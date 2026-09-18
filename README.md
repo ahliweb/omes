@@ -5,21 +5,42 @@ toolkit for **Ubuntu Server 24.04 LTS** and **Linux Mint 22.x**, with
 [Hermes Agent](https://hermes-agent.nousresearch.com/) as the integrated
 automation layer.
 
-> **Disclaimer.** OMES is an independent, Omarchy-inspired project. It is
-> **not affiliated with or endorsed by Omarchy/DHH or Nous Research**. It does
-> not install official Omarchy (an Arch/Hyprland-based distribution shipped as
-> an ISO); it brings an Omarchy-inspired, reversible workflow to Ubuntu Server
-> and Linux Mint instead.
+> **Disclaimer.** OMES is an independent, MIT-licensed project. It is inspired
+> by the Omarchy workflow but is not official Omarchy, and it is not
+> affiliated with, endorsed by, or sponsored by the Omarchy project, Canonical
+> (Ubuntu), the Linux Mint project, Docker, Inc., Telegram, or Nous Research.
+> Hermes Agent is a product of Nous Research; OMES integrates with it as an
+> external dependency and does not develop or maintain it. See
+> [docs/branding-and-trademarks.md](docs/branding-and-trademarks.md).
+
+## What OMES does
+
+1. Detects your platform (Ubuntu Server 24.04/22.04 LTS, Linux Mint 22.x) and
+   refuses to mutate anything unsupported (exit 3 before any mutation).
+2. Runs every module's read-only preflight check before applying anything
+   (`omes check` → `omes install`), backing up any file it is about to touch.
+3. Installs an Omarchy-inspired baseline: CLI tooling and a firewall/update
+   policy on the server profile; an opt-in, additive Hyprland session next to
+   Cinnamon on the desktop profile — plus Hermes Agent as the automation layer
+   on either.
+4. Verifies every change it makes (`module_verify`), and reports drift on
+   every later `omes doctor` run, not just at install time.
+5. Reverses itself on request: `omes backup`/`omes restore`/`omes uninstall`
+   work fully offline and never delete anything OMES did not itself install.
 
 ## Status
 
-**Pre-alpha.** The bootstrap installer, preflight checks, state/backup model,
-and the `apt-base` module are implemented and tested (this repository's
-`bin/omes`, `lib/omes/*`, `modules/apt-base/`). Most modules referenced by the
-`server`/`desktop`/`hermes` profiles are placeholders tracked by their own
-issues — see [Project layout](#project-layout) and
-[docs/architecture.md](docs/architecture.md) §5 for what is implemented today
-versus planned.
+**Pre-alpha, version `0.1.0-dev`.** The CLI (`bin/omes`), the shared library
+(`lib/omes/*.sh`), every module referenced by the `server`/`desktop`/`hermes`
+profiles (`apt-base`, `security-baseline`, `containers`, `hermes`,
+`hermes-gateway`, `hermes-gateway-system`, `desktop-preflight`,
+`hyprland-session`, `desktop-config`), the bootstrap installer, and the bats
+unit/integration test suite are all implemented and tested against shimmed
+commands in CI. What that does **not** mean: it has not yet had a tagged
+release, and the container/VM compatibility matrix (`scripts/test-matrix.sh`,
+`tests/vm/`) is still building out real-host coverage for every scenario — see
+[docs/architecture.md §13](docs/architecture.md#13-non-goals-and-known-limitations)
+for the known limitations that remain even where the code is implemented.
 
 ## Supported platforms
 
@@ -36,18 +57,29 @@ matrix and detection rules.
 
 ## Quick start
 
+The same one-liner bootstraps either profile; which profile you install is
+just a flag. Full walkthrough (every privileged command explained, both
+profiles, provider/Telegram setup, upgrading, uninstalling, supported vs.
+unsupported configurations): [docs/installation.md](docs/installation.md).
+
 ```bash
 # 1. Bootstrap: clones OMES and symlinks ~/.local/bin/omes (no other mutation)
 curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/main/install/bootstrap.sh | bash
 
 # 2. Preflight: read-only checks, safe to run any time, as any user
-omes check
+omes check --profile server        # or --profile desktop
 
 # 3. See exactly what would happen - no mutation
-sudo omes install --profile server --dry-run
+sudo omes install --profile server --dry-run --yes
 
-# 4. Apply for real (asks for confirmation unless --yes is given)
-sudo omes install --profile server
+# 4. Apply as root, then as your own user (root-scope and user-scope modules
+#    never run in the same invocation - see "Root/user scope" below)
+sudo omes install --profile server --yes
+omes install --profile server --yes
+
+# 5. Verify
+omes doctor
+sudo omes doctor
 ```
 
 `install/bootstrap.sh` never mutates the system beyond installing `git` (via
@@ -119,23 +151,54 @@ Full reference, including per-command JSON schemas: [docs/cli.md](docs/cli.md).
 
 ```text
 bin/omes                 CLI entry point
-lib/omes/                core.sh, log.sh, json.sh, detect.sh, state.sh, backup.sh, module.sh
-modules/apt-base/        implemented: base CLI tooling (curl, git, python3, jq, ufw, ...)
+lib/omes/                core.sh, log.sh, json.sh, detect.sh, state.sh, backup.sh, restore.sh, module.sh, pkg.sh
+modules/                 apt-base, security-baseline, containers, hermes, hermes-gateway,
+                          hermes-gateway-system, desktop-preflight, hyprland-session, desktop-config
 profiles/                server.profile, desktop.profile, hermes.profile
 install/bootstrap.sh     curl-able bootstrap entry point
 install/preflight.sh     thin wrapper for `omes check`
-tests/                   bats unit + integration tests, shims, tests/run.sh
-docs/                    architecture, compatibility matrix, security, scope, ADRs, research plan
+config/                  desktop config templates (hypr, waybar, foot, shell, nvim)
+tests/                   bats unit + integration tests, shims, scripts/test-matrix.sh, tests/vm/
+docs/                    installation, troubleshooting, configuration, architecture, security, ADRs, business
 ```
 
-Modules other than `apt-base` (`security-baseline`, `hermes`,
-`hermes-gateway`, `containers`, the desktop modules, etc.) are referenced by
-the profile files as placeholders and implemented in later issues; see
-[docs/architecture.md](docs/architecture.md) §5 for the module-to-issue
-mapping.
+See [docs/README.md](docs/README.md) for a grouped index of every document,
+and [docs/architecture.md](docs/architecture.md) §2 for the full annotated
+repository tree.
+
+## How to test
+
+```bash
+./tests/run.sh                              # ShellCheck + bats unit + integration (Docker fallback if tools are missing)
+./scripts/test-matrix.sh                    # real apt-get/dpkg inside disposable containers per supported OS
+OMES_MATRIX_IMAGES="ubuntu:24.04" ./scripts/test-matrix.sh   # a single image
+```
+
+See [docs/testing.md](docs/testing.md) for the full test pyramid and
+[docs/ci.md](docs/ci.md) for what runs in CI, what blocks a PR, and how to
+run every CI check locally.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the branching/commit/PR workflow,
+required local checks (ShellCheck, bats, `tests/run.sh`,
+`scripts/test-matrix.sh`), change fragments, and the documentation-accuracy
+rule this repository holds itself to.
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for how to report a vulnerability, and
+[docs/security.md](docs/security.md) / [docs/threat-model.md](docs/threat-model.md)
+for the security baseline and threat model this project maintains.
 
 ## Further reading
 
+- [docs/installation.md](docs/installation.md) — complete operator walkthrough,
+  both profiles, every privileged command explained
+- [docs/troubleshooting.md](docs/troubleshooting.md) — symptom → cause → fix,
+  by exit code and by component
+- [docs/configuration.md](docs/configuration.md) — every environment
+  variable OMES reads, grouped by component
 - [docs/architecture.md](docs/architecture.md) — execution model, module
   contract, state/backup model, exit codes, privilege model
 - [docs/compatibility-matrix.md](docs/compatibility-matrix.md) — supported

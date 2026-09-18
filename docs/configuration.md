@@ -1,0 +1,142 @@
+# OMES Configuration Reference
+
+> Status: describes the actual repository state. Every variable below was found by
+> grepping `bin/`, `lib/`, `modules/`, `install/`, `config/`, and `scripts/` for
+> `OMES_` and cross-checking against the source. Flags are documented in full, with
+> worked examples, in [docs/cli.md](cli.md) — this page is the single place that
+> lists every environment variable OMES reads, grouped by the component that reads
+> it, with its default and whether it is an operator-facing knob or a test-only
+> override.
+
+Legend: **Operator** — a real deployment knob, safe to set on a target host.
+**Test-only** — exists so `tests/unit/*.bats`/`tests/integration/*.bats` can exercise
+a code path without root/real hardware/a real filesystem; setting it in production
+has no documented, supported effect and is not recommended.
+
+## 1. Global CLI (`bin/omes`, `lib/omes/core.sh`, `lib/omes/log.sh`)
+
+| Variable | Flag equivalent | Default | Kind | Meaning |
+|---|---|---|---|---|
+| `OMES_DRY_RUN` | `--dry-run` | `0` | Operator | `1` prints planned actions, mutates nothing. |
+| `OMES_JSON` | `--json` | `0` | Operator | `1` emits exactly one JSON object on stdout; all logging moves to stderr/log file. |
+| `OMES_NONINTERACTIVE` | `--yes` | `0` | Operator | `1` auto-confirms mutating prompts. |
+| `OMES_ASSUME_YES` | — | `0` | Operator | Alternate spelling `omes_noninteractive()` also honors; `--yes` sets `OMES_NONINTERACTIVE`, not this one, but either satisfies the same check. |
+| `OMES_VERBOSE` | `--verbose` | `0` | Operator | `1` also prints `DEBUG`-level lines to the console (always in the log file regardless). |
+| `OMES_LOG_FILE` | `--log-file <path>` | `<state-dir>/logs/omes-<UTC timestamp>.log` | Operator | Override the log file location. |
+| `OMES_STATE_DIR` | — | `/var/lib/omes` (root) / `${XDG_STATE_HOME:-$HOME/.local/state}/omes` (user) | Operator | Override the state directory for either scope. |
+| `OMES_ROOT` | — | auto-detected from `bin/omes`'s own path | Operator (rarely needed) | Repository root; every `lib/omes/*.sh`/`modules/*/module.sh` sources relative to this. |
+| `OMES_ALLOW_DOCKER_GROUP` | `--allow-docker-group` | unset | Operator (flag-set only) | Set internally by `bin/omes` from the flag; the `containers` module reads it. Not documented as a directly-settable env var. |
+| `NO_COLOR` | — | unset | Operator | Any non-empty value disables ANSI color in human output, per [no-color.org](https://no-color.org/). |
+
+## 2. Backup / package rate-limiting (`lib/omes/backup.sh`, `lib/omes/pkg.sh`)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_BACKUP_KEEP` | `10` | Operator | Retention count for `backup_prune` — how many backup sessions are kept per scope's state dir. |
+| `OMES_PKG_APT_UPDATE_MAX_AGE` | `3600` (1 hour) | Operator | Minimum seconds between `apt-get update` calls (`pkg_apt_update`'s rate limit), tracked via the `pkg.apt_update.last_run` state key. |
+| `OMES_ASSUME_ONLINE` | unset | Test-only | `1` forces `detect_network` to report online without a real network check. |
+| `OMES_ASSUME_OFFLINE` | unset | Test-only | `1` forces `detect_network` to report offline. Checked after `OMES_ASSUME_ONLINE`, so clear that too if it was set. |
+| `OMES_APT_SOURCES_DIR` | `/etc/apt/sources.list.d` | Test-only | Where `repo_add`/`repo_remove` write/remove `<name>.sources` files. |
+
+## 3. Detection (`lib/omes/detect.sh`)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_OS_RELEASE_FILE` | `/etc/os-release` | Test-only | Points `detect_os` at a fixture, e.g. `tests/fixtures/os-release/linuxmint-22.1`. |
+
+## 4. Test/simulation hooks (`lib/omes/core.sh` and friends)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_TEST` | unset | Test-only | Must be `1` together with `OMES_FAKE_ROOT` for the latter to have any effect — see below. |
+| `OMES_FAKE_ROOT` | unset | Test-only | With `OMES_TEST=1`, makes `omes_is_root` report true without real UID 0. Never consulted otherwise. |
+
+## 5. `security-baseline` module
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_ENABLE_SSH` | `0` | Operator | `1` keeps SSH allowed through `ufw` even without an active SSH session detected. Stand-in for a future `--enable-ssh` flag. |
+| `OMES_INSTALL_CHRONY` | `0` | Operator | `1` also installs and expects `chrony` (otherwise the module only checks/warns on NTP sync, never installing anything for it). |
+| `OMES_UNATTENDED_AUTO_REBOOT` | `0` | Operator | `1` enables `Unattended-Upgrade::Automatic-Reboot "true"` in OMES's own `52omes-unattended-upgrades` fragment. |
+| `OMES_UNATTENDED_REBOOT_TIME` | `02:00` | Operator | Reboot time written when `OMES_UNATTENDED_AUTO_REBOOT=1`. |
+| `OMES_JOURNALD_MAX_USE` | `500M` | Operator | `SystemMaxUse=` written to OMES's journald drop-in. |
+| `OMES_ETC_DIR` | `/etc` | Test-only | Root for every `/etc`-rooted path this module reads/writes (also used by `containers`). |
+
+## 6. `containers` module
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_DOCKER_ROOTLESS` | `0` | Operator | `1` installs `docker-ce-rootless-extras` and prints the exact rootless setup command (never runs it). |
+| `OMES_ETC_DIR` | `/etc` | Test-only | Shared with `security-baseline`; the Docker keyring path resolves under it. |
+
+`--allow-docker-group` (flag only, see §1) grants `docker` group membership — root-equivalent, always confirmed, never a default.
+
+## 7. `hermes` module
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_HERMES_HOME` | `~/.hermes` | Operator | Overrides `HERMES_HOME`. Set before `omes install` to give a profile an isolated Hermes instance. |
+| `OMES_HERMES_VERSION` | unset | Operator | Pins the installed version; a mismatch against the currently installed `hermes --version` output triggers a re-install. |
+| `OMES_HERMES_INSTALLER_SHA256` | unset | Operator | Verifies the downloaded installer's sha256 before executing it; a mismatch aborts with no execution. |
+| `OMES_HERMES_INSTALLER_URL` | `https://hermes-agent.nousresearch.com/install.sh` | Test-only | Not a documented operator knob. |
+
+## 8. `hermes-gateway` / `hermes-gateway-system` modules
+
+| Variable | Default | Kind | Applies to | Meaning |
+|---|---|---|---|---|
+| `OMES_GATEWAY_MODE` | `user` | Operator | `hermes-gateway` | Setting it to `system` makes the user-mode module's `module_check` refuse immediately and point at `--module hermes-gateway-system` instead of silently applying the wrong mode. |
+| `OMES_HERMES_GATEWAY_EXTRA_PATH` | unset | Operator | both | Colon-separated extra directories prepended into the managed systemd drop-in's `PATH=` (e.g. where `node`/`ffmpeg` actually live). |
+| `OMES_HERMES_GATEWAY_SYSTEM_USER` | unset | Operator (required) | `hermes-gateway-system` | The existing, non-root account whose Hermes install the system gateway serves. `module_check` fails without it, or if it names `root`, or if the account does not exist. |
+| `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | `/etc/systemd/system` | Test-only | `hermes-gateway-system` | Overrides the system drop-in directory. |
+
+## 9. `desktop-preflight` / `hyprland-session` modules
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_DP_MEM_MB_OVERRIDE` | unset | Test-only | Forces `dp_check_resources`'s RAM figure. |
+| `OMES_DP_DISK_FREE_MB_OVERRIDE` | unset | Test-only | Forces `dp_check_resources`'s free-disk figure. |
+| `OMES_PROC_CMDLINE_FILE` | `/proc/cmdline` | Test-only | Overrides the kernel command-line file `dp_check_gpu` reads for `nvidia-drm.modeset=1`. |
+| `OMES_NVIDIA_MODESET_PARAM_FILE` | `/sys/module/nvidia_drm/parameters/modeset` | Test-only | Same purpose, the sysfs fallback path. |
+| `OMES_CINNAMON_SESSION_FILE` | `/usr/share/xsessions/cinnamon.desktop` | Test-only | Overrides the Cinnamon-presence check `dp_check_cinnamon` performs. |
+| `OMES_SESSION_DIR` | `/usr/share/wayland-sessions` | Test-only | Overrides where `hyprland-session` writes the session `.desktop` file. |
+| `OMES_BIN_DIR` | `/usr/local/bin` | Test-only (here) | Overrides where `hyprland-session` writes its wrapper script. **Note:** `install/bootstrap.sh` also reads `OMES_BIN_DIR`, with a different default (`~/.local/bin`) and a real operator-facing purpose — see §11. |
+
+## 10. `desktop-config` module
+
+No module-specific environment variables; behavior (never overwrite a differing file without `--yes`/`OMES_NONINTERACTIVE=1`) is controlled entirely by the global `--yes`/`OMES_NONINTERACTIVE` flag from §1.
+
+## 11. `install/bootstrap.sh` (the curl-able bootstrap script)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_REPO_URL` | `https://github.com/ahliweb/omes.git` | Operator | Where to clone OMES from — set this to point at a fork or mirror. |
+| `OMES_REF` | `main` | Operator | The git ref (branch/tag/commit) to check out. |
+| `OMES_INSTALL_DIR` | `$HOME/.local/share/omes` | Operator | Where the checkout lives. |
+| `OMES_BIN_DIR` | `$HOME/.local/bin` | Operator | Where `omes` is symlinked. See the note in §9 — this is a different default from `hyprland-session`'s test-only override of the same name; they are read in entirely separate processes (the bootstrap script vs. a module). |
+| `OMES_OS_RELEASE_FILE` | `/etc/os-release` | Test-only | Same override as §3, used for the bootstrap script's own early platform check before any checkout exists. |
+
+## 12. `scripts/test-matrix.sh` (contributor/CI tool, not a deployment knob)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_MATRIX_IMAGES` | `ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64` | Contributor/CI | Space-separated container images to run the matrix against. |
+| `OMES_MATRIX_SCENARIOS` | all scenarios (`fresh rerun offline partial-failure reboot rollback`) | Contributor/CI | Restrict to specific scenarios, e.g. `"fresh rerun"`. |
+| `OMES_MATRIX_FAIL_PKG` | a package name that does not exist | Contributor/CI | The deliberately-nonexistent package name used by the `partial-failure` scenario. |
+
+See [docs/ci.md](ci.md) for how these are used in `.github/workflows/compatibility.yml`.
+
+## 13. Reserved but not read by any code path yet
+
+None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
+
+<!-- OMES-MERMAID: docs/configuration.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    CLI[Global CLI flags/env] --> State[State, backup, logging]
+    State --> Modules[Per-module env vars]
+    Modules --> Bootstrap[install/bootstrap.sh env vars]
+    Modules --> CIVars[scripts/test-matrix.sh env vars]
+```
