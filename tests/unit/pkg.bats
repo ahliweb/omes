@@ -308,7 +308,7 @@ teardown() {
   export OMES_APT_SOURCES_DIR="${OMES_TEST_TMPDIR}/sources.list.d"
   run repo_add docker "https://download.docker.com/linux/ubuntu" "$OMES_OS_CODENAME" "$keyring" --ubuntu-only
   [ "$status" -eq 0 ]
-  [[ "$output" == *"does not support Linux Mint directly"* ]]
+  [[ "$output" == *"do not support Linux Mint directly"* ]]
   grep -q '^Suites: noble$' "${OMES_APT_SOURCES_DIR}/docker.sources"
 }
 
