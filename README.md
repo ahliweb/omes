@@ -42,6 +42,40 @@ release, and the container/VM compatibility matrix (`scripts/test-matrix.sh`,
 [docs/architecture.md §13](docs/architecture.md#13-non-goals-and-known-limitations)
 for the known limitations that remain even where the code is implemented.
 
+## Architecture and roadmap
+
+OMES is deliberately layered rather than a second agent runtime:
+
+- **OMES** owns host compatibility, preflight, installation, service lifecycle,
+  hardening, health, backup, restore, rollback, compatibility evidence, and
+  deployment/provenance state.
+- **Hermes Agent** remains the agent runtime for reasoning, messaging, channels,
+  sessions, memory, skills, delegation, cron, browser automation, and model/provider
+  routing. OMES integrates with Hermes and does not replace it.
+- **AWCMS/Control Center** is a planned companion business/control plane for
+  tenants, catalog, subscriptions, invoices, entitlements, approvals, domains,
+  and operational reporting. It must never execute arbitrary host shell commands.
+- **External providers** remain their own authorities: Cloudflare/SRS-X for
+  registrar state, the selected DNS provider for DNS state, and GitHub for
+  repository/workflow/provenance observations.
+
+The implementation sequence is tracked in GitHub milestones:
+
+| Milestone | Scope | Status |
+|---|---|---|
+| [MVP Implementation](https://github.com/ahliweb/omes/milestone/2) | Native OMES + Hermes + systemd lifecycle | Active roadmap |
+| [Quality and Security](https://github.com/ahliweb/omes/milestone/3) | Health, hardening, backup, compatibility, provenance | Active roadmap |
+| [Control Center and Entitlements](https://github.com/ahliweb/omes/milestone/5) | AWCMS boundary, audited jobs, catalog, subscriptions, entitlements | Staged |
+| [Billing Automation](https://github.com/ahliweb/omes/milestone/6) | Ledger, payment automation, webhooks, reporting | Staged |
+| [Domain and Integration Services](https://github.com/ahliweb/omes/milestone/8) | Provider abstraction, Cloudflare, SRS-X, GitHub, domain reconciliation | Staged |
+| [Multi-Server Operations](https://github.com/ahliweb/omes/milestone/7) | Rootless Compose and optional Coolify | Later stage |
+
+The web Control Center, billing service, registrar adapters, DNS integration,
+GitHub adapter, and multi-server backends are **not part of the current Bash
+CLI implementation unless their linked issues have landed**. See the canonical
+[Control Center and integrations design](docs/control-center-and-integrations.md)
+and [ADR-0011](docs/adr/0011-control-center-and-provider-boundaries.md).
+
 ## Supported platforms
 
 | Platform | Tier | Notes |
@@ -180,8 +214,9 @@ run every CI check locally.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the branching/commit/PR workflow,
-required local checks (ShellCheck, bats, `tests/run.sh`,
+See [AGENTS.md](AGENTS.md) for the operating contract for coding agents and
+contributors. See [CONTRIBUTING.md](CONTRIBUTING.md) for the branching/commit/PR
+workflow, required local checks (ShellCheck, bats, `tests/run.sh`,
 `scripts/test-matrix.sh`), change fragments, and the documentation-accuracy
 rule this repository holds itself to.
 
