@@ -233,3 +233,15 @@ effective privilege.
   user-scope modules, and prints the correct follow-up command; (b) the
   symmetric non-root case; and (c) `--module <name>` naming a
   wrong-scope module exits 5 immediately with no mutation.
+
+<!-- OMES-MERMAID: docs/adr/0005-root-and-user-scope-separation.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Detect scope] --> B[Match module scope]
+    B --> C[Run in allowed context]
+    C --> D[Report mismatch]
+```
+

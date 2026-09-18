@@ -95,3 +95,16 @@ Until a claim has a logged measurement, it is written in this document as a hypo
 > OMES adalah lapisan deployment open-source (lisensi MIT) yang independen, membawa workflow ala Omarchy (Omarchy-inspired) ke Ubuntu Server LTS dan Linux Mint — dengan Hermes Agent terpasang sebagai lapisan otomasi. Setiap langkah diperiksa sebelum dijalankan, dicadangkan (backup) sebelum ada perubahan, dan bisa dibatalkan (reversible) jika hasilnya tidak sesuai. Bukan Omarchy resmi. Bukan layanan hosting. OMES adalah toolkit yang berjalan di mesin yang sudah Anda miliki.
 
 Both pitches avoid any claim of official affiliation, avoid stating a price, and describe only behavior OMES actually implements per the engineering brief (idempotent, checked, backed-up, reversible).
+
+<!-- OMES-MERMAID: docs/business/positioning.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    ICP[Target customer] --> Problem[Deployment complexity]
+    Problem --> Promise[Reversible OMES layer]
+    Promise --> Proof[Measured evidence]
+    Proof --> Message[Positioning message]
+```
+

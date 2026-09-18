@@ -210,3 +210,17 @@ ticket regardless of the customer's tier.
 - **Modified OMES trees**: a customer's fork or hand-edited copy of `bin/omes`, `lib/omes/*`,
   `modules/*`, or profile files. Support on a modified tree first requires reverting to a
   clean, pinned OMES ref; only then can normal troubleshooting proceed.
+
+<!-- OMES-MERMAID: docs/business/support-tiers.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Need[Customer need] --> Community[Community support]
+    Community --> Assisted[Assisted support]
+    Assisted --> Professional[Professional support]
+    Professional --> Business[Business support]
+    Business --> Enterprise[Enterprise arrangements]
+```
+

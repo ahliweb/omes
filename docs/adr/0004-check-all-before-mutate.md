@@ -129,3 +129,15 @@ before any verify.
   `docs/architecture.md` Section 4.4) is what makes "verify a dependency
   before applying its dependent" true under this model — a cycle is
   rejected before either phase begins (exit 2).
+
+<!-- OMES-MERMAID: docs/adr/0004-check-all-before-mutate.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Check all modules] --> B[Apply in order]
+    B --> C[Verify each]
+    C --> D[Stop safely]
+```
+

@@ -126,3 +126,18 @@ unless your task explicitly says to, and never edit `CHANGELOG.md` (see
 
 Open a GitHub issue with the `type:question` label (or the closest
 available label) if a step in this document does not work as described.
+
+<!-- OMES-MERMAID: CONTRIBUTING.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    I[Issue] --> Br[Branch]
+    Br --> Ch[Change]
+    Ch --> T[Tests and lint]
+    T --> PR[Pull request]
+    PR --> Rev[Review]
+    Rev --> M[Merge]
+```
+

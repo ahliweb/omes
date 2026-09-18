@@ -176,3 +176,17 @@ To keep security claims honest and bounded to what OMES actually controls:
 See [`docs/threat-model.md`](./threat-model.md) for the full threat/mitigation mapping this
 baseline is derived from, and `SECURITY.md` at the repository root for how to report a
 vulnerability in OMES itself.
+
+<!-- OMES-MERMAID: docs/security.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Input[Operator and external input] --> Policy[Least privilege and allowlists]
+    Policy --> Runtime[Hermes and OMES runtime]
+    Runtime --> Network[Firewall and SSH controls]
+    Runtime --> Secrets[Credential boundary]
+    Runtime --> Audit[Verification and release gates]
+```
+

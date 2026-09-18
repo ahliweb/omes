@@ -431,3 +431,17 @@ Delay monetization when:
 - Compatibility claims must be proven through VM or hardware testing, not only upstream documentation.
 - OS, Hyprland, Docker, and Hermes versions change; CI and periodic review are required to keep the plan current.
 - This research is not a formal security audit and does not claim that an agent is always safe.
+
+<!-- OMES-MERMAID: docs/research-and-implementation-plan.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Research[Research findings] --> Architecture[Target architecture]
+    Architecture --> Phases[Implementation phases]
+    Phases --> QA[QA and release gates]
+    QA --> Pilot[Pilot validation]
+    Pilot --> Decision[Go or no-go decision]
+```
+

@@ -134,3 +134,15 @@ under any other condition.
 - `containers` remains optional in the `server` profile
   (`docs/architecture.md` Section 5); a host that never opts into
   containers never faces this decision at all.
+
+<!-- OMES-MERMAID: docs/adr/0007-docker-access-policy.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Prefer sudo docker] --> B[Try rootless path]
+    B --> C[Require explicit group opt-in]
+    C --> D[Verify access]
+```
+

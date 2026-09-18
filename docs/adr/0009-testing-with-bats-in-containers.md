@@ -137,3 +137,15 @@ that CI and contributors both use.
   behavior (actual `apt`, actual `systemctl`, actual hardware for the
   desktop profile) and is not replaced by the shim-based suite this ADR
   governs.
+
+<!-- OMES-MERMAID: docs/adr/0009-testing-with-bats-in-containers.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Change] --> B[ShellCheck and bats]
+    B --> C[Container fallback]
+    C --> D[Release evidence]
+```
+

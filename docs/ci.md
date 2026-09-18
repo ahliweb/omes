@@ -264,3 +264,17 @@ adding an entry:
    credential — rotate it first (see `SECURITY.md`), then the finding
    remains in history by design (gitleaks scans history) and is not
    something an allowlist entry should hide.
+
+<!-- OMES-MERMAID: docs/ci.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Commit[Commit or pull request] --> Lint[Lint and ShellCheck]
+    Lint --> Supply[Supply-chain checks]
+    Supply --> Compat[Compatibility tests]
+    Compat --> Links[Link checks]
+    Links --> Gate[Merge gate]
+```
+

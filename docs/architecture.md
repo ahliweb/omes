@@ -948,3 +948,19 @@ next unused integer and must not repurpose an existing code.
 - arm64 is a best-effort (tier 3) platform per the compatibility matrix
   (issue #3); this document's contracts apply there too, but test coverage
   and operator support are weaker than on tier 1/2 amd64 targets.
+
+<!-- OMES-MERMAID: docs/architecture.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    CLI[omes CLI] --> Runner[Orchestrator]
+    Runner --> Checks[Check all modules]
+    Checks --> Plan[Build plan]
+    Plan --> Apply[Apply modules]
+    Apply --> Verify[Verify state]
+    Verify --> Rollback[Rollback failed changes]
+    State[Explicit state file] --- Runner
+```
+

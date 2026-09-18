@@ -184,3 +184,17 @@ parallel workstream). Summary as of this writing:
 - [docs/security.md](security.md) — threat model and security defaults (written in parallel).
 - [docs/branding-and-trademarks.md](branding-and-trademarks.md) — naming and disclaimer rules (Issue #26).
 - [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) — licensing of referenced upstream projects (Issue #26).
+
+<!-- OMES-MERMAID: docs/scope.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    OMES[OMES] --> Server[Ubuntu Server headless]
+    OMES --> Desktop[Linux Mint desktop opt-in]
+    OMES --> Hermes[Hermes integration]
+    OMES --> Safety[Reversible and non-destructive boundary]
+    OMES --> Exclude[Explicit non-goals]
+```
+

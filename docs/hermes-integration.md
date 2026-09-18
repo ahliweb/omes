@@ -222,3 +222,17 @@ fully remove Hermes themselves:
   respectively; this module's `module_rollback` is reachable today only by
   calling it directly (e.g. from a future `omes uninstall`), not via a
   finished CLI command.
+
+<!-- OMES-MERMAID: docs/hermes-integration.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    OMES[OMES module] --> Install[Install or update Hermes]
+    Install --> Profile[Profile and home layout]
+    Profile --> Doctor[Doctor gate]
+    Doctor --> Operator[Operator configures providers]
+    Operator --> Runtime[Hermes runtime]
+```
+

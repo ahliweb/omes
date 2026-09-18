@@ -134,3 +134,15 @@ rollback), never as an automatic response to an apply/verify failure.
 - This ADR does not mandate any particular internal structure within a
   function body — only the four-function boundary and each function's
   read-only/mutating classification.
+
+<!-- OMES-MERMAID: docs/adr/0003-module-contract-check-apply-verify-rollback.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Check] --> B[Apply]
+    B --> C[Verify]
+    C --> D[Rollback]
+```
+

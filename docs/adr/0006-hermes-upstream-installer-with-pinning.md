@@ -146,3 +146,15 @@ exception.
   the Telegram gateway's own dependency fetches (Node/ffmpeg via apt is
   governed separately by `apt-base`/`pkg.sh`); it governs specifically
   the initial installer-script execution.
+
+<!-- OMES-MERMAID: docs/adr/0006-hermes-upstream-installer-with-pinning.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Download installer] --> B[Verify optional pin]
+    B --> C[Execute upstream installer]
+    C --> D[Verify Hermes]
+```
+

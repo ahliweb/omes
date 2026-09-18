@@ -130,3 +130,15 @@ Linux Mint 22.x is required to run OMES.
   templating), that would motivate a new ADR reconsidering this decision
   for the affected subsystem specifically — this ADR is not a permanent
   ban on ever introducing another language, only the MVP default.
+
+<!-- OMES-MERMAID: docs/adr/0001-bash-as-implementation-language.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Evaluate options] --> B[Choose Bash]
+    B --> C[Document trade-offs]
+    C --> D[Review later]
+```
+

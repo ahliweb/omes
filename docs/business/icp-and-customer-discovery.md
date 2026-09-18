@@ -206,3 +206,17 @@ Every `ASSUMPTION` above is tracked here with its validation method. Update stat
 | A-19-08 | 10–15 interviews across these segment allocations is sufficient to inform positioning (#20) | Track interview count and diversity of segments reached before #20 work starts | Open |
 
 No item in this register may be promoted to "Validated" without a cited interview ID, pilot log entry, or reproducible technical test linked in this document or its successor.
+
+<!-- OMES-MERMAID: docs/business/icp-and-customer-discovery.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Candidates[ICP candidates] --> Interviews[Customer discovery]
+    Interviews --> Pain[Validated pain points]
+    Pain --> Segment[Prioritized segment]
+    Segment --> Pilot[Pilot hypothesis]
+    Pilot --> Evidence[Evidence-based revision]
+```
+

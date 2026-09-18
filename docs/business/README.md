@@ -31,3 +31,17 @@ The last four documents are written by parallel agents working the same mileston
 2. [positioning.md](positioning.md) — how we describe OMES once we have discovery evidence.
 3. [competitive-landscape.md](competitive-landscape.md) — how OMES compares to alternatives, honestly.
 4. [business-model.md](business-model.md) — how OMES could make money, and what would have to be true first.
+
+<!-- OMES-MERMAID: docs/business/README.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Market[Market evidence] --> ICP[Customer profiles]
+    ICP --> Positioning[Positioning]
+    Positioning --> Model[Business model]
+    Model --> Pilot[Pilot and measurement]
+    Pilot --> Gates[Go or no-go gates]
+```
+

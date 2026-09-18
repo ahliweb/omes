@@ -95,3 +95,16 @@ changes are reviewed.
   notices for every third-party project named above.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) — contribution workflow, including
   documentation-accuracy requirements.
+
+<!-- OMES-MERMAID: docs/branding-and-trademarks.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Product[OMES product] --> Naming[Naming rules]
+    Naming --> Visual[Visual identity]
+    Visual --> Disclaimer[Required disclaimer]
+    Disclaimer --> Distribution[Docs, UI, and releases]
+```
+

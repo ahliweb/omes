@@ -148,3 +148,15 @@ session manager at all times; no desktop module removes or disables it.
   `docs/research-and-implementation-plan.md` Section 7, independent of
   this ADR's architectural decision, which only fixes packaging strategy
   and Cinnamon-fallback policy, not release timing.
+
+<!-- OMES-MERMAID: docs/adr/0008-desktop-profile-opt-in-no-source-builds.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Default server profile] --> B[Opt-in desktop profile]
+    B --> C[Use packaged components]
+    C --> D[Keep fallback session]
+```
+

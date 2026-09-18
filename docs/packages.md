@@ -140,3 +140,17 @@ this is what `tests/integration/pkg.bats` and `tests/unit/pkg.bats` use.
   **check** time (exit 4) with **no** `apt-get install` call logged, that offline behaves the
   same way (exit 4, not 8, per Section 5), and that a normal install calls `apt-get install`
   exactly once and records `installed_packages`.
+
+<!-- OMES-MERMAID: docs/packages.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Module[OMES module] --> Map[Package-name mapping]
+    Map --> Repo[Repository policy]
+    Repo --> Install[Install package]
+    Install --> Verify[Verify command and version]
+    Verify --> Override[Apply release override when needed]
+```
+

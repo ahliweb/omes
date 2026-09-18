@@ -139,3 +139,15 @@ cleared and a `vX.Y.Z` git tag is created matching the new `VERSION`.
 - `docs/architecture.md`'s repository layout (Section 2) reflects
   `VERSION`, `CHANGELOG.md`, and `changes/` exactly as this ADR defines
   them.
+
+<!-- OMES-MERMAID: docs/adr/0010-versioning-and-change-fragments.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Change fragment] --> B[SemVer decision]
+    B --> C[Compile changelog]
+    C --> D[Tag release]
+```
+

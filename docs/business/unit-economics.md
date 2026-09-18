@@ -259,3 +259,16 @@ optimizing before the pricing and labor-time inputs are validated.
 6. Never replace an ASSUMPTION with a "fact" based on fewer than the sample sizes noted above,
    and never state a market-size or willingness-to-pay figure without citing the specific pilot
    observation it came from.
+
+<!-- OMES-MERMAID: docs/business/unit-economics.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Revenue[Revenue per account] --> Margin[Gross margin]
+    Costs[Support and infrastructure costs] --> Margin
+    Margin --> CAC[CAC payback]
+    CAC --> Decision[Scale, adjust, or stop]
+```
+

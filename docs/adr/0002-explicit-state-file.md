@@ -133,3 +133,15 @@ as colon-separated strings within a single key's value.
   existing key's meaning is a breaking change to this contract and would
   need a migration note in `CHANGELOG.md` and a version bump per
   ADR-0010.
+
+<!-- OMES-MERMAID: docs/adr/0002-explicit-state-file.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    A[Read state] --> B[Compare desired state]
+    B --> C[Write explicit key values]
+    C --> D[Verify state]
+```
+

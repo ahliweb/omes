@@ -205,3 +205,16 @@ OMES pilot exit report — <deployment type> — <date range>
    justification (this is a change to this document, tracked separately, not silently edited
    into the exit report).
 ```
+
+<!-- OMES-MERMAID: docs/business/pilot-program.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Recruit[Recruit cohort] --> Onboard[Onboard deployment]
+    Onboard --> Instrument[Measure usage and incidents]
+    Instrument --> Feedback[Collect feedback]
+    Feedback --> Decide[Decide: iterate, expand, or stop]
+```
+

@@ -162,3 +162,16 @@ Stop or substantially revise the productized-service approach if, after a define
 | A-22-03 | Customers will accept a bounded-scope Ops retainer rather than expecting unlimited support | Direct customer feedback during retainer pilots; track scope-creep requests | Open |
 | A-22-04 | Managed deployment demand exists but is correctly deferred past MVP | Ask about it directly in post-engagement follow-ups; do not build it until asked for repeatedly | Open |
 | A-22-05 | The first 5 paid engagements (or whatever count is chosen) is a large enough sample to evaluate kill criteria fairly | Revisit sample size after the first 2–3 engagements; adjust if labor-hour variance is too high to draw conclusions | Open |
+
+<!-- OMES-MERMAID: docs/business/business-model.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Community[Open-core community] --> Setup[Paid setup or migration]
+    Setup --> Managed[Managed deployment]
+    Managed --> Support[Support subscription]
+    Support --> Expansion[Expansion and retention]
+```
+

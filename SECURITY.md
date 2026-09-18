@@ -93,3 +93,17 @@ scope — please report it here as well as, or instead of, upstream.
 OMES does not currently operate a paid bug bounty program. Reports are welcomed and credited
 in release notes/advisories with the reporter's consent, but no monetary reward is offered at
 this stage.
+
+<!-- OMES-MERMAID: SECURITY.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Report[Report vulnerability] --> Triage[Security triage]
+    Triage --> Fix[Private fix]
+    Fix --> Verify[Verify remediation]
+    Verify --> Release[Coordinated release]
+    Release --> Advisory[Publish guidance]
+```
+

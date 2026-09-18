@@ -97,3 +97,17 @@ explicitly selected and preflight passes (see
 - [docs/architecture.md](architecture.md) — module and CLI architecture (written in parallel).
 - [docs/security.md](security.md) — threat model and security defaults (written in parallel).
 - [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) — licensing of referenced upstream projects (Issue #26).
+
+<!-- OMES-MERMAID: docs/omarchy-compatibility-inventory.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Omarchy[Omarchy capability] --> Classify{Compatibility decision}
+    Classify --> Inherit[Inherit in server profile]
+    Classify --> Optional[Optional desktop feature]
+    Classify --> Replace[Replace with Ubuntu or Mint equivalent]
+    Classify --> Reject[Reject with rationale]
+```
+

@@ -139,3 +139,16 @@ Stated honestly, per the hard rule against overselling:
 | A-21-03 | Teams with mature Ansible/NixOS pipelines are a disqualifier rather than an upsell opportunity | Interview any agency/SME with existing CM tooling; ask what would make OMES relevant despite it | Open |
 
 Any external-facing comparison content must re-check the sources above before reuse — this table is a snapshot dated 2026-09-18, and both Omarchy/Omakub's status and vendor support-tier details are things that change.
+
+<!-- OMES-MERMAID: docs/business/competitive-landscape.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Need[User need] --> Alternatives[Existing alternatives]
+    Alternatives --> Gap[Unserved deployment and compatibility gap]
+    Gap --> OMES[OMES positioning]
+    OMES --> Test[Evidence and pilot validation]
+```
+

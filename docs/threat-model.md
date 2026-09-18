@@ -149,3 +149,17 @@ This threat model must be revisited whenever: a new module is added, a new netwo
 service is introduced, Hermes's upstream security posture changes materially, or a security
 incident (real or near-miss) occurs during a pilot. Until then, treat it as the gate referenced
 in `docs/research-and-implementation-plan.md` §4 (Phase 0).
+
+<!-- OMES-MERMAID: docs/threat-model.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Assets[Assets] --> Boundaries[Trust boundaries]
+    Boundaries --> Threats[STRIDE threats]
+    Threats --> Controls[Mitigations]
+    Controls --> Residual[Residual risk]
+    Residual --> Review[Periodic review]
+```
+

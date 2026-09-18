@@ -197,3 +197,17 @@ the same price/scope while "hoping" the trend reverses.
    note the release stage and the specific commit/tag being released.
 5. Re-run this procedure again before every subsequent stage transition; a passed alpha review
    does not carry forward to beta or public without its own review.
+
+<!-- OMES-MERMAID: docs/business/release-gates.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Alpha[Alpha] --> Beta[Beta]
+    Beta --> Public[Public release]
+    Alpha --> Gate1[Safety and correctness gate]
+    Beta --> Gate2[Compatibility and support gate]
+    Public --> Gate3[KPI and business gate]
+```
+

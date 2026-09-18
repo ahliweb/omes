@@ -32,3 +32,16 @@ architecture and state model."
   `Rejected`.
 - An ADR records why a decision was made, not the full implementation —
   implementation details belong in `docs/architecture.md` and in code.
+
+<!-- OMES-MERMAID: docs/adr/README.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Problem[Architectural question] --> Options[Options documented]
+    Options --> Decision[Decision recorded]
+    Decision --> Consequences[Consequences tracked]
+    Consequences --> Review[Revisit when assumptions change]
+```
+

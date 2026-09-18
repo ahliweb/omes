@@ -66,3 +66,16 @@ it.
   are used only nominatively (to say what OMES targets or integrates with),
   never as a claim of affiliation or endorsement. See
   [docs/branding-and-trademarks.md](docs/branding-and-trademarks.md).
+
+<!-- OMES-MERMAID: THIRD_PARTY_NOTICES.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    Discover[Discover dependency] --> License[Review license]
+    License --> Record[Record notice]
+    Record --> Verify[Verify on release]
+    Verify --> Publish[Publish notices]
+```
+

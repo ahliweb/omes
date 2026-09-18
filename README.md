@@ -140,3 +140,17 @@ mapping.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+<!-- OMES-MERMAID: README.md -->
+
+## Visual summary
+
+```mermaid
+flowchart LR
+    B[Bootstrap] --> C[Check]
+    C --> D[Diff]
+    D --> A[Apply]
+    A --> V[Verify]
+    V --> R[Rollback on failure]
+```
+

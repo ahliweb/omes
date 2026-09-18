@@ -291,3 +291,18 @@ change) on each of the following triggers, whichever comes first:
   at least one tier in the same PR that acknowledges the EOL date;
 - a Tier 2 platform accumulates repeated periodic-test failures — downgraded to Tier 3
   pending investigation.
+
+<!-- OMES-MERMAID: docs/compatibility-matrix.md -->
+
+## Visual summary
+
+```mermaid
+flowchart TD
+    Host[Host detected] --> OS{Supported OS?}
+    OS -->|Ubuntu Server LTS| Server[Server profile]
+    OS -->|Linux Mint| Mint[Desktop profile optional]
+    OS -->|Other| Stop[Stop with rationale]
+    Server --> Check[Run compatibility checks]
+    Mint --> Check
+```
+
