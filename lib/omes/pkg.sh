@@ -57,19 +57,14 @@ pkg_missing() {
   done
 }
 
-# _pkg_network_available
-# Internal helper: true when network is usable for apt operations. Honors
-# OMES_ASSUME_OFFLINE=1 / OMES_ASSUME_ONLINE=1 (see lib/omes/detect.sh) so
-# this is deterministically testable without real connectivity.
-_pkg_network_available() {
-  if [[ "${OMES_ASSUME_OFFLINE:-0}" == "1" ]]; then
-    return 1
-  fi
-  if [[ "${OMES_ASSUME_ONLINE:-0}" == "1" ]]; then
-    return 0
-  fi
-  detect_network
-}
+# Network checks below call detect_network() (lib/omes/detect.sh) directly,
+# rather than re-deriving their own online/offline decision, so there is a
+# single source of truth for "is the network usable" across the codebase.
+# detect_network already honors OMES_ASSUME_ONLINE=1 / OMES_ASSUME_OFFLINE=1
+# (checked in that order) so callers/tests wanting a deterministic offline
+# result must also clear OMES_ASSUME_ONLINE (e.g.
+# `OMES_ASSUME_ONLINE=0 OMES_ASSUME_OFFLINE=1`), matching detect_network's
+# own contract and tests.
 
 # ---------------------------------------------------------------------------
 # apt-get update (rate-limited)
@@ -104,7 +99,7 @@ pkg_apt_update() {
     return 0
   fi
 
-  if ! _pkg_network_available; then
+  if ! detect_network; then
     log_error "pkg: apt-get update requires network access, but network is unavailable"
     return "$OMES_EX_NETWORK"
   fi
@@ -146,7 +141,7 @@ pkg_candidate_version() {
 pkg_exists_in_repos() {
   local pkg="$1"
 
-  if ! _pkg_network_available; then
+  if ! detect_network; then
     log_error "pkg: cannot validate '${pkg}' availability: network is unavailable"
     return "$OMES_EX_NETWORK"
   fi
@@ -247,7 +242,7 @@ pkg_install() {
     return 0
   fi
 
-  if ! _pkg_network_available; then
+  if ! detect_network; then
     log_error "pkg: install requires network access for: ${missing[*]}"
     return "$OMES_EX_NETWORK"
   fi

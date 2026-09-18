@@ -237,3 +237,55 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "root-mod" ]
 }
+
+# --- run_apply exit-code mapping (lib/omes/pkg.sh return-code convention) --
+
+@test "run_apply maps a module_apply return of exactly OMES_EX_NETWORK to process exit 8" {
+  local dir="${OMES_TEST_TMPDIR}/modroot/modules/net-mod"
+  mkdir -p "$dir"
+  cat > "${dir}/module.sh" <<'EOF'
+MODULE_NAME="net-mod"
+MODULE_DESCRIPTION="returns the network sentinel from module_apply"
+MODULE_SCOPE="root"
+MODULE_REQUIRES=()
+module_check() { :; }
+module_apply() { return 8; }
+module_verify() { :; }
+module_rollback() { :; }
+EOF
+  run env OMES_ROOT="${OMES_TEST_TMPDIR}/modroot" OMES_TEST=1 OMES_FAKE_ROOT=1 bash -c '
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/core.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/log.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/state.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/backup.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/module.sh"
+    state_init >/dev/null
+    run_apply net-mod
+  '
+  [ "$status" -eq 8 ]
+}
+
+@test "run_apply maps any other module_apply failure to process exit 6" {
+  local dir="${OMES_TEST_TMPDIR}/modroot/modules/fail-mod"
+  mkdir -p "$dir"
+  cat > "${dir}/module.sh" <<'EOF'
+MODULE_NAME="fail-mod"
+MODULE_DESCRIPTION="returns a generic failure from module_apply"
+MODULE_SCOPE="root"
+MODULE_REQUIRES=()
+module_check() { :; }
+module_apply() { return 1; }
+module_verify() { :; }
+module_rollback() { :; }
+EOF
+  run env OMES_ROOT="${OMES_TEST_TMPDIR}/modroot" OMES_TEST=1 OMES_FAKE_ROOT=1 bash -c '
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/core.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/log.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/state.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/backup.sh"
+    source "'"${OMES_TEST_ROOT}"'/lib/omes/module.sh"
+    state_init >/dev/null
+    run_apply fail-mod
+  '
+  [ "$status" -eq 6 ]
+}
