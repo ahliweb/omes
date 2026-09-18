@@ -50,20 +50,19 @@ teardown() {
   [ "$status" -eq 2 ]
 }
 
-@test "stub commands report not-implemented and exit 1" {
-  run "$OMES_BIN" restore
+@test "stub commands (doctor, update) report not-implemented and exit 1" {
+  run "$OMES_BIN" doctor
   [ "$status" -eq 1 ]
   [[ "$output" == *"Not implemented yet"* ]]
 
-  run "$OMES_BIN" backup
-  [ "$status" -eq 1 ]
-
-  run "$OMES_BIN" uninstall
-  [ "$status" -eq 1 ]
-
-  run "$OMES_BIN" doctor
-  [ "$status" -eq 1 ]
-
   run "$OMES_BIN" update
   [ "$status" -eq 1 ]
+  [[ "$output" == *"Not implemented yet"* ]]
+}
+
+@test "stub commands --json still emit a single valid JSON object with ok:false and exit 1" {
+  run "$OMES_BIN" doctor --json
+  [ "$status" -eq 1 ]
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["ok"] is False; assert d["exit_code"]==1' <<< "$output"
+  [ "$status" -eq 0 ]
 }

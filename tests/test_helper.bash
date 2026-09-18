@@ -48,3 +48,23 @@ omes_test_teardown() {
 omes_fixture_path() {
   printf '%s/%s\n' "$OMES_TEST_TMPDIR" "$1"
 }
+
+# omes_run_stdout_only <command...>
+# Like bats' `run`, but captures ONLY stdout into $output (discarding
+# stderr) and sets $status, exactly the two variables `run` would have
+# set. bats' own `run` captures merged stdout+stderr into $output, which
+# is the right default for human-mode assertions but WRONG for asserting
+# the --json contract (docs/architecture.md Section 8.2: exactly one JSON
+# object on stdout, all logging on stderr) whenever the command under
+# test also logs via log_info/log_warn - a merged $output would contain
+# both and fail to parse as JSON even though the CLI is behaving
+# correctly. Use this instead of `run` whenever a test pipes $output into
+# `python3 -m json.tool`/`json.loads` for a command that also logs.
+omes_run_stdout_only() {
+  # status/output are bats convention names, read by the test body exactly
+  # like a normal `run` would set them.
+  # shellcheck disable=SC2034
+  output="$("$@" 2>/dev/null)"
+  # shellcheck disable=SC2034
+  status=$?
+}

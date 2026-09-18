@@ -330,6 +330,11 @@ run_apply() {
 
     if ! omes_dry_run; then
       backup_finish >/dev/null
+      # Retention (docs/architecture.md Section 7.5): prune after every
+      # successful apply's backup step, never after a failed one (a
+      # failed apply's backup is exactly the recovery point an operator
+      # needs, so it must not be pruned away by an unrelated success).
+      backup_prune
     fi
 
     if omes_dry_run; then

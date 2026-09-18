@@ -26,6 +26,8 @@ source "${OMES_ROOT}/lib/omes/backup.sh"
 source "${OMES_ROOT}/lib/omes/module.sh"
 # shellcheck source=lib/omes/pkg.sh
 source "${OMES_ROOT}/lib/omes/pkg.sh"
+# shellcheck source=lib/omes/restore.sh
+source "${OMES_ROOT}/lib/omes/restore.sh"
 
 omes_install_err_trap
 
@@ -37,6 +39,8 @@ declare -a OMES_MANAGED_PATHS=()
 OMES_PROFILE=""
 declare -a OMES_SELECTED_MODULES=()
 RESTORE_FROM=""
+RESTORE_LIST=0
+BACKUP_REASON=""
 PURGE_PACKAGES=0
 
 # ---------------------------------------------------------------------------
@@ -54,22 +58,24 @@ Commands:
   modules              List available modules (scope, description, status).
   version              Print the OMES version.
   help                 Show this help.
+  backup               Create an on-demand backup of all managed paths.
+  restore              Restore files from a backup session (offline-safe).
+  uninstall            Roll back applied modules and their managed paths.
   doctor               Not implemented yet (tracked in #14).
-  backup               Not implemented yet (tracked in #10).
-  restore              Not implemented yet (tracked in #10).
   update               Not implemented yet (tracked in #14).
-  uninstall            Not implemented yet (tracked in #10).
 
 Global flags:
   --profile <name>       server | desktop | hermes
   --module <name>        select a single module (repeatable)
   --dry-run              print planned actions, mutate nothing
-  --json                 emit a single JSON object on stdout (check/status/modules/version)
+  --json                 emit a single JSON object on stdout
   --yes                  auto-confirm mutating actions
   --verbose              print debug-level log lines to the console
   --log-file <path>      override the log file location
   --allow-docker-group   opt in to granting root-equivalent docker group access
-  --from <timestamp>     (restore) pick a specific backup
+  --from <timestamp>     (restore) pick a specific backup session
+  --list                 (restore) list available backup sessions, then exit
+  --reason <text>        (backup) short reason recorded in the session's META
   --purge-packages       (uninstall) also remove OMES-installed packages
 
 Environment overrides:
@@ -124,16 +130,17 @@ cmd_version() {
 
 cmd_stub() {
   local stub_command="$1"
-  local msg
-  case "$stub_command" in
-    doctor | update)
-      msg="Not implemented yet (tracked in #14)"
-      ;;
-    *)
-      msg="Not implemented yet (tracked in #10)"
-      ;;
-  esac
-  printf '[omes] %s\n' "$msg" >&2
+  local msg="Not implemented yet (tracked in #14)"
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command "$stub_command")" \
+      "$(json_kv ok false --raw)" \
+      "$(json_kv error "$msg")" \
+      "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+    printf '\n'
+  else
+    printf '[omes] %s\n' "$msg" >&2
+  fi
   exit "$OMES_EX_ERROR"
 }
 
@@ -444,6 +451,337 @@ cmd_modules() {
   exit "$OMES_EX_OK"
 }
 
+# _omes_meta_get <meta-file> <key>
+# Prints the value of <key> from a backup session's META file (same
+# key=value format as the state file). Empty output when the file is
+# unreadable or the key is absent.
+_omes_meta_get() {
+  local meta="$1" key="$2"
+  [[ -r "$meta" ]] || return 0
+  grep "^${key}=" "$meta" 2>/dev/null | head -n1 | cut -d= -f2-
+}
+
+cmd_backup() {
+  local -a targets=()
+  if [[ -n "${OMES_SELECTED_MODULES[0]:-}" ]]; then
+    targets=("${OMES_SELECTED_MODULES[0]}")
+  else
+    mapfile -t targets < <(state_list_modules)
+  fi
+
+  local -a all_paths=()
+  local m paths_str old_ifs
+  for m in "${targets[@]}"; do
+    paths_str="$(state_get "module.${m}.managed_paths" 2>/dev/null || true)"
+    [[ -z "$paths_str" ]] && continue
+    local -a mod_paths=()
+    old_ifs="$IFS"
+    IFS=':'
+    read -r -a mod_paths <<< "$paths_str"
+    IFS="$old_ifs"
+    all_paths+=("${mod_paths[@]}")
+  done
+
+  if [[ "${#all_paths[@]}" -eq 0 ]]; then
+    log_info "backup: no managed paths recorded for the requested module(s); nothing to back up"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command backup)" "$(json_kv ok true --raw)" "$(json_kv backup_dir "")" "$(json_kv files_backed_up 0 --raw)" "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] would back up ${#all_paths[@]} managed path(s): ${all_paths[*]}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command backup)" "$(json_kv ok true --raw)" "$(json_kv backup_dir "")" "$(json_kv files_backed_up "${#all_paths[@]}" --raw)" "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  state_init >/dev/null
+
+  local session_label="${OMES_SELECTED_MODULES[0]:-all}"
+  backup_begin "$session_label" "${BACKUP_REASON:-manual}" >/dev/null
+  local p
+  for p in "${all_paths[@]}"; do
+    backup_path "$p"
+  done
+  local dir
+  dir="$(backup_finish)"
+  # shellcheck disable=SC2119  # default retention comes from OMES_BACKUP_KEEP
+  backup_prune
+
+  log_info "backup: created $(basename "$dir") (${#all_paths[@]} path(s))"
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command backup)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv backup_dir "$dir")" \
+      "$(json_kv files_backed_up "${#all_paths[@]}" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+
+  exit "$OMES_EX_OK"
+}
+
+cmd_restore() {
+  if [[ "$RESTORE_LIST" == "1" ]]; then
+    local -a sessions=()
+    mapfile -t sessions < <(backup_list)
+
+    if [[ "$OMES_JSON" == "1" ]]; then
+      local -a objs=()
+      local s meta
+      for s in "${sessions[@]}"; do
+        meta="$(omes_state_dir)/backups/${s}/META"
+        objs+=("$(json_obj \
+          "$(json_kv timestamp "$s")" \
+          "$(json_kv module "$(_omes_meta_get "$meta" module)")" \
+          "$(json_kv reason "$(_omes_meta_get "$meta" reason)")" \
+          "$(json_kv started_at "$(_omes_meta_get "$meta" started_at)")")")
+      done
+      json_obj \
+        "$(json_kv command restore)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv backups "$(json_array "${objs[@]}")" --raw)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    else
+      if [[ "${#sessions[@]}" -eq 0 ]]; then
+        printf '[omes] restore: no backups available\n'
+      else
+        printf '[omes] backups (oldest first):\n'
+        local s meta
+        for s in "${sessions[@]}"; do
+          meta="$(omes_state_dir)/backups/${s}/META"
+          printf '[omes]   %-18s module=%-14s reason=%s\n' \
+            "$s" "$(_omes_meta_get "$meta" module)" "$(_omes_meta_get "$meta" reason)"
+        done
+      fi
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! omes_dry_run; then
+    if ! omes_confirm "Restore from backup ${RESTORE_FROM:-<latest>}? Current files are backed up first."; then
+      log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+      exit "$OMES_EX_ERROR"
+    fi
+  fi
+
+  if restore_backup "$RESTORE_FROM"; then
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command restore)" "$(json_kv ok true --raw)" "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    else
+      log_info "restore: complete"
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj "$(json_kv command restore)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_BACKUP" --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_BACKUP"
+}
+
+# _omes_uninstall_report_packages <module>
+# Prints the packages OMES recorded as installed by <module> and the exact
+# `apt-get remove` command an operator could run - unconditionally (this
+# is the "print by default" half of the --purge-packages policy).
+_omes_uninstall_report_packages() {
+  local mod="$1"
+  local installed
+  installed="$(state_get "module.${mod}.installed_packages" 2>/dev/null || true)"
+  [[ -n "$installed" ]] || return 0
+
+  local -a pkgs=()
+  local old_ifs="$IFS"
+  IFS=':'
+  read -r -a pkgs <<< "$installed"
+  IFS="$old_ifs"
+
+  log_info "uninstall: '${mod}' installed these packages (kept unless --purge-packages): ${pkgs[*]}"
+  log_info "uninstall: to remove them yourself: apt-get remove ${pkgs[*]}"
+}
+
+# _omes_uninstall_handle_packages <module>
+# Always reports (see above); additionally purges via `apt-get remove`
+# when PURGE_PACKAGES=1 - and ONLY the packages recorded as installed by
+# THIS module (never anything else), clearing that state key once removed
+# so a re-run does not try to remove them again.
+_omes_uninstall_handle_packages() {
+  local mod="$1"
+  local installed
+  installed="$(state_get "module.${mod}.installed_packages" 2>/dev/null || true)"
+
+  _omes_uninstall_report_packages "$mod"
+
+  [[ -n "$installed" ]] || return 0
+  [[ "$PURGE_PACKAGES" == "1" ]] || return 0
+
+  local -a pkgs=()
+  local old_ifs="$IFS"
+  IFS=':'
+  read -r -a pkgs <<< "$installed"
+  IFS="$old_ifs"
+
+  if ! DEBIAN_FRONTEND=noninteractive omes_run apt-get remove -y "${pkgs[@]}"; then
+    omes_die "$OMES_EX_ROLLBACK" "uninstall: apt-get remove failed for module: ${mod}"
+  fi
+
+  state_unset "module.${mod}.installed_packages"
+}
+
+cmd_uninstall() {
+  local -a state_modules=()
+  mapfile -t state_modules < <(state_list_modules)
+
+  # Resolve target modules FROM STATE ONLY - a --profile/--module request
+  # names candidates, but uninstall never touches a module OMES never
+  # recorded as applied (docs/scope.md Section 5: "removes only the
+  # files/services/configuration OMES itself recorded as managed").
+  local -a requested=()
+  if [[ -n "$OMES_PROFILE" ]]; then
+    local -a profile_mods=()
+    mapfile -t profile_mods < <(profile_load "$OMES_PROFILE")
+    local pm sm
+    for pm in "${profile_mods[@]}"; do
+      for sm in "${state_modules[@]}"; do
+        if [[ "$pm" == "$sm" ]]; then
+          requested+=("$pm")
+          break
+        fi
+      done
+    done
+  elif [[ "${#OMES_SELECTED_MODULES[@]}" -gt 0 ]]; then
+    local wm sm found
+    for wm in "${OMES_SELECTED_MODULES[@]}"; do
+      found=0
+      for sm in "${state_modules[@]}"; do
+        [[ "$wm" == "$sm" ]] && found=1 && break
+      done
+      if [[ "$found" -eq 0 ]]; then
+        log_info "uninstall: module '${wm}' has no recorded state; nothing to do"
+        continue
+      fi
+      requested+=("$wm")
+    done
+  else
+    requested=("${state_modules[@]}")
+  fi
+
+  local -a active=()
+  local m status
+  for m in "${requested[@]}"; do
+    status="$(state_get "module.${m}.status" 2>/dev/null || echo unknown)"
+    if [[ "$status" == "removed" ]]; then
+      log_info "uninstall: module '${m}' is already removed; skipping"
+      continue
+    fi
+    active+=("$m")
+  done
+
+  if [[ "${#active[@]}" -eq 0 ]]; then
+    log_info "uninstall: nothing to do"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command uninstall)" "$(json_kv ok true --raw)" "$(json_kv modules "$(json_array)" --raw)" "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  # Same scope convention as check/install (Section 4.5): an explicit
+  # --module naming a wrong-scope module is a privilege usage error
+  # (exit 5, no mutation); a resolved set that simply mixes scopes is
+  # filtered, not failed.
+  _omes_check_explicit_module_scope "${active[@]}"
+
+  local -a in_scope=()
+  local -a other_scope=()
+  mapfile -t in_scope < <(module_filter_by_scope "${active[@]}")
+  mapfile -t other_scope < <(module_other_scope_modules "${active[@]}")
+
+  if [[ "${#other_scope[@]}" -gt 0 ]]; then
+    log_info "uninstall: skipping modules that require a different privilege level (current: $(module_current_scope)): ${other_scope[*]}"
+  fi
+
+  if [[ "${#in_scope[@]}" -eq 0 ]]; then
+    log_info "uninstall: nothing to uninstall at the current privilege level ($(module_current_scope))"
+    exit "$OMES_EX_OK"
+  fi
+
+  # Reverse dependency order: dependents removed before their
+  # dependencies (the opposite of install's apply order).
+  local -a order=()
+  mapfile -t order < <(module_resolve_order "${in_scope[@]}")
+  local -a reverse=()
+  local i
+  for ((i = ${#order[@]} - 1; i >= 0; i--)); do
+    reverse+=("${order[$i]}")
+  done
+
+  if ! omes_dry_run; then
+    if ! omes_confirm "Uninstall modules: ${reverse[*]}?"; then
+      log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+      exit "$OMES_EX_ERROR"
+    fi
+  fi
+
+  local -a results=()
+  for m in "${reverse[@]}"; do
+    module_load "$m"
+    log_info "uninstall: rolling back module: ${m}"
+
+    if ! module_rollback; then
+      if omes_dry_run; then
+        log_warn "uninstall: [dry-run] module_rollback reported a failure for: ${m} (continuing, dry-run)"
+      else
+        omes_die "$OMES_EX_ROLLBACK" "uninstall: module_rollback failed: ${m}"
+      fi
+    fi
+
+    if ! module_rollback_managed_paths "$m"; then
+      if omes_dry_run; then
+        log_warn "uninstall: [dry-run] managed-path rollback reported a failure for: ${m} (continuing, dry-run)"
+      else
+        omes_die "$OMES_EX_ROLLBACK" "uninstall: failed to roll back managed paths for: ${m}"
+      fi
+    fi
+
+    if omes_dry_run; then
+      _omes_uninstall_report_packages "$m"
+      results+=("$(json_obj "$(json_kv name "$m")" "$(json_kv status would-remove)")")
+      continue
+    fi
+
+    _omes_uninstall_handle_packages "$m"
+
+    state_set "module.${m}.status" "removed"
+    state_set "module.${m}.removed_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    results+=("$(json_obj "$(json_kv name "$m")" "$(json_kv status removed)")")
+    log_info "uninstall: module removed: ${m}"
+  done
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command uninstall)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv modules "$(json_array "${results[@]}")" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  else
+    log_info "uninstall: complete"
+  fi
+
+  exit "$OMES_EX_OK"
+}
+
 # ---------------------------------------------------------------------------
 # Argument parsing + dispatch
 # ---------------------------------------------------------------------------
@@ -499,6 +837,15 @@ main() {
         RESTORE_FROM="$2"
         shift 2
         ;;
+      --list)
+        RESTORE_LIST=1
+        shift
+        ;;
+      --reason)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "--reason requires an argument"
+        BACKUP_REASON="$2"
+        shift 2
+        ;;
       --purge-packages)
         PURGE_PACKAGES=1
         shift
@@ -520,7 +867,7 @@ main() {
   if [[ -n "${OMES_LOG_FILE:-}" ]]; then
     export OMES_LOG_FILE
   fi
-  export RESTORE_FROM PURGE_PACKAGES OMES_ALLOW_DOCKER_GROUP
+  export RESTORE_FROM RESTORE_LIST BACKUP_REASON PURGE_PACKAGES OMES_ALLOW_DOCKER_GROUP
 
   case "$command" in
     check) cmd_check ;;
@@ -528,11 +875,14 @@ main() {
     status) cmd_status ;;
     modules) cmd_modules ;;
     version) cmd_version ;;
+    backup) cmd_backup ;;
+    restore) cmd_restore ;;
+    uninstall) cmd_uninstall ;;
     help)
       print_usage
       exit "$OMES_EX_OK"
       ;;
-    doctor | backup | restore | update | uninstall)
+    doctor | update)
       cmd_stub "$command"
       ;;
     *)

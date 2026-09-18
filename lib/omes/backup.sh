@@ -129,9 +129,13 @@ backup_list() {
 }
 
 # backup_prune [keep]
-# Deletes the oldest backup sessions beyond the last <keep> (default 10).
+# Deletes the oldest backup sessions beyond the last <keep>. Defaults to
+# the OMES_BACKUP_KEEP environment variable when no argument is given,
+# falling back to 10 when that is unset too (docs/architecture.md Section
+# 7.5). Wired in by lib/omes/module.sh's run_apply (after every successful
+# module_apply's backup) and by `omes backup` (bin/omes).
 backup_prune() {
-  local keep="${1:-10}"
+  local keep="${1:-${OMES_BACKUP_KEEP:-10}}"
   local dir
   dir="$(omes_state_dir)/backups"
   [[ -d "$dir" ]] || return 0
