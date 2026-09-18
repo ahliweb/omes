@@ -63,6 +63,23 @@ One-line description of the user-visible change.
 `CHANGELOG.md` is compiled from these fragments at release time — do not
 edit `CHANGELOG.md` directly in a feature/docs PR.
 
+### Cutting a release
+
+Releases follow [ADR-0010](docs/adr/0010-versioning-and-change-fragments.md)
+and are cut from a clean, green `main` with `scripts/release.sh`:
+
+```bash
+scripts/release.sh 0.2.0 --dry-run   # preview the compiled CHANGELOG section
+scripts/release.sh 0.2.0             # compile changes/*.md, set VERSION, remove
+                                     # the fragments, commit, and tag v0.2.0
+git push origin main --follow-tags
+```
+
+The script refuses to run on a dirty tree, on an existing tag, or when
+`changes/` is empty, and rejects malformed fragments. Create the GitHub
+release from the tag afterwards (`gh release create vX.Y.Z --notes-from-tag`
+or paste the CHANGELOG section).
+
 ## 5. Required local workflow: ShellCheck, bats, and the test matrix
 
 All shell code (`bin/`, `lib/`, `modules/`, `install/`, `tests/shims/`) must
