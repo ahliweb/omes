@@ -24,6 +24,8 @@ source "${OMES_ROOT}/lib/omes/state.sh"
 source "${OMES_ROOT}/lib/omes/backup.sh"
 # shellcheck source=lib/omes/module.sh
 source "${OMES_ROOT}/lib/omes/module.sh"
+# shellcheck source=lib/omes/pkg.sh
+source "${OMES_ROOT}/lib/omes/pkg.sh"
 
 omes_install_err_trap
 
