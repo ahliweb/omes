@@ -1,0 +1,120 @@
+name: Compatibility
+
+# Exercises `bin/omes` inside the OS containers from docs/compatibility-matrix.md
+# on every pull request, every push to main, weekly on a schedule, and on
+# demand. The core installer (bin/omes, lib/omes/*.sh, modules/, profiles/)
+# is tracked separately in issue #6 and may not exist yet on this branch;
+# every step that depends on it is guarded with `if: hashFiles('bin/omes') != ''`
+# so this workflow is a harmless no-op before #6 merges and exercises the
+# real CLI once it does. See docs/ci.md for how this matrix maps to the
+# compatibility-matrix.md support tiers.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "17 3 * * 1"  # weekly, Monday 03:17 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    name: ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - "ubuntu:24.04"
+          - "ubuntu:22.04"
+          - "linuxmintd/mint22-amd64"
+    container:
+      image: ${{ matrix.image }}
+    steps:
+      - name: Install prerequisites (sudo, curl, ca-certificates, git)
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y --no-install-recommends sudo curl ca-certificates git
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: bin/omes version --json
+        if: hashFiles('bin/omes') != ''
+        run: bin/omes version --json
+
+      - name: bin/omes check --json
+        if: hashFiles('bin/omes') != ''
+        # Allowed to report a non-zero preflight result (e.g. a container
+        # legitimately failing a hardware/network check) -- this step
+        # records the result rather than gating the job on it.
+        run: bin/omes check --json || echo "[compatibility] omes check exited non-zero (recorded above, not fatal)"
+
+      - name: bin/omes install --profile server --dry-run --yes
+        if: hashFiles('bin/omes') != ''
+        run: bin/omes install --profile server --dry-run --yes
+
+      - name: bin/omes not present yet
+        if: hashFiles('bin/omes') == ''
+        run: |
+          echo "bin/omes not present yet (core installer #6 not merged); skipping. Tracked in #6."
+
+  real-install-ubuntu-24-04:
+    name: Real install + idempotency (ubuntu:24.04, root)
+    runs-on: ubuntu-24.04
+    # This job is allowed to fail until the security-baseline (#7) and
+    # Hermes (#15) modules land -- a real, non-dry-run `omes install` on a
+    # bare container currently has no applicable modules to prove
+    # end-to-end. See docs/ci.md.
+    continue-on-error: true
+    container:
+      image: ubuntu:24.04
+    steps:
+      - name: Install prerequisites (sudo, curl, ca-certificates, git)
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y --no-install-recommends sudo curl ca-certificates git
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: First install (real, non-dry-run, as root)
+        if: hashFiles('bin/omes') != ''
+        run: bin/omes install --profile server --yes
+
+      - name: Second install (idempotency check)
+        if: hashFiles('bin/omes') != ''
+        run: bin/omes install --profile server --yes
+
+      - name: bin/omes not present yet
+        if: hashFiles('bin/omes') == ''
+        run: |
+          echo "bin/omes not present yet (core installer #6 not merged); skipping. Tracked in #6."
+
+      - name: Locate the omes log directory
+        if: always() && hashFiles('bin/omes') != ''
+        id: logdir
+        run: |
+          dir="/var/lib/omes/logs"
+          if [[ -d "$dir" ]]; then
+            echo "path=$dir" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload omes logs
+        if: always() && steps.logdir.outputs.path != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: omes-logs-ubuntu-24.04
+          path: ${{ steps.logdir.outputs.path }}
+          if-no-files-found: ignore

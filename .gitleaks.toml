@@ -1,0 +1,29 @@
+title = "OMES gitleaks config"
+
+# Start from gitleaks' built-in default ruleset (generic API keys, cloud
+# provider keys, private keys, common SaaS tokens, ...) and layer an
+# OMES-specific allowlist on top. See docs/ci.md for the policy on adding a
+# new allowlist entry (every entry must be justified in the PR that adds it).
+[extend]
+useDefault = true
+
+[allowlist]
+description = "OMES-specific allowlist: test fixtures and documented example placeholders"
+
+paths = [
+  # Fixtures are static, fake /etc/os-release content, not secrets; see
+  # docs/adr/0009-testing-with-bats-in-containers.md and
+  # docs/compatibility-matrix.md section 7.
+  '''^tests/fixtures/.*''',
+]
+
+regexes = [
+  # docs/security.md documents the *convention* for a fake, obviously-not-real
+  # placeholder value for the Hermes/Telegram bot token env var
+  # (TELEGRAM_BOT_TOKEN=changeme) and the "123456789:ABC..." shape of a real
+  # Telegram bot token when explaining what NOT to commit. Neither is a real
+  # secret; both are allowlisted here so a future edit to this exact
+  # documented example doesn't need a new PR to adjust gitleaks config.
+  '''TELEGRAM_BOT_TOKEN=changeme''',
+  '''123456789:ABC[A-Za-z0-9_-]*''',
+]
