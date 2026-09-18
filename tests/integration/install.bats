@@ -114,6 +114,23 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
+@test "re-running install keeps applied_at stable and only moves last_run_at" {
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
+  [ "$status" -eq 0 ]
+  local first_applied first_run
+  first_applied="$(grep '^module.apt-base.applied_at=' "${OMES_STATE_DIR}/state")"
+  first_run="$(grep '^module.apt-base.last_run_at=' "${OMES_STATE_DIR}/state")"
+  [ -n "$first_applied" ]
+  [ -n "$first_run" ]
+
+  # Force a different timestamp on the second run.
+  sleep 1
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
+  [ "$status" -eq 0 ]
+  [ "$(grep '^module.apt-base.applied_at=' "${OMES_STATE_DIR}/state")" = "$first_applied" ]
+  [ "$(grep '^module.apt-base.last_run_at=' "${OMES_STATE_DIR}/state")" != "$first_run" ]
+}
+
 @test "install without --profile or --module is a usage error (exit 2)" {
   run "$OMES_BIN" install --yes
   [ "$status" -eq 2 ]
