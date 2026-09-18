@@ -17,6 +17,12 @@ setup() {
 
   export HOME="${OMES_TEST_TMPDIR}/home"
   mkdir -p "$HOME"
+  # modules/desktop-config resolves ${XDG_CONFIG_HOME:-$HOME/.config}; some
+  # environments (observed on GitHub Actions' ubuntu-24.04 hosted runner)
+  # already export a real XDG_CONFIG_HOME, which would otherwise win over
+  # this test's isolated $HOME override and write into the real runner
+  # account's ~/.config.
+  unset XDG_CONFIG_HOME || true
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
   cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
@@ -141,18 +147,6 @@ _cinnamon_untouched() {
 
 @test "install --profile desktop as non-root applies desktop-preflight and desktop-config, and tells the operator to sudo for the rest" {
   run "$OMES_BIN" install --profile desktop --yes
-  if [ "$status" -ne 0 ] || [ ! -f "${HOME}/.config/hypr/hyprland.conf" ]; then
-    {
-      echo "DEBUG install status=${status}"
-      echo "DEBUG install output:"
-      echo "$output"
-      echo "DEBUG find \$HOME:"
-      find "$HOME" 2>&1
-      echo "DEBUG id: $(id)"
-      echo "DEBUG PATH=$PATH"
-      echo "DEBUG which omes-config-hypr-src: $(ls -la "${OMES_TEST_ROOT}/config/hypr" 2>&1)"
-    } >&3
-  fi
   [ "$status" -eq 0 ]
   [[ "$output" == *"Run with sudo: sudo omes install --profile desktop"* ]]
 
