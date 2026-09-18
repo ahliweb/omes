@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
 # Managed by OMES (modules/desktop-config) - installed at
 # ~/.config/omes/shell.sh and sourced from ~/.bashrc via a marker block.
 # Do not edit by hand if you plan to keep re-applying `omes install
