@@ -73,12 +73,10 @@
 #     apt-base's packages always fails at the preflight stage: exit 4, not
 #     8. The `offline` scenario asserts this exact code and documents why,
 #     rather than accepting either value opaquely.
-#   - `rerun`'s substantive idempotency check (no `apt-get install` call on
-#     a no-op re-apply) is blocking; its `applied_at`-unchanged check is
-#     NOT, because lib/omes/module.sh's run_apply unconditionally rewrites
-#     module.<name>.applied_at on every successful apply, even a no-op one
-#     - a confirmed gap, out of this issue's file scope to fix (see
-#     docs/testing.md "Known gaps").
+#   - `rerun` is blocking on both idempotency signals: no `apt-get install`
+#     call on a no-op re-apply, and module.<name>.applied_at unchanged
+#     (run_apply only moves applied_at when a module transitions into
+#     "applied"; last_run_at moves on every run).
 
 set -Eeuo pipefail
 IFS=$'\n\t'
@@ -314,15 +312,8 @@ scenario_fresh() {
 # at all) and the recorded package set is unchanged. This is the blocking
 # assertion.
 #
-# `applied_at` is checked too, but NON-BLOCKING and reported as a note only
-# - it is a KNOWN, CONFIRMED GAP (see docs/testing.md "Known gaps"), not a
-# false negative in this script: lib/omes/module.sh's run_apply
-# unconditionally rewrites module.<name>.applied_at (and re-stamps
-# .version/.managed_paths) after every successful module_apply + verify,
-# even one that changed nothing on disk - it does not distinguish "applied
-# for the first time" from "re-applied, no-op". apt-base is off-limits to
-# this issue's file scope (lib/omes/module.sh), so this is documented, not
-# patched here.
+# `applied_at` must be unchanged as well: run_apply keeps it at the first
+# successful apply and only re-stamps last_run_at on a no-op re-run.
 scenario_rerun() {
   local image="$1" container="$2"
   local scenario="rerun"
@@ -353,7 +344,9 @@ scenario_rerun() {
   fi
 
   if [[ "$before_ts" != "$after_ts" ]]; then
-    notes="${notes:+$notes; }[known gap, non-blocking] applied_at changed on a no-op rerun (before=${before_ts} after=${after_ts}) - see docs/testing.md Known gaps"
+    ok=0
+    rc=1
+    notes="${notes:+$notes; }applied_at changed on a no-op rerun (before=${before_ts} after=${after_ts})"
   fi
 
   local dur=$(( $(date +%s) - start ))
