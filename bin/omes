@@ -63,6 +63,9 @@ Commands:
   restore     Restore files from a backup session (offline-safe).
   uninstall   Roll back applied modules and their managed paths.
   update      Fast-forward this checkout via git, then re-run 'check'.
+EOF
+  _omes_print_extension_commands
+  cat <<'EOF'
 
 Global flags:
   --profile <name>       server | desktop | hermes
@@ -113,6 +116,51 @@ _omes_platform_json() {
 # ---------------------------------------------------------------------------
 # Commands
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Extension commands
+#
+# A file lib/omes/cmd/<name>.sh defines `cmd_<name>` (receiving the
+# command's own positional arguments and flags) and a one-line
+# `# omes-help: <summary>` header used by `omes help`. Global flags before
+# the first non-global token are parsed by bin/omes as usual; everything
+# from the first unrecognized token on is handed to the extension verbatim.
+# ---------------------------------------------------------------------------
+
+_omes_cmd_dir() {
+  printf '%s\n' "${OMES_ROOT}/lib/omes/cmd"
+}
+
+# _omes_is_extension_command <name>
+_omes_is_extension_command() {
+  [[ "$1" =~ ^[a-z][a-z0-9-]*$ ]] && [[ -r "$(_omes_cmd_dir)/$1.sh" ]]
+}
+
+_omes_print_extension_commands() {
+  local f name summary
+  shopt -s nullglob
+  local -a files=("$(_omes_cmd_dir)"/*.sh)
+  shopt -u nullglob
+  [[ "${#files[@]}" -gt 0 ]] || return 0
+  printf '\nExtension commands:\n'
+  for f in "${files[@]}"; do
+    name="$(basename "$f" .sh)"
+    summary="$(grep -m1 '^# omes-help:' "$f" | sed 's/^# omes-help:[[:space:]]*//')"
+    printf '  %-11s %s\n' "$name" "${summary:-(no description)}"
+  done
+}
+
+# _omes_run_extension_command <name> [args...]
+_omes_run_extension_command() {
+  local name="$1"
+  shift
+  # shellcheck disable=SC1090  # extension path is computed at runtime
+  source "$(_omes_cmd_dir)/${name}.sh"
+  if ! declare -F "cmd_${name}" >/dev/null 2>&1; then
+    omes_die "$OMES_EX_ERROR" "extension command '${name}' does not define cmd_${name}"
+  fi
+  "cmd_${name}" "$@"
+}
 
 cmd_version() {
   if [[ "$OMES_JSON" == "1" ]]; then
@@ -1122,6 +1170,7 @@ main() {
 
   local command="$1"
   shift
+  local -a OMES_CMD_ARGS=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -1183,6 +1232,11 @@ main() {
         shift
         ;;
       *)
+        if _omes_is_extension_command "$command"; then
+          # Everything from here on belongs to the extension command.
+          OMES_CMD_ARGS=("$@")
+          break
+        fi
         omes_die "$OMES_EX_USAGE" "unknown option: $1"
         ;;
     esac
@@ -1210,7 +1264,11 @@ main() {
     update) cmd_update ;;
     help) cmd_help ;;
     *)
-      omes_die "$OMES_EX_USAGE" "unknown command: $command"
+      if _omes_is_extension_command "$command"; then
+        _omes_run_extension_command "$command" "${OMES_CMD_ARGS[@]}"
+      else
+        omes_die "$OMES_EX_USAGE" "unknown command: $command"
+      fi
       ;;
   esac
 }
