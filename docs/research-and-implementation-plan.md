@@ -1,85 +1,85 @@
-# OMES — Riset Mendalam dan Rencana Implementasi
+# OMES — Deep Research and Implementation Plan
 
-> Status: baseline riset dan implementation plan
-> Tanggal riset: 2026-09-18 (WIB)
+> Status: research baseline and implementation plan
+> Research date: 2026-09-18 (WIB)
 > Repository: https://github.com/ahliweb/omes
 > Owner: ahliweb / Unggul
 
-## 1. Ringkasan eksekutif
+## 1. Executive summary
 
-OMES tidak akan mencoba memasang Omarchy resmi di Ubuntu Server atau Linux Mint. Omarchy resmi adalah distribusi berbasis Arch, Hyprland, dan Quickshell yang dipasang melalui ISO. OMES diposisikan sebagai **compatibility layer dan deployment toolkit yang terinspirasi workflow Omarchy**, dengan Hermes Agent sebagai komponen automation/agentic operation.
+OMES will not attempt to install official Omarchy on Ubuntu Server or Linux Mint. Official Omarchy is an Arch-based distribution built around Hyprland and Quickshell and installed through an ISO. OMES is positioned as an **Omarchy-inspired compatibility layer and deployment toolkit** for Ubuntu Server and Linux Mint, with Hermes Agent as the automation and agentic-operations layer.
 
-Keputusan produk awal:
+Initial product decisions:
 
-- Ubuntu Server LTS: mode headless, Hermes-first, systemd, observability, Docker opsional, tanpa GUI secara default.
-- Linux Mint: mode desktop tambahan dengan Hyprland/Wayland opsional; Cinnamon tetap menjadi fallback.
-- Core OMES: installer idempotent, preflight, backup, rollback, package mapping, service management, diagnostics, dan dokumentasi.
-- Hermes: instalasi per-user atau service-user, profile-safe `HERMES_HOME`, gateway Telegram opsional, dan konfigurasi secret terpisah.
-- Semua fitur desktop bersifat modular karena Hyprland pada Ubuntu memiliki risiko dependency drift dan tidak cocok sebagai baseline server.
+- Ubuntu Server LTS: headless, Hermes-first, systemd-based, observable, optional Docker, no GUI by default.
+- Linux Mint: optional Hyprland/Wayland desktop profile; Cinnamon remains the fallback session.
+- OMES core: idempotent installer, preflight checks, backups, rollback, package mapping, service management, diagnostics, and documentation.
+- Hermes: per-user or service-user installation, profile-safe `HERMES_HOME`, optional Telegram gateway, and separate secret configuration.
+- All desktop features remain modular because Hyprland introduces dependency drift risk and is not appropriate as a server baseline.
 
-## 2. Temuan riset teknis
+## 2. Technical research findings
 
 ### 2.1 Upstream Omarchy
 
-Omarchy menggabungkan Arch, Hyprland, Quickshell, Neovim, terminal/TUI workflow, development tools, AI CLI, themes, update channels, security defaults, dan system snapshots. Nilai produknya bukan sekadar daftar paket, tetapi integrasi opinionated, workflow keyboard-first, dan operasi yang terkoordinasi.
+Omarchy combines Arch, Hyprland, Quickshell, Neovim, terminal/TUI workflows, development tools, AI CLIs, themes, update channels, security defaults, and system snapshots. Its product value is not merely a package list; it is an opinionated integration, keyboard-first workflow, and coordinated operating model.
 
-Fitur yang layak diadopsi sebagai konsep OMES:
+Concepts suitable for OMES:
 
 - opinionated developer baseline;
 - terminal/TUI-first workflow;
-- mise untuk runtime/tool version management;
-- agent sebagai first-class workflow;
+- mise for runtime and tool version management;
+- agents as first-class workflow components;
 - theme/configuration layer;
-- update, diagnostics, backup, dan rollback yang eksplisit;
-- security-by-default dan dokumentasi recovery.
+- explicit update, diagnostics, backup, and rollback workflows;
+- security-by-default and documented recovery.
 
-Fitur yang tidak boleh disalin secara langsung sebagai asumsi:
+Features that must not be copied as assumptions:
 
-- pacman/AUR/Arch mirror;
+- pacman/AUR/Arch mirror behavior;
 - Limine snapshot boot flow;
-- konfigurasi ISO dan full-disk install;
-- klaim bahwa Ubuntu/Mint mempunyai dependency/update guarantees yang sama.
+- ISO and full-disk installation;
+- any claim that Ubuntu/Mint provides the same dependency or update guarantees.
 
-### 2.2 Kelayakan Ubuntu dan Linux Mint
+### 2.2 Ubuntu and Linux Mint feasibility
 
-Ubuntu Server menyediakan autoinstall YAML yang divalidasi schema dan command list-nya berjalan sebagai root. Ini cocok untuk provisioning baseline, tetapi memperbesar risiko jika installer OMES memasukkan command remote atau command yang tidak idempotent. Karena itu autoinstall harus menjadi artefak terpisah, tervalidasi, dan tidak menjadi satu-satunya jalur instalasi.
+Ubuntu Server provides schema-validated autoinstall YAML, and its command lists run as root. This is suitable for provisioning a baseline but increases the risk of remote or non-idempotent commands. Autoinstall must therefore be a separate, validated artifact and must not be the only installation path.
 
-Linux Mint cocok untuk desktop personal dan memiliki dukungan LTS, tetapi dependency desktop, GPU, compositor, display manager, portal, dan kernel harus diuji per versi. Mint diperlakukan sebagai Ubuntu derivative dengan compatibility matrix sendiri.
+Linux Mint is suitable for personal desktop use and provides LTS releases, but desktop dependencies, GPU support, compositor, display manager, portals, and kernel behavior must be tested per release. Mint requires its own compatibility matrix as an Ubuntu derivative.
 
-Hyprland upstream memperingatkan bahwa Ubuntu dapat tertinggal pada dependency dan packaged version tertentu. Oleh karena itu:
+Hyprland upstream warns that Ubuntu may lag in dependencies and packaged versions. Therefore:
 
-- jangan menjadikan build-from-source sebagai jalur default MVP;
-- lakukan preflight versi kernel, Mesa, Wayland, GPU, display manager, portal, dan session;
-- pertahankan Cinnamon sebagai recovery/fallback;
-- sediakan mode server tanpa Hyprland.
+- source builds must not be the default MVP path;
+- preflight must check kernel, Mesa, Wayland, GPU, display manager, portal, and session requirements;
+- Cinnamon must remain available as a recovery fallback;
+- server mode must not depend on Hyprland.
 
-Docker juga menyatakan instalasi pada Ubuntu derivative seperti Linux Mint tidak resmi didukung walaupun dapat bekerja. OMES harus mendeteksi Mint, memberi warning, dan menguji jalur paket yang dipilih; jangan menjanjikan support Docker yang setara dengan Ubuntu.
+Docker also states that installation on Ubuntu derivatives such as Linux Mint is not officially supported, even though it may work. OMES must detect Mint, provide a warning, and test the selected package path; it must not promise the same Docker support level as Ubuntu.
 
 ### 2.3 Hermes Agent
 
-Hermes menyediakan installer Linux, `hermes setup`, `hermes doctor`, profile melalui `HERMES_HOME`, konfigurasi terpisah antara `config.yaml` dan secret `.env`, serta gateway messaging. Gateway mendukung user service maupun system service; server headless dapat memakai system service atau user service dengan lingering.
+Hermes provides a Linux installer, `hermes setup`, `hermes doctor`, profiles through `HERMES_HOME`, separate `config.yaml` and `.env` secret storage, and a messaging gateway. The gateway supports user services and system services; headless servers can use a system service or a user service with lingering enabled.
 
-Implikasi desain:
+Design implications:
 
-- OMES tidak boleh menaruh token provider atau Telegram di repository.
-- Setiap profile harus memiliki scope secret dan state yang jelas.
-- `hermes config set` lebih aman daripada hand-edit YAML.
-- `hermes doctor` menjadi health check wajib setelah instalasi.
-- Telegram harus menggunakan numeric allowlist, bukan wildcard secara default.
-- Service gateway harus mempunyai PATH eksplisit agar launcher, Node, ffmpeg, dan tooling dapat ditemukan.
-- Perintah agent yang mempunyai dampak sistem harus melewati approval policy Hermes.
+- OMES must never place provider or Telegram tokens in the repository.
+- Each profile must have an explicit secret and state boundary.
+- `hermes config set` is safer than hand-editing YAML.
+- `hermes doctor` is a mandatory post-install health check.
+- Telegram must use numeric allowlists rather than wildcards by default.
+- The gateway service must have an explicit PATH so launchers, Node, ffmpeg, and related tooling are available.
+- Agent commands with system impact must remain subject to Hermes approval policies.
 
-### 2.4 Security dan operasional
+### 2.4 Security and operations
 
-Inspirasi security Omarchy yang dapat dipakai: firewall default-deny, encrypted storage bila tersedia, update policy, SSH yang eksplisit, dan recovery path. Namun OMES tidak mengontrol bootloader atau disk encryption pada host existing; klaim security harus dibatasi pada konfigurasi yang benar-benar dikelola OMES.
+Security concepts from Omarchy that can inform OMES include default-deny firewalling, encrypted storage where available, update policy, explicit SSH activation, and recovery paths. However, OMES does not control the bootloader or disk encryption on an existing host; security claims must be limited to settings actually managed by OMES.
 
-Docker daemon tetap sensitif: akses grup `docker` setara root. OMES tidak boleh otomatis menambahkan user ke grup `docker` tanpa opt-in yang menjelaskan risikonya. Pilihan default:
+The Docker daemon is also sensitive: membership in the `docker` group is effectively root-level access. OMES must not automatically add a user to that group without explicit opt-in and a risk warning. Defaults should be:
 
-1. `sudo docker` untuk host biasa;
-2. rootless Docker bila kebutuhan dan prerequisite terpenuhi;
-3. docker group hanya dengan explicit opt-in.
+1. `sudo docker` for ordinary hosts;
+2. rootless Docker when requirements are met;
+3. the `docker` group only through explicit opt-in.
 
-## 3. Arsitektur target
+## 3. Target architecture
 
 ```text
 omes/
@@ -125,107 +125,107 @@ omes/
     └── compatibility.yml
 ```
 
-Prinsip dependency:
+Dependency principles:
 
-- `preflight` tidak melakukan mutasi;
-- `install` hanya memanggil modul yang lolos preflight;
-- setiap modul memiliki `check`, `apply`, `verify`, dan bila memungkinkan `rollback`;
-- state OMES disimpan secara terukur, bukan berdasarkan asumsi isi file;
-- root operation dipisahkan dari user operation;
-- konfigurasi pengguna selalu dibackup sebelum dikelola;
-- output tersedia dalam human-readable dan JSON.
+- `preflight` performs no mutation;
+- `install` calls only modules that pass preflight;
+- every module has `check`, `apply`, `verify`, and, where practical, `rollback` operations;
+- OMES state is tracked explicitly rather than inferred from file contents;
+- root operations are separated from user operations;
+- user configuration is backed up before it is managed;
+- output is available in human-readable and JSON formats.
 
-## 4. Tahapan implementasi
+## 4. Implementation phases
 
-### Phase 0 — Foundation dan keputusan desain
+### Phase 0 — Foundation and design decisions
 
-Issue: #1, #2, #3, #4, #5, #18, #26
+Issues: #1, #2, #3, #4, #5, #18, #26
 
 Deliverables:
 
-- scope/non-goals;
-- feature inventory dan compatibility matrix;
+- scope and non-goals;
+- feature inventory and compatibility matrix;
 - threat model;
-- arsitektur modul;
-- naming/licensing/third-party notices;
-- README dan contribution rules.
+- module architecture;
+- naming, licensing, and third-party notices;
+- README and contribution rules.
 
-Gate: tidak ada installer production sebelum OS matrix, threat model, dan rollback policy disetujui.
+Gate: no production installer work begins until the OS matrix, threat model, and rollback policy are approved.
 
-### Phase 1 — Preflight dan core installer
+### Phase 1 — Preflight and core installer
 
-Issue: #6, #9, #10, #14
+Issues: #6, #9, #10, #14
 
 Deliverables:
 
 - `omes check`;
-- OS/version/architecture detection;
-- privilege/network/disk/display/GPU checks;
-- dry-run;
+- OS, version, and architecture detection;
+- privilege, network, disk, display, and GPU checks;
+- dry-run mode;
 - structured logging;
 - idempotent package installation;
 - backup manifest;
-- rollback/uninstall;
+- rollback and uninstall;
 - stable exit codes.
 
 Acceptance:
 
-- fresh install dan re-run menghasilkan state sama;
-- unsupported OS berhenti sebelum mutasi;
-- partial failure menunjuk modul yang gagal;
-- restore dapat diuji tanpa koneksi internet.
+- fresh installation and re-run converge to the same state;
+- unsupported operating systems stop before mutation;
+- partial failures identify the failed module;
+- restore can be tested without an internet connection.
 
 ### Phase 2 — Ubuntu Server profile
 
-Issue: #7, #12, #16, #17
+Issues: #7, #12, #16, #17
 
-Urutan:
+Sequence:
 
-1. base packages dan time/network checks;
-2. Hermes per-user atau dedicated service user;
+1. base packages and time/network checks;
+2. Hermes with a per-user or dedicated service user;
 3. `hermes doctor`;
-4. gateway service dengan systemd;
-5. journald/log rotation/health command;
-6. firewall/SSH policy yang explicit;
-7. Docker opsional dengan rootless-first evaluation;
-8. reboot and recovery test.
+4. gateway service with systemd;
+5. journald, log rotation, and health command;
+6. explicit firewall and SSH policy;
+7. optional Docker with a rootless-first evaluation;
+8. reboot and recovery testing.
 
 Acceptance:
 
-- service hidup setelah reboot;
-- credentials tidak muncul di process args atau log;
-- status dan journal dapat dibaca operator;
-- Telegram tidak aktif tanpa explicit setup;
-- install tidak memerlukan GUI.
+- the service is running after reboot;
+- credentials do not appear in process arguments or logs;
+- operators can inspect status and journal logs;
+- Telegram is not enabled without explicit setup;
+- installation does not require a GUI.
 
 ### Phase 3 — Linux Mint desktop profile
 
-Issue: #8, #9, #10, #15, #17
+Issues: #8, #9, #10, #15, #17
 
-Urutan:
+Sequence:
 
-1. backup Cinnamon/session config;
-2. preflight GPU, kernel, Mesa, Wayland, portal, display manager;
-3. install compositor/session components dari sumber yang didukung;
-4. konfigurasi terminal, launcher, notification, clipboard, idle, screenshot;
-5. session entry Hyprland;
-6. retain Cinnamon fallback;
+1. back up Cinnamon and session configuration;
+2. preflight GPU, kernel, Mesa, Wayland, portal, and display manager;
+3. install compositor/session components from supported sources;
+4. configure terminal, launcher, notifications, clipboard, idle, and screenshots;
+5. create the Hyprland session entry;
+6. retain Cinnamon as a fallback;
 7. verify login, logout, suspend, multi-monitor, screen sharing, and recovery.
 
 Acceptance:
 
-- Cinnamon tetap dapat dipilih;
-- login failure tidak membuat host unusable;
-- konfigurasi dapat dikembalikan;
-- unsupported GPU menghasilkan warning yang jelas.
+- Cinnamon remains selectable;
+- login failure does not make the host unusable;
+- configuration can be restored;
+- unsupported GPUs produce clear warnings.
 
-### Phase 4 — Hermes workflow dan Telegram
+### Phase 4 — Hermes workflow and Telegram
 
-Issue: #11, #12, #13, #14
+Issues: #11, #12, #13, #14
 
 Deliverables:
 
-- installer/provider-neutral;
+- provider-neutral installer;
 - profile-safe state;
 - CLI diagnostics;
 - gateway service;
@@ -235,177 +235,177 @@ Deliverables:
 
 Acceptance:
 
-- `hermes doctor` clean atau warning yang actionable;
-- gateway status dapat dibuktikan melalui systemd;
-- Telegram test hanya berhasil untuk authorized identity;
-- backup tidak mengandung token.
+- `hermes doctor` is clean or produces actionable warnings;
+- gateway status can be proven through systemd;
+- Telegram tests succeed only for authorized identities;
+- backups contain no tokens.
 
-### Phase 5 — QA dan release
+### Phase 5 — QA and release
 
-Issue: #15, #16, #17, #27
+Issues: #15, #16, #17, #27
 
-Test matrix minimum:
+Minimum test matrix:
 
 - Ubuntu Server 24.04 amd64 VM;
-- Ubuntu Server 22.04 amd64 bila dipertahankan;
-- Linux Mint 22.x amd64 VM/physical test;
-- fresh install;
-- rerun;
+- Ubuntu Server 22.04 amd64 if retained;
+- Linux Mint 22.x amd64 VM or physical test;
+- fresh installation;
+- re-run;
 - reboot;
-- network unavailable;
+- unavailable network;
 - package failure;
-- broken session rollback;
-- secret scan;
+- broken-session rollback;
+- secret scanning;
 - ShellCheck;
 - CI smoke test.
 
 Release gates:
 
-- no secret in tree/history;
+- no secret in the tree or history;
 - no destructive default;
 - documented rollback;
-- success evidence on every supported profile;
+- success evidence for every supported profile;
 - issue severity and known limitations published;
-- business pilot has a measurable success threshold.
+- business pilot with a measurable success threshold.
 
-## 5. Riset bisnis dan rekomendasi
+## 5. Business research and recommendations
 
-### 5.1 ICP prioritas
+### 5.1 Priority ICP
 
-Urutan validasi:
+Validation order:
 
-1. internal ahliweb dan workstation operator;
-2. freelancer/developer yang ingin setup reproducible;
-3. agency web/digital dengan beberapa workstation/server;
-4. small team yang membutuhkan Hermes internal;
-5. self-hosters dan lab pendidikan.
+1. ahliweb internal operators and workstations;
+2. freelancers and developers who want a reproducible setup;
+3. web/digital agencies with multiple workstations or servers;
+4. small teams that need an internal Hermes assistant;
+5. self-hosters and education labs.
 
-Masalah yang harus divalidasi, bukan diasumsikan:
+Problems to validate rather than assume:
 
-- waktu setup Linux developer terlalu lama;
-- konfigurasi AI agent dan gateway sulit diulang;
-- tim kecil tidak memiliki DevOps khusus;
-- pengguna ingin Ubuntu/Mint stability tetapi menyukai workflow keyboard-first;
-- biaya support setup lebih rendah daripada engineering time yang hilang.
+- Linux developer setup takes too long;
+- AI agent and gateway configuration is difficult to reproduce;
+- small teams lack dedicated DevOps capacity;
+- users want Ubuntu/Mint stability while preferring keyboard-first workflows;
+- setup and support cost less than the engineering time currently lost.
 
 ### 5.2 Positioning
 
-Positioning yang disarankan:
+Recommended positioning:
 
-> OMES adalah deployment layer open-source untuk membuat Ubuntu Server dan Linux Mint siap dipakai sebagai lingkungan development dan operasi berbasis Hermes, dengan workflow desktop yang terinspirasi Omarchy namun tetap reversible dan sesuai platform host.
+> OMES is an open-source deployment layer that makes Ubuntu Server and Linux Mint ready for Hermes-based development and operations, with an Omarchy-inspired workflow that remains reversible and respects the host platform.
 
-Jangan menggunakan klaim “Omarchy untuk Ubuntu” sebagai klaim resmi. Gunakan “Omarchy-inspired” atau “compatibility layer” dan jelaskan perbedaan teknis.
+Do not claim that OMES is an official Omarchy product or use “Omarchy for Ubuntu” as an affiliation claim. Use “Omarchy-inspired” or “compatibility layer” and explain the technical differences.
 
-### 5.3 Model bisnis yang layak diuji
+### 5.3 Business models to test
 
-- Core open-source: installer, profile, docs, tests.
-- Paid setup/migration: instalasi dan transfer workflow.
-- Support subscription: update, backup, incident response, dan troubleshooting.
-- Business hardening: allowlist, isolated profiles, logging, backup, policy.
-- Custom integration: Telegram, GitHub, Docker, internal tools, provider routing.
-- Training/workshop: Linux + AI agent operations untuk tim kecil.
+- open-source core: installer, profiles, documentation, and tests;
+- paid setup and migration;
+- support subscription: updates, backups, incident response, and troubleshooting;
+- business hardening: allowlists, isolated profiles, logging, backups, and policy;
+- custom integrations: Telegram, GitHub, Docker, internal tools, and provider routing;
+- training and workshops: Linux and AI-agent operations for small teams.
 
-Rekomendasi MVP komersial: jangan mulai dari SaaS atau hosting. Mulai dari productized service yang menggunakan OMES sebagai delivery engine; ukur waktu implementasi dan support cost sebelum menetapkan subscription.
+MVP commercial recommendation: do not start with SaaS or hosting. Use OMES as a **productized-service delivery engine**, then measure implementation time and support cost before introducing a subscription.
 
-### 5.4 Unit economics yang harus diukur
+### 5.4 Unit economics to measure
 
-Catat per pilot:
+Track during every pilot:
 
-- waktu preflight;
-- waktu install;
-- waktu troubleshooting;
-- jumlah manual intervention;
-- jumlah rollback;
-- biaya compute/API/support;
-- waktu onboarding Hermes;
-- waktu maintenance per bulan;
-- willingness-to-pay dan alasan keberatan.
+- preflight time;
+- installation time;
+- troubleshooting time;
+- number of manual interventions;
+- rollback count;
+- compute, API, and support cost;
+- Hermes onboarding time;
+- monthly maintenance time;
+- willingness to pay and objections.
 
-Rumus dasar:
+Basic formulas:
 
 ```text
-gross contribution = revenue - delivery labor - infrastructure - support variable cost
+gross contribution = revenue - delivery labor - infrastructure - variable support cost
 payback months = acquisition/setup cost / monthly gross contribution
 support burden = support hours / active deployment / month
 ```
 
-Tidak ada angka pasar atau harga final yang boleh dianggap fakta sebelum customer discovery.
+No market-size or final pricing figure may be treated as fact before customer discovery.
 
-### 5.5 Risiko bisnis utama
+### 5.5 Main business risks
 
-- maintenance matrix Ubuntu/Mint/Hyprland terlalu mahal;
-- upstream desktop berubah lebih cepat daripada kapasitas maintenance;
-- support incident akibat installer salah mengubah host;
-- pengguna menganggap OMES sebagai produk resmi Omarchy/Hermes;
-- provider AI dan biaya token berubah;
-- akses agent/Docker menciptakan insiden keamanan;
-- nilai produk desktop sulit dibedakan dari dotfiles biasa.
+- Ubuntu/Mint/Hyprland maintenance matrix becomes too expensive;
+- upstream desktop changes outpace maintenance capacity;
+- installer incidents damage an existing host;
+- users mistake OMES for an official Omarchy or Hermes product;
+- AI provider pricing and availability change;
+- agent or Docker access creates a security incident;
+- the desktop value proposition is indistinguishable from ordinary dotfiles.
 
-Mitigasi:
+Mitigations:
 
-- fokus awal pada Hermes/server reliability;
-- desktop profile opt-in;
-- strict compatibility matrix;
-- reproducible VM tests;
-- backup/rollback wajib;
-- security claims konservatif;
-- paid offering berbasis support dan operational outcome.
+- focus first on Hermes/server reliability;
+- make the desktop profile opt-in;
+- maintain a strict compatibility matrix;
+- use reproducible VM tests;
+- require backup and rollback;
+- keep security claims conservative;
+- base paid offerings on support and operational outcomes.
 
-## 6. Prioritas 30/60/90 hari
+## 6. 30/60/90-day priorities
 
-### Hari 0–30
+### Days 0–30
 
-- selesaikan #1–#5;
-- buat README dan architecture doc;
+- complete #1–#5;
+- create the README and architecture document;
 - implement preflight;
-- implement Ubuntu Server dry-run dan check;
-- validasi Hermes install/service;
-- jalankan pilot internal pertama.
+- implement Ubuntu Server dry-run and check;
+- validate Hermes installation and service operation;
+- run the first internal pilot.
 
-### Hari 31–60
+### Days 31–60
 
-- implement installer server idempotent;
-- tambah rollback dan diagnostics;
-- buat CI lint/secret scan;
-- dokumentasikan Telegram secure profile;
-- mulai Linux Mint profile pada satu hardware/VM;
-- wawancara calon pengguna dan catat evidence.
+- implement the idempotent server installer;
+- add rollback and diagnostics;
+- add CI linting and secret scanning;
+- document the secure Telegram profile;
+- begin the Linux Mint profile on one hardware target or VM;
+- interview prospective users and capture evidence.
 
-### Hari 61–90
+### Days 61–90
 
-- stabilkan desktop profile;
-- tambah compatibility matrix dan regression VM;
-- rilis alpha;
-- jalankan 2–5 pilot terkontrol;
-- hitung support burden dan unit economics;
-- putuskan apakah model paid setup/support layak dilanjutkan.
+- stabilize the desktop profile;
+- add the compatibility matrix and regression VM;
+- release an alpha;
+- run 2–5 controlled pilots;
+- calculate support burden and unit economics;
+- decide whether paid setup/support is viable.
 
-## 7. Kriteria go/no-go
+## 7. Go/no-go criteria
 
-Go ke alpha apabila:
+Proceed to alpha when:
 
-- Ubuntu Server install, re-run, reboot, dan rollback teruji;
-- Hermes service dan health check berjalan;
-- secret boundary tervalidasi;
-- dokumentasi dapat diikuti operator lain;
-- tidak ada destructive default;
-- satu pilot internal menyelesaikan workflow nyata.
+- Ubuntu Server installation, re-run, reboot, and rollback are tested;
+- Hermes service and health check work;
+- secret boundaries are validated;
+- another operator can follow the documentation;
+- no destructive default exists;
+- one internal pilot completes a real workflow.
 
-Tunda desktop release apabila:
+Delay the desktop release when:
 
-- Hyprland membutuhkan source build yang rapuh;
-- Cinnamon fallback tidak terjamin;
-- screen sharing/portal/GPU belum stabil;
-- support matrix belum dapat dipelihara.
+- Hyprland requires a fragile source build;
+- Cinnamon fallback is not guaranteed;
+- screen sharing, portals, or GPU support are unstable;
+- the support matrix cannot be maintained.
 
-Tunda monetisasi apabila:
+Delay monetization when:
 
-- waktu support lebih besar daripada nilai setup;
-- pelanggan tidak memiliki willingness-to-pay;
-- positioning tidak berbeda dari dotfiles/Ansible biasa;
-- biaya maintenance lintas distro tidak dapat ditutup oleh paket layanan.
+- support time exceeds setup value;
+- customers show no willingness to pay;
+- positioning is not meaningfully different from dotfiles or Ansible;
+- cross-distro maintenance cannot be covered by service revenue.
 
-## 8. Sumber utama
+## 8. Primary sources
 
 1. Omarchy Manual — https://omarchy.org/manual/
 2. Omarchy Getting Started — https://omarchy.org/manual/getting-started/
@@ -425,9 +425,9 @@ Tunda monetisasi apabila:
 16. Hermes configuration — https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 17. Omakub Manual — https://manual.omakub.org/1/read
 
-## 9. Batasan riset
+## 9. Research limitations
 
-- Tidak ada data pelanggan, revenue, CAC, churn, atau willingness-to-pay OMES; semua keputusan bisnis tersebut masih hipotesis.
-- Compatibility claim harus dibuktikan melalui VM/hardware test, bukan hanya dokumentasi upstream.
-- Versi OS, Hyprland, Docker, dan Hermes berubah; CI dan periodic review wajib menjaga freshness.
-- Riset ini tidak mengklaim audit keamanan formal atau jaminan bahwa agent selalu aman.
+- There is no customer, revenue, CAC, churn, or willingness-to-pay data for OMES; those business decisions remain hypotheses.
+- Compatibility claims must be proven through VM or hardware testing, not only upstream documentation.
+- OS, Hyprland, Docker, and Hermes versions change; CI and periodic review are required to keep the plan current.
+- This research is not a formal security audit and does not claim that an agent is always safe.
