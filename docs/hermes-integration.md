@@ -211,13 +211,15 @@ fully remove Hermes themselves:
 | `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it | unset (proceeds with a `WARN`) |
 | `OMES_HERMES_INSTALLER_URL` | Overrides the installer URL | `https://hermes-agent.nousresearch.com/install.sh` (testing only; not a documented operator knob) |
 
-## 10. Not implemented yet (part 1 / `hermes` module)
+## 10. Status (part 1 / `hermes` module)
 
-- `omes doctor`/`omes update` as first-class CLI commands (currently
-  stubs in `bin/omes`) — tracked in issue #14. `omes uninstall` and `omes
-  restore` are implemented (issue #10, `lib/omes/restore.sh`), so this
-  module's `module_rollback` is reachable via `omes uninstall --module
-  hermes` in addition to being callable directly.
+`omes doctor`/`omes update` are implemented first-class CLI commands (issue
+#14; `bin/omes`'s `cmd_doctor`/`cmd_update`) — `omes doctor` runs this
+module's `module_verify` for every host where `hermes` is recorded as
+applied. `omes uninstall`/`omes restore` are implemented (issue #10,
+`lib/omes/restore.sh`), so this module's `module_rollback` is reachable via
+`omes uninstall --module hermes` in addition to being callable directly.
+Nothing in part 1 is outstanding.
 
 <!-- OMES-MERMAID: docs/hermes-integration.md -->
 
@@ -456,12 +458,15 @@ function, so it runs on every `omes install` without requiring a future
 | `OMES_HERMES_GATEWAY_SYSTEM_USER` | The non-root account the system gateway serves; required, no default | unset (module_check fails without it) | `hermes-gateway-system` |
 | `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | Overrides the system drop-in directory | `/etc/systemd/system` (testing-only override; not a documented operator knob) | `hermes-gateway-system` |
 
-## 16. Not implemented yet (part 2)
+## 16. Status and known limitations (part 2)
 
-- A first-class `omes doctor` command that would run the adapter-caveat
-  check on demand without a full `install` — tracked in issue #14; today
-  the same check runs as part of every `module_verify`, so it is not
-  unreachable, just not independently invocable yet.
+`omes doctor` (issue #14) is implemented and runs the adapter-caveat check
+on demand: it calls `module_verify` for every module recorded as `applied`,
+which is exactly where the caveat logged in §14 lives, so
+`omes doctor`/`sudo omes doctor` reach it without a full `omes install`.
+
+Not implemented / manual by design:
+
 - Automatic discovery of Node/ffmpeg/etc. install locations for
   `OMES_HERMES_GATEWAY_EXTRA_PATH` — this is a manual, documented operator
   step (§12.1), not automated.

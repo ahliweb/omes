@@ -63,18 +63,36 @@ One-line description of the user-visible change.
 `CHANGELOG.md` is compiled from these fragments at release time — do not
 edit `CHANGELOG.md` directly in a feature/docs PR.
 
-## 5. Required checks: ShellCheck and bats
+## 5. Required local workflow: ShellCheck, bats, and the test matrix
 
-All shell code (`bin/`, `lib/`, `modules/`, `install/`) must pass
-ShellCheck, and all bats test suites under `tests/` must pass before a PR
+All shell code (`bin/`, `lib/`, `modules/`, `install/`, `tests/shims/`) must
+pass ShellCheck, and every bats suite under `tests/` must pass before a PR
 is ready for review.
 
-If you don't have the tools installed locally, run them via Docker exactly
-as follows:
+**Prefer `tests/run.sh` and `scripts/test-matrix.sh`** — they run the exact
+checks CI runs and fall back to Docker automatically when a tool is not
+installed locally, so local and CI results should not diverge:
 
 ```bash
-# ShellCheck (style-level checks, following sourced files)
+./tests/run.sh              # ShellCheck (-S style) + tests/unit + tests/integration
+./scripts/lint.sh           # ShellCheck + shfmt + yamllint (what .github/workflows/lint.yml runs)
+./scripts/test-matrix.sh    # real apt-get/dpkg inside disposable containers, all supported OSes
+```
+
+If you want to run ShellCheck directly against a specific severity/image
+instead, run it against **both** images below — `scripts/lint.sh` pins the
+`stable` tag by digest for local/CI parity on everyday changes, but CI's
+`.github/workflows/lint.yml` `shellcheck` job resolves to ShellCheck
+**v0.9.0** at the time this document was written, and a finding that only
+one of the two versions reports is exactly the kind of drift a docs-accuracy
+PR should catch before it reaches CI:
+
+```bash
+# Whatever scripts/lint.sh currently pins (the "stable" tag, by digest)
 docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:stable -x -S style <files>
+
+# The exact version CI's shellcheck job runs
+docker run --rm -v "$PWD:/mnt" koalaman/shellcheck:v0.9.0 -x -S style <files>
 
 # Unit tests
 docker run --rm -v "$PWD:/code" -w /code bats/bats:latest tests/unit
@@ -83,12 +101,30 @@ docker run --rm -v "$PWD:/code" -w /code bats/bats:latest tests/unit
 docker run --rm -v "$PWD:/code" -w /code bats/bats:latest tests/integration
 ```
 
-Add `--user "$(id -u):$(id -g)"` to either `docker run` command if file
-ownership on generated artifacts matters on your host.
+Add `--user "$(id -u):$(id -g)"` to any `docker run` command if file
+ownership on generated artifacts matters on your host. See
+[docs/ci.md](docs/ci.md) for what every CI job does, what blocks a PR versus
+is advisory, and how to run `gitleaks`/`actionlint`/`check-links.py` locally
+too.
 
-`tests/run.sh` (once present) runs ShellCheck plus the unit and integration
-suites, falling back to Docker automatically when the tools are not
-installed locally — prefer it once it exists in the repository.
+## 5a. PR checklist
+
+Before opening a pull request:
+
+- [ ] One issue, one branch, one PR (§3); PR title `<type>: <summary> (#N)`.
+- [ ] `./tests/run.sh` passes.
+- [ ] `./scripts/lint.sh` passes (or the two ShellCheck images in §5, if you
+      changed shell code specifically).
+- [ ] If your change touches a module installed by the `server`/`desktop`
+      profiles, `./scripts/test-matrix.sh` still passes for at least
+      `ubuntu:24.04` (`OMES_MATRIX_IMAGES="ubuntu:24.04"`).
+- [ ] A `changes/<issue>-<slug>.md` fragment exists (§4).
+- [ ] Every doc your change affects was updated in the same PR (§7) — if you
+      touched code, grep the docs you're about to touch for stale claims
+      (`grep -rn "Not implemented yet" docs/`) before writing new ones.
+- [ ] No secret, real-looking token, or `.env` file is staged.
+- [ ] The PR description has `Closes #N`, a summary, and a **Verification**
+      section listing the exact commands you ran and their results.
 
 ## 6. Secrets
 

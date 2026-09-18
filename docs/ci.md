@@ -1,20 +1,21 @@
 # OMES Continuous Integration
 
-> Status: describes the CI implemented in issue [#16](https://github.com/ahliweb/omes/issues/16)
-> — `.github/workflows/lint.yml`, `.github/workflows/compatibility.yml`,
+> Status: implemented. Describes the CI as it exists in this repository today —
+> `.github/workflows/lint.yml`, `.github/workflows/compatibility.yml`,
 > `.github/dependabot.yml`, `.gitleaks.toml`, `.yamllint.yml`, and the
-> `scripts/lint.sh` / `scripts/check-supply-chain.sh` / `scripts/check-links.py`
-> scripts those workflows call. This document describes what exists today,
-> not aspirational behavior; see [docs/security.md](security.md) section 6-7
-> for the supply-chain and release-gate *requirements* this CI implements.
+> `scripts/lint.sh` / `scripts/check-supply-chain.sh` / `scripts/check-links.py` /
+> `scripts/test-matrix.sh` scripts those workflows call. See
+> [docs/security.md](security.md) sections 6-7 for the supply-chain and
+> release-gate *requirements* this CI implements, and
+> [docs/testing.md](testing.md) for how `scripts/test-matrix.sh` maps onto the
+> compatibility-matrix support tiers.
 >
 > The core installer (`bin/omes`, `lib/omes/*.sh`, `modules/`, `tests/run.sh`,
-> `.shellcheckrc`) is tracked separately in issue
-> [#6](https://github.com/ahliweb/omes/issues/6) and may not exist yet on a
-> given branch. Every CI step that depends on it is guarded with
-> `if: hashFiles('<path>') != ''` (or an equivalent `[ -e ... ]` shell check
-> inside a script), so both workflows in this document are safe, harmless
-> no-ops before issue #6 merges and exercise the real CLI once it does.
+> `.shellcheckrc`) is implemented and present on `main`. Both workflows still
+> carry `if: hashFiles('<path>') != ''` guards around the steps that depend on
+> it — these are now inert no-op branches (the files always exist), kept only
+> so a stripped-down fork or an unusually early checkout does not hard-fail;
+> they are not evidence that the installer is missing.
 
 ## 1. Workflows
 
@@ -42,28 +43,34 @@ the repository, comment on pull requests, or write security-events.
 Triggers: every pull request, every push to `main`, a weekly schedule
 (Monday 03:17 UTC), and `workflow_dispatch` (manual run). Same
 `concurrency`/`cancel-in-progress` policy as `lint.yml`. `permissions:
-contents: read` throughout.
+contents: read` throughout. As of issue [#15](https://github.com/ahliweb/omes/issues/15),
+both jobs below run `scripts/test-matrix.sh` (§2.6 of this document,
+`docs/testing.md`) rather than a handful of `bin/omes` invocations inline in
+the workflow — the workflow is a thin GitHub Actions wrapper around that
+script, which itself does its own `docker run`/`docker exec` against the
+target OS images (hence running on the GitHub-hosted runner directly, not
+inside a `container:` job).
 
 | Job | What it does | Blocks merge? |
 |---|---|---|
-| `matrix` | For each of `ubuntu:24.04`, `ubuntu:22.04`, `linuxmintd/mint22-amd64` (containers, running as root): installs `sudo`, `curl`, `ca-certificates`, `git`, then (once `bin/omes` exists) runs `bin/omes version --json`, `bin/omes check --json` (result recorded, not gating), and `bin/omes install --profile server --dry-run --yes`. | **Yes** for `version`/`install --dry-run`; `check`'s exit code is recorded, not gating (a container can legitimately fail a hardware/network preflight check without that being a CI defect). |
-| `real-install-ubuntu-24-04` | On `ubuntu:24.04` only: a **real**, non-dry-run `bin/omes install --profile server --yes` as root, run **twice in a row** to prove idempotency, then uploads `/var/lib/omes/logs` as a build artifact (`actions/upload-artifact`). | **No.** `continue-on-error: true` — this is allowed to fail until the `security-baseline` (#7) and `hermes` (#15) modules exist, since a bare container currently has no applicable server-profile modules to install end-to-end. Once those modules land, this job becomes the real idempotency proof and should be revisited for whether it should start blocking. |
+| `matrix` | For each of `ubuntu:24.04` (tier 1), `linuxmintd/mint22-amd64` (tier 1), and `ubuntu:22.04` (tier 2, `continue-on-error: true`): runs `scripts/test-matrix.sh` for that one image, covering all six scenarios (`fresh`, `rerun`, `offline`, `partial-failure`, `reboot`, `rollback`) against a **real** `apt-get`/`dpkg` inside a disposable container. Uploads `tests/matrix/results/` and `tests/matrix/logs/` as a build artifact per image. | **Yes** for the two tier-1 images; the tier-2 `ubuntu:22.04` row is advisory (`continue-on-error: true`). |
+| `real-install-ubuntu-24-04` | On `ubuntu:24.04` only, as root: `scripts/test-matrix.sh` restricted to `OMES_MATRIX_SCENARIOS="fresh rerun"` — a **real**, non-dry-run `apt-base` install run twice in a row to prove idempotency end to end. Uploads the same artifacts. | **Yes.** `continue-on-error: false` — blocking since issue #15, now that `apt-base` gives this job a real module to install. Kept as its own named job (duplicating part of the `matrix` job's ubuntu:24.04 coverage) so its pass/fail history stays visible on its own. |
 
 **Compatibility-matrix mapping.** `docs/compatibility-matrix.md` section 1
-defines four support tiers; this workflow currently covers exactly the
-**Tier 1** platforms for the `server` profile
-(`ubuntu:24.04` — Tier 1 server) and one representative of Tier 1 desktop
-(`linuxmintd/mint22-amd64`, standing in for Linux Mint 22.x) plus the Tier 2
+defines four support tiers; this workflow covers exactly the **Tier 1**
+platforms for the `server` profile (`ubuntu:24.04`) and one representative of
+Tier 1 desktop (`linuxmintd/mint22-amd64`, standing in for Linux Mint 22.x —
+see `scripts/test-matrix.sh`'s own "known limitations" comment for why its
+`/etc/os-release` actually reports `ID=ubuntu`) plus the Tier 2
 `ubuntu:22.04`. Per compatibility-matrix.md section 1, Tier 1 platforms must
-be tested "in CI containers **and** in a VM before every release" — the
-container matrix here is the CI-container half of that requirement; the VM
-half is `tests/vm/` (tracked separately, see compatibility-matrix.md
-section 7). Tier 2 (`ubuntu:22.04`) is tested "periodically, not on every
-release" per that same table — today this workflow runs it on every PR/push
-in addition to the weekly schedule, which is a stricter cadence than the
-minimum the matrix document requires, not a shortfall. Promoting a new
-platform to Tier 1 requires adding it to this workflow's matrix, per
-compatibility-matrix.md section 6, step 6.
+be tested "in CI containers **and** in a VM before every release" — this
+workflow is the CI-container half of that requirement; the VM half is
+`tests/vm/` (see compatibility-matrix.md section 7 and `docs/testing.md`).
+Tier 2 (`ubuntu:22.04`) is tested "periodically, not on every release" per
+that same table — today this workflow runs it on every PR/push in addition to
+the weekly schedule, a stricter cadence than the minimum required, not a
+shortfall. Promoting a new platform to Tier 1 requires adding it to this
+workflow's matrix, per compatibility-matrix.md section 6, step 6.
 
 ## 2. Running the checks locally
 
@@ -140,24 +147,24 @@ Docker (`bats/bats:latest`) when `bats` is not installed locally.
 ## 3. What blocks merge vs. what is advisory
 
 **Blocking** (a failing job fails the PR check): `shellcheck` (at
-`warning` severity), `bats` (once #6 merges), `gitleaks`, `yamllint`,
+`warning` severity), `bats` (`tests/run.sh`), `gitleaks`, `yamllint`,
 `actionlint`, `supply-chain` (action pinning + unsafe-pipe checks),
-`check-links` (broken link *targets*), and the `compatibility.yml` `matrix`
-job's `version`/`install --dry-run` steps.
+`check-links` (broken link *targets*), the `compatibility.yml` `matrix`
+job's `ubuntu:24.04`/`linuxmintd/mint22-amd64` (tier 1) rows, and the
+`real-install-ubuntu-24-04` job (blocking since issue #15 — `apt-base` gives
+it a real module to install and re-install idempotently).
 
 **Advisory** (reported, does not fail the PR check): `shfmt` — the
-repository's shell code is new and its formatting conventions are still
+repository's shell code has landed but its formatting conventions are still
 being established; making `shfmt` blocking before there is an agreed,
 enforced style would make every future formatting-convention decision a
-breaking CI change instead of a deliberate, reviewed one. Revisit this once
-the core installer (#6) and its modules have landed and a style has
-settled. Also advisory: `check-supply-chain.sh`'s external-download-URL
-listing (informational, for human review, never fails), `check-links.py`'s
-anchor-only warnings (the heading-to-slug matching is a best-effort
-approximation of GitHub's own algorithm and can have false positives), and
-`compatibility.yml`'s `check --json` step (a container's preflight result
-is recorded, not gating) and its entire `real-install-ubuntu-24-04` job
-(`continue-on-error: true`, see §1.2).
+breaking CI change instead of a deliberate, reviewed one. Also advisory:
+`check-supply-chain.sh`'s external-download-URL listing (informational, for
+human review, never fails), `check-links.py`'s anchor-only warnings (the
+heading-to-slug matching is a best-effort approximation of GitHub's own
+algorithm and can have false positives), and `compatibility.yml`'s
+`ubuntu:22.04` (tier 2) row of the `matrix` job (`continue-on-error: true`,
+see §1.2).
 
 ## 4. `scripts/check-supply-chain.sh`
 
