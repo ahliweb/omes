@@ -258,6 +258,25 @@ _mark_packages_installed() {
   [ ! -f "$(_security_journald_conf_path)" ]
 }
 
+@test "module_check passes even when ufw and systemctl are both absent (e.g. a bare container)" {
+  # Regression test for a real bug the shim-based suite could not catch
+  # on its own (caught by CI's Compatibility workflow running inside
+  # actual ubuntu:24.04/22.04 containers): module_check must not hard-
+  # require ufw (apt-base installs it, but only from its own
+  # module_apply, which has not run yet on a fresh host's first
+  # check-all) or systemctl (may genuinely be absent in a bare
+  # container; a real Ubuntu Server/Mint host always has it).
+  local minimal="${OMES_TEST_TMPDIR}/minimal-path"
+  mkdir -p "$minimal"
+  local bin
+  for bin in apt-cache apt-get dpkg-query curl who timedatectl; do
+    ln -sf "${OMES_TEST_ROOT}/tests/shims/${bin}" "${minimal}/${bin}"
+  done
+  PATH="${minimal}:/usr/bin:/bin" run module_check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"systemctl not found"* ]]
+}
+
 @test "module_check warns but does not fail when NTP is not synchronized" {
   export SHIM_TIMEDATECTL_NTP_SYNC=no
   run module_check

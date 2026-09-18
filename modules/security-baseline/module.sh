@@ -262,9 +262,16 @@ module_check() {
   # runs before ANY module_apply, requiring the binary here would make a
   # fresh install impossible; its availability is validated through the
   # package checks below instead.
+  # systemctl absence is reported, never a hard module_check failure:
+  # this module is designed for a real Ubuntu Server/Mint host (always
+  # systemd), but `omes check`/`install --dry-run` must still degrade
+  # gracefully on a systemd-less environment (e.g. a bare Docker
+  # container, as docs/compatibility-matrix.md's WSL row already
+  # establishes for systemd-detect-virt) rather than fail check-all
+  # outright - a real apply/verify without systemctl fails later, at the
+  # specific step that actually needs it, with a clear error.
   if ! command -v systemctl >/dev/null 2>&1; then
-    log_error "security-baseline: systemctl not found"
-    return 1
+    log_warn "security-baseline: systemctl not found (this host may not be running systemd; ufw/journald management will fail if applied)"
   fi
 
   local -a pkgs=("${SECURITY_BASELINE_PACKAGES[@]}")
