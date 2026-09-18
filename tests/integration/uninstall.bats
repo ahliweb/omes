@@ -148,3 +148,48 @@ EOF
   [ "$status" -eq 10 ]
   [[ "$output" == *"fail-rollback"* ]]
 }
+
+# Regression: module_resolve_order expands MODULE_REQUIRES transitively,
+# which is right for install but must never make `uninstall --module X`
+# roll back X's dependencies too.
+@test "uninstall --module does not cascade into the module's dependencies" {
+  local work="${OMES_TEST_TMPDIR}/cascade-tree"
+  mkdir -p "$work"
+  cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "$work/"
+  mkdir -p "${work}/modules/base-dep" "${work}/modules/leaf"
+  cat > "${work}/modules/base-dep/module.sh" <<'EOF2'
+MODULE_NAME="base-dep"
+MODULE_DESCRIPTION="dependency"
+MODULE_SCOPE="root"
+MODULE_REQUIRES=()
+module_check() { :; }
+module_apply() { :; }
+module_verify() { :; }
+module_rollback() { echo "ROLLBACK base-dep"; }
+EOF2
+  cat > "${work}/modules/leaf/module.sh" <<'EOF2'
+MODULE_NAME="leaf"
+MODULE_DESCRIPTION="depends on base-dep"
+MODULE_SCOPE="root"
+MODULE_REQUIRES=(base-dep)
+module_check() { :; }
+module_apply() { :; }
+module_verify() { :; }
+module_rollback() { echo "ROLLBACK leaf"; }
+EOF2
+
+  mkdir -p "$OMES_STATE_DIR"
+  {
+    printf 'module.base-dep.status=applied\n'
+    printf 'module.base-dep.managed_paths=\n'
+    printf 'module.leaf.status=applied\n'
+    printf 'module.leaf.managed_paths=\n'
+  } >> "${OMES_STATE_DIR}/state"
+
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "${work}/bin/omes" uninstall --module leaf --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ROLLBACK leaf"* ]]
+  [[ "$output" != *"ROLLBACK base-dep"* ]]
+  grep -q '^module.leaf.status=removed$' "${OMES_STATE_DIR}/state"
+  grep -q '^module.base-dep.status=applied$' "${OMES_STATE_DIR}/state"
+}
