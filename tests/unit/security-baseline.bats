@@ -361,3 +361,27 @@ _mark_packages_installed() {
   [[ "$output" == *"firewall:"* ]]
   [[ "$output" == *"NTP synchronized:"* ]]
 }
+
+# --- fresh install ---------------------------------------------------------
+
+# Regression: every module_check runs before ANY module_apply, so on a
+# fresh host ufw is not installed yet when security-baseline is checked.
+# The check must pass as long as the packages are installable; requiring
+# the ufw binary made a first-ever `omes install --profile server` exit 4.
+@test "module_check passes on a fresh host where ufw is not installed yet but is available in repos" {
+  # Nothing recorded as installed; the shims report packages as available.
+  : > "$SHIM_INSTALLED_PKGS_FILE"
+  local bindir="${OMES_TEST_TMPDIR}/no-ufw-bin"
+  mkdir -p "$bindir"
+  # Build a PATH that has every shim EXCEPT ufw, so `command -v ufw` fails.
+  local d
+  for d in "${OMES_TEST_ROOT}/tests/shims/"*; do
+    [[ "$(basename "$d")" == "ufw" ]] && continue
+    ln -s "$d" "${bindir}/$(basename "$d")"
+  done
+  PATH="${bindir}:$(printf '%s' "$PATH" | tr ':' '\n' | grep -v '/tests/shims$' | paste -sd: -)" \
+    run module_check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"missing packages: ufw"* ]]
+  [[ "$output" == *"ufw would be enabled"* ]]
+}

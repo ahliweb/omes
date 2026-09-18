@@ -257,15 +257,11 @@ _security_write_if_changed() {
 # ---------------------------------------------------------------------------
 
 module_check() {
-  # ufw is NOT required to already be on PATH here: apt-base
-  # (MODULE_REQUIRES) installs it via its own module_apply, which - like
-  # this module's - never actually runs under --dry-run. A fresh host's
-  # first `omes install --profile server --dry-run` must still pass
-  # check-all (lib/omes/module.sh runs every module's module_check before
-  # any module_apply), so ufw's *availability* is validated the same way
-  # apt-base validates its own packages: pkg_missing/pkg_exists_in_repos
-  # below, never a hard `command -v` gate on a package this very module
-  # is responsible for installing.
+  # ufw is in SECURITY_BASELINE_PACKAGES and is installed by module_apply
+  # (or by apt-base earlier in the same run). Because every module_check
+  # runs before ANY module_apply, requiring the binary here would make a
+  # fresh install impossible; its availability is validated through the
+  # package checks below instead.
   if ! command -v systemctl >/dev/null 2>&1; then
     log_error "security-baseline: systemctl not found"
     return 1
@@ -297,8 +293,10 @@ module_check() {
     log_info "security-baseline: all packages already installed (offline ok)"
   fi
 
-  local status_out
-  status_out="$(ufw status verbose 2>/dev/null || true)"
+  local status_out=""
+  if command -v ufw >/dev/null 2>&1; then
+    status_out="$(ufw status verbose 2>/dev/null || true)"
+  fi
   if [[ "$status_out" == *"Status: active"* ]]; then
     log_info "security-baseline: ufw is already active"
   else

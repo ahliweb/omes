@@ -58,9 +58,17 @@ jobs:
         # records the result rather than gating the job on it.
         run: bin/omes check --json || echo "[compatibility] omes check exited non-zero (recorded above, not fatal)"
 
-      - name: bin/omes install --profile server --dry-run --yes
+      - name: bin/omes install --module apt-base --dry-run --yes
         if: hashFiles('bin/omes') != ''
-        run: bin/omes install --profile server --dry-run --yes
+        run: bin/omes install --module apt-base --dry-run --yes
+
+      - name: bin/omes install --profile server --dry-run --yes (recorded, not gating)
+        if: hashFiles('bin/omes') != ''
+        # The full server profile includes security-baseline, whose
+        # preflight requires systemd; a plain container has none, so this
+        # legitimately exits 4 here. Recorded for the log; the VM matrix
+        # (tests/vm, #15) is where the full profile is proven.
+        run: bin/omes install --profile server --dry-run --yes || echo "[compatibility] full-profile dry-run exited non-zero in a container (recorded above, not fatal)"
 
       - name: bin/omes not present yet
         if: hashFiles('bin/omes') == ''
@@ -70,10 +78,12 @@ jobs:
   real-install-ubuntu-24-04:
     name: Real install + idempotency (ubuntu:24.04, root)
     runs-on: ubuntu-24.04
-    # This job is allowed to fail until the security-baseline (#7) and
-    # Hermes (#15) modules land -- a real, non-dry-run `omes install` on a
-    # bare container currently has no applicable modules to prove
-    # end-to-end. See docs/ci.md.
+    # A plain container has no systemd, so the full server profile (which
+    # now includes security-baseline: ufw + journald + unattended-upgrades)
+    # correctly fails preflight here. This job therefore proves the real
+    # install + idempotency contract for the container-safe module
+    # (apt-base); full-profile real installs, reboot survival and the
+    # firewall run in the VM matrix (tests/vm, #15). See docs/ci.md.
     continue-on-error: true
     container:
       image: ubuntu:24.04
@@ -89,11 +99,11 @@ jobs:
 
       - name: First install (real, non-dry-run, as root)
         if: hashFiles('bin/omes') != ''
-        run: bin/omes install --profile server --yes
+        run: bin/omes install --module apt-base --yes
 
       - name: Second install (idempotency check)
         if: hashFiles('bin/omes') != ''
-        run: bin/omes install --profile server --yes
+        run: bin/omes install --module apt-base --yes
 
       - name: bin/omes not present yet
         if: hashFiles('bin/omes') == ''
