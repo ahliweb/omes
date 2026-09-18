@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/apt-cache - fake apt-cache for bats tests.
+#
+# Understands only the subset lib/omes/pkg.sh uses: `apt-cache policy
+# <package>`. A package is reported as having no candidate (unknown/not in
+# any configured repo) when it is listed in $SHIM_APT_CACHE_UNKNOWN_PKGS
+# (space/newline separated); otherwise it reports a fake candidate version
+# ($SHIM_APT_CACHE_VERSION, default 1.0.0-1) so pkg_exists_in_repos treats
+# it as available.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'apt-cache %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+is_unknown() {
+  local candidate="$1"
+  local p
+  for p in ${SHIM_APT_CACHE_UNKNOWN_PKGS:-}; do
+    [[ "$p" == "$candidate" ]] && return 0
+  done
+  return 1
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  policy)
+    pkg="${2:-}"
+    if is_unknown "$pkg"; then
+      printf 'N: Unable to locate package %s\n' "$pkg"
+      exit 0
+    fi
+    ver="${SHIM_APT_CACHE_VERSION:-1.0.0-1}"
+    printf '%s:\n' "$pkg"
+    printf '  Installed: (none)\n'
+    printf '  Candidate: %s\n' "$ver"
+    printf '  Version table:\n'
+    printf '     %s 500\n' "$ver"
+    printf '        500 http://archive.ubuntu.com/ubuntu noble/main amd64 Packages\n'
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac

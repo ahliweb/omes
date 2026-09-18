@@ -19,49 +19,6 @@ MODULE_PROFILES=(server desktop)
 
 APT_BASE_PACKAGES=(curl ca-certificates git python3 jq unzip tar gnupg lsb-release ufw)
 
-# _apt_base_is_installed <package>
-# True when dpkg reports the package as fully installed.
-_apt_base_is_installed() {
-  local pkg="$1"
-  local status
-  status="$(dpkg-query -W -f='${Status}' "$pkg" 2>/dev/null || true)"
-  [[ "$status" == "install ok installed" ]]
-}
-
-# _apt_base_missing_packages
-# Prints the subset of APT_BASE_PACKAGES that are not yet installed.
-_apt_base_missing_packages() {
-  local pkg
-  for pkg in "${APT_BASE_PACKAGES[@]}"; do
-    if ! _apt_base_is_installed "$pkg"; then
-      printf '%s\n' "$pkg"
-    fi
-  done
-}
-
-# _apt_base_update_if_stale
-# Runs `apt-get update` at most once per hour, tracked via the
-# module.apt-base.last_update state key.
-_apt_base_update_if_stale() {
-  local last now age
-  last="$(state_get "module.apt-base.last_update" 2>/dev/null || true)"
-  now="$(date -u +%s)"
-
-  if [[ -n "$last" ]]; then
-    age=$((now - last))
-    if [[ "$age" -lt 3600 ]]; then
-      log_info "apt-base: apt-get update skipped (last run ${age}s ago)"
-      return 0
-    fi
-  fi
-
-  omes_run apt-get update
-
-  if ! omes_dry_run; then
-    state_set "module.apt-base.last_update" "$now"
-  fi
-}
-
 module_check() {
   if ! command -v apt-get >/dev/null 2>&1; then
     log_error "apt-base: apt-get not found (requires a Debian/Ubuntu-based system)"
@@ -76,15 +33,28 @@ module_check() {
   local pkg
   while IFS= read -r pkg; do
     [[ -n "$pkg" ]] && missing+=("$pkg")
-  done < <(_apt_base_missing_packages)
+  done < <(pkg_missing "${APT_BASE_PACKAGES[@]}")
 
   if [[ "${#missing[@]}" -eq 0 ]]; then
     log_info "apt-base: all packages already installed (offline ok)"
     return 0
   fi
 
-  if ! detect_network; then
-    log_error "apt-base: network required to install missing packages: ${missing[*]}"
+  # Validate every missing package exists in the configured repositories
+  # BEFORE any mutation, so an unknown/renamed package is reported here
+  # (module_check -> preflight failure, exit 4) rather than failing
+  # mid-module_apply (exit 6). pkg_exists_in_repos also distinguishes an
+  # unavailable network (exit 8 via run_apply/run_checks mapping) from a
+  # genuinely unknown package (exit 4) - see lib/omes/pkg.sh.
+  local rc bad=0
+  for pkg in "${missing[@]}"; do
+    pkg_exists_in_repos "$pkg"
+    rc=$?
+    if [[ "$rc" -ne 0 ]]; then
+      bad=1
+    fi
+  done
+  if [[ "$bad" -eq 1 ]]; then
     return 1
   fi
 
@@ -97,24 +67,15 @@ module_apply() {
   local pkg
   while IFS= read -r pkg; do
     [[ -n "$pkg" ]] && missing+=("$pkg")
-  done < <(_apt_base_missing_packages)
+  done < <(pkg_missing "${APT_BASE_PACKAGES[@]}")
 
   if [[ "${#missing[@]}" -eq 0 ]]; then
     log_info "apt-base: nothing to install, all packages already present"
-    if ! omes_dry_run; then
-      state_set "module.apt-base.installed_packages" ""
-    fi
     return 0
   fi
 
-  _apt_base_update_if_stale
-
-  DEBIAN_FRONTEND=noninteractive omes_run apt-get install -y --no-install-recommends "${missing[@]}"
-
-  if ! omes_dry_run; then
-    local IFS=' '
-    state_set "module.apt-base.installed_packages" "${missing[*]}"
-  fi
+  pkg_apt_update || return $?
+  pkg_install "${missing[@]}" || return $?
 
   return 0
 }
@@ -124,7 +85,7 @@ module_verify() {
   local pkg
   while IFS= read -r pkg; do
     [[ -n "$pkg" ]] && bad+=("$pkg")
-  done < <(_apt_base_missing_packages)
+  done < <(pkg_missing "${APT_BASE_PACKAGES[@]}")
 
   if [[ "${#bad[@]}" -gt 0 ]]; then
     log_error "apt-base: packages missing after apply: ${bad[*]}"
@@ -144,7 +105,14 @@ module_rollback() {
     return 0
   fi
 
-  log_warn "apt-base: OMES installed these packages and will not remove them automatically: ${installed}"
-  log_warn "apt-base: remove manually with apt-get, or use 'omes uninstall --purge-packages' once available (tracked in #10)"
+  local -a pkgs=()
+  local old_ifs="$IFS"
+  IFS=':'
+  read -r -a pkgs <<< "$installed"
+  IFS="$old_ifs"
+
+  log_warn "apt-base: OMES installed these packages and will not remove them automatically: ${pkgs[*]}"
+  log_warn "apt-base: remove manually with: apt-get remove ${pkgs[*]}"
+  log_warn "apt-base: or use 'omes uninstall --purge-packages' to remove them the same way"
   return 0
 }

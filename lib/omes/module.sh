@@ -310,11 +310,22 @@ run_apply() {
       backup_begin "$m" "pre-apply" >/dev/null
     fi
 
-    if ! module_apply; then
+    local apply_rc=0
+    module_apply || apply_rc=$?
+    if [[ "$apply_rc" -ne 0 ]]; then
       if ! omes_dry_run; then
         backup_finish >/dev/null
       fi
-      omes_die "$OMES_EX_MODULE_APPLY" "module apply failed: ${m}"
+      # A module_apply that returns exactly $OMES_EX_NETWORK (e.g. via
+      # lib/omes/pkg.sh's pkg_install/pkg_apt_update detecting network is
+      # unavailable mid-apply) is surfaced as exit 8, not the generic
+      # module-apply-failed exit 6 - see lib/omes/pkg.sh's return-code
+      # convention comment.
+      local apply_exit="$OMES_EX_MODULE_APPLY"
+      if [[ "$apply_rc" == "$OMES_EX_NETWORK" ]]; then
+        apply_exit="$OMES_EX_NETWORK"
+      fi
+      omes_die "$apply_exit" "module apply failed: ${m} (exit ${apply_rc})"
     fi
 
     if ! omes_dry_run; then

@@ -6,6 +6,11 @@
 # returns success. When "install" is requested, the packages named on the
 # command line are appended to $SHIM_INSTALLED_PKGS so a subsequent
 # dpkg-query shim call sees them as installed (simulates real apt state).
+#
+# SHIM_APT_GET_FAIL_UPDATE=1 makes `apt-get update` exit 1 (simulates apt
+# itself failing, e.g. a broken repository) without touching install state.
+# SHIM_APT_GET_FAIL_INSTALL=1 makes `apt-get install ...` exit 1 without
+# recording any package as installed (simulates a mid-install apt failure).
 
 set -Eeuo pipefail
 
@@ -13,7 +18,17 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'apt-get %s\n' "$*" >> "$SHIM_LOG"
 fi
 
+if [[ "${1:-}" == "update" ]]; then
+  if [[ "${SHIM_APT_GET_FAIL_UPDATE:-0}" == "1" ]]; then
+    exit 1
+  fi
+  exit 0
+fi
+
 if [[ "${1:-}" == "install" ]]; then
+  if [[ "${SHIM_APT_GET_FAIL_INSTALL:-0}" == "1" ]]; then
+    exit 1
+  fi
   shift
   pkgs=()
   for arg in "$@"; do
