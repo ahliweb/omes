@@ -30,20 +30,11 @@ UBUNTU_CODENAME=noble
 EOF
   export OMES_OS_RELEASE_FILE
 
-  # curl is only reachable via module_check's `command -v curl`; use a
-  # trivial always-present fake so these tests don't depend on the CI
-  # image shipping real curl, and never hit the network even by accident
-  # (module_apply here always takes the "already installed" path via
-  # SHIM_HERMES_VERSION, so this fake curl's -o/download behavior is never
-  # exercised in this file - see tests/unit/hermes.bats for that).
-  mkdir -p "${OMES_TEST_TMPDIR}/fakebin"
-  cat > "${OMES_TEST_TMPDIR}/fakebin/curl" <<'EOF'
-#!/usr/bin/env bash
-exit 0
-EOF
-  chmod +x "${OMES_TEST_TMPDIR}/fakebin/curl"
-  export PATH="${OMES_TEST_TMPDIR}/fakebin:${PATH}"
-
+  # tests/shims/curl (already on PATH via test_helper.bash) stands in for
+  # curl, which module_check requires unconditionally. module_apply here
+  # always takes the "already installed" path via SHIM_HERMES_VERSION, so
+  # curl's -o/download behavior is never exercised in this file - see
+  # tests/unit/hermes.bats for that.
   export SHIM_HERMES_VERSION="1.2.3"
 }
 

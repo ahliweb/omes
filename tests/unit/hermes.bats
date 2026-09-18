@@ -39,35 +39,17 @@ teardown() {
   omes_test_teardown
 }
 
-# _install_fake_curl <installer-body>
-# Puts a fake curl on the front of PATH that writes <installer-body> (a
-# heredoc-provided script) to whatever -o target it is given, and logs
-# "fake-curl-fetched <url>" to $SHIM_LOG. Used to exercise the
-# download-then-run path without any real network access or a committed
-# tests/shims/curl (curl is intentionally not a shared shim in this repo).
-_install_fake_curl() {
+# _set_fake_installer <installer-body>
+# Writes <installer-body> to a tmp file and points tests/shims/curl (already
+# on PATH via test_helper.bash) at it via SHIM_CURL_OUTPUT_FILE, so the next
+# `curl -fsSL <url> -o <file>` call made by module_apply's download step
+# copies this exact content instead of the shim's default stub. Used to
+# exercise the download-then-run path without any real network access.
+_set_fake_installer() {
   local body="$1"
-  mkdir -p "${OMES_TEST_TMPDIR}/fakebin"
-  {
-    printf '#!/usr/bin/env bash\n'
-    printf 'set -Eeuo pipefail\n'
-    printf 'out=""\n'
-    printf 'url=""\n'
-    printf 'args=("$@")\n'
-    printf 'for ((i=0;i<${#args[@]};i++)); do\n'
-    printf '  if [[ "${args[$i]}" == "-o" ]]; then out="${args[$((i+1))]}"; fi\n'
-    printf '  if [[ "${args[$i]}" == http* ]]; then url="${args[$i]}"; fi\n'
-    printf 'done\n'
-    printf 'if [[ -n "${SHIM_LOG:-}" ]]; then printf "fake-curl-fetched %%s\\n" "$url" >> "$SHIM_LOG"; fi\n'
-    printf 'if [[ -n "$out" ]]; then\n'
-    printf 'cat > "$out" <<'"'"'INSTALLER'"'"'\n'
-    printf '%s\n' "$body"
-    printf 'INSTALLER\n'
-    printf 'fi\n'
-    printf 'exit "${SHIM_CURL_EXIT:-0}"\n'
-  } > "${OMES_TEST_TMPDIR}/fakebin/curl"
-  chmod +x "${OMES_TEST_TMPDIR}/fakebin/curl"
-  export PATH="${OMES_TEST_TMPDIR}/fakebin:${PATH}"
+  local f="${OMES_TEST_TMPDIR}/fake-installer.sh"
+  printf '%s\n' "$body" > "$f"
+  export SHIM_CURL_OUTPUT_FILE="$f"
 }
 
 _fake_installer_body() {
@@ -122,17 +104,17 @@ EOF
   run module_apply
   [ "$status" -eq 0 ]
   [[ "$output" == *"skipping installer download"* ]]
-  run grep -c 'fake-curl-fetched\|^curl ' "$SHIM_LOG"
+  run grep -c '^curl ' "$SHIM_LOG"
   [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
 }
 
 @test "module_apply re-downloads when OMES_HERMES_VERSION does not match the installed version" {
   export SHIM_HERMES_VERSION="1.2.3"
   export OMES_HERMES_VERSION="9.9.9"
-  _install_fake_curl "$(_fake_installer_body)"
+  _set_fake_installer "$(_fake_installer_body)"
   run module_apply
   [ "$status" -eq 0 ]
-  run grep -c 'fake-curl-fetched' "$SHIM_LOG"
+  run grep -c '^curl ' "$SHIM_LOG"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
 }
@@ -140,7 +122,7 @@ EOF
 # --- module_apply: supply-chain (sha256 pin) --------------------------------
 
 @test "module_apply proceeds with a WARN when OMES_HERMES_INSTALLER_SHA256 is not set" {
-  _install_fake_curl "$(_fake_installer_body)"
+  _set_fake_installer "$(_fake_installer_body)"
   run module_apply
   [ "$status" -eq 0 ]
   [[ "$output" == *"OMES_HERMES_INSTALLER_SHA256"* ]]
@@ -150,7 +132,7 @@ EOF
 }
 
 @test "module_apply aborts and does not execute the installer on a sha256 mismatch" {
-  _install_fake_curl "$(_fake_installer_body)"
+  _set_fake_installer "$(_fake_installer_body)"
   export OMES_HERMES_INSTALLER_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
   run module_apply
   [ "$status" -eq 1 ]
@@ -160,14 +142,12 @@ EOF
 }
 
 @test "module_apply executes the installer when the sha256 pin matches" {
-  _install_fake_curl "$(_fake_installer_body)"
+  local installer="${OMES_TEST_TMPDIR}/installer.sh"
+  _fake_installer_body > "$installer"
+  export SHIM_CURL_OUTPUT_FILE="$installer"
 
-  # Compute the pin the same way the fake curl assembles the installer file,
-  # by writing it once ourselves and hashing it.
-  local tmp="${OMES_TEST_TMPDIR}/expected-installer.sh"
-  _fake_installer_body > "$tmp"
   local expected
-  expected="$(sha256sum "$tmp" | awk '{print $1}')"
+  expected="$(sha256sum "$installer" | awk '{print $1}')"
 
   export OMES_HERMES_INSTALLER_SHA256="$expected"
   run module_apply
@@ -182,11 +162,11 @@ EOF
 
 @test "module_apply performs no download and writes nothing under --dry-run" {
   export OMES_DRY_RUN=1
-  _install_fake_curl "$(_fake_installer_body)"
+  _set_fake_installer "$(_fake_installer_body)"
   run module_apply
   [ "$status" -eq 0 ]
   [[ "$output" == *"[dry-run]"* ]]
-  run grep -c 'fake-curl-fetched' "$SHIM_LOG"
+  run grep -c '^curl ' "$SHIM_LOG"
   [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
   [ ! -e "${OMES_HERMES_HOME}/.env" ]
   [ ! -e "$(_hermes_path_snippet_file)" ]
@@ -276,11 +256,12 @@ EOF
 
   run module_rollback
   [ "$status" -eq 0 ]
+  local rollback_output="$output"
   [ ! -f "$(_hermes_path_snippet_file)" ]
   run grep -c 'BEGIN OMES hermes PATH' "${HOME}/.bashrc"
   [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
 
   # Hermes' own data is untouched.
   [ -f "${OMES_HERMES_HOME}/marker-user-data" ]
-  [[ "$output" == *"rm -rf"* ]]
+  [[ "$rollback_output" == *"rm -rf"* ]]
 }
