@@ -201,3 +201,34 @@ directory (as opposed to a single file) captured by `backup_path`'s recursive mo
 full mixed-scope (`server` profile with both root- and user-scope modules) uninstall running
 as two separate invocations — no user-scope module exists yet to exercise this (tracked
 alongside the modules that will add one, e.g. #11).
+
+## 9. Tested scenarios (disaster recovery, issue #17)
+
+`docs/disaster-recovery.md` is the operator-facing runbook set (symptoms, exact commands,
+expected output, data-loss boundary, and verification per scenario); this section is the index
+of which automated test proves which of its claims.
+
+| Disaster-recovery scenario (`docs/disaster-recovery.md` section) | Automated test |
+|---|---|
+| 2.1 Failed installation mid-profile — earlier module's managed file restored, re-install converges | `tests/integration/dr-failed-install.bats` |
+| 2.2 Broken desktop session — `uninstall --module hyprland-session` removes only the OMES session entry/wrapper, Cinnamon untouched, user config restored | `tests/integration/dr-desktop-session.bats` (skips with a clear message if issue #8's modules are absent — never faked) |
+| 2.3 Failed Hermes gateway — `module_verify` fails when inactive (`omes doctor` FAIL not WARN), rollback disables the unit and OMES-enabled lingering, re-install recovers | `tests/integration/dr-gateway.bats` |
+| 2.4 Corrupted configuration — `omes restore --from <ts>` repairs a truncated/garbled managed file; a corrupt `MANIFEST` is refused, exit 9 | `tests/integration/dr-corrupted-config.bats` |
+| 2.5 Corrupted/deleted state file — `omes restore` still works from the backup directory alone | `tests/integration/dr-corrupted-state.bats` |
+| 2.6 SSH locked out by firewall | Manual only — requires real console/out-of-band access; the underlying "SSH rule added before `ufw enable`" ordering is covered by `tests/unit/security-baseline.bats` / `tests/integration/server.bats` |
+| 2.7 Lost sudo/root | Manual only — OS account recovery is outside OMES's own scope (`docs/scope.md` section 4) |
+| 2.8 OMES state directory deleted entirely (no backups left) | Manual only for the "nothing left to restore" end state; the closely related "state file corrupted/deleted, `backups/` intact" case is `tests/integration/dr-corrupted-state.bats` |
+| 2.9 Restoring from a backup copied off-host | Manual only for the literal two-host case; the underlying restore mechanism (backup-session-location-independent) is the same code path as `tests/unit/restore.bats` / `tests/integration/restore.bats` |
+
+Two confirmed gaps were found and are tested (not silently assumed) rather than papered over —
+see `docs/disaster-recovery.md` sections 2.4 and 2.5 for the full explanation and a suggested
+follow-up for each:
+
+- `omes doctor` has no checksum-based check that a managed file's *content* still matches what
+  OMES last wrote — only functional checks (package present, unit active, binary on `PATH`).
+- `omes status` does not fail with a clear "state file corrupted" message; a garbled state file
+  is silently under-reported rather than flagged.
+
+Evidence from running the container-matrix side of these scenarios (`scripts/test-matrix.sh`'s
+`dr-*` scenarios, where applicable) is archived the same way `docs/testing.md` section 3
+describes — not committed to the repository, referenced from a PR body / release review instead.

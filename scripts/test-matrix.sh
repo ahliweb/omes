@@ -16,6 +16,9 @@
 #                   "known limitations" note below and docs/testing.md)
 #   rollback        backup -> modify -> restore -> checksum equality;
 #                   plain uninstall leaves packages, removes only OMES files
+#   dr              issue #17 scenarios (d)/(e) for real: restore still
+#                   works with a corrupted/deleted state file; a corrupt
+#                   MANIFEST is refused, exit 9 - see docs/disaster-recovery.md
 #
 # Each scenario writes exactly one result line to
 # tests/matrix/results/<image>-<scenario>.json (gitignored; see
@@ -94,7 +97,7 @@ err() { printf '[test-matrix] ERROR %s\n' "$*" >&2; }
 # ---------------------------------------------------------------------------
 
 DEFAULT_IMAGES="ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64"
-DEFAULT_SCENARIOS="fresh rerun offline partial-failure reboot rollback"
+DEFAULT_SCENARIOS="fresh rerun offline partial-failure reboot rollback dr"
 
 # IFS is scoped to just this `read`, not the global $'\n\t' set above: the
 # global IFS deliberately excludes a plain space (standard hardening), but
@@ -592,6 +595,94 @@ scenario_rollback() {
   [[ "$ok" == "1" ]]
 }
 
+# scenario_dr <image> <container>
+# Container-runnable slice of issue #17's disaster-recovery scenarios (d)
+# and (e) - docs/disaster-recovery.md sections 2.4/2.5 - proven for real
+# against a real filesystem, not just bats shims: `omes restore` still
+# works from the backup directory alone when the state file is corrupted
+# or deleted (it never reads the state file), and `omes restore` refuses a
+# corrupt MANIFEST outright, exit 9, leaving the managed file untouched.
+# Reuses the same synthetic-managed-path technique as scenario_rollback
+# (see its header note: apt-base manages no config file on its own).
+scenario_dr() {
+  local image="$1" container="$2"
+  local scenario="dr"
+  local logfile
+  logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
+  : > "$logfile"
+  local start
+  start="$(date +%s)"
+  local ok=1 notes=""
+  local target="/etc/omes-matrix-dr.conf"
+
+  if ! mx_exec "$container" "$logfile" -- bash -c "
+    printf 'dr-original-content\n' > '$target'
+    source /omes/lib/omes/core.sh
+    source /omes/lib/omes/log.sh
+    source /omes/lib/omes/state.sh
+    existing=\"\$(state_get 'module.apt-base.managed_paths' 2>/dev/null || true)\"
+    if [[ -n \"\$existing\" ]]; then
+      state_set 'module.apt-base.managed_paths' \"\${existing}:${target}\"
+    else
+      state_set 'module.apt-base.managed_paths' '${target}'
+    fi
+  "; then
+    ok=0
+    notes="seeding the synthetic managed path failed"
+  fi
+
+  if ! mx_exec "$container" "$logfile" -- /omes/bin/omes backup --module apt-base --reason matrix-dr-test --yes; then
+    ok=0
+    notes="${notes:+$notes; }omes backup failed"
+  fi
+
+  # Resolve the just-created session's timestamp the same way an operator
+  # would: omes restore --list --json, picking the reason=matrix-dr-test entry.
+  local ts
+  ts="$(mx_json "$container" -- /omes/bin/omes restore --list --json 2> /dev/null \
+    | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); ms=[b["timestamp"] for b in d["backups"] if b["reason"]=="matrix-dr-test"]; print(ms[-1] if ms else "")' 2> /dev/null || true)"
+  if [[ -z "$ts" ]]; then
+    ok=0
+    notes="${notes:+$notes; }could not resolve the matrix-dr-test backup session's timestamp"
+  fi
+
+  # (e) corrupted/deleted state file: omes restore still works from the
+  # backup directory alone.
+  if [[ -n "$ts" ]]; then
+    if ! mx_exec "$container" "$logfile" -- bash -c "printf '\\x00\\x01garbled-state-not-key-value\\xff' > /state/state; printf 'DR-CORRUPTED\n' >> '$target'"; then
+      ok=0
+      notes="${notes:+$notes; }could not corrupt the state file for the test"
+    fi
+    if ! mx_exec "$container" "$logfile" -- /omes/bin/omes restore --from "$ts" --yes; then
+      ok=0
+      notes="${notes:+$notes; }restore failed with a corrupted state file"
+    fi
+    local restored
+    restored="$(mx_json "$container" -- cat "$target" 2> /dev/null || true)"
+    if [[ "$(printf '%s' "$restored" | tr -d '[:space:]')" != "dr-original-content" ]]; then
+      ok=0
+      notes="${notes:+$notes; }restore-with-corrupted-state-file did not repair the file (got: ${restored})"
+    fi
+  fi
+
+  # (d) corrupt MANIFEST: refused outright, exit 9.
+  if [[ -n "$ts" ]]; then
+    mx_exec "$container" "$logfile" -- bash -c "printf 'not a valid manifest line\n' > /state/backups/${ts}/MANIFEST"
+    local manifest_rc=0
+    mx_exec "$container" "$logfile" -- /omes/bin/omes restore --from "$ts" --yes || manifest_rc=$?
+    if [[ "$manifest_rc" != "9" ]]; then
+      ok=0
+      notes="${notes:+$notes; }corrupt-MANIFEST restore exited ${manifest_rc}, expected 9"
+    fi
+  fi
+
+  local rc=0
+  [[ "$ok" == "1" ]] || rc=1
+  local dur=$(( $(date +%s) - start ))
+  write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
+  [[ "$ok" == "1" ]]
+}
+
 # ---------------------------------------------------------------------------
 # Per-image orchestration
 # ---------------------------------------------------------------------------
@@ -612,7 +703,7 @@ run_image() {
   main_name="omes-matrix-$(safe_name "$image")-main-$$"
   local main_started=0
 
-  if _has_scenario fresh || _has_scenario rerun || _has_scenario reboot || _has_scenario rollback; then
+  if _has_scenario fresh || _has_scenario rerun || _has_scenario reboot || _has_scenario rollback || _has_scenario dr; then
     mx_start "$image" "$main_name"
     main_started=1
   fi
@@ -634,6 +725,9 @@ run_image() {
   fi
   if _has_scenario rollback; then
     scenario_rollback "$image" "$main_name" || true
+  fi
+  if _has_scenario dr; then
+    scenario_dr "$image" "$main_name" || true
   fi
 
   if [[ "$main_started" == "1" ]]; then

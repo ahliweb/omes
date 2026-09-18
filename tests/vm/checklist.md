@@ -42,16 +42,13 @@ from a PR body / release review instead of committed to the repo).
 - [ ] `sudo omes install --profile server --dry-run --yes` then
       `sudo omes install --profile server --yes` (root-scope modules)
       complete without error.
-- [ ] `omes install --profile desktop --yes` (user-scope modules; today
-      this is `apt-base` only per `profiles/desktop.profile` - the
-      Hyprland session modules are tracked in issue #8 and this box may
-      currently just confirm there is nothing further to apply. Re-check
-      this box once #8 merges, per the file-scope note in this issue's
-      brief).
+- [ ] `omes install --profile desktop --yes` (user-scope modules:
+      `desktop-preflight`, `desktop-config`) completes without error, per
+      `profiles/desktop.profile`.
 - [ ] Log out of the current session.
 - [ ] **Login screen shows a session selector** with both the OMES-managed
-      Hyprland entry and the stock Cinnamon entry (once #8 ships this
-      entry; until then this box is "not yet applicable, tracked in #8").
+      Hyprland entry (`modules/hyprland-session`) and the stock Cinnamon
+      entry.
 - [ ] Log in to the Hyprland session; it starts without falling back to a
       failsafe/black screen.
 - [ ] Log out of Hyprland, log back in to **Cinnamon** (the fallback

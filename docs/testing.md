@@ -182,16 +182,11 @@ script's own comments for the same notes, cross-referenced here):
   backup`/`restore`/`uninstall` CLI end-to-end on a real filesystem. The restore-vs-remove
   *decision logic* (pre-existing vs. OMES-created path) is not re-derived here - it is already
   covered by `tests/unit/restore.bats` and `tests/integration/restore.bats`/`uninstall.bats`.
-- **`rerun`'s `applied_at`-unchanged check is non-blocking, and is expected to sometimes fail.**
-  `lib/omes/module.sh`'s `run_apply` unconditionally rewrites `module.<name>.applied_at` (and
-  re-stamps `.version`/`.managed_paths`) after every successful `module_apply` + `module_verify`,
-  even a no-op one that installed nothing - it does not distinguish "applied for the first time"
-  from "re-applied, changed nothing." This is a confirmed gap in the current state-bookkeeping,
-  not a false negative in the test: the *substantive* idempotency check (no `apt-get install`
-  call, no package changes) is the blocking assertion; the timestamp discrepancy is reported as
-  a note only. Fixing it is out of this issue's file scope (`lib/omes/module.sh` is owned by
-  other issues) - tracked here as a suggested follow-up for whichever issue next touches
-  `run_apply`.
+- **`rerun`'s `applied_at`-unchanged check.** `lib/omes/module.sh`'s `run_apply` keeps
+  `module.<name>.applied_at` stable across a no-op re-apply (it only moves when a module
+  transitions into `applied`) and separately records `last_run_at` on every run, so both the
+  substantive idempotency signal (no `apt-get install` call) and the timestamp signal are
+  blocking assertions in the `rerun` scenario.
 - **`omes install`'s network-unavailable exit code is 4 for `apt-base` specifically, not 8.**
   Both are documented as valid ("network required but unavailable") in `docs/cli.md`, but which
   one actually happens depends on *when* the network check runs relative to `module_check`
@@ -211,10 +206,7 @@ script's own comments for the same notes, cross-referenced here):
 - **Linux Mint desktop verification is entirely manual** (`tests/vm/checklist.md`). Mint
   publishes no official cloud image (the format `tests/vm/run.sh` automates against), only
   installer ISOs meant for an interactive or preseed/autoinstall install; building and
-  maintaining a reliable unattended Mint installer is out of this issue's scope. Several of the
-  checklist's boxes (the Hyprland session entry specifically) are also marked "not yet
-  applicable" until issue #8 (desktop profile / `hyprland-session` module) merges - re-run the
-  checklist once it does.
+  maintaining a reliable unattended Mint installer is out of this issue's scope.
 - **Hermes/hermes-gateway are never installed for real by `scripts/test-matrix.sh`** (only
   `apt-base` is, today) - they are user-scope modules needing a real non-root user/session and a
   real download from `hermes-agent.nousresearch.com`, both of which add meaningful complexity to
