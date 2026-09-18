@@ -81,6 +81,33 @@ _hgw_headless() {
   [[ "$session" == "server" ]]
 }
 
+# _hgw_hermes_home
+# Prints the resolved HERMES_HOME (same resolution as modules/hermes).
+_hgw_hermes_home() {
+  printf '%s\n' "${OMES_HERMES_HOME:-${HOME}/.hermes}"
+}
+
+# _hgw_telegram_allowlist_check
+# Runs modules/hermes-gateway/telegram-allowlist.sh --check as an extra
+# doctor-style signal (issue #13) when a Telegram bot token is configured
+# - surfaces a half-enabled group (present in only one of
+# TELEGRAM_ALLOWED_CHATS / TELEGRAM_GROUP_ALLOWED_CHATS) as a WARN. This
+# is advisory only: it never fails module_verify on its own, and it is a
+# complete no-op when Telegram is not configured for this install.
+_hgw_telegram_allowlist_check() {
+  local env_file
+  env_file="$(_hgw_hermes_home)/.env"
+  [[ -r "$env_file" ]] || return 0
+  grep -q '^TELEGRAM_BOT_TOKEN=' "$env_file" 2>/dev/null || return 0
+
+  local script="${OMES_ROOT}/modules/hermes-gateway/telegram-allowlist.sh"
+  [[ -x "$script" ]] || return 0
+
+  if ! "$script" --check; then
+    log_warn "hermes-gateway: telegram-allowlist.sh --check reported an issue (see above) - see docs/telegram-security.md"
+  fi
+}
+
 # _hgw_doctor_caveat <status-output>
 # Always logs the "green systemctl signal does not prove the messaging
 # adapter is connected" caveat (docs/hermes-integration.md part 2), and
@@ -226,6 +253,7 @@ module_verify() {
   log_info "hermes-gateway: status: ${status_output}"
 
   _hgw_doctor_caveat "$status_output"
+  _hgw_telegram_allowlist_check
 
   return 0
 }
