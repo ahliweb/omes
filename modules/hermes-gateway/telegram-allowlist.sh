@@ -181,7 +181,7 @@ _ta_lines_to_csv() {
 # _ta_csv_remove <csv> <id>
 _ta_csv_remove() {
   local csv="$1" id="$2"
-  _ta_csv_to_lines "$csv" | grep -vxF "$id" | _ta_lines_to_csv || true
+  _ta_csv_to_lines "$csv" | grep -vxF -- "$id" | _ta_lines_to_csv || true
 }
 
 # ---------------------------------------------------------------------------
@@ -221,7 +221,9 @@ cmd_add() {
     return 0
   fi
 
-  _ta_env_write_two TELEGRAM_ALLOWED_CHATS "$new_allowed" TELEGRAM_GROUP_ALLOWED_CHATS "$new_group" "$file"
+  if ! _ta_env_write_two TELEGRAM_ALLOWED_CHATS "$new_allowed" TELEGRAM_GROUP_ALLOWED_CHATS "$new_group" "$file"; then
+    return 1
+  fi
   log_info "telegram-allowlist: added '${chat_id}' to both TELEGRAM_ALLOWED_CHATS and TELEGRAM_GROUP_ALLOWED_CHATS"
   _ta_print_restart_warning
 }
@@ -249,7 +251,9 @@ cmd_remove() {
     return 0
   fi
 
-  _ta_env_write_two TELEGRAM_ALLOWED_CHATS "$new_allowed" TELEGRAM_GROUP_ALLOWED_CHATS "$new_group" "$file"
+  if ! _ta_env_write_two TELEGRAM_ALLOWED_CHATS "$new_allowed" TELEGRAM_GROUP_ALLOWED_CHATS "$new_group" "$file"; then
+    return 1
+  fi
   log_info "telegram-allowlist: removed '${chat_id}' from both TELEGRAM_ALLOWED_CHATS and TELEGRAM_GROUP_ALLOWED_CHATS"
   _ta_print_restart_warning
 }
@@ -278,13 +282,13 @@ cmd_check() {
   local id
   while IFS= read -r id; do
     [[ -z "$id" ]] && continue
-    if ! _ta_csv_to_lines "$group_chats" | grep -qxF "$id"; then
+    if ! _ta_csv_to_lines "$group_chats" | grep -qxF -- "$id"; then
       only_allowed+=("$id")
     fi
   done < <(_ta_csv_to_lines "$allowed_chats")
   while IFS= read -r id; do
     [[ -z "$id" ]] && continue
-    if ! _ta_csv_to_lines "$allowed_chats" | grep -qxF "$id"; then
+    if ! _ta_csv_to_lines "$allowed_chats" | grep -qxF -- "$id"; then
       only_group+=("$id")
     fi
   done < <(_ta_csv_to_lines "$group_chats")

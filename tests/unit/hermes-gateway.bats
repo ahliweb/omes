@@ -211,6 +211,30 @@ teardown() {
   [[ "$output" == *"may not be connected"* ]]
 }
 
+@test "module_verify surfaces a half-enabled telegram allowlist group as a warning (#13 wiring)" {
+  export OMES_NONINTERACTIVE=1
+  run module_apply
+  [ "$status" -eq 0 ]
+
+  mkdir -p "${HOME}/.hermes"
+  printf 'TELEGRAM_BOT_TOKEN=abc123\nTELEGRAM_ALLOWED_CHATS=-1001\nTELEGRAM_GROUP_ALLOWED_CHATS=\n' > "${HOME}/.hermes/.env"
+  chmod 600 "${HOME}/.hermes/.env"
+
+  run module_verify
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"half-enabled"* ]]
+  [[ "$output" != *"abc123"* ]]
+}
+
+@test "module_verify is unaffected when no telegram token is configured" {
+  export OMES_NONINTERACTIVE=1
+  run module_apply
+  [ "$status" -eq 0 ]
+  run module_verify
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"half-enabled"* ]]
+}
+
 # --- module_rollback ------------------------------------------------------------
 
 @test "module_rollback disables lingering only when OMES itself enabled it" {
