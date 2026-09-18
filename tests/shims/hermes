@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/hermes - fake hermes CLI for bats tests.
+#
+# Records every invocation (space-joined argv) to $SHIM_LOG. Behavior is
+# driven entirely by env vars so tests can simulate "not installed",
+# "installed at version X", a passing/warning/failing `hermes doctor`, and
+# gateway subcommand outcomes without any real Hermes install:
+#
+#   SHIM_HERMES_VERSION            unset/empty => `hermes --version` fails
+#                                   (simulates "not installed"); set =>
+#                                   `hermes --version` prints "hermes $SHIM_HERMES_VERSION"
+#   SHIM_HERMES_DOCTOR_EXIT         exit code for `hermes doctor` (default 0)
+#   SHIM_HERMES_DOCTOR_OUTPUT       output for `hermes doctor` (default "All checks passed")
+#   SHIM_HERMES_GATEWAY_INSTALL_EXIT   exit code for `hermes gateway install` (default 0)
+#   SHIM_HERMES_GATEWAY_STATUS_EXIT    exit code for `hermes gateway status` (default 0)
+#   SHIM_HERMES_GATEWAY_STATUS_OUTPUT  output for `hermes gateway status` (default "running")
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'hermes %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  --version)
+    if [[ -z "${SHIM_HERMES_VERSION:-}" ]]; then
+      exit 1
+    fi
+    printf 'hermes %s\n' "$SHIM_HERMES_VERSION"
+    exit 0
+    ;;
+  doctor)
+    if [[ "${SHIM_HERMES_DOCTOR_EXIT:-0}" != "0" ]]; then
+      printf '%s\n' "${SHIM_HERMES_DOCTOR_OUTPUT:-FAIL: simulated doctor failure}" >&2
+      exit "${SHIM_HERMES_DOCTOR_EXIT}"
+    fi
+    printf '%s\n' "${SHIM_HERMES_DOCTOR_OUTPUT:-All checks passed}"
+    exit 0
+    ;;
+  config)
+    exit 0
+    ;;
+  model)
+    exit 0
+    ;;
+  gateway)
+    shift || true
+    case "${1:-}" in
+      install)
+        exit "${SHIM_HERMES_GATEWAY_INSTALL_EXIT:-0}"
+        ;;
+      status)
+        printf '%s\n' "${SHIM_HERMES_GATEWAY_STATUS_OUTPUT:-running}"
+        exit "${SHIM_HERMES_GATEWAY_STATUS_EXIT:-0}"
+        ;;
+      setup | start | stop)
+        exit 0
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
+    ;;
+  *)
+    exit 0
+    ;;
+esac

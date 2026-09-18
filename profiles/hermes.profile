@@ -4,5 +4,5 @@
 # modules by MODULE_REQUIRES before applying them.
 
 apt-base
-# hermes (#11)
+hermes
 # hermes-gateway (#12)
