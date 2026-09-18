@@ -3,3 +3,12 @@
 .bats-tmp/
 **/backups/
 .claude/
+
+# tests/matrix/ results and logs are per-run evidence (scripts/test-matrix.sh,
+# issue #15) - never committed, except the directory's own README.md.
+tests/matrix/results/*
+!tests/matrix/results/README.md
+tests/matrix/logs/
+
+# tests/vm/ evidence bundles (tests/vm/run.sh, issue #15) - never committed.
+tests/vm/evidence/
