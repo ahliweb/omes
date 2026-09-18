@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/nvidia-smi - fake nvidia-smi for bats tests.
+#
+# `--query-gpu=driver_version --format=csv,noheader` prints
+# $SHIM_NVIDIA_DRIVER_VERSION (default "555.42.02"). Used by
+# modules/desktop-preflight/checks.sh's _dp_nvidia_driver_version.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'nvidia-smi %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+printf '%s\n' "${SHIM_NVIDIA_DRIVER_VERSION:-555.42.02}"

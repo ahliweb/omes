@@ -4,7 +4,11 @@
 # modules by MODULE_REQUIRES before applying them.
 
 apt-base
-# desktop-preflight (#8)
-# desktop-session (#8)
-# hermes (#11)
+desktop-preflight
+hyprland-session
+desktop-config
+# hermes (#11) - optional on desktop; enable by uncommenting once you want
+# Hermes Agent alongside the desktop session (installs per-user, same as
+# the server/hermes profiles - see docs/hermes-integration.md).
+# hermes
 # hermes-gateway (#12)

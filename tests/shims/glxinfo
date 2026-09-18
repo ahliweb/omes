@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/glxinfo - fake glxinfo for bats tests.
+#
+# Prints a minimal `glxinfo -B`-shaped report: $SHIM_GLXINFO_DIRECT
+# ("Yes"/"No", default "Yes") and $SHIM_GLXINFO_RENDERER (default a benign
+# Mesa renderer string). Used by
+# modules/desktop-preflight/checks.sh's dp_check_render as a secondary,
+# non-fatal cross-check of direct rendering availability.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'glxinfo %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+printf 'direct rendering: %s\n' "${SHIM_GLXINFO_DIRECT:-Yes}"
+printf 'OpenGL renderer string: %s\n' "${SHIM_GLXINFO_RENDERER:-Mesa Intel(R) Graphics (ADL-S GT1)}"
