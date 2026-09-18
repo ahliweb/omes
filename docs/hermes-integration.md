@@ -8,10 +8,9 @@
 > [#11](https://github.com/ahliweb/omes/issues/11)) and the
 > `hermes-gateway`/`hermes-gateway-system` modules (part 2, issue
 > [#12](https://github.com/ahliweb/omes/issues/12), sections 11+).
-> Telegram-specific security guidance will live in
-> `docs/telegram-security.md`, tracked in issue
-> [#13](https://github.com/ahliweb/omes/issues/13) — **not created yet**
-> as of this document.
+> Telegram-specific security guidance lives in
+> [`docs/telegram-security.md`](./telegram-security.md) (issue
+> [#13](https://github.com/ahliweb/omes/issues/13)).
 >
 > OMES is an independent, MIT-licensed, Omarchy-inspired compatibility
 > layer. It is not official Omarchy and Hermes Agent is a separate upstream
@@ -135,8 +134,8 @@ This is deliberate: embedding a credential-writing step in an installer
 module would mean OMES scripts handle plaintext secrets, and would give any
 `omes install` run the ability to silently overwrite operator-managed
 credentials. Neither is acceptable per `docs/security.md` §5. Telegram bot
-token handling specifically will be documented in `docs/telegram-security.md`
-(issue #13 — not created yet as of this document).
+token handling specifically is documented in
+[`docs/telegram-security.md`](./telegram-security.md) (issue #13).
 
 ## 6. The doctor gate
 
@@ -214,13 +213,11 @@ fully remove Hermes themselves:
 
 ## 10. Not implemented yet (part 1 / `hermes` module)
 
-- Telegram allowlist tooling and security documentation — tracked in issue
-  #13.
-- `omes doctor`/`omes update`/`omes uninstall` as first-class CLI commands
-  (currently stubs in `bin/omes`) — tracked in issue #14 and #10
-  respectively; this module's `module_rollback` is reachable today only by
-  calling it directly (e.g. from a future `omes uninstall`), not via a
-  finished CLI command.
+- `omes doctor`/`omes update` as first-class CLI commands (currently
+  stubs in `bin/omes`) — tracked in issue #14. `omes uninstall` and `omes
+  restore` are implemented (issue #10, `lib/omes/restore.sh`), so this
+  module's `module_rollback` is reachable via `omes uninstall --module
+  hermes` in addition to being callable directly.
 
 <!-- OMES-MERMAID: docs/hermes-integration.md -->
 
@@ -439,9 +436,9 @@ own output contains a recognizable disconnected-looking phrase
 additional, more specific `WARN` is logged quoting that output. This is a
 narrow, best-effort heuristic, not a guarantee — the authoritative way to
 confirm adapter connectivity is the safe Telegram diagnostics documented
-in `docs/telegram-security.md` (issue #13, not yet written), which
-explicitly avoid the prohibited `getUpdates` call (see `docs/security.md`
-§2).
+in [`docs/telegram-security.md`](./telegram-security.md) (issue #13),
+which explicitly avoid the prohibited long-polling read endpoint (see
+`docs/security.md` §2).
 
 There is no separate `module_doctor` function in the module contract
 (`docs/architecture.md` §4.2 defines exactly four: `check`/`apply`/
@@ -461,8 +458,6 @@ function, so it runs on every `omes install` without requiring a future
 
 ## 16. Not implemented yet (part 2)
 
-- Telegram allowlist tooling and safe chat-discovery diagnostics — tracked
-  in issue #13.
 - A first-class `omes doctor` command that would run the adapter-caveat
   check on demand without a full `install` — tracked in issue #14; today
   the same check runs as part of every `module_verify`, so it is not

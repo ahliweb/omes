@@ -31,7 +31,7 @@ teardown() {
 }
 
 _write_env() {
-  printf '%s\n' "$@" > "$ENV_FILE"
+  printf '%s\n' "$@" >"$ENV_FILE"
   chmod 600 "$ENV_FILE"
 }
 

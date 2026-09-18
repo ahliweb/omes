@@ -217,7 +217,7 @@ teardown() {
   [ "$status" -eq 0 ]
 
   mkdir -p "${HOME}/.hermes"
-  printf 'TELEGRAM_BOT_TOKEN=abc123\nTELEGRAM_ALLOWED_CHATS=-1001\nTELEGRAM_GROUP_ALLOWED_CHATS=\n' > "${HOME}/.hermes/.env"
+  printf 'TELEGRAM_BOT_TOKEN=abc123\nTELEGRAM_ALLOWED_CHATS=-1001\nTELEGRAM_GROUP_ALLOWED_CHATS=\n' >"${HOME}/.hermes/.env"
   chmod 600 "${HOME}/.hermes/.env"
 
   run module_verify

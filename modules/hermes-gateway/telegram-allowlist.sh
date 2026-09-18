@@ -89,7 +89,7 @@ _ta_env_get() {
         found=0
         ;;
     esac
-  done < "$file"
+  done <"$file"
   [[ "$found" -eq 0 ]] || return 1
   printf '%s\n' "$value"
 }
@@ -119,21 +119,21 @@ _ta_env_write_two() {
     while IFS= read -r line || [[ -n "$line" ]]; do
       case "$line" in
         "${key1}="*)
-          printf '%s=%s\n' "$key1" "$val1" >> "$tmp"
+          printf '%s=%s\n' "$key1" "$val1" >>"$tmp"
           wrote1=1
           ;;
         "${key2}="*)
-          printf '%s=%s\n' "$key2" "$val2" >> "$tmp"
+          printf '%s=%s\n' "$key2" "$val2" >>"$tmp"
           wrote2=1
           ;;
         *)
-          printf '%s\n' "$line" >> "$tmp"
+          printf '%s\n' "$line" >>"$tmp"
           ;;
       esac
-    done < "$file"
+    done <"$file"
   fi
-  [[ "$wrote1" -eq 1 ]] || printf '%s=%s\n' "$key1" "$val1" >> "$tmp"
-  [[ "$wrote2" -eq 1 ]] || printf '%s=%s\n' "$key2" "$val2" >> "$tmp"
+  [[ "$wrote1" -eq 1 ]] || printf '%s=%s\n' "$key1" "$val1" >>"$tmp"
+  [[ "$wrote2" -eq 1 ]] || printf '%s=%s\n' "$key2" "$val2" >>"$tmp"
 
   chmod 600 "$tmp"
   if [[ -e "$file" ]]; then
@@ -213,8 +213,14 @@ cmd_add() {
   group_chats="$(_ta_env_get TELEGRAM_GROUP_ALLOWED_CHATS "$file" || true)"
 
   local new_allowed new_group
-  new_allowed="$( { _ta_csv_to_lines "$allowed_chats"; printf '%s\n' "$chat_id"; } | _ta_lines_to_csv)"
-  new_group="$( { _ta_csv_to_lines "$group_chats"; printf '%s\n' "$chat_id"; } | _ta_lines_to_csv)"
+  new_allowed="$({
+    _ta_csv_to_lines "$allowed_chats"
+    printf '%s\n' "$chat_id"
+  } | _ta_lines_to_csv)"
+  new_group="$({
+    _ta_csv_to_lines "$group_chats"
+    printf '%s\n' "$chat_id"
+  } | _ta_lines_to_csv)"
 
   if [[ "$new_allowed" == "$allowed_chats" ]] && [[ "$new_group" == "$group_chats" ]]; then
     log_info "telegram-allowlist: '${chat_id}' is already present in both TELEGRAM_ALLOWED_CHATS and TELEGRAM_GROUP_ALLOWED_CHATS; nothing to do"
@@ -341,7 +347,7 @@ _ta_api_call() {
     printf 'url = "https://api.telegram.org/bot%s/%s?%s"\n' "$token" "$method" "$query"
     printf 'silent\n'
     printf 'show-error\n'
-  } > "$cfg"
+  } >"$cfg"
 
   local out rc
   out="$(curl -K "$cfg" 2>&1)"
