@@ -510,6 +510,7 @@ cmd_backup() {
   done
   local dir
   dir="$(backup_finish)"
+  # shellcheck disable=SC2119  # default retention comes from OMES_BACKUP_KEEP
   backup_prune
 
   log_info "backup: created $(basename "$dir") (${#all_paths[@]} path(s))"

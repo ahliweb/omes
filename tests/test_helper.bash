@@ -61,8 +61,10 @@ omes_fixture_path() {
 # correctly. Use this instead of `run` whenever a test pipes $output into
 # `python3 -m json.tool`/`json.loads` for a command that also logs.
 omes_run_stdout_only() {
-  # shellcheck disable=SC2034  # status/output are bats convention names,
-  # read by the test body exactly like a normal `run` would set them.
+  # status/output are bats convention names, read by the test body exactly
+  # like a normal `run` would set them.
+  # shellcheck disable=SC2034
   output="$("$@" 2>/dev/null)"
+  # shellcheck disable=SC2034
   status=$?
 }

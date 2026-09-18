@@ -184,7 +184,9 @@ _restore_find_oldest_backup_for_path() {
     entry="${base}/${name}"
     meta="${entry}/META"
     manifest="${entry}/MANIFEST"
-    [[ -r "$meta" ]] && [[ -r "$manifest" ]] || continue
+    if [[ ! -r "$meta" ]] || [[ ! -r "$manifest" ]]; then
+      continue
+    fi
     grep -qxF "module=${mod}" "$meta" || continue
 
     while IFS= read -r line || [[ -n "$line" ]]; do
