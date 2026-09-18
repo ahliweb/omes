@@ -113,23 +113,38 @@ root - see `docs/hermes-integration.md`). This is the command
 
 ```console
 $ omes doctor
+$ sudo omes doctor   # also verifies root-scope modules (apt-base, security-baseline, containers)
 ```
 
-**Not implemented yet** (tracked in
-[#14](https://github.com/ahliweb/omes/issues/14); `bin/omes` currently
-reports it as a stub, exit code `1`, `"Not implemented yet (tracked in
-#14)"`). `modules/security-baseline/module.sh` and
-`modules/containers/module.sh` each already implement an optional,
-read-only `module_doctor` function (firewall state, a simulated pending-
-security-updates count via `apt-get -s upgrade`, NTP sync state for
-security-baseline; docker reachability, service state, and access policy
-for containers) - **(tested)** directly at the module level
-(`tests/unit/security-baseline.bats`, `tests/unit/containers.bats`), but
-`bin/omes doctor` does not call them yet, because wiring `omes doctor`
-itself is `bin/omes`'s responsibility and outside this module's file
-scope.
+`omes doctor` (issue [#14](https://github.com/ahliweb/omes/issues/14)) is
+implemented: OK/WARN/FAIL per check, exit code `0` unless something is
+`FAIL`. For every module recorded as applied, it runs that module's
+`module_verify` (OK/FAIL) plus - when the module defines one - its
+optional `module_doctor` hook, treating a non-zero return as `WARN`.
+`security-baseline` and `containers` both implement `module_doctor`:
 
-Until then, use:
+- `security-baseline`: current `ufw status verbose` firewall state, a
+  simulated pending-security-updates count (`apt-get -s upgrade`), and
+  NTP sync state - `WARN` if the firewall is not active or the clock is
+  not NTP-synchronized.
+- `containers`: `docker version` reachability, whether `docker.service`
+  is enabled, and the current access policy - `WARN` if docker is
+  unreachable, the service is disabled, **or** OMES granted `docker`
+  group membership (per `docs/threat-model.md` T06, that root-equivalent
+  grant must stay visible on every run, not just at install time).
+
+Run `omes doctor` as your own user first (verifies `hermes`/
+`hermes-gateway`), then `sudo omes doctor` (verifies `apt-base`/
+`security-baseline`/`containers`) - each privilege level can only verify
+the modules that match its own scope; the other modules are reported as
+`WARN "requires root to verify"` / `WARN "must not run as root"`, not a
+failure. **(tested)** - `tests/unit/security-baseline.bats`,
+`tests/unit/containers.bats` exercise both `module_doctor` functions
+directly; `bin/omes cmd_doctor`'s own OK/WARN/FAIL wiring is covered by
+`tests/integration/doctor.bats` (outside this module's file scope, not
+modified here beyond the same test-isolation setup as Section 2.3).
+
+Complementary manual commands:
 
 ```console
 $ sudo ufw status verbose
@@ -377,10 +392,6 @@ failure.
 
 ## 9. Known limitations
 
-- `omes doctor` and `omes update` are stubs (`bin/omes cmd_stub`), tracked
-  in [#14](https://github.com/ahliweb/omes/issues/14). The read-only
-  `module_doctor` functions in `security-baseline`/`containers` exist and
-  are tested at the module level but are not yet reachable from the CLI.
 - There is no `--enable-ssh` / `--rootless` CLI flag yet; both are
   environment-variable opt-ins (`OMES_ENABLE_SSH=1`,
   `OMES_DOCKER_ROOTLESS=1`) pending `bin/omes` flag-parsing changes, which
