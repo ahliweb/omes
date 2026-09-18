@@ -47,7 +47,7 @@ work); a `hermes-gateway-system` `MODULE_REQUIRES` edge onto the user-scope
 |---|---|---|
 | `/var/lib/omes/` (root scope) | State file, backups, logs | `0700` dir, `0600` files |
 | `${XDG_STATE_HOME:-$HOME/.local/state}/omes/` (user scope) | Same, for user-scope modules | `0700` dir, `0600` files |
-| `<state-dir>/state` | `key=value` lines: `omes.version`, `omes.profile`, `module.<name>.status`/`applied_at`/`version`/`managed_paths`/`installed_packages` | `0600` |
+| `<state-dir>/state` | `key=value` lines: `omes.version`, `omes.profile`, `module.<name>.status`/`applied_at`/`last_run_at`/`version`/`managed_paths`/`installed_packages` | `0600` |
 | `<state-dir>/backups/<UTC timestamp>/` | `MANIFEST` (sha256 + path per file), `META` (version/module/reason), copies of every backed-up file | `0700` dir; `.env`-named files always copied at `0600` |
 | `<state-dir>/logs/omes-<UTC timestamp>.log` | One line per log event for that invocation | `0600`-ish (created by the process; no stricter guarantee documented) |
 | `~/.local/share/omes/omes.git` — actually `~/.local/share/omes` (`OMES_INSTALL_DIR`) | The cloned OMES repository (bootstrap only) | operator's normal umask |
