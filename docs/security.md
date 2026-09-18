@@ -151,7 +151,23 @@ These gates map directly to the QA/security issues that produce the evidence:
 | Telegram allowlist behavior proven | Test asserts unauthorized users/groups are rejected and authorized ones are served, in both directions (see hermes-telegram-bot lessons: verify allowlisted groups still serve unknown *users* correctly) | #13, #15 |
 | Known limitations published | This document and `docs/threat-model.md` are current and linked from the release notes | #5, #18 |
 
-## 8. What OMES does NOT claim
+## 8. Control Center and provider integration security
+
+The web Control Center and provider adapters are **not implemented in the current CLI branch**. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are implemented, the following are release requirements:
+
+- AWCMS is a companion control plane; it must not expose arbitrary shell or replace Hermes.
+- Every host/provider mutation uses an allowlisted, idempotent, audited job with tenant, actor, target, correlation ID, and reconciliation evidence.
+- The preferred OMES connection is a local socket, authenticated mTLS channel, or pull worker; a public privileged listener is not the default.
+- Registrar, DNS, GitHub, payment, and OMES credentials are secret references; raw values never enter browser payloads, state, logs, issues, or backups.
+- Cloudflare and SRS-X capabilities are checked per account/extension/operation. Unsupported capabilities become manual tasks.
+- `.id` registrant data and documents receive encryption, tenant-scoped access, access audit, retention, and deletion/legal-hold treatment.
+- External calls occur outside database transactions. Webhook signatures, event IDs, timestamps, and replay protection are mandatory.
+- Registrar state, DNS state, invoice state, entitlement state, and deployment state remain separate and reconcile asynchronously.
+- Paid invoices never directly imply successful registration, DNS, or deployment. Suspension never stops healthy deployments by default.
+
+See [docs/control-center-and-integrations.md](control-center-and-integrations.md) and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md) for the normative boundary.
+
+## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
 

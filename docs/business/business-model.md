@@ -91,7 +91,7 @@ Per the plan (section 5.4) and the hard rule against inventing numbers: candidat
 
 ### 7. Custom integrations
 
-- **Customer value**: connecting Hermes/OMES to a customer's specific stack (internal tools, provider routing, GitHub, Docker workflows) beyond what ships in the core modules.
+- **Customer value**: connecting Hermes/OMES to a customer's specific stack (internal tools, provider routing, GitHub, Docker workflows, and provider routing) beyond what ships in the core modules.
 - **Delivery cost drivers**: bespoke development time per integration; ongoing maintenance if the integration must track upstream API changes (this is a recurring cost driver, not a one-time one).
 - **Risks**: bespoke work doesn't scale — each integration is closer to consulting than product; maintenance burden accumulates silently unless each integration has an explicit support/versioning commitment attached.
 - **Candidate pricing logic**:
@@ -101,7 +101,34 @@ Per the plan (section 5.4) and the hard rule against inventing numbers: candidat
   ```
 - **Dependencies**: depends on the module contract (engineering track — `MODULE_REQUIRES`, `check`/`apply`/`verify`/`rollback`) being stable enough that a custom integration module doesn't need to be rewritten on every core change.
 
----
+### 8. Control Center and domain/provider services
+
+This is a **hypothesis and staged implementation track**, not a claim that a SaaS or billing product is available today. The engineering boundary is documented in [docs/control-center-and-integrations.md](../control-center-and-integrations.md) and tracked in issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102).
+
+Potential customer value:
+
+- one portal for OMES deployments, service plans, invoices, support, domains, and GitHub deployment metadata;
+- domain registration and renewal workflow for supported international extensions through Cloudflare and Indonesian `.id` extensions through SRS-X;
+- deployment/domain/repository linkage and clearer operational evidence;
+- managed integration add-ons without making OMES the provider's billing authority.
+
+Business risks:
+
+- registrar APIs have changing capabilities and asynchronous/non-refundable operations;
+- `.id` registration may require personal/business documents and manual review;
+- billing state can be mistaken for infrastructure success unless reconciled;
+- payment, domain, GitHub, and host credentials expand the security and compliance burden;
+- Control Center operations can become a second operational platform before the native OMES runtime is stable.
+
+Commercial validation must therefore measure:
+
+- domain order conversion and manual fallback rate;
+- provider failure and reconciliation rate;
+- support hours per active domain/deployment;
+- gross margin after provider cost, payment cost, document handling, and support;
+- willingness to pay for managed integration rather than assuming domain markup or SaaS demand.
+
+The recommended order is: native OMES reliability → productized setup/support → Control Center pilot → domain/GitHub add-ons → recurring billing only after operational evidence.
 
 ## Service package definitions (scope, not price)
 

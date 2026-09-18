@@ -34,6 +34,7 @@
 11. [Network model](#11-network-model)
 12. [Extension points](#12-extension-points)
 13. [Non-goals and known limitations](#13-non-goals-and-known-limitations)
+14. [Control Center and provider boundary](#14-control-center-and-provider-boundary)
 
 ---
 
@@ -950,6 +951,24 @@ next unused integer and must not repurpose an existing code.
 - arm64 is a best-effort (tier 3) platform per the compatibility matrix
   (issue #3); this document's contracts apply there too, but test coverage
   and operator support are weaker than on tier 1/2 amd64 targets.
+
+## 14. Control Center and provider boundary
+
+The current OMES implementation remains a Bash CLI and host toolkit. A future AWCMS/awcms-one-based Control Center is a companion control plane, not a replacement for the CLI or a second Hermes runtime. Its design and issue mapping are authoritative in [docs/control-center-and-integrations.md](control-center-and-integrations.md) and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md).
+
+The Control Center may own tenant, catalog, subscription, invoice, payment, entitlement, approval, support, and reporting state. OMES owns host and deployment state; Hermes owns agent runtime state. Web mutations reach OMES only through an authenticated, allowlisted, idempotent, audited job boundary. Arbitrary shell execution and public privileged listeners are prohibited by design.
+
+Provider adapters are staged and not implemented in this CLI branch:
+
+- [#98](https://github.com/ahliweb/omes/issues/98) owns the registrar/DNS abstraction, capability matrix, catalog, price snapshot, and manual fallback.
+- [#99](https://github.com/ahliweb/omes/issues/99) owns Cloudflare Registrar/DNS for supported international extensions.
+- [#100](https://github.com/ahliweb/omes/issues/100) owns SRS-X for supported Indonesian `.id` workflows and documents.
+- [#101](https://github.com/ahliweb/omes/issues/101) owns GitHub App, repository, webhook, Actions, and provenance integration.
+- [#102](https://github.com/ahliweb/omes/issues/102) owns domain billing and provider reconciliation.
+
+Registrar and DNS remain separate contracts. Provider state, invoice state, entitlement state, DNS state, and deployment state must never be collapsed into one boolean `active` field. External calls happen outside database transactions and are reconciled asynchronously. Unsupported provider capability becomes an explicit manual task rather than an implicit retry or provider substitution.
+
+The Control Center and provider boundary is a design-only capability until the linked issues land; this section must not be read as evidence that a web GUI or provider adapter exists.
 
 <!-- OMES-MERMAID: docs/architecture.md -->
 

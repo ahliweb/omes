@@ -209,6 +209,8 @@ for the security baseline and threat model this project maintains.
 - [docs/scope.md](docs/scope.md) — product scope and non-goals
 - [docs/research-and-implementation-plan.md](docs/research-and-implementation-plan.md) —
   research baseline and phased implementation plan
+- [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md) —
+  proposed web control plane, billing, domain, DNS, Cloudflare, SRS-X, and GitHub boundaries
 - [docs/adr/](docs/adr/) — architecture decision records
 - [CONTRIBUTING.md](CONTRIBUTING.md) and
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)

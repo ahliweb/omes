@@ -268,6 +268,81 @@ Release gates:
 - issue severity and known limitations published;
 - business pilot with a measurable success threshold.
 
+### Phase 6 — Control Center and service entitlements
+
+Issues: [#89](https://github.com/ahliweb/omes/issues/89), [#90](https://github.com/ahliweb/omes/issues/90), [#91](https://github.com/ahliweb/omes/issues/91), [#92](https://github.com/ahliweb/omes/issues/92)
+
+This is a companion control-plane track, not a replacement for the native CLI or Hermes. It defines the AWCMS/awcms-one boundary, authenticated allowlisted jobs, idempotency, desired/observed deployment state, tenant scope, service catalog, subscription, and entitlement enforcement.
+
+Gate:
+
+- no arbitrary shell endpoint;
+- job replay is idempotent;
+- all mutations are audited and reconciled;
+- Control Center outage does not stop an already-healthy local Hermes deployment;
+- RLS/ABAC and secret-reference requirements are tested.
+
+### Phase 7 — Billing and reporting
+
+Issues: [#93](https://github.com/ahliweb/omes/issues/93), [#94](https://github.com/ahliweb/omes/issues/94), [#95](https://github.com/ahliweb/omes/issues/95)
+
+Deliverables:
+
+- manual invoice and immutable billing ledger;
+- recurring billing adapter contract;
+- signed payment webhooks with replay protection;
+- grace period and suspension policy;
+- prorated changes and refund semantics;
+- operational, usage, billing, and revenue projections.
+
+Gate:
+
+- provider events are processed outside database transactions;
+- payment state cannot be mistaken for deployment or domain success;
+- financial records are immutable and reconciliable;
+- reports identify freshness and rebuild scope.
+
+### Phase 8 — Domain and GitHub provider integrations
+
+Milestone: [Domain and Integration Services](https://github.com/ahliweb/omes/milestone/8)
+
+Issues: [#98](https://github.com/ahliweb/omes/issues/98), [#99](https://github.com/ahliweb/omes/issues/99), [#100](https://github.com/ahliweb/omes/issues/100), [#101](https://github.com/ahliweb/omes/issues/101), [#102](https://github.com/ahliweb/omes/issues/102)
+
+Deliverables:
+
+- provider-neutral registrar and DNS contracts;
+- capability matrix and manual fallback;
+- Cloudflare Registrar/DNS for supported international extensions;
+- SRS-X `.id` registration, renewal, and document workflow where the reseller account supports them;
+- GitHub App, repository, webhook, Actions, and provenance integration;
+- domain billing, renewal reminders, and provider reconciliation.
+
+Gate:
+
+- price and capability snapshots are immutable at checkout;
+- unsupported API operations are visible manual tasks;
+- provider actions are idempotent and externally reconciled;
+- PII, domain contacts, and `.id` documents have tenant-scoped encryption/retention controls;
+- no live provider credential is required for default CI tests.
+
+### Phase 9 — Isolation and multi-server operations
+
+Issues: [#96](https://github.com/ahliweb/omes/issues/96), [#97](https://github.com/ahliweb/omes/issues/97)
+
+Deliverables:
+
+- rootless Docker Compose worker backend;
+- optional Coolify adapter;
+- provenance, health, resource, backup, and rollback integration;
+- multi-server reconciliation.
+
+Gate:
+
+- native systemd remains the default;
+- privileged Docker access is not granted implicitly;
+- Coolify is optional and does not become OMES's source of truth;
+- disposable-host and fake-provider tests cover failure and rollback paths.
+
 ## 5. Business research and recommendations
 
 ### 5.1 Priority ICP

@@ -130,7 +130,25 @@ Coolify remains the source of truth for the delegated resource's:
 
 The adapter must be idempotent, least-privilege, and explicit about rollback boundaries. It must not embed the Coolify Laravel/PostgreSQL/Redis/realtime control-plane stack in OMES.
 
-### 2.4 Large-scale phase: evaluate Nomad/Kubernetes only with evidence
+### 2.4 Control Center, billing, and external providers
+
+The web Control Center is a staged companion control plane, not part of the native systemd MVP. It may use the AWCMS/awcms-one foundation for tenant, identity, catalog, subscription, invoice, entitlement, approval, audit, support, and reporting surfaces. It requests host operations through the versioned OMES job boundary defined in [#89](https://github.com/ahliweb/omes/issues/89) and [#90](https://github.com/ahliweb/omes/issues/90); it never exposes arbitrary shell execution.
+
+The provider sequence is tracked in the [Domain and Integration Services milestone](https://github.com/ahliweb/omes/milestone/8):
+
+```text
+D1  #98  provider abstraction, capabilities, catalog, price snapshots
+D2  #99  Cloudflare Registrar/DNS for supported international extensions
+D2  #100 SRS-X for supported Indonesian .id workflows and documents
+D2  #101 GitHub App, repository, webhook, Actions, and provenance integration
+D3  #102 domain billing, renewal, and provider reconciliation
+```
+
+Registrar and DNS are separate adapters. Cloudflare API support must be checked per extension and capability; SRS-X `.id` operations may require documents and provider action; GitHub remains a repository/CI provider, not OMES's billing authority. Billing success never proves registrar, DNS, or deployment success. All provider mutations are idempotent audited jobs with asynchronous reconciliation and a manual fallback.
+
+Implementation status: design only; the Control Center and provider adapters are not implemented in the current OMES CLI branch. See [docs/control-center-and-integrations.md](control-center-and-integrations.md) and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md).
+
+### 2.5 Large-scale phase: evaluate Nomad/Kubernetes only with evidence
 
 Nomad or Kubernetes should be considered only if measured requirements demonstrate a need for capabilities such as:
 

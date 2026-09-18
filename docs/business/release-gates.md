@@ -91,6 +91,25 @@ layer. It is not the official Omarchy project, and no release gate below waives 
   the combined external pilot cohort, not just one deployment type.
 - No kill-criteria trigger from section 4 of this document is currently active.
 
+### 1.4 Control Center and provider pilot
+
+This is a separate gate from the native OMES alpha/beta release. It may not be used to imply that the CLI is production-ready, and the CLI may not be declared commercially ready merely because a web prototype works.
+
+Required design/implementation evidence for a Control Center pilot:
+
+- #89 and #90 contracts reviewed; no arbitrary shell path exists;
+- tenant isolation, RBAC/ABAC, idempotency, audit, and reconciliation tests pass;
+- AWCMS outage does not stop a healthy local deployment;
+- manual invoice and entitlement behavior is deterministic before live payment automation;
+- provider adapters expose capability and manual fallback states;
+- Cloudflare registration uses authoritative check and explicit final confirmation;
+- SRS-X `.id` document handling has encryption, access audit, expiry, and retention evidence;
+- GitHub webhook signatures and delivery replay protection are tested;
+- no live credentials are needed for default CI tests;
+- provider costs, manual intervention, failure rate, reconciliation drift, and support hours are measured before pricing claims.
+
+A domain/billing pilot is **not go** when any operation can silently report provider success, lose tenant scope, expose raw credentials/PII, or automatically destroy a healthy deployment on payment state alone.
+
 ## 2. KPI definitions
 
 | KPI | Formula | Unit | Source |
