@@ -59,7 +59,7 @@ case "$os_id" in
     ;;
   linuxmint)
     case "$os_version_id" in
-      22.*) tier="tier1" ;;
+      22 | 22.*) tier="tier1" ;;
     esac
     ;;
 esac

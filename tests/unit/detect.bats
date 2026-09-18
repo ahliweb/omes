@@ -159,6 +159,40 @@ EOF
   [ "$output" = "tier1" ]
 }
 
+@test "detect_tier: linuxmint 22 (no point release) is tier1" {
+  local path
+  path="$(_write_os_release <<'EOF'
+PRETTY_NAME="Linux Mint 22"
+VERSION_ID="22"
+ID=linuxmint
+ID_LIKE="ubuntu debian"
+UBUNTU_CODENAME=noble
+EOF
+)"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  OMES_ARCH="amd64"
+  run detect_tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "tier1" ]
+}
+
+@test "detect_tier: linuxmint 21.3 is unsupported" {
+  local path
+  path="$(_write_os_release <<'EOF'
+PRETTY_NAME="Linux Mint 21.3"
+VERSION_ID="21.3"
+ID=linuxmint
+ID_LIKE="ubuntu debian"
+UBUNTU_CODENAME=jammy
+EOF
+)"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  OMES_ARCH="amd64"
+  run detect_tier
+  [ "$status" -eq 1 ]
+  [ "$output" = "unsupported" ]
+}
+
 @test "detect_tier: debian 12 is unsupported" {
   local path
   path="$(_write_os_release <<'EOF'

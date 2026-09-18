@@ -76,7 +76,7 @@ detect_arch() {
 # Sets and prints OMES_OS_TIER to one of tier1/tier2/tier3/unsupported:
 #   - Ubuntu 24.04            -> tier1
 #   - Ubuntu 22.04            -> tier2
-#   - Linux Mint 22.*         -> tier1
+#   - Linux Mint 22 / 22.*    -> tier1
 #   - arm64 on a supported OS -> tier3 (overrides the amd64 tier above)
 #   - everything else         -> unsupported
 detect_tier() {
@@ -105,7 +105,7 @@ detect_tier() {
       ;;
     linuxmint)
       case "${OMES_OS_VERSION_ID:-}" in
-        22.*)
+        22 | 22.*)
           tier="tier1"
           supported=1
           ;;
