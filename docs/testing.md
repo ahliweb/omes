@@ -211,10 +211,7 @@ script's own comments for the same notes, cross-referenced here):
 - **Linux Mint desktop verification is entirely manual** (`tests/vm/checklist.md`). Mint
   publishes no official cloud image (the format `tests/vm/run.sh` automates against), only
   installer ISOs meant for an interactive or preseed/autoinstall install; building and
-  maintaining a reliable unattended Mint installer is out of this issue's scope. Several of the
-  checklist's boxes (the Hyprland session entry specifically) are also marked "not yet
-  applicable" until issue #8 (desktop profile / `hyprland-session` module) merges - re-run the
-  checklist once it does.
+  maintaining a reliable unattended Mint installer is out of this issue's scope.
 - **Hermes/hermes-gateway are never installed for real by `scripts/test-matrix.sh`** (only
   `apt-base` is, today) - they are user-scope modules needing a real non-root user/session and a
   real download from `hermes-agent.nousresearch.com`, both of which add meaningful complexity to
