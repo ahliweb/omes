@@ -2,9 +2,14 @@
 # shellcheck shell=bash
 # tests/shims/journalctl - fake journalctl for bats tests.
 #
-# Prints $SHIM_JOURNALCTL_OUTPUT (default empty - "no matching entries").
 # Used by modules/hyprland-session/module.sh's best-effort
-# _hs_doctor_best_effort crash check; never fails.
+# _hs_doctor_best_effort crash check (#8) and by
+# modules/security-baseline/module.sh's module_doctor (#7); never fails
+# unless SHIM_JOURNALCTL_EXIT is set.
+#
+#   SHIM_JOURNALCTL_OUTPUT   text to print (default: empty - "no matching
+#                            entries")
+#   SHIM_JOURNALCTL_EXIT     exit code (default 0)
 
 set -Eeuo pipefail
 
@@ -13,6 +18,6 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
 fi
 
 if [[ -n "${SHIM_JOURNALCTL_OUTPUT:-}" ]]; then
-  printf '%s\n' "$SHIM_JOURNALCTL_OUTPUT"
+  printf '%s\n' "${SHIM_JOURNALCTL_OUTPUT}"
 fi
-exit 0
+exit "${SHIM_JOURNALCTL_EXIT:-0}"

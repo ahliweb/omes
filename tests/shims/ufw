@@ -1,0 +1,131 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/ufw - fake ufw for bats tests (#7, modules/security-baseline).
+#
+# State is tracked in $SHIM_UFW_STATE_FILE - tests MUST export this to a
+# FIXED path so multiple `ufw` invocations within one test share state
+# (each invocation is a separate process; without a shared statefile every
+# call would see fresh defaults). When unset, every call sees defaults and
+# nothing persists - fine only for a single-call assertion.
+#
+# Understands the subset modules/security-baseline/module.sh uses:
+#   ufw status verbose
+#   ufw default <deny|allow|reject> <incoming|outgoing>
+#   ufw allow OpenSSH | ufw allow <port>/tcp
+#   ufw --force enable | ufw enable
+#   ufw disable
+#
+# Defaults (no statefile, or a statefile with no entries yet): inactive,
+# default incoming ALLOW, default outgoing ALLOW - the pessimistic
+# starting point ("everything wide open, nothing configured yet") so a
+# module_apply run always has real, observable work to do on a first pass.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'ufw %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+STATE="${SHIM_UFW_STATE_FILE:-}"
+
+_state_get() {
+  local key="$1" default="$2"
+  if [[ -z "$STATE" ]] || [[ ! -r "$STATE" ]]; then
+    printf '%s\n' "$default"
+    return 0
+  fi
+  local line
+  line="$(grep "^${key}=" "$STATE" 2>/dev/null | tail -n1 || true)"
+  if [[ -n "$line" ]]; then
+    printf '%s\n' "${line#*=}"
+  else
+    printf '%s\n' "$default"
+  fi
+}
+
+_state_set() {
+  local key="$1" value="$2"
+  [[ -n "$STATE" ]] || return 0
+  mkdir -p "$(dirname "$STATE")" 2>/dev/null || true
+  touch "$STATE"
+  local tmp="${STATE}.tmp.$$"
+  { grep -v "^${key}=" "$STATE" 2>/dev/null || true; printf '%s=%s\n' "$key" "$value"; } > "$tmp"
+  mv -f "$tmp" "$STATE"
+}
+
+_rules() {
+  if [[ -z "$STATE" ]] || [[ ! -r "$STATE" ]]; then
+    return 0
+  fi
+  grep '^rule=' "$STATE" 2>/dev/null | cut -d= -f2-
+}
+
+_add_rule() {
+  local text="$1"
+  [[ -n "$STATE" ]] || return 0
+  if _rules | grep -qxF "$text"; then
+    return 0
+  fi
+  mkdir -p "$(dirname "$STATE")" 2>/dev/null || true
+  printf 'rule=%s\n' "$text" >> "$STATE"
+}
+
+cmd="${1:-}"
+case "$cmd" in
+  status)
+    enabled="$(_state_get enabled 0)"
+    if [[ "$enabled" != "1" ]]; then
+      printf 'Status: inactive\n'
+      exit 0
+    fi
+    in_pol="$(_state_get default_in allow)"
+    out_pol="$(_state_get default_out allow)"
+    printf 'Status: active\n'
+    printf 'Logging: on (low)\n'
+    printf 'Default: %s (incoming), %s (outgoing), disabled (routed)\n' "$in_pol" "$out_pol"
+    printf 'New profiles: skip\n\n'
+    printf 'To                         Action      From\n'
+    printf -- '--                         ------      ----\n'
+    while IFS= read -r r; do
+      [[ -z "$r" ]] && continue
+      printf '%-26s ALLOW IN    Anywhere\n' "$r"
+    done < <(_rules)
+    exit 0
+    ;;
+  default)
+    policy="${2:-}"
+    direction="${3:-}"
+    case "$direction" in
+      incoming) key="default_in" ;;
+      outgoing) key="default_out" ;;
+      *) exit 0 ;;
+    esac
+    case "$policy" in
+      deny | allow | reject) _state_set "$key" "$policy" ;;
+    esac
+    exit 0
+    ;;
+  allow)
+    shift
+    _add_rule "$*"
+    exit 0
+    ;;
+  disable)
+    _state_set enabled 0
+    exit 0
+    ;;
+  --force)
+    shift
+    if [[ "${1:-}" == "enable" ]]; then
+      _state_set enabled 1
+    fi
+    exit 0
+    ;;
+  enable)
+    _state_set enabled 1
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
