@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/systemd-detect-virt - fake systemd-detect-virt for bats tests.
+#
+# Prints $SHIM_VIRT (default "none") and, matching the real tool, exits
+# non-zero when the result is "none".
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'systemd-detect-virt %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+result="${SHIM_VIRT:-none}"
+printf '%s\n' "$result"
+[[ "$result" != "none" ]]

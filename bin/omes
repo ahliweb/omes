@@ -1,0 +1,542 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# bin/omes - OMES CLI entry point.
+
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+OMES_SELF="$(readlink -f "$0")"
+OMES_ROOT="$(cd "$(dirname "$OMES_SELF")/.." && pwd)"
+export OMES_ROOT
+unset OMES_SELF
+
+# shellcheck source=lib/omes/core.sh
+source "${OMES_ROOT}/lib/omes/core.sh"
+# shellcheck source=lib/omes/log.sh
+source "${OMES_ROOT}/lib/omes/log.sh"
+# shellcheck source=lib/omes/json.sh
+source "${OMES_ROOT}/lib/omes/json.sh"
+# shellcheck source=lib/omes/detect.sh
+source "${OMES_ROOT}/lib/omes/detect.sh"
+# shellcheck source=lib/omes/state.sh
+source "${OMES_ROOT}/lib/omes/state.sh"
+# shellcheck source=lib/omes/backup.sh
+source "${OMES_ROOT}/lib/omes/backup.sh"
+# shellcheck source=lib/omes/module.sh
+source "${OMES_ROOT}/lib/omes/module.sh"
+
+omes_install_err_trap
+
+declare -a OMES_CHECK_NAMES=()
+declare -a OMES_CHECK_OK=()
+declare -a OMES_CHECK_DETAILS=()
+declare -a OMES_MANAGED_PATHS=()
+
+OMES_PROFILE=""
+declare -a OMES_SELECTED_MODULES=()
+RESTORE_FROM=""
+PURGE_PACKAGES=0
+
+# ---------------------------------------------------------------------------
+# Usage
+# ---------------------------------------------------------------------------
+
+print_usage() {
+  cat <<'EOF'
+[omes] Usage: omes <command> [flags]
+
+Commands:
+  check                Run platform + module preflight checks (no mutation).
+  install              Check-all-then-apply the requested profile/modules.
+  status               Show platform + applied-module state summary.
+  modules              List available modules (scope, description, status).
+  version              Print the OMES version.
+  help                 Show this help.
+  doctor               Not implemented yet (tracked in #14).
+  backup               Not implemented yet (tracked in #10).
+  restore              Not implemented yet (tracked in #10).
+  update               Not implemented yet (tracked in #14).
+  uninstall            Not implemented yet (tracked in #10).
+
+Global flags:
+  --profile <name>       server | desktop | hermes
+  --module <name>        select a single module (repeatable)
+  --dry-run              print planned actions, mutate nothing
+  --json                 emit a single JSON object on stdout (check/status/modules/version)
+  --yes                  auto-confirm mutating actions
+  --verbose              print debug-level log lines to the console
+  --log-file <path>      override the log file location
+  --allow-docker-group   opt in to granting root-equivalent docker group access
+  --from <timestamp>     (restore) pick a specific backup
+  --purge-packages       (uninstall) also remove OMES-installed packages
+
+Environment overrides:
+  OMES_DRY_RUN=1, OMES_JSON=1, OMES_STATE_DIR, OMES_LOG_FILE, OMES_ROOT,
+  OMES_NONINTERACTIVE=1
+
+Exit codes:
+  0 success                       6 module apply failed
+  1 general/unexpected error      7 verification failed
+  2 usage error                   8 network required but unavailable
+  3 unsupported platform          9 backup/restore failed
+  4 preflight failed             10 rollback failed
+  5 privilege error
+EOF
+}
+
+# ---------------------------------------------------------------------------
+# JSON helpers shared by multiple commands
+# ---------------------------------------------------------------------------
+
+_omes_platform_json() {
+  json_obj \
+    "$(json_kv os_id "${OMES_OS_ID:-}")" \
+    "$(json_kv os_version_id "${OMES_OS_VERSION_ID:-}")" \
+    "$(json_kv os_codename "${OMES_OS_CODENAME:-}")" \
+    "$(json_kv os_pretty "${OMES_OS_PRETTY:-}")" \
+    "$(json_kv arch "${OMES_ARCH:-}")" \
+    "$(json_kv tier "${OMES_OS_TIER:-}")" \
+    "$(json_kv virt "${OMES_VIRT:-}")" \
+    "$(json_kv session "${OMES_SESSION:-}")" \
+    "$(json_kv privilege "${OMES_PRIVILEGE:-}")" \
+    "$(json_kv network "${OMES_NETWORK:-}")"
+}
+
+# ---------------------------------------------------------------------------
+# Commands
+# ---------------------------------------------------------------------------
+
+cmd_version() {
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command version)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv version "$OMES_VERSION")" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  else
+    printf '[omes] omes %s\n' "$OMES_VERSION"
+  fi
+  exit "$OMES_EX_OK"
+}
+
+cmd_stub() {
+  local stub_command="$1"
+  local msg
+  case "$stub_command" in
+    doctor | update)
+      msg="Not implemented yet (tracked in #14)"
+      ;;
+    *)
+      msg="Not implemented yet (tracked in #10)"
+      ;;
+  esac
+  printf '[omes] %s\n' "$msg" >&2
+  exit "$OMES_EX_ERROR"
+}
+
+_omes_resolve_modules() {
+  if [[ -n "$OMES_PROFILE" ]]; then
+    profile_load "$OMES_PROFILE"
+  elif [[ "${#OMES_SELECTED_MODULES[@]}" -gt 0 ]]; then
+    module_resolve_order "${OMES_SELECTED_MODULES[@]}"
+  fi
+}
+
+# _omes_scope_followup_line
+# Prints the exact follow-up command an operator should run to apply
+# modules that were skipped for the other privilege scope.
+_omes_scope_followup_line() {
+  if [[ "$(module_current_scope)" == "root" ]]; then
+    printf 'Run as your user: omes install --profile %s\n' "${OMES_PROFILE:-<profile>}"
+  else
+    printf 'Run with sudo: sudo omes install --profile %s\n' "${OMES_PROFILE:-<profile>}"
+  fi
+}
+
+# _omes_check_explicit_module_scope <name> [name...]
+# Only meaningful when modules were selected via --module (not --profile):
+# an explicit request naming a module of the wrong scope is a privilege
+# usage error (exit 5), unlike a profile that simply mixes scopes.
+_omes_check_explicit_module_scope() {
+  [[ -z "$OMES_PROFILE" ]] || return 0
+  local -a bad=()
+  mapfile -t bad < <(module_other_scope_modules "$@")
+  if [[ "${#bad[@]}" -gt 0 ]]; then
+    log_error "requested module(s) do not match the current privilege level (current: $(module_current_scope)): ${bad[*]}"
+    exit "$OMES_EX_PRIVILEGE"
+  fi
+}
+
+cmd_check() {
+  local -a names=()
+  local -a oks=()
+  local -a details=()
+
+  detect_os || true
+  detect_arch || true
+  detect_tier >/dev/null || true
+  detect_virt >/dev/null || true
+  detect_session >/dev/null || true
+  detect_privilege >/dev/null || true
+
+  local net_ok=0
+  if detect_network; then
+    net_ok=1
+  fi
+
+  names+=("os")
+  details+=("${OMES_OS_PRETTY:-unknown} (${OMES_OS_ID:-unknown} ${OMES_OS_VERSION_ID:-}) tier=${OMES_OS_TIER:-unsupported}")
+  if [[ "${OMES_OS_TIER:-unsupported}" != "unsupported" ]]; then oks+=("true"); else oks+=("false"); fi
+
+  names+=("arch")
+  details+=("${OMES_ARCH:-unsupported}")
+  if [[ "${OMES_ARCH:-unsupported}" != "unsupported" ]]; then oks+=("true"); else oks+=("false"); fi
+
+  names+=("network")
+  details+=("${OMES_NETWORK:-offline}")
+  if [[ "$net_ok" -eq 1 ]]; then oks+=("true"); else oks+=("false"); fi
+
+  local unsupported=0
+  if [[ "${OMES_OS_TIER:-unsupported}" == "unsupported" ]] || [[ "${OMES_ARCH:-unsupported}" == "unsupported" ]]; then
+    unsupported=1
+  fi
+
+  local -a modules=()
+  if [[ "$unsupported" -eq 0 ]]; then
+    mapfile -t modules < <(_omes_resolve_modules)
+  fi
+
+  # An explicit --module request naming a wrong-scope module is the only
+  # scope-related failure for `check`; a --profile that simply mixes
+  # scopes is filtered (skipped, not failed) below.
+  if [[ "${#modules[@]}" -gt 0 ]]; then
+    _omes_check_explicit_module_scope "${modules[@]}"
+  fi
+
+  local -a in_scope=()
+  local -a other_scope=()
+  if [[ "${#modules[@]}" -gt 0 ]]; then
+    mapfile -t in_scope < <(module_filter_by_scope "${modules[@]}")
+    mapfile -t other_scope < <(module_other_scope_modules "${modules[@]}")
+  fi
+
+  local module_failed=0
+  if [[ "${#in_scope[@]}" -gt 0 ]]; then
+    if ! run_checks "${in_scope[@]}"; then
+      module_failed=1
+    fi
+    local i
+    for ((i = 0; i < ${#OMES_CHECK_NAMES[@]}; i++)); do
+      names+=("${OMES_CHECK_NAMES[$i]}")
+      oks+=("${OMES_CHECK_OK[$i]}")
+      details+=("${OMES_CHECK_DETAILS[$i]}")
+    done
+  fi
+
+  local m
+  for m in "${other_scope[@]}"; do
+    names+=("$m")
+    oks+=("true")
+    details+=("skipped: different privilege level (current: $(module_current_scope)); $(_omes_scope_followup_line)")
+  done
+
+  local exit_code="$OMES_EX_OK"
+  local overall_ok="true"
+  if [[ "$unsupported" -eq 1 ]]; then
+    exit_code="$OMES_EX_UNSUPPORTED"
+    overall_ok="false"
+  elif [[ "$module_failed" -eq 1 ]]; then
+    exit_code="$OMES_EX_PREFLIGHT"
+    overall_ok="false"
+  fi
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local -a check_objs=()
+    local j
+    for ((j = 0; j < ${#names[@]}; j++)); do
+      check_objs+=("$(json_obj "$(json_kv name "${names[$j]}")" "$(json_kv ok "${oks[$j]}" --raw)" "$(json_kv detail "${details[$j]}")")")
+    done
+    json_obj \
+      "$(json_kv command check)" \
+      "$(json_kv ok "$overall_ok" --raw)" \
+      "$(json_kv platform "$(_omes_platform_json)" --raw)" \
+      "$(json_kv checks "$(json_array "${check_objs[@]}")" --raw)" \
+      "$(json_kv exit_code "$exit_code" --raw)"
+    printf '\n'
+  else
+    printf '[omes] platform: %s %s (%s), arch=%s, tier=%s\n' \
+      "${OMES_OS_PRETTY:-unknown}" "${OMES_OS_VERSION_ID:-}" "${OMES_OS_CODENAME:-}" "${OMES_ARCH:-unknown}" "${OMES_OS_TIER:-unsupported}"
+    printf '[omes] checks:\n'
+    local k mark
+    for ((k = 0; k < ${#names[@]}; k++)); do
+      mark="ok"
+      [[ "${oks[$k]}" == "false" ]] && mark="FAIL"
+      printf '[omes]   %-20s %-4s %s\n' "${names[$k]}" "$mark" "${details[$k]}"
+    done
+  fi
+
+  exit "$exit_code"
+}
+
+cmd_install() {
+  detect_os || true
+  detect_arch || true
+  detect_tier >/dev/null || true
+  detect_privilege >/dev/null || true
+
+  if [[ "${OMES_OS_TIER:-unsupported}" == "unsupported" ]] || [[ "${OMES_ARCH:-unsupported}" == "unsupported" ]]; then
+    log_error "unsupported platform: ${OMES_OS_PRETTY:-unknown} / ${OMES_ARCH:-unknown} (before any mutation)"
+    exit "$OMES_EX_UNSUPPORTED"
+  fi
+
+  if [[ -z "$OMES_PROFILE" ]] && [[ "${#OMES_SELECTED_MODULES[@]}" -eq 0 ]]; then
+    omes_die "$OMES_EX_USAGE" "install requires --profile <name> or --module <name>"
+  fi
+
+  local -a requested=()
+  mapfile -t requested < <(_omes_resolve_modules)
+
+  if [[ "${#requested[@]}" -eq 0 ]]; then
+    omes_die "$OMES_EX_USAGE" "no modules resolved for this profile/module selection"
+  fi
+
+  # An explicit --module request naming a wrong-scope module is a
+  # privilege usage error (exit 5, no mutation). A --profile that simply
+  # mixes scopes is never an error: mismatched modules are filtered out
+  # below and the operator is told the exact follow-up command.
+  _omes_check_explicit_module_scope "${requested[@]}"
+
+  local -a in_scope=()
+  local -a other_scope=()
+  mapfile -t in_scope < <(module_filter_by_scope "${requested[@]}")
+  mapfile -t other_scope < <(module_other_scope_modules "${requested[@]}")
+
+  if [[ "${#other_scope[@]}" -gt 0 ]]; then
+    log_info "skipping modules that require a different privilege level (current: $(module_current_scope)): ${other_scope[*]}"
+  fi
+
+  # Informational-only sudo preflight: never causes bin/omes to invoke
+  # sudo itself, and never changes whether root-scope modules run now.
+  if [[ "${#other_scope[@]}" -gt 0 ]] && [[ "$(module_current_scope)" == "user" ]] && command -v sudo >/dev/null 2>&1; then
+    if sudo -n true 2>/dev/null; then
+      log_info "sudo: passwordless sudo appears available for the root-scope follow-up run"
+    else
+      log_info "sudo: no cached/passwordless sudo detected; the root-scope follow-up run may prompt for a password"
+    fi
+  fi
+
+  if [[ "${#in_scope[@]}" -eq 0 ]]; then
+    log_info "nothing to apply at the current privilege level ($(module_current_scope))"
+    if [[ "${#other_scope[@]}" -gt 0 ]]; then
+      log_info "$(_omes_scope_followup_line)"
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  log_info "plan: will apply modules: ${in_scope[*]}"
+
+  if ! run_checks "${in_scope[@]}"; then
+    local i
+    for ((i = 0; i < ${#OMES_CHECK_NAMES[@]}; i++)); do
+      if [[ "${OMES_CHECK_OK[$i]}" == "false" ]]; then
+        log_error "check failed: ${OMES_CHECK_NAMES[$i]}: ${OMES_CHECK_DETAILS[$i]}"
+      fi
+    done
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] plan only, no mutation will occur"
+  else
+    if ! omes_confirm "About to apply modules: ${in_scope[*]}. Continue?"; then
+      log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+      exit "$OMES_EX_ERROR"
+    fi
+    state_init >/dev/null
+  fi
+
+  run_apply "${in_scope[@]}"
+
+  if [[ "${#other_scope[@]}" -gt 0 ]]; then
+    log_info "$(_omes_scope_followup_line)"
+  fi
+
+  log_info "install complete"
+  exit "$OMES_EX_OK"
+}
+
+cmd_status() {
+  detect_os || true
+  detect_arch || true
+  detect_tier >/dev/null || true
+
+  local -a mod_names=()
+  mapfile -t mod_names < <(state_list_modules)
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local -a mod_objs=()
+    local m status applied_at version
+    for m in "${mod_names[@]}"; do
+      status="$(state_get "module.${m}.status" 2>/dev/null || echo unknown)"
+      applied_at="$(state_get "module.${m}.applied_at" 2>/dev/null || echo "")"
+      version="$(state_get "module.${m}.version" 2>/dev/null || echo "")"
+      mod_objs+=("$(json_obj "$(json_kv name "$m")" "$(json_kv status "$status")" "$(json_kv applied_at "$applied_at")" "$(json_kv version "$version")")")
+    done
+    json_obj \
+      "$(json_kv command status)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv platform "$(_omes_platform_json)" --raw)" \
+      "$(json_kv state_dir "$(omes_state_dir)")" \
+      "$(json_kv modules "$(json_array "${mod_objs[@]}")" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  else
+    printf '[omes] platform: %s %s, arch=%s, tier=%s\n' \
+      "${OMES_OS_PRETTY:-unknown}" "${OMES_OS_VERSION_ID:-}" "${OMES_ARCH:-unknown}" "${OMES_OS_TIER:-unsupported}"
+    printf '[omes] state dir: %s\n' "$(omes_state_dir)"
+    if [[ "${#mod_names[@]}" -eq 0 ]]; then
+      printf '[omes] modules: none applied yet\n'
+    else
+      printf '[omes] modules:\n'
+      local m status applied_at
+      for m in "${mod_names[@]}"; do
+        status="$(state_get "module.${m}.status" 2>/dev/null || echo unknown)"
+        applied_at="$(state_get "module.${m}.applied_at" 2>/dev/null || echo "-")"
+        printf '[omes]   %-20s %-10s applied_at=%s\n' "$m" "$status" "$applied_at"
+      done
+    fi
+  fi
+
+  exit "$OMES_EX_OK"
+}
+
+cmd_modules() {
+  local -a all=()
+  mapfile -t all < <(module_discover)
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local -a objs=()
+    local m status
+    for m in "${all[@]}"; do
+      module_load "$m"
+      status="$(state_get "module.${m}.status" 2>/dev/null || echo not-applied)"
+      objs+=("$(json_obj "$(json_kv name "$MODULE_NAME")" "$(json_kv description "$MODULE_DESCRIPTION")" "$(json_kv scope "$MODULE_SCOPE")" "$(json_kv status "$status")")")
+    done
+    json_obj \
+      "$(json_kv command modules)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv modules "$(json_array "${objs[@]}")" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  else
+    printf '[omes] modules:\n'
+    local m status
+    for m in "${all[@]}"; do
+      module_load "$m"
+      status="$(state_get "module.${m}.status" 2>/dev/null || echo not-applied)"
+      printf '[omes]   %-16s scope=%-5s status=%-12s %s\n' "$MODULE_NAME" "$MODULE_SCOPE" "$status" "$MODULE_DESCRIPTION"
+    done
+  fi
+
+  exit "$OMES_EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# Argument parsing + dispatch
+# ---------------------------------------------------------------------------
+
+main() {
+  if [[ $# -eq 0 ]]; then
+    print_usage
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local command="$1"
+  shift
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --profile)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "--profile requires an argument"
+        OMES_PROFILE="$2"
+        shift 2
+        ;;
+      --module)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "--module requires an argument"
+        OMES_SELECTED_MODULES+=("$2")
+        shift 2
+        ;;
+      --dry-run)
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      --yes)
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --verbose)
+        OMES_VERBOSE=1
+        shift
+        ;;
+      --log-file)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "--log-file requires an argument"
+        OMES_LOG_FILE="$2"
+        shift 2
+        ;;
+      --allow-docker-group)
+        OMES_ALLOW_DOCKER_GROUP=1
+        shift
+        ;;
+      --from)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "--from requires an argument"
+        RESTORE_FROM="$2"
+        shift 2
+        ;;
+      --purge-packages)
+        PURGE_PACKAGES=1
+        shift
+        ;;
+      -h | --help)
+        command="help"
+        shift
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "unknown option: $1"
+        ;;
+    esac
+  done
+
+  export OMES_DRY_RUN="${OMES_DRY_RUN:-0}"
+  export OMES_JSON="${OMES_JSON:-0}"
+  export OMES_VERBOSE="${OMES_VERBOSE:-0}"
+  export OMES_NONINTERACTIVE="${OMES_NONINTERACTIVE:-0}"
+  if [[ -n "${OMES_LOG_FILE:-}" ]]; then
+    export OMES_LOG_FILE
+  fi
+  export RESTORE_FROM PURGE_PACKAGES OMES_ALLOW_DOCKER_GROUP
+
+  case "$command" in
+    check) cmd_check ;;
+    install) cmd_install ;;
+    status) cmd_status ;;
+    modules) cmd_modules ;;
+    version) cmd_version ;;
+    help)
+      print_usage
+      exit "$OMES_EX_OK"
+      ;;
+    doctor | backup | restore | update | uninstall)
+      cmd_stub "$command"
+      ;;
+    *)
+      omes_die "$OMES_EX_USAGE" "unknown command: $command"
+      ;;
+  esac
+}
+
+main "$@"

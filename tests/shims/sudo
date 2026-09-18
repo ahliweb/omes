@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/sudo - fake sudo for bats tests.
+#
+# `sudo -n true` reports availability via $SHIM_SUDO_AVAILABLE (1/0,
+# default 1). Any other invocation just logs and runs the command as-is
+# (tests never rely on a real privilege change from this shim).
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'sudo %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+if [[ "${1:-}" == "-n" ]] && [[ "${2:-}" == "true" ]]; then
+  [[ "${SHIM_SUDO_AVAILABLE:-1}" == "1" ]] && exit 0
+  exit 1
+fi
+
+shift || true
+exec "$@"
