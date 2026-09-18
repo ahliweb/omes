@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/dpkg-query - fake dpkg-query for bats tests.
+#
+# Understands only the subset apt-base uses: `dpkg-query -W -f='${Status}'
+# <package>`. A package is reported "install ok installed" when it is
+# listed in $SHIM_INSTALLED_PKGS (space/newline separated) or appears in
+# the file at $SHIM_INSTALLED_PKGS_FILE (one package per line, appended to
+# by the apt-get shim after a simulated install); otherwise dpkg reports
+# it unknown, matching real dpkg-query's behavior for a never-seen package.
+
+set -Eeuo pipefail
+
+pkg=""
+for arg in "$@"; do
+  case "$arg" in
+    -W | -f=* | --showformat=*) continue ;;
+    *) pkg="$arg" ;;
+  esac
+done
+
+is_installed() {
+  local candidate="$1"
+  local p
+  for p in ${SHIM_INSTALLED_PKGS:-}; do
+    [[ "$p" == "$candidate" ]] && return 0
+  done
+  if [[ -n "${SHIM_INSTALLED_PKGS_FILE:-}" ]] && [[ -r "$SHIM_INSTALLED_PKGS_FILE" ]]; then
+    grep -qxF "$candidate" "$SHIM_INSTALLED_PKGS_FILE" 2>/dev/null && return 0
+  fi
+  return 1
+}
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'dpkg-query %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+if is_installed "$pkg"; then
+  printf 'install ok installed'
+  exit 0
+fi
+
+printf 'unknown ok not-installed' >&2
+exit 1

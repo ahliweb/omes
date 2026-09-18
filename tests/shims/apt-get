@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/apt-get - fake apt-get for bats tests.
+#
+# Logs every invocation (one line, space-joined argv) to $SHIM_LOG and
+# returns success. When "install" is requested, the packages named on the
+# command line are appended to $SHIM_INSTALLED_PKGS so a subsequent
+# dpkg-query shim call sees them as installed (simulates real apt state).
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'apt-get %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+if [[ "${1:-}" == "install" ]]; then
+  shift
+  pkgs=()
+  for arg in "$@"; do
+    case "$arg" in
+      -*) continue ;;
+      *) pkgs+=("$arg") ;;
+    esac
+  done
+  if [[ -n "${SHIM_INSTALLED_PKGS_FILE:-}" ]] && [[ "${#pkgs[@]}" -gt 0 ]]; then
+    printf '%s\n' "${pkgs[@]}" >> "$SHIM_INSTALLED_PKGS_FILE"
+  fi
+fi
+
+exit 0

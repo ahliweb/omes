@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/systemctl - fake systemctl for bats tests.
+#
+# `get-default` prints $SHIM_DEFAULT_TARGET (default multi-user.target).
+# `is-enabled <svc>` succeeds only for services listed (space-separated)
+# in $SHIM_ENABLED_SERVICES.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'systemctl %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  get-default)
+    printf '%s\n' "${SHIM_DEFAULT_TARGET:-multi-user.target}"
+    exit 0
+    ;;
+  is-enabled)
+    svc="${2:-}"
+    for s in ${SHIM_ENABLED_SERVICES:-}; do
+      if [[ "$s" == "$svc" ]]; then
+        printf 'enabled\n'
+        exit 0
+      fi
+    done
+    printf 'disabled\n' >&2
+    exit 1
+    ;;
+  *)
+    exit 0
+    ;;
+esac
