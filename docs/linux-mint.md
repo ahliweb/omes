@@ -10,11 +10,11 @@
 > layer for Ubuntu Server LTS and Linux Mint. It is **not** official
 > Omarchy and must never be described as such — see
 > [docs/scope.md](scope.md) and [docs/branding-and-trademarks.md](branding-and-trademarks.md).
-> `omes backup`/`omes restore`/`omes uninstall` are **not implemented yet**
-> (tracked in [#10](https://github.com/ahliweb/omes/issues/10)); every
-> mention of them below is marked accordingly. `omes doctor` is likewise
-> **not implemented yet** (tracked in [#14](https://github.com/ahliweb/omes/issues/14));
-> the best-effort crash-report logic this document describes lives inside
+> `omes backup`/`omes restore`/`omes uninstall` are implemented (issue
+> [#10](https://github.com/ahliweb/omes/issues/10)) and used throughout
+> this document. `omes doctor`/`omes update` are **not implemented yet**
+> (tracked in [#14](https://github.com/ahliweb/omes/issues/14)); the
+> best-effort crash-report logic this document describes lives inside
 > `hyprland-session`'s `module_verify` today, not behind an `omes doctor`
 > command.
 
@@ -182,6 +182,17 @@ normal, not an error.
 action (package installs, the session file, the wrapper) without writing
 anything.
 
+**Use `--profile desktop`, not `--module hyprland-session`, for install.**
+`hyprland-session` declares `MODULE_REQUIRES=(desktop-preflight apt-base)`
+(Section 2), and `desktop-preflight` is user-scope while `hyprland-session`
+is root-scope; requesting `sudo omes install --module hyprland-session`
+directly makes the CLI's explicit-module scope check see `desktop-preflight`
+pulled in by that dependency and refuse with exit 5 ("requested module(s)
+do not match the current privilege level"). `--profile desktop` does not
+have this problem (a profile's scope mismatches are filtered, not
+rejected) and is the supported way to install this profile — see Section
+7 for the equivalent caveat on `omes uninstall`.
+
 ## 6. Recovery procedures
 
 - **Hyprland fails to start / broken session:** at the LightDM login
@@ -212,37 +223,72 @@ anything.
   every monitor at its preferred mode (`monitor=,preferred,auto,1`); edit
   `~/.config/hypr/hyprland.conf` for a fixed layout (run `hyprctl
   monitors` after first login to get exact output names).
-- **Full uninstall of the session:** `omes uninstall --module
-  hyprland-session` — **not implemented yet** (tracked in
-  [#10](https://github.com/ahliweb/omes/issues/10)); until then,
-  `hyprland-session`'s `module_rollback` logic (removes only
+- **Full uninstall of the session:** `sudo omes uninstall --module
+  hyprland-session` (root scope, same as install) removes
   `/usr/share/wayland-sessions/omes-hyprland.desktop` and
-  `/usr/local/bin/omes-hyprland-session`, never Cinnamon, and reports —
-  without removing — any packages it installed) is implemented and unit
-  tested but not yet reachable from the CLI.
-- **Restoring replaced config files:** `omes restore` — **not implemented
-  yet** (tracked in [#10](https://github.com/ahliweb/omes/issues/10));
-  until then, every file `desktop-config`/`hyprland-session` overwrite is
-  backed up first (with a sha256 manifest) under
-  `<state-dir>/backups/<timestamp>/` per the standard OMES backup
-  mechanism (`lib/omes/backup.sh`) — you can restore a backed-up file
-  manually from there today.
+  `/usr/local/bin/omes-hyprland-session`, prints the packages OMES
+  installed without removing them (add `--purge-packages` to also remove
+  those), and — per `lib/omes/restore.sh`'s generic managed-path
+  rollback, which runs for every module — restores any file that existed
+  *before* OMES touched it, or deletes it if OMES created it fresh.
+  `hyprland-session`'s own `module_rollback` (removes the session file and
+  wrapper directly, re-asserts the Cinnamon invariant, reports installed
+  packages) runs first and is never allowed to touch Cinnamon, LightDM's
+  config, or the default session.
+- **Restoring replaced config files:** every file
+  `desktop-config`/`hyprland-session` overwrite is backed up first (sha256
+  manifest) via the standard OMES backup mechanism
+  (`lib/omes/backup.sh`/`lib/omes/restore.sh`). Run `omes restore --list`
+  to see backup sessions, then `omes restore --from <timestamp>` (or
+  `omes restore` for the latest) to restore — this works fully offline
+  and verifies each restored file's sha256 against the backup manifest
+  before writing it back.
 
 ## 7. How to remove
 
-- **Session only:** see "Full uninstall of the session" above.
-- **Config files:** `desktop-config`'s `module_rollback` removes only its
-  own shell snippet (`~/.config/omes/shell.sh`) and the marker block in
-  `~/.bashrc`; installed `~/.config/{hypr,waybar,foot}` files are left in
-  place intentionally (restore your previous versions from the
-  pre-apply backups, or delete them yourself) — see
-  `modules/desktop-config/module.sh`.
-- **Packages:** never removed automatically by any module_rollback.
-  `omes uninstall --purge-packages` — **not implemented yet** (tracked in
-  [#10](https://github.com/ahliweb/omes/issues/10)) — is the intended way
-  to remove them later; until then, `hyprland-session`'s
-  `module_rollback` prints the exact `apt-get remove` command for the
-  packages it installed.
+> **Verified caveat:** `hyprland-session` declares `MODULE_REQUIRES=(desktop-preflight
+> apt-base)` (Section 2). `lib/omes/module.sh`'s dependency resolution
+> (shared, out of this issue's file scope) walks a module's full
+> `MODULE_REQUIRES` chain even for a single `--module` request, so `sudo
+> omes uninstall --module hyprland-session` also rolls back `apt-base` and
+> `desktop-preflight` in the same run, not just `hyprland-session` — this
+> was confirmed by hand against this repository's actual behavior, not
+> assumed. It is **not destructive on its own**: `apt-base`'s
+> `module_rollback` only warns and prints the packages it installed
+> (`curl`, `git`, ...) without removing them unless you also pass
+> `--purge-packages`, and Cinnamon is never touched. It **does** mark
+> `apt-base`/`desktop-preflight` as `removed` in OMES's state file even
+> though their packages remain installed, which can be confusing in
+> `omes status` output afterward. If you only want the Hyprland session
+> gone and want `apt-base`'s state to stay accurate, use `--profile
+> desktop` for both install and uninstall consistently rather than a bare
+> `--module hyprland-session`, or re-run `sudo omes install --profile
+> desktop` afterward to re-apply `apt-base` and restore its state.
+
+- **Session only:** `sudo omes uninstall --module hyprland-session` — see
+  "Full uninstall of the session" above (and the cascading-uninstall
+  caveat immediately above this list).
+- **Config files:** `omes uninstall --module desktop-config` (as your
+  user) removes the shell snippet (`~/.config/omes/shell.sh`) and the
+  marker block in `~/.bashrc` directly, via `desktop-config`'s own
+  `module_rollback`; the generic managed-path rollback that runs
+  immediately after it then restores or removes every file
+  `desktop-config` registered as managed — including
+  `~/.config/{hypr,waybar,foot}/*` — the same way: a file that pre-dated
+  OMES is restored to what it was before, a file OMES created fresh is
+  removed. A file you told OMES to skip (differing, no `--yes` — see
+  Section 5) was never modified in the first place, so it is left alone.
+- **Packages:** never removed by default. `omes uninstall --purge-packages`
+  removes exactly the packages OMES recorded as installed by the module(s)
+  being uninstalled (e.g. `sudo omes uninstall --module hyprland-session
+  --purge-packages`); without that flag, the exact `apt-get remove`
+  command is printed instead.
+- **Whole profile:** `sudo omes uninstall --profile desktop` then
+  `omes uninstall --profile desktop` (as your user) rolls back every
+  module `omes install --profile desktop` applied, in reverse dependency
+  order — `omes uninstall` only ever touches modules OMES itself recorded
+  as applied in its state file, matching the no-destructive-default policy
+  in [docs/scope.md](scope.md) Section 5.
 
 ## 8. Optional: Hermes Agent alongside the desktop session
 
@@ -262,14 +308,11 @@ same way the `server`/`hermes` profiles do — see
 - `config/nvim/` ships only a README pointing at LazyVim's own installer;
   OMES does not template or install a Neovim configuration
   (`docs/omarchy-compatibility-inventory.md` categorizes this **DEFER**).
-- `omes backup`/`omes restore`/`omes uninstall`/`omes doctor` are not
-  implemented yet (tracked in
-  [#10](https://github.com/ahliweb/omes/issues/10) and
+- `omes doctor`/`omes update` are not implemented yet (tracked in
   [#14](https://github.com/ahliweb/omes/issues/14)); the equivalent
-  logic this document describes (backups-before-write, rollback,
-  best-effort crash reporting) is implemented inside the modules
-  themselves and unit tested, but not yet reachable through those CLI
-  subcommands.
+  best-effort crash-reporting logic this document describes is folded
+  into `hyprland-session`'s `module_verify` today, not behind an
+  `omes doctor` subcommand.
 - Fingerprint/FIDO2 login and the Walker launcher are DEFERred (not part
   of this profile) — see
   [docs/omarchy-compatibility-inventory.md](omarchy-compatibility-inventory.md).
