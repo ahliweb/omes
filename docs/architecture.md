@@ -209,17 +209,29 @@ omes install --profile <name>
   4. Topologically sort modules by MODULE_REQUIRES (Section 4.4).
      A cycle is a fatal usage error → exit 2, no module runs.
   │
-  5. Privilege gate: for each module in the resolved order, verify
-     MODULE_SCOPE matches the current effective privilege (Section 4.5).
-     A mismatch → exit 5, no mutation performed for ANY module.
+  5. Privilege gate (filter, not fail): partition the resolved module
+     order by MODULE_SCOPE against the current effective privilege
+     (Section 4.5) — root (EUID 0) or non-root. Modules whose
+     MODULE_SCOPE matches the current privilege continue into the check/
+     apply phases below; modules of the OTHER scope are skipped for this
+     run (logged, not applied, not failed) — this is the expected,
+     non-error outcome for a mixed-scope profile run under one privilege
+     level, and does NOT exit 5. `bin/omes` never escalates (no internal
+     `sudo`) and never de-escalates (no internal `sudo -u`) on the
+     operator's behalf.
+     The ONLY case this step exits 5 is an explicit `--module <name>`
+     request naming a module whose MODULE_SCOPE does not match the
+     current effective privilege — asking BY NAME for a module the
+     current invocation cannot run is a privilege usage error, distinct
+     from a profile that simply contains modules of both scopes.
   │
   6. CHECK PHASE (no mutation):
-     for each module in order: run module_check.
+     for each module in the scope-filtered order: run module_check.
        - any module_check fails → log which module(s) failed → exit 4.
        - NOTHING is applied, even for modules whose check passed.
   │
-  7. APPLY PHASE (only entered if step 6 passed for all modules):
-     for each module in order:
+  7. APPLY PHASE (only entered if step 6 passed for all scope-filtered modules):
+     for each module in the scope-filtered order:
        a. omes_manage_path is available; module_apply registers every path
           it will touch via omes_manage_path <path> BEFORE writing to it.
        b. For each newly registered managed path that already exists,
@@ -237,7 +249,14 @@ omes install --profile <name>
           (module.<name>.status=failed) for the operator to inspect,
           re-run, or roll back explicitly.
   │
-  8. Print/emit final summary (human or JSON per Section 8).
+  8. Print/emit final summary (human or JSON per Section 8), including
+     any modules skipped in step 5 for scope mismatch and the exact
+     follow-up command to apply them (e.g. after `sudo omes install
+     --profile server` finishes its root-scope modules, it prints:
+     "Run as your user: omes install --profile server" to apply the
+     profile's user-scope modules; the reverse case — a non-root
+     invocation that skipped root-scope modules — prints "Run with sudo:
+     sudo omes install --profile server").
 ```
 
 **Fail-fast semantics:** a failure at any step stops the run at that point.
@@ -404,47 +423,48 @@ resolved module's `MODULE_REQUIRES` and computes a topological order
 
 - `MODULE_SCOPE="root"` modules perform actions that need root (package
   installation, system services, files outside the invoking user's home).
-  They MUST refuse to run when the effective UID is not 0: `bin/omes`
-  checks this before sourcing the module's functions and exits **5**
-  (privilege error) if the process is not root.
-- `MODULE_SCOPE="user"` modules perform actions scoped to the invoking
+  `MODULE_SCOPE="user"` modules perform actions scoped to the invoking
   user (per-user Hermes install, `--user` systemd units, dotfiles in
-  `$HOME`). They MUST refuse to run when the effective UID is 0: `bin/omes`
-  exits **5** if a user-scope module would otherwise run as root. This
-  protects against a root-owned `~/.hermes` or root-owned user systemd
-  units, which would break `hermes` for the real user and violate the
-  privilege boundary.
-- A single `omes install --profile <name>` invocation may need to run both
-  root-scope and user-scope modules. The **operator's own invocation**
-  determines which set runs in that process:
-  - **Root-scope modules**: the operator runs `sudo omes install --profile
-    server`. `bin/omes` runs as root (EUID 0); root-scope modules in the
-    resolved order execute directly as root.
-  - **User-scope modules**: they are never executed as root, even when
-    `bin/omes` itself was invoked with `sudo`. When a resolved run contains
-    a user-scope module and the process is currently root (because the
-    operator ran `sudo omes install ...` against a profile mixing scopes),
-    `lib/omes/module.sh` re-invokes that module's functions as the target
-    non-root user via `sudo -u <user> --preserve-env=OMES_DRY_RUN,OMES_JSON,... omes-module-runner ...`
-    (an internal re-entry point), so the module body itself still observes
-    `EUID != 0`. A user-scope module is never executed with `EUID == 0`
-    under any invocation path.
-  - Determining `<user>`: the invoking (pre-`sudo`) user, taken from
-    `SUDO_USER` when the process is root and `SUDO_USER` is set; otherwise
-    the current user. If a root-invoked run resolves user-scope modules
-    and there is no way to determine a target non-root user (e.g. `SUDO_USER`
-    unset, as under a root login shell with no `sudo`), that is a
-    privilege error → exit 5, with a log line telling the operator to
-    invoke `omes` as that user directly (optionally via `sudo -u <user>`)
-    instead.
-  - A profile that mixes scopes (e.g. `server`: `apt-base` (root),
-    `hermes` (user)) is run in one `sudo omes install --profile server`
-    invocation; `bin/omes` does the root/user dispatch internally per
-    module, in resolved order. The operator does not need to invoke `omes`
-    twice.
+  `$HOME`).
+- **Contract: no automatic privilege escalation or de-escalation.**
+  `bin/omes` never internally invokes `sudo` to gain root, and never
+  internally invokes `sudo -u <user>` (or any other mechanism) to shed
+  root and act as another user. Every module function always runs under
+  whatever effective privilege the operator started the `omes` process
+  with — nothing else.
+- **Scope filtering, not failure, for a mixed-scope profile.** When a
+  resolved profile (or the full unfiltered module set) contains modules of
+  both scopes, `omes check`/`omes install` runs only the modules whose
+  `MODULE_SCOPE` matches the current effective privilege (Section 3.2,
+  step 5) and **skips** the others, printing which modules were skipped
+  and the exact command to run afterward to apply them:
+  - `sudo omes install --profile server` runs the profile's root-scope
+    modules as root, skips its user-scope modules, and on completion
+    prints `Run as your user: omes install --profile server` (no `sudo`)
+    to apply the skipped user-scope modules as the operator's own login
+    user.
+  - `omes install --profile server` (no `sudo`, run as a normal user)
+    runs the profile's user-scope modules, skips its root-scope modules,
+    and on completion prints `Run with sudo: sudo omes install --profile
+    server` to apply the skipped root-scope modules.
+  - This means a mixed-scope profile is applied to completion by **two**
+    separate operator-initiated invocations — one as root, one as the
+    target user — never by one invocation acting on the operator's behalf
+    as the other identity.
+- **`exit 5` is reserved for an explicit, unsatisfiable request**, not for
+  a mixed-scope profile: `--module <name>` naming a specific module whose
+  `MODULE_SCOPE` does not match the current effective privilege is a
+  privilege usage error (the operator asked BY NAME for something this
+  invocation cannot do) and exits **5** immediately, with no mutation.
+  Running a whole profile that happens to mix scopes is never itself an
+  error.
 - `omes doctor`/`omes status` are read-only and may run as either root or
-  the target user; they report scope mismatches as warnings rather than
-  refusing outright, since they do not mutate.
+  the target user; they report both scopes' status (reading each scope's
+  own state directory when readable) rather than refusing outright, since
+  they do not mutate.
+
+See ADR-0005 for why automatic `sudo -u` re-dispatch was considered and
+rejected in favor of this skip-and-instruct model.
 
 ### 4.6 `omes_manage_path`
 
@@ -774,20 +794,28 @@ next unused integer and must not repurpose an existing code.
 
 - **Root-scope modules** (`MODULE_SCOPE=root`) run as root. The operator
   invokes `sudo omes install --profile server` (or `--profile hermes`, or
-  any profile containing root-scope modules); `bin/omes` refuses (exit 5)
-  to run a root-scope module's functions when EUID is not 0.
+  any profile containing root-scope modules) to apply them; when the
+  process is not root, `bin/omes` skips root-scope modules rather than
+  running them (Section 4.5) — it does not call `sudo` itself.
 - **User-scope modules** (`MODULE_SCOPE=user`) run as the invoking user,
-  **never** as root, even inside a `sudo`-invoked process (Section 4.5)
-  — they are dispatched via `sudo -u <user>` internally when necessary.
-- `bin/omes` performs a `sudo -n true` (non-interactive) check during
-  `check`/preflight when a root-scope module is in the resolved set and
-  the process is not already root, to detect *before* any mutation whether
-  the operator has usable, non-interactively-cached sudo, and to produce a
-  clear "you will be prompted for sudo" or "sudo is not available for this
-  user" message rather than failing mid-`install`. This check itself is
-  read-only (`sudo -n true` invokes nothing mutating) and its failure alone
-  does not abort `check` — it is informational preflight, not a hard gate;
-  the hard gate is the EUID check in Section 4.5, enforced at apply time.
+  **never** as root. `bin/omes` never runs a user-scope module's functions
+  while EUID is 0, and never shells out to `sudo -u <user>` (or any
+  equivalent) to act as another user on the operator's behalf; when the
+  process is root, `bin/omes` skips user-scope modules rather than
+  de-escalating to run them (Section 4.5). This keeps root and user runs
+  as two entirely separate, independently auditable invocations, each
+  with its own log file and its own scope's state directory (Section 6.1)
+  — no root process ever writes to, or acts within, a user's `$HOME`/
+  `$XDG_RUNTIME_DIR` on that user's behalf.
+- `bin/omes` performs a `sudo -n true` (non-interactive, non-mutating)
+  check during `check`/preflight when the resolved module set contains
+  root-scope modules and the process is not already root, purely to tell
+  the operator ahead of time whether they have usable, non-interactively-
+  cached `sudo` for the follow-up `sudo omes install ...` invocation
+  Section 4.5 tells them to run — it is informational only. It never
+  causes `bin/omes` to invoke `sudo` itself, and its result does not
+  change whether root-scope modules run in the *current* (non-root)
+  invocation: they are skipped regardless, per Section 4.5.
 - **No `curl | bash` of unpinned content inside modules.** Any module that
   needs to run an upstream installer script (the canonical example is the
   Hermes installer) MUST download it to a file first (e.g. `curl -fsSL
@@ -898,11 +926,25 @@ next unused integer and must not repurpose an existing code.
 - Backup retention (Section 7.5) is a fixed count, not a size- or
   age-based policy; a host that runs many `install`s in quick succession
   relies on the count-based prune running promptly.
-- The user-scope re-dispatch mechanism in Section 4.5 depends on
-  `SUDO_USER` being set correctly by `sudo`; environments that reach root
-  by other means (e.g. `su -`, a root login shell, some containerized
-  entrypoints) may not have a determinable target user, in which case OMES
-  fails closed (exit 5) rather than guessing.
+- A profile that mixes `MODULE_SCOPE=root` and `MODULE_SCOPE=user` modules
+  (Section 4.5) is never fully applied by a single `omes install`
+  invocation — it requires one root invocation and one user invocation,
+  run separately by the operator. `omes install` does not track "the
+  other half is still pending" as its own state key; the skip message
+  printed at the end of each run (Section 3.2, step 8) is the only
+  reminder, so an operator who ignores it can be left believing a mixed
+  profile is fully applied when only one scope's modules are.
+- A `MODULE_REQUIRES` edge that crosses scopes (e.g. a user-scope module
+  requiring a root-scope module) can only be satisfied by an *earlier,
+  separate* invocation that already applied the root-scope side, because
+  root-scope and user-scope state directories are distinct and the root
+  one is not readable by a non-root user (`0700`, Section 6.5). A
+  user-scope module's `module_check` therefore cannot read the root
+  scope's state file to confirm a cross-scope dependency was applied; it
+  must instead check for the dependency's observable effect on the host
+  (e.g. a package binary present, a system service active). This is an
+  accepted consequence of the scope separation in ADR-0005, not a defect
+  in the state model.
 - arm64 is a best-effort (tier 3) platform per the compatibility matrix
   (issue #3); this document's contracts apply there too, but test coverage
   and operator support are weaker than on tier 1/2 amd64 targets.
