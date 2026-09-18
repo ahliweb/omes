@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/matrix/shims/apt-get - real-apt passthrough wrapper for the
+# `partial-failure` scenario in scripts/test-matrix.sh.
+#
+# Mounted read-only ahead of the real apt-get on PATH (typically at
+# /usr/local/sbin/apt-get, which precedes /usr/bin on a stock Ubuntu/Mint
+# container PATH) ONLY for that one scenario's container. Every subcommand
+# is passed straight through to the real /usr/bin/apt-get UNCHANGED, except
+# `apt-get install ...` naming the package in $OMES_MATRIX_FAIL_PKG: that
+# one invocation is failed deterministically (exit 1) without ever calling
+# the real apt-get, simulating a package whose install step fails partway
+# through a module_apply (e.g. a broken/held package, a disk-full mid-write,
+# a post-install script exiting non-zero) while `apt-cache`/`apt-get update`
+# (module_check's own validation) are untouched and still report the
+# package as available - reproducing exactly the "check passed, apply
+# failed" case the module contract expects `omes install` to surface as
+# exit 6, naming the module.
+#
+# OMES_MATRIX_FAIL_PKG unset/empty: this shim is a pure passthrough (never
+# fails anything on its own), so it is safe to leave mounted.
+
+set -Eeuo pipefail
+
+REAL_APT_GET="/usr/bin/apt-get"
+
+if [[ "${1:-}" == "install" ]] && [[ -n "${OMES_MATRIX_FAIL_PKG:-}" ]]; then
+  for arg in "$@"; do
+    if [[ "$arg" == "$OMES_MATRIX_FAIL_PKG" ]]; then
+      printf '[matrix apt-get shim] simulated failure installing %s\n' "$OMES_MATRIX_FAIL_PKG" >&2
+      exit 1
+    fi
+  done
+fi
+
+exec "$REAL_APT_GET" "$@"

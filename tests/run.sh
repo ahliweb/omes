@@ -57,11 +57,18 @@ BATS_IMAGE="bats/bats:latest"
 # The unit/integration suites assert real (non-root) EUID behavior for
 # root/user MODULE_SCOPE filtering, so bats must run as a non-root user
 # inside the container (--user). bats/bats:latest is Alpine-based and has
-# no python3 (needed by the JSON-validity assertions), and a non-root user
-# cannot `apk add` at test time - so build a tiny derived image, once,
-# that layers python3 on top of the upstream bats image.
+# no python3 (needed by the JSON-validity assertions) and no git (needed by
+# tests/unit/*.bats and tests/integration/update.bats, which exercise `omes
+# update`'s git fetch/ff-only-merge path - added for #14/#15, previously 7
+# tests failed locally without it), and a non-root user cannot `apk add` at
+# test time - so build a tiny derived image, once (cached by tag; bump
+# OMES_BATS_IMAGE_TAG below if the Dockerfile ever changes and a stale local
+# tag needs to be invalidated), that layers python3 and git on top of the
+# upstream bats image.
+OMES_BATS_IMAGE_TAG="omes-bats-python3-git:local"
+
 _ensure_bats_python_image() {
-  local tag="omes-bats-python3:local"
+  local tag="$OMES_BATS_IMAGE_TAG"
   if docker image inspect "$tag" >/dev/null 2>&1; then
     printf '%s' "$tag"
     return 0
@@ -69,8 +76,8 @@ _ensure_bats_python_image() {
   # This function's stdout is captured via command substitution by its
   # caller (the resolved image tag), so status messages must go to
   # stderr, never stdout - otherwise they'd corrupt the image reference.
-  log "building ${tag} (bats + python3, for JSON-validity assertions)" >&2
-  if printf 'FROM %s\nRUN apk add --no-cache python3\n' "$BATS_IMAGE" \
+  log "building ${tag} (bats + python3 + git, for JSON-validity assertions and 'omes update' tests)" >&2
+  if printf 'FROM %s\nRUN apk add --no-cache python3 git\n' "$BATS_IMAGE" \
     | docker build -q -t "$tag" - >/dev/null; then
     printf '%s' "$tag"
   else

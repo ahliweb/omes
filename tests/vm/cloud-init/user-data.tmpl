@@ -1,0 +1,18 @@
+#cloud-config
+# tests/vm/cloud-init/user-data.tmpl - templated by tests/vm/run.sh
+# (placeholders __OMES_VM_USER__ / __OMES_VM_SSH_PUBKEY__ are substituted,
+# never evaluated as shell). Creates one sudo-capable user with a supplied
+# SSH public key and password authentication disabled - nothing else.
+# OMES itself is never installed by cloud-init; tests/vm/run.sh copies the
+# repository over and runs bin/omes over SSH so the real bootstrap/check/
+# install path is exercised exactly as a human operator would run it.
+users:
+  - name: __OMES_VM_USER__
+    groups: [sudo]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    ssh_authorized_keys:
+      - __OMES_VM_SSH_PUBKEY__
+ssh_pwauth: false
+package_update: false
+package_upgrade: false
