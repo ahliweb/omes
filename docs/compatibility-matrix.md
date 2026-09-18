@@ -188,7 +188,7 @@ OMES's desktop profile therefore:
 
 - installs Hyprland only from apt or a PPA source that has passed OMES's own package
   validation (signature/repo checks in `lib/omes/pkg.sh` — **not implemented yet, tracked
-  in #16**);
+  in #9**);
 - **never builds Hyprland (or its dependencies) from source by default**; a from-source path,
   if ever offered, would be explicit opt-in and out of scope for the MVP;
 - treats an apt/PPA Hyprland version that is older than upstream's latest as an accepted
@@ -248,7 +248,7 @@ To move a platform from Unsupported/Tier 3 into a higher tier (or to add a new o
 5. Update this document (tables + rationale) and the EOL/support dates in the same PR that
    changes the tier, citing the distribution's own release-cycle page.
 6. Promotion to Tier 1 additionally requires the platform to be added to
-   `.github/workflows/compatibility.yml` (**not implemented yet, tracked in #17**) so it is
+   `.github/workflows/compatibility.yml` (**not implemented yet, tracked in #15/#16**) so it is
    tested on every release, not just periodically.
 
 ## 7. Test fixtures
