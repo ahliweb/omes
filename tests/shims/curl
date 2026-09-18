@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/curl - fake curl for bats tests.
+#
+# Added alongside tests/shims/hermes (#11): modules/hermes/module.sh
+# requires curl to be present (module_check) and uses it to download the
+# Hermes installer to a file (module_apply, `curl -fsSL <url> -o <file>`,
+# never `curl | bash`). The bats/bats:latest (Alpine) image used by
+# tests/run.sh does not ship curl, so a real one is not always available in
+# CI; this shim stands in for it everywhere curl is used across the suite.
+#
+# Behavior, driven by env vars:
+#   SHIM_CURL_EXIT          exit code to return (default 0)
+#   SHIM_CURL_OUTPUT_FILE   if set, its contents are copied to the -o
+#                           target instead of the default stub script
+#                           (lets a test control exactly what the
+#                           "downloaded installer" contains, e.g. to
+#                           exercise OMES_HERMES_INSTALLER_SHA256 pinning)
+#
+# Any other invocation (e.g. the `--head --silent --fail` form
+# lib/omes/detect.sh's detect_network falls back to) is a silent no-op
+# success; tests always set OMES_ASSUME_ONLINE=1 so that path is not
+# normally exercised.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'curl %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+out=""
+args=("$@")
+for ((i = 0; i < ${#args[@]}; i++)); do
+  if [[ "${args[$i]}" == "-o" ]] && [[ $((i + 1)) -lt "${#args[@]}" ]]; then
+    out="${args[$((i + 1))]}"
+  fi
+done
+
+if [[ -n "$out" ]]; then
+  if [[ -n "${SHIM_CURL_OUTPUT_FILE:-}" ]] && [[ -r "${SHIM_CURL_OUTPUT_FILE}" ]]; then
+    cp "${SHIM_CURL_OUTPUT_FILE}" "$out"
+  else
+    printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
+  fi
+fi
+
+exit "${SHIM_CURL_EXIT:-0}"

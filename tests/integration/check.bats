@@ -9,6 +9,13 @@ setup() {
   load '../test_helper.bash'
   omes_test_setup
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
+
+  # The server profile now includes the user-scope `hermes` module (#11),
+  # whose module_check asserts $HOME is writable; override it to an
+  # isolated, always-writable tmpdir (the bats docker container's real
+  # $HOME is "/", which is not writable by a non-root uid).
+  export HOME="${OMES_TEST_TMPDIR}/home"
+  mkdir -p "$HOME"
 }
 
 teardown() {

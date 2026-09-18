@@ -5,6 +5,6 @@
 
 apt-base
 # security-baseline (#7)
-# hermes (#11)
+hermes
 # hermes-gateway (#12)
 # containers (#7, optional)
