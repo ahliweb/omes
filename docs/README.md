@@ -38,6 +38,7 @@ Grouped index of every document in this repository. See the top-level
 | [branding-and-trademarks.md](branding-and-trademarks.md) | Naming rules and the required disclaimer text. |
 | [adr/](adr/README.md) | Architecture Decision Records. |
 | [research-and-implementation-plan.md](research-and-implementation-plan.md) | The original research baseline and phased implementation plan. |
+| [agent-orchestration-roadmap.md](agent-orchestration-roadmap.md) | Staged agent deployment roadmap: native systemd MVP, rootless Compose isolation, optional Coolify backend, and evidence-gated Nomad/Kubernetes evaluation. |
 
 ## Business
 
