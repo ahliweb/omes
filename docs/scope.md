@@ -136,8 +136,11 @@ OMES follows a strict **no-destructive-default** policy:
 - Add a user to the `docker` group (root-equivalent access) — only via
   `--allow-docker-group`, with a printed warning.
 - Remove or purge a package it installed — only via `--purge-packages`.
-- Delete a backup — backups are retained until an operator removes them
-  manually; OMES does not prune backups automatically in the MVP.
+- Delete a *recent* backup: `omes` automatically prunes only the *oldest*
+  sessions beyond the last `OMES_BACKUP_KEEP` (default 10) after a
+  successful apply/backup — see [docs/architecture.md §7.5](architecture.md#75-retention)
+  — never the session an operator might still need; there is no
+  operator-facing command to delete a specific backup by hand.
 - Disable or remove the Cinnamon session on Linux Mint.
 - Overwrite a config file it manages without first writing a backup copy
   with a checksum manifest.
@@ -179,9 +182,9 @@ parallel workstream). Summary as of this writing:
 ## 8. Related documents
 
 - [docs/omarchy-compatibility-inventory.md](omarchy-compatibility-inventory.md) — capability-by-capability port/adapt/defer/reject decisions (Issue #2).
-- [docs/compatibility-matrix.md](compatibility-matrix.md) — supported OS/hardware matrix (written in parallel).
-- [docs/architecture.md](architecture.md) — module and CLI architecture (written in parallel).
-- [docs/security.md](security.md) — threat model and security defaults (written in parallel).
+- [docs/compatibility-matrix.md](compatibility-matrix.md) — supported OS/hardware matrix.
+- [docs/architecture.md](architecture.md) — module and CLI architecture.
+- [docs/security.md](security.md) — threat model and security defaults.
 - [docs/branding-and-trademarks.md](branding-and-trademarks.md) — naming and disclaimer rules (Issue #26).
 - [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) — licensing of referenced upstream projects (Issue #26).
 

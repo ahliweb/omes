@@ -1,28 +1,27 @@
 # OMES Security Baseline
 
-> Status: Phase 0 design baseline (issue #5), companion to
-> [`docs/threat-model.md`](./threat-model.md). OMES has no installer code yet — the
-> repository currently contains only `LICENSE` and `docs/research-and-implementation-plan.md`.
-> Every control described below is **Not implemented yet**; each row/section names the issue
-> that will implement it. This document defines what "done" means for that issue's security
-> requirements — it is the acceptance bar, not a report of current behavior.
+> Status: implemented. Companion to [`docs/threat-model.md`](./threat-model.md). Every
+> control below is implemented in this repository's `bin/omes`, `lib/omes/*.sh`, and
+> `modules/*/module.sh` unless marked **operator-responsibility** (OMES documents/warns
+> but cannot enforce it) or **out-of-scope** (see §8). Each row/section names the file
+> that implements it so a claim here can be checked directly against code.
 
 ## 1. Least-privilege defaults
 
-These are the defaults OMES must ship with. Any deviation requires an explicit operator
-opt-in flag, and every opt-in must be visible in `omes status`/`omes doctor` output for as
-long as it is active.
+These are the defaults OMES ships with. Any deviation requires an explicit operator
+opt-in flag/env var, and every opt-in stays visible in `omes status`/`omes doctor` output
+for as long as it is active (docs/threat-model.md T06).
 
-| Area | Default | Opt-in escape hatch | Implementing issue |
+| Area | Default | Opt-in escape hatch | Implemented in |
 |------|---------|----------------------|---------------------|
-| Installer scope separation | Root-scope modules refuse to run as non-root (exit 5); user-scope modules refuse to run as root (exit 5). No module is ever both. | None — this is a hard invariant of the module contract | #4, #6 |
-| Docker access | `sudo docker` by default; rootless Docker evaluated when eligible | `--allow-docker-group` (prints a root-equivalence warning, recorded in state) | #9, #12 |
-| Hermes runtime user | `hermes` (and its gateway) run as the unprivileged user who installed it, never as root | Explicit `--system` gateway install, which still runs the gateway as a dedicated service account, not root | #11, #12 |
-| Secrets on disk | `$HERMES_HOME/.env` mode `0600`, owned by the running user | None | #11 |
-| State directory | `/var/lib/omes/` (root scope) or `${XDG_STATE_HOME:-$HOME/.local/state}/omes/` (user scope), mode `0700` | None | #4, #6 |
-| Backups | `<state-dir>/backups/<timestamp>/`, mode `0700`; files inside preserve source mode (`.env` stays `0600`) | None | #10 |
-| API/gateway bind address | `127.0.0.1` only | Explicit non-loopback bind requires an explicit flag plus a matching firewall rule; never an implicit `0.0.0.0` | #12 |
-| sudo | OMES never writes a NOPASSWD sudoers entry for any account | None — out of scope for any automated escape hatch | #6, #16 |
+| Installer scope separation | Root-scope modules refuse to run as non-root (exit 5); user-scope modules refuse to run as root (exit 5). No module is ever both. | None — this is a hard invariant of the module contract | `lib/omes/module.sh` (`run_checks`/`run_apply`), `bin/omes` (`_omes_check_explicit_module_scope`) |
+| Docker access | `sudo docker` by default; rootless Docker via an explicit opt-in | `OMES_DOCKER_ROOTLESS=1` (installs `docker-ce-rootless-extras`, prints the setup command, never runs it); `--allow-docker-group` (prints a root-equivalence warning, recorded in state) | `modules/containers/module.sh` |
+| Hermes runtime user | `hermes` (and its gateway) run as the unprivileged user who installed it, never as root | `sudo omes install --module hermes-gateway-system` (still runs the gateway process as a dedicated service account, never root) | `modules/hermes/module.sh`, `modules/hermes-gateway/module.sh`, `modules/hermes-gateway-system/module.sh` |
+| Secrets on disk | `$HERMES_HOME/.env` mode `0600`, owned by the running user; never registered for backup/restore/rollback | None | `modules/hermes/module.sh` (`_hermes_ensure_env_file`) |
+| State directory | `/var/lib/omes/` (root scope) or `${XDG_STATE_HOME:-$HOME/.local/state}/omes/` (user scope), mode `0700` | `OMES_STATE_DIR` override (testing) | `lib/omes/core.sh` (`omes_state_dir`), `lib/omes/state.sh` (`state_init`) |
+| Backups | `<state-dir>/backups/<timestamp>/`, mode `0700`; files inside preserve source mode (`.env` stays `0600`) | None | `lib/omes/backup.sh` |
+| Telegram/API bind address | Upstream Hermes's own gateway binding, not configured by OMES | N/A — OMES does not itself open a network listener | operator-responsibility (upstream Hermes) |
+| sudo | OMES never writes a NOPASSWD sudoers entry for any account | None — out of scope for any automated escape hatch | audited by review + `scripts/check-supply-chain.sh` (CI) |
 
 ## 2. Telegram policy
 

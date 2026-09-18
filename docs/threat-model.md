@@ -1,12 +1,12 @@
 # OMES Threat Model
 
-> Status: Phase 0 design baseline (issue #5). OMES has no installer code yet — the
-> repository currently contains only `LICENSE` and `docs/research-and-implementation-plan.md`.
-> This document is a design gate: implementation issues referenced in the "OMES control"
-> column must satisfy the mitigations listed here before they are considered done. Every
-> control below is **Not implemented yet** unless a later revision of this document (or the
-> linked issue/PR) records otherwise. This is not a certified security audit; see
-> [`docs/security.md`](./security.md) §8 for what OMES does not claim.
+> Status: implemented. The "OMES control" column in the STRIDE table below reflects the
+> actual repository state: `implemented-in-OMES` rows are enforced by the named code in
+> `bin/omes`/`lib/omes/*.sh`/`modules/*/module.sh` today (cross-check the "Implementing
+> issue" column's PR history if you want the commit that landed it); `operator-responsibility`
+> rows are documented but cannot be enforced by OMES (usually because the behavior belongs
+> to upstream Hermes or Telegram); `out-of-scope` rows are explicitly excluded — see
+> [`docs/security.md`](./security.md) §8. This is not a certified security audit.
 
 ## 1. Purpose and scope
 
@@ -118,7 +118,7 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 | T21 | A rollback/backup silently fails or restores a tampered/stale backup, giving false confidence that recovery works | Tampering | A7, A8 | M | H | `MANIFEST` sha256 per file is verified before restore; restore is tested offline in CI (#17); `omes restore` reports mismatches instead of silently applying a corrupted backup; exit code 10 reserved for rollback failure | implemented-in-OMES | #10, #17 |
 | T22 | On a multi-user host, one user's `HERMES_HOME`, secrets, or transcripts are readable by another local user | Information Disclosure | A1, A2, A3, A6 | M | H | Per-user `HERMES_HOME` under the user's own home directory with default filesystem permissions; user-scope state dir at `${XDG_STATE_HOME:-$HOME/.local/state}/omes/` mode 0700; OMES never widens a home directory's permissions | implemented-in-OMES | #4, #11 |
 | T23 | A system-scope Hermes gateway service (shared across users) is chosen when isolation was actually required, mixing multiple users' agent sessions under one identity | Elevation of Privilege | A3, A6 | L | M | Documentation is explicit about the user-vs-system service trade-off; OMES defaults to per-user service + `loginctl enable-linger` for headless persistence rather than defaulting to a system-wide unit | implemented-in-OMES (default choice); operator-responsibility if they opt into system scope | #12 |
-| T24 | Gateway/API port is reachable from the network instead of loopback-only, exposing an unauthenticated or weakly authenticated control surface | Information Disclosure, Elevation of Privilege | A3, A4 | M | H | Gateway/API binds to `127.0.0.1` by default; any exposure beyond loopback requires explicit operator configuration plus an explicit firewall rule, never an implicit `0.0.0.0` bind | implemented-in-OMES | #12 |
+| T24 | Gateway/API port is reachable from the network instead of loopback-only, exposing an unauthenticated or weakly authenticated control surface | Information Disclosure, Elevation of Privilege | A3, A4 | M | H | The Hermes gateway's own bind address/exposure is upstream Hermes configuration, not something `modules/hermes-gateway{,-system}/module.sh` sets; OMES documents that any exposure beyond loopback needs an explicit firewall rule, never an implicit wide-open bind | operator-responsibility (upstream Hermes gateway binding); OMES documents the required posture | #12 |
 | T25 | Host firewall is left in default-allow, exposing services (SSH, gateway, Docker-published ports) that were never meant to be internet-facing | Elevation of Privilege, Denial of Service | A4, A7 | M | H | `ufw` (or equivalent) configured default-deny incoming / allow outgoing on the server profile; SSH allowed only when explicitly enabled via `--enable-ssh` or detected already active | implemented-in-OMES | #7 |
 | T26 | Applying the firewall policy locks the operator out of the very SSH session they are using to run the installer | Denial of Service | A5 | M | H | OMES detects an active SSH session before applying firewall rules and unconditionally keeps port 22 allowed when one is detected, printing a warning rather than silently blocking; "never lock the operator out" is a hard invariant, not a default that can be disabled by omission | implemented-in-OMES | #7 |
 | T27 | Denial of wallet: prompt injection, a runaway cron job, or normal use drives LLM provider spend far beyond what the operator expected | Denial of Service (financial) | A1 | H | H | Document that OMES cannot set a hard spend ceiling — only the provider dashboard can; recommend `session_reset` and bounded session/context size on day one; treat unexpected spend as an incident-response trigger | operator-responsibility (spend caps live at the provider); OMES documents the requirement and default session hygiene | #13 |

@@ -8,10 +8,10 @@
 > OMES is an **Omarchy-inspired** compatibility layer and deployment toolkit. It is not the
 > official Omarchy distribution and must never be described as such.
 >
-> Everything in this document describes intended behavior for the `omes` CLI (`bin/omes`,
-> `lib/omes/detect.sh`). **Not implemented yet (tracked in #6/#9/#10).** This document is the
-> contract those implementations must satisfy; it does not itself change any code. Tiers are
-> re-evaluated periodically — see [8. Re-evaluation cadence](#8-re-evaluation-cadence).
+> Everything in this document describes the actual, implemented behavior of the `omes` CLI
+> (`bin/omes`, `lib/omes/detect.sh`, `lib/omes/pkg.sh`) — detection, tiering, and preflight
+> are all live code, not a design contract awaiting implementation. Tiers are re-evaluated
+> periodically — see [8. Re-evaluation cadence](#8-re-evaluation-cadence).
 
 ## 1. Support tiers
 
@@ -186,9 +186,11 @@ Be honest about upstream drift: **Ubuntu 24.04's apt repositories may lag the Hy
 version and its Mesa/wlroots dependencies** relative to what Hyprland upstream recommends.
 OMES's desktop profile therefore:
 
-- installs Hyprland only from apt or a PPA source that has passed OMES's own package
-  validation (signature/repo checks in `lib/omes/pkg.sh` — **not implemented yet, tracked
-  in #9**);
+- installs Hyprland only from apt or a PPA source that has passed OMES's own package/
+  repository validation (`pkg_exists_in_repos`/`repo_validate` in `lib/omes/pkg.sh`,
+  implemented — see [docs/packages.md](packages.md)); as of this writing no PPA is
+  allowlisted, so on a stock Ubuntu 24.04/Mint 22.x host this preflight check FAILs
+  naming `hyprland`/`hypridle`/`hyprlock` — see [docs/linux-mint.md §3](linux-mint.md);
 - **never builds Hyprland (or its dependencies) from source by default**; a from-source path,
   if ever offered, would be explicit opt-in and out of scope for the MVP;
 - treats an apt/PPA Hyprland version that is older than upstream's latest as an accepted
@@ -248,7 +250,7 @@ To move a platform from Unsupported/Tier 3 into a higher tier (or to add a new o
 5. Update this document (tables + rationale) and the EOL/support dates in the same PR that
    changes the tier, citing the distribution's own release-cycle page.
 6. Promotion to Tier 1 additionally requires the platform to be added to
-   `.github/workflows/compatibility.yml` (**not implemented yet, tracked in #15/#16**) so it is
+   `.github/workflows/compatibility.yml`'s matrix (implemented — see [docs/ci.md](ci.md)) so it is
    tested on every release, not just periodically.
 
 ## 7. Test fixtures

@@ -114,7 +114,8 @@ Component responsibilities:
 | `lib/omes/log.sh` | Human and JSON log emitters, log file management, secret redaction. |
 | `lib/omes/detect.sh` | Read-only OS/arch/privilege/network/display/GPU detection used by `check` and by modules; never mutates. |
 | `lib/omes/state.sh` | Reads/writes the `key=value` state file atomically. |
-| `lib/omes/backup.sh` | Creates timestamped backups with `MANIFEST`/`META`, restores from backup, applies retention. |
+| `lib/omes/backup.sh` | Creates timestamped backups with `MANIFEST`/`META`, applies retention (`backup_prune`). |
+| `lib/omes/restore.sh` | Resolves/validates a backup session, restores files by verified sha256 (`omes restore`), and the generic managed-path rollback `omes uninstall` uses. |
 | `lib/omes/module.sh` | Loads a profile, topologically sorts modules by `MODULE_REQUIRES`, runs the check-all-then-apply sequence, enforces `MODULE_SCOPE`. |
 | `lib/omes/pkg.sh` | apt helpers and package-name mapping/validation across Ubuntu/Mint. |
 | `lib/omes/json.sh` | `json_escape`/`json_kv` helpers used by `log.sh` and command handlers for `--json` output. |
@@ -122,15 +123,14 @@ Component responsibilities:
 | `modules/<name>/module.sh` | One unit of installable/checkable functionality, implementing the module contract (Section 4). |
 | Upstream systems | `apt`/`dpkg` (packages), `systemd` (services, system and `--user`), the Hermes upstream installer script, the Docker daemon/group. OMES never vendors these; it drives them through their documented interfaces. |
 
-Implementation status: `bin/omes` and `lib/omes/*.sh` are tracked in issues
-#6–#10; `modules/*` are tracked in issues #6–#14; `profiles/*` are tracked in
-issue #5.
+Implementation status: implemented. `bin/omes` and every `lib/omes/*.sh` file,
+every module in the table above, and every `profiles/*.profile` file exist in
+this repository and are exercised by `tests/unit/*.bats`/`tests/integration/*.bats`.
 
 ## 2. Repository layout
 
 Only paths relevant to the architecture are listed; each has exactly one
-purpose. This is the target layout — see the linked issue for what already
-exists.
+purpose. Every path below exists in this repository today.
 
 ```text
 bin/omes                        # CLI entry point (bash). Parses flags/commands, dispatches.
@@ -138,7 +138,8 @@ lib/omes/core.sh                # Strict mode, exit code constants, common helpe
 lib/omes/log.sh                 # Human + JSON logging, log file, secret redaction.
 lib/omes/detect.sh              # OS/arch/privilege/network/display/GPU detection (read-only).
 lib/omes/state.sh               # State file read/write (atomic).
-lib/omes/backup.sh              # Backup creation, manifest, restore, retention.
+lib/omes/backup.sh              # Backup creation, manifest, retention.
+lib/omes/restore.sh             # Restore-from-backup and generic managed-path rollback.
 lib/omes/module.sh              # Module loader/runner (topological sort, check-all-then-apply).
 lib/omes/pkg.sh                 # apt helpers, package name mapping/validation.
 lib/omes/json.sh                # json_escape, json_kv helpers for --json output.
@@ -497,21 +498,21 @@ within it).
 
 **Module names are the contract of this document.** Whether a given
 module's `module.sh` exists yet, and how complete it is, is tracked per
-module in issues #6–#14, not here. A profile listing a module name is a
-statement of intended composition, not a claim that the module is
-implemented.
+module. All modules named below exist and are implemented in this
+repository — a profile listing a module name here is a statement of
+composition that matches `profiles/*.profile` exactly.
 
 | Profile | Modules (in intended order) | Notes |
 |---|---|---|
-| `server` | `apt-base`, `security-baseline`, `hermes`, `hermes-gateway`, `containers` (optional) | Headless Ubuntu Server 24.04/22.04 target. `containers` is optional: included in the profile file but must be skippable via `--module` exclusion or an explicit opt-out flag documented by that module; Docker access policy is governed by ADR-0007. |
-| `desktop` | `apt-base`, `desktop-preflight`, `hyprland-session`, `desktop-config`, `hermes` (optional) | Linux Mint 22.x target. `hermes` is optional on desktop (server/hermes profiles are the primary Hermes delivery path); `desktop-preflight` gates GPU/kernel/Mesa/Wayland/portal checks before any desktop package is touched (ADR-0008). Cinnamon remains selectable; OMES never removes it. |
-| `hermes` | `hermes`, `hermes-gateway` | Hermes-only profile for a host that does not need `apt-base`'s full baseline or is being used purely to add/upgrade Hermes on an already-baselined host. |
+| `server` | `apt-base`, `security-baseline`, `hermes`, `hermes-gateway`, `containers` (optional, commented out by default) | Headless Ubuntu Server 24.04/22.04 target. `containers` is listed in `profiles/server.profile` but commented out; enable it explicitly with `sudo omes install --module containers` or by uncommenting the line — Docker access policy is governed by ADR-0007. `hermes-gateway-system` is never wired into any profile (opt-in only, root-scope alternative to `hermes-gateway`). |
+| `desktop` | `apt-base`, `desktop-preflight`, `hyprland-session`, `desktop-config`, `hermes` (optional, commented out by default) | Linux Mint 22.x target. `hermes`/`hermes-gateway` are commented out in `profiles/desktop.profile` (server/hermes profiles are the primary Hermes delivery path); `desktop-preflight` gates GPU/kernel/Mesa/Wayland/portal checks before any desktop package is touched (ADR-0008). Cinnamon remains selectable; OMES never removes it. |
+| `hermes` | `apt-base`, `hermes`, `hermes-gateway` | Hermes-only profile for a host that does not need the rest of the server baseline, or is being used purely to add/upgrade Hermes on an already-baselined host. |
 
-Implementation status: module implementations tracked in issues #6
-(`apt-base`), #7 (`security-baseline`), #11–#13 (`hermes`,
-`hermes-gateway`), #8/#9/#10 (`desktop-preflight`, `hyprland-session`,
-`desktop-config`), #16 (`containers`). Profile files themselves are
-tracked in issue #5.
+Implementation status: implemented. Every module named above exists at
+`modules/<name>/module.sh` and is exercised by
+`tests/unit/<name>.bats`/`tests/integration/<name>.bats` (`security-baseline`
+by `tests/integration/server.bats`, `hyprland-session`/`desktop-config` by
+`tests/integration/desktop.bats`).
 
 ## 6. State model
 
@@ -547,7 +548,8 @@ degrades to "line ignored" rather than "unparseable blob" (see ADR-0002).
 | `omes.version` | `0.1.0` | The OMES `VERSION` at the time of the last write to this state file. |
 | `omes.profile` | `server` | The profile name most recently installed against this state dir. |
 | `module.<name>.status` | `applied` | One of `applied`, `failed`, `rolled-back`, `removed`. |
-| `module.<name>.applied_at` | `2026-09-18T10:00:00Z` | UTC timestamp (ISO 8601) of the last successful `module_apply` + `module_verify`. |
+| `module.<name>.applied_at` | `2026-09-18T10:00:00Z` | UTC timestamp (ISO 8601) of the **first** successful `module_apply` + `module_verify` that moved this module into `applied` status (`lib/omes/module.sh`'s `run_apply`: only rewritten when the previous status was not `applied`, or the key was never set) — stays stable across idempotent re-runs. |
+| `module.<name>.last_run_at` | `2026-09-18T10:05:00Z` | UTC timestamp (ISO 8601) of the **most recent** successful `module_apply` + `module_verify`, written on every successful run including idempotent re-runs (comparing it to `applied_at` is how you tell "this module last changed vs. this module was last confirmed unchanged"). State-file-only: `omes status`/`omes status --json` do **not** currently surface this key (verified by running `omes status --json` after a real apply — its `modules[]` objects have only `name`/`status`/`applied_at`/`version`); read it with `state_get "module.<name>.last_run_at"` or by inspecting `<state-dir>/state` directly. |
 | `module.<name>.version` | `0.1.0` | The OMES `VERSION` this module was last successfully applied under (lets `omes update` detect drift). |
 | `module.<name>.managed_paths` | `/home/u/.hermes/config.yaml:/home/u/.hermes/.env` | Colon-separated list of paths registered via `omes_manage_path` during the last successful apply. |
 | `module.<name>.installed_packages` | `curl:git:build-essential` | Colon-separated list of apt package names this module installed (informational; used by `omes uninstall --purge-packages`). |
@@ -692,10 +694,11 @@ timestamp=2026-09-18T10:15:30Z
 
 **Contract:** by default, OMES keeps the last **10** backup directories
 (across all modules, ordered by timestamp) per scope's state directory,
-and prunes older ones after a successful `module_apply`'s backup step or
-on an explicit `omes backup --prune`. Retention count is a constant in
-`lib/omes/core.sh` (`OMES_BACKUP_RETENTION=10` by default), not currently
-exposed as a CLI flag — Implementation status: tracked in issue #9.
+and prunes older ones (`lib/omes/backup.sh`'s `backup_prune`) after every
+successful `module_apply`'s backup step (`run_apply` in `lib/omes/module.sh`)
+and after every `omes backup`. Retention count is the `OMES_BACKUP_KEEP`
+environment variable (default `10`), not currently exposed as its own CLI
+flag — see [docs/configuration.md](configuration.md).
 
 ### 7.6 What is never backed up in plaintext logs
 
@@ -768,8 +771,7 @@ one** JSON object on stdout for the whole invocation, e.g.:
 
 ## 9. Exit codes
 
-**Contract — stable across releases, documented in `docs/cli.md`
-(Implementation status: `docs/cli.md` tracked in issue #6):**
+**Contract — stable across releases, documented in `docs/cli.md`:**
 
 | Code | Meaning |
 |---|---|

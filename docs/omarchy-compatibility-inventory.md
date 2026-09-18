@@ -93,9 +93,9 @@ explicitly selected and preflight passes (see
 ## 4. Related documents
 
 - [docs/scope.md](scope.md) — product boundary and non-goals (Issue #1).
-- [docs/compatibility-matrix.md](compatibility-matrix.md) — supported OS/hardware matrix (written in parallel).
-- [docs/architecture.md](architecture.md) — module and CLI architecture (written in parallel).
-- [docs/security.md](security.md) — threat model and security defaults (written in parallel).
+- [docs/compatibility-matrix.md](compatibility-matrix.md) — supported OS/hardware matrix.
+- [docs/architecture.md](architecture.md) — module and CLI architecture.
+- [docs/security.md](security.md) — threat model and security defaults.
 - [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) — licensing of referenced upstream projects (Issue #26).
 
 <!-- OMES-MERMAID: docs/omarchy-compatibility-inventory.md -->
