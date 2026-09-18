@@ -73,8 +73,14 @@ _hgws_user_home() {
   getent passwd "$1" 2>/dev/null | awk -F: '{print $6}'
 }
 
+# _hgws_dropin_dir
+# Prints the system drop-in directory. Honors
+# OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR (tests only; production always
+# uses the real /etc/systemd/system location) - same pattern as
+# lib/omes/pkg.sh's OMES_APT_SOURCES_DIR, so unit tests never need real
+# root/filesystem access to /etc to exercise this module.
 _hgws_dropin_dir() {
-  printf '/etc/systemd/system/%s.service.d\n' "$HERMES_GATEWAY_UNIT"
+  printf '%s/%s.service.d\n' "${OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR:-/etc/systemd/system}" "$HERMES_GATEWAY_UNIT"
 }
 
 _hgws_dropin_file() {
@@ -92,7 +98,7 @@ _hgws_dropin_content() {
 }
 
 _hgws_doctor_caveat() {
-  log_warn "hermes-gateway-system: 'systemctl is-active' proves the process is running, NOT that the messaging adapter (e.g. Telegram) is connected - see docs/hermes-integration.md part 2 ('green signals can lie'). Verify with: sudo -u <user> hermes gateway status, or journalctl -u ${HERMES_GATEWAY_UNIT} -f"
+  log_warn "hermes-gateway-system: a green 'systemctl is-active' does NOT prove the messaging adapter (e.g. Telegram) is connected - it only proves the process is running. See docs/hermes-integration.md part 2 ('green signals can lie'). Verify with: sudo -u <user> hermes gateway status, or journalctl -u ${HERMES_GATEWAY_UNIT} -f"
 }
 
 # ---------------------------------------------------------------------------

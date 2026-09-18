@@ -91,7 +91,7 @@ _hgw_headless() {
 # what module_verify treats as authoritative).
 _hgw_doctor_caveat() {
   local status_output="$1"
-  log_warn "hermes-gateway: 'systemctl --user is-active' proves the process is running, NOT that the messaging adapter (e.g. Telegram) is connected - see docs/hermes-integration.md part 2 ('green signals can lie')"
+  log_warn "hermes-gateway: a green 'systemctl --user is-active' does NOT prove the messaging adapter (e.g. Telegram) is connected - it only proves the process is running. See docs/hermes-integration.md part 2 ('green signals can lie')"
   if grep -qi 'disconnected\|not connected\|unauthorized\|unreachable' <<<"$status_output"; then
     log_warn "hermes-gateway: 'hermes gateway status' output suggests the messaging adapter may not be connected:"
     log_warn "${status_output}"
