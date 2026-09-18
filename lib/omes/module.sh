@@ -351,8 +351,18 @@ run_apply() {
         local IFS=':'
         joined="${OMES_MANAGED_PATHS[*]}"
       fi
+      local now prev_status
+      now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      prev_status="$(state_get "module.${m}.status" 2>/dev/null || true)"
       state_set "module.${m}.status" "applied"
-      state_set "module.${m}.applied_at" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      # applied_at records the first successful apply (it only moves when a
+      # module transitions into "applied"); last_run_at moves on every
+      # successful run, so an idempotent re-run is observable as
+      # "last_run_at changed, applied_at did not".
+      if [[ "$prev_status" != "applied" ]] || ! state_get "module.${m}.applied_at" >/dev/null 2>&1; then
+        state_set "module.${m}.applied_at" "$now"
+      fi
+      state_set "module.${m}.last_run_at" "$now"
       state_set "module.${m}.version" "${OMES_VERSION}"
       state_set "module.${m}.managed_paths" "$joined"
     fi
