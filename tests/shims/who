@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/who - fake who for bats tests (#7, modules/security-baseline).
+#
+# Only `who am i` is used (the SSH lockout guard's fallback detection when
+# $SSH_CONNECTION/$SSH_TTY are unset - e.g. after `su - otheruser`).
+#
+#   SHIM_WHO_AM_I_OUTPUT   full line to print (default: empty, i.e. no
+#                          session info - matches a container with no
+#                          controlling tty/utmp entry). Set to something
+#                          like "user pts/0 2026-09-18 10:00 (203.0.113.5)"
+#                          to simulate a remote login.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'who %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+if [[ "${1:-}" == "am" ]] && [[ "${2:-}" == "i" ]]; then
+  if [[ -n "${SHIM_WHO_AM_I_OUTPUT:-}" ]]; then
+    printf '%s\n' "${SHIM_WHO_AM_I_OUTPUT}"
+  fi
+  exit 0
+fi
+
+exit 0

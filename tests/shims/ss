@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/ss - fake ss for bats tests (reserved for future
+# listening-port diagnostics; not currently called by any OMES module).
+#
+#   SHIM_SS_OUTPUT   text to print (default: empty)
+#   SHIM_SS_EXIT      exit code (default 0)
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'ss %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+if [[ -n "${SHIM_SS_OUTPUT:-}" ]]; then
+  printf '%s\n' "${SHIM_SS_OUTPUT}"
+fi
+exit "${SHIM_SS_EXIT:-0}"

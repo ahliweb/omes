@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/getent - fake getent for bats tests
+# (#7, modules/containers rootless-prerequisite checks).
+#
+# Understands `getent subuid <user>` / `getent subgid <user>` (used to
+# check for rootless Docker's required /etc/subuid /etc/subgid entries)
+# and `getent hosts <host>` (lib/omes/detect.sh's detect_network fallback
+# - tests always set OMES_ASSUME_ONLINE=1, so this path is rarely
+# exercised, but a harmless success keeps it safe if it ever is).
+#
+#   SHIM_GETENT_SUBUID_USERS   space-separated users WITH a subuid entry
+#   SHIM_GETENT_SUBGID_USERS   space-separated users WITH a subgid entry
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'getent %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+db="${1:-}"
+key="${2:-}"
+
+_has() {
+  local list="$1" needle="$2" u
+  for u in $list; do
+    [[ "$u" == "$needle" ]] && return 0
+  done
+  return 1
+}
+
+case "$db" in
+  subuid)
+    if _has "${SHIM_GETENT_SUBUID_USERS:-}" "$key"; then
+      printf '%s:100000:65536\n' "$key"
+      exit 0
+    fi
+    exit 2
+    ;;
+  subgid)
+    if _has "${SHIM_GETENT_SUBGID_USERS:-}" "$key"; then
+      printf '%s:100000:65536\n' "$key"
+      exit 0
+    fi
+    exit 2
+    ;;
+  hosts)
+    if [[ "${SHIM_GETENT_HOSTS_FAIL:-0}" == "1" ]]; then
+      exit 2
+    fi
+    printf '93.184.216.34 %s\n' "$key"
+    exit 0
+    ;;
+  *)
+    exit 2
+    ;;
+esac

@@ -13,6 +13,16 @@
 # `loginctl list-sessions`, which succeeds (prints a fake session line)
 # unless $SHIM_LOGINCTL_FAIL=1, which simulates systemd-logind being
 # unreachable.
+#
+# Extended for #7 (modules/containers): `loginctl show-user <user>` is
+# used as a rootless-Docker prerequisite check ("does this user have an
+# active systemd user session"). Succeeds only for users listed
+# (space-separated) in $SHIM_LOGINCTL_KNOWN_USERS, unless
+# $SHIM_LOGINCTL_SHOW_USER_EXIT is set, which overrides the exit code
+# unconditionally.
+#
+#   SHIM_LOGINCTL_KNOWN_USERS      space-separated users with a session
+#   SHIM_LOGINCTL_SHOW_USER_EXIT   overrides `show-user`'s exit code
 
 set -Eeuo pipefail
 
@@ -34,6 +44,16 @@ case "${1:-}" in
     printf 'SESSION UID USER SEAT TTY\n'
     printf '1       1000 user seat0 -\n'
     exit 0
+    ;;
+  show-user)
+    if [[ -n "${SHIM_LOGINCTL_SHOW_USER_EXIT:-}" ]]; then
+      exit "${SHIM_LOGINCTL_SHOW_USER_EXIT}"
+    fi
+    user="${2:-}"
+    for u in ${SHIM_LOGINCTL_KNOWN_USERS:-}; do
+      [[ "$u" == "$user" ]] && exit 0
+    done
+    exit 1
     ;;
   *)
     exit 0
