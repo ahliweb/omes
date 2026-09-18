@@ -158,9 +158,9 @@ _security_ssh_reason() {
   fi
 
   if command -v who >/dev/null 2>&1; then
-    local who_out
+    local who_out who_host_re='\(([^)]+)\)'
     who_out="$(who am i 2>/dev/null || true)"
-    if [[ "$who_out" =~ \(([^)]+)\) ]]; then
+    if [[ "$who_out" =~ $who_host_re ]]; then
       local host="${BASH_REMATCH[1]}"
       if [[ -n "$host" ]] && [[ "$host" != "-" ]] && [[ "$host" != :* ]] && [[ "$host" != "localhost" ]]; then
         printf "'who am i' reports a remote host (%s)\n" "$host"

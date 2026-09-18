@@ -30,7 +30,10 @@ STATE="${SHIM_UFW_STATE_FILE:-}"
 
 _state_get() {
   local key="$1" default="$2"
-  [[ -n "$STATE" ]] && [[ -r "$STATE" ]] || { printf '%s\n' "$default"; return 0; }
+  if [[ -z "$STATE" ]] || [[ ! -r "$STATE" ]]; then
+    printf '%s\n' "$default"
+    return 0
+  fi
   local line
   line="$(grep "^${key}=" "$STATE" 2>/dev/null | tail -n1 || true)"
   if [[ -n "$line" ]]; then
@@ -51,7 +54,9 @@ _state_set() {
 }
 
 _rules() {
-  [[ -n "$STATE" ]] && [[ -r "$STATE" ]] || return 0
+  if [[ -z "$STATE" ]] || [[ ! -r "$STATE" ]]; then
+    return 0
+  fi
   grep '^rule=' "$STATE" 2>/dev/null | cut -d= -f2-
 }
 
