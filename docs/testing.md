@@ -182,16 +182,11 @@ script's own comments for the same notes, cross-referenced here):
   backup`/`restore`/`uninstall` CLI end-to-end on a real filesystem. The restore-vs-remove
   *decision logic* (pre-existing vs. OMES-created path) is not re-derived here - it is already
   covered by `tests/unit/restore.bats` and `tests/integration/restore.bats`/`uninstall.bats`.
-- **`rerun`'s `applied_at`-unchanged check is non-blocking, and is expected to sometimes fail.**
-  `lib/omes/module.sh`'s `run_apply` unconditionally rewrites `module.<name>.applied_at` (and
-  re-stamps `.version`/`.managed_paths`) after every successful `module_apply` + `module_verify`,
-  even a no-op one that installed nothing - it does not distinguish "applied for the first time"
-  from "re-applied, changed nothing." This is a confirmed gap in the current state-bookkeeping,
-  not a false negative in the test: the *substantive* idempotency check (no `apt-get install`
-  call, no package changes) is the blocking assertion; the timestamp discrepancy is reported as
-  a note only. Fixing it is out of this issue's file scope (`lib/omes/module.sh` is owned by
-  other issues) - tracked here as a suggested follow-up for whichever issue next touches
-  `run_apply`.
+- **`rerun`'s `applied_at`-unchanged check.** `lib/omes/module.sh`'s `run_apply` keeps
+  `module.<name>.applied_at` stable across a no-op re-apply (it only moves when a module
+  transitions into `applied`) and separately records `last_run_at` on every run, so both the
+  substantive idempotency signal (no `apt-get install` call) and the timestamp signal are
+  blocking assertions in the `rerun` scenario.
 - **`omes install`'s network-unavailable exit code is 4 for `apt-base` specifically, not 8.**
   Both are documented as valid ("network required but unavailable") in `docs/cli.md`, but which
   one actually happens depends on *when* the network check runs relative to `module_check`
