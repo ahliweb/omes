@@ -52,17 +52,17 @@ print_usage() {
 [omes] Usage: omes <command> [flags]
 
 Commands:
-  check                Run platform + module preflight checks (no mutation).
-  install              Check-all-then-apply the requested profile/modules.
-  status               Show platform + applied-module state summary.
-  modules              List available modules (scope, description, status).
-  version              Print the OMES version.
-  help                 Show this help.
-  backup               Create an on-demand backup of all managed paths.
-  restore              Restore files from a backup session (offline-safe).
-  uninstall            Roll back applied modules and their managed paths.
-  doctor               Not implemented yet (tracked in #14).
-  update               Not implemented yet (tracked in #14).
+  check       Run platform + module preflight checks (no mutation).
+  install     Check-all-then-apply the requested profile/modules.
+  status      Show platform, profile, per-module, backup, and log summary.
+  modules     List available modules (scope, description, status).
+  doctor      Run health checks (OK/WARN/FAIL); exits 0 unless a FAIL.
+  version     Print the OMES version.
+  help        Show this help.
+  backup      Create an on-demand backup of all managed paths.
+  restore     Restore files from a backup session (offline-safe).
+  uninstall   Roll back applied modules and their managed paths.
+  update      Fast-forward this checkout via git, then re-run 'check'.
 
 Global flags:
   --profile <name>       server | desktop | hermes
@@ -128,20 +128,45 @@ cmd_version() {
   exit "$OMES_EX_OK"
 }
 
-cmd_stub() {
-  local stub_command="$1"
-  local msg="Not implemented yet (tracked in #14)"
+# _omes_json_result <command> <ok> <exit_code> [<extra-json-kv-pair>...]
+# Emits {"command":...,"ok":...,<extra fields>...,"exit_code":...} as a
+# single line on stdout (docs/cli.md's JSON contract: one object, no other
+# stdout noise). <extra-json-kv-pair> are already-built "key":value
+# fragments (from json_kv), inserted between "ok" and "exit_code".
+_omes_json_result() {
+  local command="$1" ok="$2" exit_code="$3"
+  shift 3
+  json_obj \
+    "$(json_kv command "$command")" \
+    "$(json_kv ok "$ok" --raw)" \
+    "$@" \
+    "$(json_kv exit_code "$exit_code" --raw)"
+  printf '\n'
+}
+
+# _omes_json_die <command> <exit_code> <message...>
+# In --json mode, first emits a single-object JSON error envelope
+# ({"command":...,"ok":false,"error":"<message>","exit_code":...}) on
+# stdout, then calls omes_die exactly like any other failure (redacted
+# log line + exit <exit_code>) - the JSON object is complete and valid on
+# stdout even though the process then exits via the normal log/exit path.
+_omes_json_die() {
+  local command="$1" exit_code="$2"
+  shift 2
+  local msg="$*"
   if [[ "$OMES_JSON" == "1" ]]; then
-    json_obj \
-      "$(json_kv command "$stub_command")" \
-      "$(json_kv ok false --raw)" \
-      "$(json_kv error "$msg")" \
-      "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
-    printf '\n'
-  else
-    printf '[omes] %s\n' "$msg" >&2
+    _omes_json_result "$command" false "$exit_code" "$(json_kv error "$msg")"
   fi
-  exit "$OMES_EX_ERROR"
+  omes_die "$exit_code" "$msg"
+}
+
+cmd_help() {
+  if [[ "$OMES_JSON" == "1" ]]; then
+    _omes_json_result help true "$OMES_EX_OK" "$(json_kv usage "$(print_usage)")"
+  else
+    print_usage
+  fi
+  exit "$OMES_EX_OK"
 }
 
 _omes_resolve_modules() {
@@ -163,17 +188,18 @@ _omes_scope_followup_line() {
   fi
 }
 
-# _omes_check_explicit_module_scope <name> [name...]
+# _omes_check_explicit_module_scope <command> <name> [name...]
 # Only meaningful when modules were selected via --module (not --profile):
 # an explicit request naming a module of the wrong scope is a privilege
 # usage error (exit 5), unlike a profile that simply mixes scopes.
 _omes_check_explicit_module_scope() {
+  local command="$1"
+  shift
   [[ -z "$OMES_PROFILE" ]] || return 0
   local -a bad=()
   mapfile -t bad < <(module_other_scope_modules "$@")
   if [[ "${#bad[@]}" -gt 0 ]]; then
-    log_error "requested module(s) do not match the current privilege level (current: $(module_current_scope)): ${bad[*]}"
-    exit "$OMES_EX_PRIVILEGE"
+    _omes_json_die "$command" "$OMES_EX_PRIVILEGE" "requested module(s) do not match the current privilege level (current: $(module_current_scope)): ${bad[*]}"
   fi
 }
 
@@ -220,7 +246,7 @@ cmd_check() {
   # scope-related failure for `check`; a --profile that simply mixes
   # scopes is filtered (skipped, not failed) below.
   if [[ "${#modules[@]}" -gt 0 ]]; then
-    _omes_check_explicit_module_scope "${modules[@]}"
+    _omes_check_explicit_module_scope check "${modules[@]}"
   fi
 
   local -a in_scope=()
@@ -295,26 +321,25 @@ cmd_install() {
   detect_privilege >/dev/null || true
 
   if [[ "${OMES_OS_TIER:-unsupported}" == "unsupported" ]] || [[ "${OMES_ARCH:-unsupported}" == "unsupported" ]]; then
-    log_error "unsupported platform: ${OMES_OS_PRETTY:-unknown} / ${OMES_ARCH:-unknown} (before any mutation)"
-    exit "$OMES_EX_UNSUPPORTED"
+    _omes_json_die install "$OMES_EX_UNSUPPORTED" "unsupported platform: ${OMES_OS_PRETTY:-unknown} / ${OMES_ARCH:-unknown} (before any mutation)"
   fi
 
   if [[ -z "$OMES_PROFILE" ]] && [[ "${#OMES_SELECTED_MODULES[@]}" -eq 0 ]]; then
-    omes_die "$OMES_EX_USAGE" "install requires --profile <name> or --module <name>"
+    _omes_json_die install "$OMES_EX_USAGE" "install requires --profile <name> or --module <name>"
   fi
 
   local -a requested=()
   mapfile -t requested < <(_omes_resolve_modules)
 
   if [[ "${#requested[@]}" -eq 0 ]]; then
-    omes_die "$OMES_EX_USAGE" "no modules resolved for this profile/module selection"
+    _omes_json_die install "$OMES_EX_USAGE" "no modules resolved for this profile/module selection"
   fi
 
   # An explicit --module request naming a wrong-scope module is a
   # privilege usage error (exit 5, no mutation). A --profile that simply
   # mixes scopes is never an error: mismatched modules are filtered out
   # below and the operator is told the exact follow-up command.
-  _omes_check_explicit_module_scope "${requested[@]}"
+  _omes_check_explicit_module_scope install "${requested[@]}"
 
   local -a in_scope=()
   local -a other_scope=()
@@ -340,18 +365,26 @@ cmd_install() {
     if [[ "${#other_scope[@]}" -gt 0 ]]; then
       log_info "$(_omes_scope_followup_line)"
     fi
+    if [[ "$OMES_JSON" == "1" ]]; then
+      _omes_json_result install true "$OMES_EX_OK" "$(json_kv modules "$(json_array)" --raw)"
+    fi
     exit "$OMES_EX_OK"
   fi
 
   log_info "plan: will apply modules: ${in_scope[*]}"
 
   if ! run_checks "${in_scope[@]}"; then
+    local -a failed_objs=()
     local i
     for ((i = 0; i < ${#OMES_CHECK_NAMES[@]}; i++)); do
       if [[ "${OMES_CHECK_OK[$i]}" == "false" ]]; then
         log_error "check failed: ${OMES_CHECK_NAMES[$i]}: ${OMES_CHECK_DETAILS[$i]}"
+        failed_objs+=("$(json_obj "$(json_kv name "${OMES_CHECK_NAMES[$i]}")" "$(json_kv detail "${OMES_CHECK_DETAILS[$i]}")")")
       fi
     done
+    if [[ "$OMES_JSON" == "1" ]]; then
+      _omes_json_result install false "$OMES_EX_PREFLIGHT" "$(json_kv failed_checks "$(json_array "${failed_objs[@]}")" --raw)"
+    fi
     exit "$OMES_EX_PREFLIGHT"
   fi
 
@@ -359,6 +392,9 @@ cmd_install() {
     log_info "[dry-run] plan only, no mutation will occur"
   else
     if ! omes_confirm "About to apply modules: ${in_scope[*]}. Continue?"; then
+      if [[ "$OMES_JSON" == "1" ]]; then
+        _omes_json_result install false "$OMES_EX_ERROR" "$(json_kv error "aborted: confirmation required")"
+      fi
       log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
       exit "$OMES_EX_ERROR"
     fi
@@ -367,12 +403,46 @@ cmd_install() {
 
   run_apply "${in_scope[@]}"
 
+  if [[ -n "$OMES_PROFILE" ]] && ! omes_dry_run; then
+    state_set "omes.profile" "$OMES_PROFILE"
+  fi
+
   if [[ "${#other_scope[@]}" -gt 0 ]]; then
     log_info "$(_omes_scope_followup_line)"
   fi
 
   log_info "install complete"
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local -a mod_objs=()
+    local m
+    for m in "${in_scope[@]}"; do
+      mod_objs+=("$(json_obj "$(json_kv name "$m")" "$(json_kv status "$(omes_dry_run && echo would-apply || echo applied)")")")
+    done
+    _omes_json_result install true "$OMES_EX_OK" "$(json_kv modules "$(json_array "${mod_objs[@]}")" --raw)"
+  fi
+
   exit "$OMES_EX_OK"
+}
+
+# _omes_last_log_path
+# Prints the path to the most recent log file under this scope's state
+# dir (lexicographic order matches chronological order for the
+# omes-<UTC timestamp>.log naming scheme - lib/omes/log.sh), or nothing if
+# none exists yet.
+_omes_last_log_path() {
+  local dir
+  dir="$(omes_state_dir)/logs"
+  [[ -d "$dir" ]] || return 0
+  local f latest=""
+  for f in "$dir"/*.log; do
+    [[ -e "$f" ]] || continue
+    latest="$f"
+  done
+  if [[ -n "$latest" ]]; then
+    printf '%s\n' "$latest"
+  fi
+  return 0
 }
 
 cmd_status() {
@@ -382,6 +452,15 @@ cmd_status() {
 
   local -a mod_names=()
   mapfile -t mod_names < <(state_list_modules)
+
+  local profile
+  profile="$(state_get "omes.profile" 2>/dev/null || true)"
+
+  local -a backups=()
+  mapfile -t backups < <(backup_list)
+
+  local last_log
+  last_log="$(_omes_last_log_path)"
 
   if [[ "$OMES_JSON" == "1" ]]; then
     local -a mod_objs=()
@@ -396,25 +475,32 @@ cmd_status() {
       "$(json_kv command status)" \
       "$(json_kv ok true --raw)" \
       "$(json_kv platform "$(_omes_platform_json)" --raw)" \
+      "$(json_kv profile "$profile")" \
       "$(json_kv state_dir "$(omes_state_dir)")" \
       "$(json_kv modules "$(json_array "${mod_objs[@]}")" --raw)" \
+      "$(json_kv backup_count "${#backups[@]}" --raw)" \
+      "$(json_kv last_log "$last_log")" \
       "$(json_kv exit_code 0 --raw)"
     printf '\n'
   else
     printf '[omes] platform: %s %s, arch=%s, tier=%s\n' \
       "${OMES_OS_PRETTY:-unknown}" "${OMES_OS_VERSION_ID:-}" "${OMES_ARCH:-unknown}" "${OMES_OS_TIER:-unsupported}"
+    printf '[omes] profile: %s\n' "${profile:-none}"
     printf '[omes] state dir: %s\n' "$(omes_state_dir)"
     if [[ "${#mod_names[@]}" -eq 0 ]]; then
       printf '[omes] modules: none applied yet\n'
     else
       printf '[omes] modules:\n'
-      local m status applied_at
+      local m status applied_at version
       for m in "${mod_names[@]}"; do
         status="$(state_get "module.${m}.status" 2>/dev/null || echo unknown)"
         applied_at="$(state_get "module.${m}.applied_at" 2>/dev/null || echo "-")"
-        printf '[omes]   %-20s %-10s applied_at=%s\n' "$m" "$status" "$applied_at"
+        version="$(state_get "module.${m}.version" 2>/dev/null || echo "-")"
+        printf '[omes]   %-20s %-10s applied_at=%-22s version=%s\n' "$m" "$status" "$applied_at" "$version"
       done
     fi
+    printf '[omes] backups: %d session(s)\n' "${#backups[@]}"
+    printf '[omes] last log: %s\n' "${last_log:-none}"
   fi
 
   exit "$OMES_EX_OK"
@@ -700,7 +786,7 @@ cmd_uninstall() {
   # --module naming a wrong-scope module is a privilege usage error
   # (exit 5, no mutation); a resolved set that simply mixes scopes is
   # filtered, not failed.
-  _omes_check_explicit_module_scope "${active[@]}"
+  _omes_check_explicit_module_scope uninstall "${active[@]}"
 
   local -a in_scope=()
   local -a other_scope=()
@@ -780,6 +866,229 @@ cmd_uninstall() {
   fi
 
   exit "$OMES_EX_OK"
+}
+
+# ---------------------------------------------------------------------------
+# omes doctor
+# ---------------------------------------------------------------------------
+
+declare -a DOCTOR_NAMES=()
+declare -a DOCTOR_LEVELS=()
+declare -a DOCTOR_DETAILS=()
+
+# _doctor_check <name> <level> <detail>
+# Records one doctor check result. <level> is one of OK/WARN/FAIL.
+_doctor_check() {
+  DOCTOR_NAMES+=("$1")
+  DOCTOR_LEVELS+=("$2")
+  DOCTOR_DETAILS+=("$3")
+}
+
+cmd_doctor() {
+  DOCTOR_NAMES=()
+  DOCTOR_LEVELS=()
+  DOCTOR_DETAILS=()
+
+  detect_os || true
+  detect_arch || true
+  detect_tier >/dev/null || true
+
+  # 1. Platform tier.
+  if [[ "${OMES_OS_TIER:-unsupported}" == "unsupported" ]]; then
+    _doctor_check platform FAIL "${OMES_OS_PRETTY:-unknown} / ${OMES_ARCH:-unknown} is unsupported"
+  else
+    _doctor_check platform OK "${OMES_OS_PRETTY:-unknown} (${OMES_OS_ID:-unknown}), arch=${OMES_ARCH:-unknown}, tier=${OMES_OS_TIER}"
+  fi
+
+  # 2. Required commands (advisory: a module using apt might not need all
+  # of these on a non-Debian host, but every currently supported platform
+  # is Debian-family, so their absence is at least a WARN).
+  local cmd
+  for cmd in bash sha256sum dpkg-query apt-get apt-cache git; do
+    if command -v "$cmd" >/dev/null 2>&1; then
+      _doctor_check "cmd:${cmd}" OK "found on PATH"
+    else
+      _doctor_check "cmd:${cmd}" WARN "not found on PATH"
+    fi
+  done
+
+  # 3. State dir integrity and permissions.
+  local sd
+  sd="$(omes_state_dir)"
+  if [[ -d "$sd" ]]; then
+    local mode
+    mode="$(stat -c '%a' "$sd" 2>/dev/null || printf '?')"
+    if [[ "$mode" == "700" ]]; then
+      _doctor_check state_dir OK "${sd} (mode ${mode})"
+    else
+      _doctor_check state_dir WARN "${sd} has mode ${mode} (expected 700)"
+    fi
+    if [[ -f "${sd}/state" ]]; then
+      local smode
+      smode="$(stat -c '%a' "${sd}/state" 2>/dev/null || printf '?')"
+      if [[ "$smode" == "600" ]]; then
+        _doctor_check state_file OK "mode 600"
+      else
+        _doctor_check state_file WARN "${sd}/state has mode ${smode} (expected 600)"
+      fi
+    fi
+  else
+    _doctor_check state_dir OK "${sd} does not exist yet (nothing applied)"
+  fi
+
+  # 4. Applied modules' module_verify, plus an optional module_doctor
+  # hook (lib/omes/module.sh's contract only requires
+  # check/apply/verify/rollback; module_doctor is an additive, optional
+  # convention a module may define for deeper self-diagnosis).
+  local -a mod_names=()
+  mapfile -t mod_names < <(state_list_modules)
+  local m mstatus
+  for m in "${mod_names[@]}"; do
+    mstatus="$(state_get "module.${m}.status" 2>/dev/null || echo unknown)"
+    if [[ "$mstatus" != "applied" ]]; then
+      _doctor_check "module:${m}" WARN "status=${mstatus} (not currently applied)"
+      continue
+    fi
+    if [[ ! -r "${OMES_ROOT}/modules/${m}/module.sh" ]]; then
+      _doctor_check "module:${m}" WARN "module.sh no longer present on disk"
+      continue
+    fi
+
+    module_load "$m"
+
+    if [[ "$MODULE_SCOPE" == "root" ]] && ! omes_is_root; then
+      _doctor_check "module:${m}" WARN "requires root to verify (run: sudo omes doctor)"
+      continue
+    fi
+    if [[ "$MODULE_SCOPE" == "user" ]] && omes_is_root; then
+      _doctor_check "module:${m}" WARN "must not run as root to verify"
+      continue
+    fi
+
+    if module_verify >/dev/null 2>&1; then
+      _doctor_check "module:${m}" OK "verified"
+    else
+      _doctor_check "module:${m}" FAIL "module_verify failed"
+    fi
+
+    if declare -F module_doctor >/dev/null 2>&1; then
+      local mdout="" mdrc=0
+      mdout="$(module_doctor 2>&1)" || mdrc=$?
+      if [[ "$mdrc" -eq 0 ]]; then
+        _doctor_check "module:${m}:doctor" OK "${mdout:-ok}"
+      else
+        _doctor_check "module:${m}:doctor" WARN "${mdout:-module_doctor reported an issue}"
+      fi
+    fi
+  done
+
+  # 5. Backup availability.
+  local -a backups=()
+  mapfile -t backups < <(backup_list)
+  _doctor_check backups OK "${#backups[@]} session(s) available"
+
+  # 6. Log writability.
+  local logdir="${sd}/logs"
+  if mkdir -p "$logdir" 2>/dev/null && [[ -w "$logdir" ]]; then
+    _doctor_check log_writable OK "$logdir"
+  else
+    _doctor_check log_writable FAIL "${logdir} is not writable"
+  fi
+
+  local overall_fail=0
+  local i
+  for i in "${!DOCTOR_LEVELS[@]}"; do
+    [[ "${DOCTOR_LEVELS[$i]}" == "FAIL" ]] && overall_fail=1
+  done
+  local exit_code="$OMES_EX_OK"
+  local overall_ok="true"
+  if [[ "$overall_fail" -eq 1 ]]; then
+    exit_code="$OMES_EX_ERROR"
+    overall_ok="false"
+  fi
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local -a check_objs=()
+    for i in "${!DOCTOR_NAMES[@]}"; do
+      check_objs+=("$(json_obj "$(json_kv name "${DOCTOR_NAMES[$i]}")" "$(json_kv level "${DOCTOR_LEVELS[$i]}")" "$(json_kv detail "${DOCTOR_DETAILS[$i]}")")")
+    done
+    _omes_json_result doctor "$overall_ok" "$exit_code" "$(json_kv checks "$(json_array "${check_objs[@]}")" --raw)"
+  else
+    printf '[omes] doctor:\n'
+    for i in "${!DOCTOR_NAMES[@]}"; do
+      printf '[omes]   %-22s %-4s %s\n' "${DOCTOR_NAMES[$i]}" "${DOCTOR_LEVELS[$i]}" "${DOCTOR_DETAILS[$i]}"
+    done
+  fi
+
+  exit "$exit_code"
+}
+
+# ---------------------------------------------------------------------------
+# omes update
+# ---------------------------------------------------------------------------
+
+# cmd_update
+# Updates the OMES checkout itself via git (fetch + fast-forward only),
+# then re-runs `omes check` (never auto-applies any module). Refuses on a
+# dirty working tree or a detached HEAD - either would make a
+# fast-forward merge ambiguous or unsafe to auto-resolve.
+cmd_update() {
+  if ! command -v git >/dev/null 2>&1; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: git not found on PATH"
+  fi
+
+  if ! git -C "$OMES_ROOT" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: ${OMES_ROOT} is not a git checkout (omes was not installed via git clone)"
+  fi
+
+  if [[ -n "$(git -C "$OMES_ROOT" status --porcelain 2>/dev/null)" ]]; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: refusing to update - the working tree has local changes (git status --porcelain is non-empty)"
+  fi
+
+  local branch
+  branch="$(git -C "$OMES_ROOT" symbolic-ref --short -q HEAD || true)"
+  if [[ -z "$branch" ]]; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: refusing to update - HEAD is detached (not on a branch)"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] would run: git -C ${OMES_ROOT} fetch, then git -C ${OMES_ROOT} merge --ff-only"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      _omes_json_result update true "$OMES_EX_OK" "$(json_kv branch "$branch")"
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! detect_network; then
+    _omes_json_die update "$OMES_EX_NETWORK" "update: network required to fetch, but network is unavailable"
+  fi
+
+  local before
+  before="$(git -C "$OMES_ROOT" rev-parse HEAD)"
+
+  if ! omes_run git -C "$OMES_ROOT" fetch --quiet; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: git fetch failed"
+  fi
+
+  if ! omes_run git -C "$OMES_ROOT" merge --ff-only --quiet; then
+    _omes_json_die update "$OMES_EX_ERROR" "update: fast-forward merge failed (local branch has diverged from its upstream, or no upstream is configured for '${branch}')"
+  fi
+
+  local after
+  after="$(git -C "$OMES_ROOT" rev-parse HEAD)"
+  log_info "update: ${branch} ${before} -> ${after}"
+
+  if [[ "$before" == "$after" ]]; then
+    log_info "update: already up to date"
+  fi
+
+  log_info "update: re-running 'omes check' (never auto-applies any module)"
+  # cmd_check exits internally with its own contract-compliant output
+  # (human or --json); on a successful update, `omes update`'s final
+  # output IS `omes check`'s output for the freshly-updated checkout -
+  # documented explicitly in docs/cli.md rather than duplicating check's
+  # entire platform/module report under a second JSON envelope.
+  cmd_check
 }
 
 # ---------------------------------------------------------------------------
@@ -878,13 +1187,9 @@ main() {
     backup) cmd_backup ;;
     restore) cmd_restore ;;
     uninstall) cmd_uninstall ;;
-    help)
-      print_usage
-      exit "$OMES_EX_OK"
-      ;;
-    doctor | update)
-      cmd_stub "$command"
-      ;;
+    doctor) cmd_doctor ;;
+    update) cmd_update ;;
+    help) cmd_help ;;
     *)
       omes_die "$OMES_EX_USAGE" "unknown command: $command"
       ;;

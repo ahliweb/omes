@@ -59,28 +59,39 @@ unchanged system makes no further changes.
 ## CLI overview
 
 ```text
-omes check      Run platform + module preflight checks (no mutation)
-omes install    Check-all-then-apply the requested profile/modules
-omes status     Show platform + applied-module state summary
-omes modules    List available modules (scope, description, status)
-omes version    Print the OMES version
-omes help       Show usage
-
-omes doctor, backup, restore, update, uninstall
-                 Not implemented yet (tracked in #10 / #14)
+omes check       Run platform + module preflight checks (no mutation)
+omes install     Check-all-then-apply the requested profile/modules
+omes status      Show platform, profile, per-module, backup, and log summary
+omes modules     List available modules (scope, description, status)
+omes doctor      Run health checks (OK/WARN/FAIL); exits 0 unless a FAIL
+omes update      Fast-forward this checkout via git, then re-run `check`
+omes backup      Create an on-demand backup of all managed paths
+omes restore     Restore files from a backup session (offline-safe)
+omes uninstall   Roll back applied modules and their managed paths
+omes version     Print the OMES version
+omes help        Show usage
 ```
+
+Full synopsis, flags, JSON schema, and worked examples per command:
+[docs/cli.md](docs/cli.md).
 
 Global flags: `--profile <server|desktop|hermes>`, `--module <name>`
 (repeatable), `--dry-run`, `--json`, `--yes`, `--verbose`, `--log-file <path>`,
-`--allow-docker-group`.
+`--allow-docker-group`, `--from <timestamp>` (restore), `--list` (restore),
+`--reason <text>` (backup), `--purge-packages` (uninstall).
 
 Env overrides: `OMES_DRY_RUN=1`, `OMES_JSON=1`, `OMES_STATE_DIR`,
-`OMES_LOG_FILE`, `OMES_ROOT`, `OMES_NONINTERACTIVE=1`.
+`OMES_LOG_FILE`, `OMES_ROOT`, `OMES_NONINTERACTIVE=1`, `OMES_BACKUP_KEEP`.
+
+Every command supports `--json`, emitting exactly one JSON object on stdout
+(all logging moves to stderr) — see
+[docs/cli.md §3](docs/cli.md#3-json-output-contract) for the shared schema and
+a per-command sample.
 
 **Root/user scope (no auto-escalation).** Every module declares
-`MODULE_SCOPE=root` or `MODULE_SCOPE=user`. `omes check`/`omes install` only
-run the modules matching the *current* effective privilege and **skip** the
-rest, printing the exact follow-up command
+`MODULE_SCOPE=root` or `MODULE_SCOPE=user`. `omes check`/`omes install`/`omes
+uninstall` only run the modules matching the *current* effective privilege and
+**skip** the rest, printing the exact follow-up command
 (e.g. `sudo omes install --profile server` prints `Run as your user: omes
 install --profile server` for the profile's user-scope modules once its
 root-scope modules are done). OMES never calls `sudo` or `sudo -u` on your
@@ -91,7 +102,7 @@ behalf. See [ADR-0005](docs/adr/0005-root-and-user-scope-separation.md).
 | Code | Meaning |
 |---|---|
 | 0 | Success |
-| 1 | General/unexpected error |
+| 1 | General/unexpected error (includes a failed `omes doctor` check) |
 | 2 | Usage error |
 | 3 | Unsupported platform (OS/arch) — detected before any mutation |
 | 4 | Preflight failed (a `module_check` failed; no mutation occurred) |
@@ -100,7 +111,9 @@ behalf. See [ADR-0005](docs/adr/0005-root-and-user-scope-separation.md).
 | 7 | Verification failed (names the module) |
 | 8 | Network required but unavailable |
 | 9 | Backup/restore failed |
-| 10 | Rollback failed |
+| 10 | Rollback failed (names the module) |
+
+Full reference, including per-command JSON schemas: [docs/cli.md](docs/cli.md).
 
 ## Project layout
 
