@@ -85,7 +85,7 @@ case "$cmd" in
     printf 'Default: %s (incoming), %s (outgoing), disabled (routed)\n' "$in_pol" "$out_pol"
     printf 'New profiles: skip\n\n'
     printf 'To                         Action      From\n'
-    printf '--                         ------      ----\n'
+    printf -- '--                         ------      ----\n'
     while IFS= read -r r; do
       [[ -z "$r" ]] && continue
       printf '%-26s ALLOW IN    Anywhere\n' "$r"

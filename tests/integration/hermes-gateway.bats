@@ -43,6 +43,13 @@ EOF
   # Production's modules/hermes-gateway-system writes to the real
   # /etc/systemd/system/...; tests redirect to an isolated tmpdir.
   export OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR="${OMES_TEST_TMPDIR}/etc-systemd-system"
+
+  # The server profile now also includes the root-scope `security-baseline`
+  # module (#7) - see tests/integration/install.bats for the identical
+  # rationale/pattern.
+  export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
+  export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
+  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {

@@ -35,6 +35,20 @@ EOF
   export SHIM_HERMES_VERSION="1.2.3"
   export SHIM_USER_ENABLED_FILE="${OMES_TEST_TMPDIR}/user-enabled"
   export SHIM_USER_ACTIVE_FILE="${OMES_TEST_TMPDIR}/user-active"
+
+  # The server profile now also includes the root-scope `security-baseline`
+  # module (#7). Redirect its /etc-rooted paths to an isolated tmpdir (the
+  # bats docker container's non-root uid cannot write real /etc) and give
+  # ufw a fixed statefile so these apt-base-focused tests exercise
+  # security-baseline as a lightweight pass-through rather than failing on
+  # filesystem permissions; its own behavior is covered by
+  # tests/*/security-baseline*.bats and tests/integration/server.bats.
+  # ufw/unattended-upgrades are marked already-installed so the existing
+  # "apt-get install exactly once" assertions below (about apt-base's own
+  # install) remain valid.
+  export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
+  export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
+  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {

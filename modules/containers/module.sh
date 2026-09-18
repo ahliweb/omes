@@ -237,30 +237,40 @@ module_apply() {
   keyring="$(_containers_keyring_path)"
   keyring_dir="$(dirname "$keyring")"
 
+  # A single, whole-function dry-run early return: repo_add's own
+  # validation (repo_validate) requires the Signed-By keyring to already
+  # exist on disk, which dry-run never creates - so repo_add cannot be
+  # called at all in dry-run (not even in its own dry-run-aware branch),
+  # only described.
   if omes_dry_run; then
-    log_info "[dry-run] would download Docker's signing key to ${keyring}, add the docker apt repo for suite '${codename}', install: ${CONTAINERS_PACKAGES[*]}, and enable docker.service"
-  else
-    mkdir -p "$keyring_dir"
-    local tmp
-    tmp="$(mktemp "${TMPDIR:-/tmp}/omes-docker-key.XXXXXX")"
-
-    if ! curl -fsSL "$CONTAINERS_DOCKER_GPG_URL" -o "$tmp"; then
-      log_error "containers: failed to download Docker's signing key from ${CONTAINERS_DOCKER_GPG_URL}"
-      rm -f "$tmp"
-      return 1
-    fi
-
-    if ! grep -q 'BEGIN PGP PUBLIC KEY BLOCK' "$tmp"; then
-      log_error "containers: downloaded key does not look like an ASCII-armored/PEM PGP public key; aborting, nothing installed"
-      rm -f "$tmp"
-      return 1
-    fi
-
-    chmod 644 "$tmp"
-    omes_manage_path "$keyring"
-    mv -f "$tmp" "$keyring"
-    log_info "containers: wrote Docker signing key to ${keyring}"
+    log_info "[dry-run] would download Docker's signing key to ${keyring}"
+    log_info "[dry-run] would add the docker apt repo for suite '${codename}'"
+    log_info "[dry-run] would install: ${CONTAINERS_PACKAGES[*]}"
+    log_info "[dry-run] would run: systemctl enable --now docker"
+    log_info "[dry-run] access policy: default 'sudo docker' (no group change) unless OMES_DOCKER_ROOTLESS=1 and/or --allow-docker-group is given"
+    return 0
   fi
+
+  mkdir -p "$keyring_dir"
+  local tmp
+  tmp="$(mktemp "${TMPDIR:-/tmp}/omes-docker-key.XXXXXX")"
+
+  if ! curl -fsSL "$CONTAINERS_DOCKER_GPG_URL" -o "$tmp"; then
+    log_error "containers: failed to download Docker's signing key from ${CONTAINERS_DOCKER_GPG_URL}"
+    rm -f "$tmp"
+    return 1
+  fi
+
+  if ! grep -q 'BEGIN PGP PUBLIC KEY BLOCK' "$tmp"; then
+    log_error "containers: downloaded key does not look like an ASCII-armored/PEM PGP public key; aborting, nothing installed"
+    rm -f "$tmp"
+    return 1
+  fi
+
+  chmod 644 "$tmp"
+  omes_manage_path "$keyring"
+  mv -f "$tmp" "$keyring"
+  log_info "containers: wrote Docker signing key to ${keyring}"
 
   if [[ "${OMES_OS_ID:-}" == "linuxmint" ]]; then
     log_warn "containers: Linux Mint detected; using \$UBUNTU_CODENAME (${codename}) for the apt suite - no support parity claimed (see docs/adr/0007-docker-access-policy.md)"
