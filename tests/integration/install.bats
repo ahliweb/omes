@@ -118,3 +118,45 @@ teardown() {
   run "$OMES_BIN" install --yes
   [ "$status" -eq 2 ]
 }
+
+# Regression: an explicit --module naming a module of the CURRENT scope
+# whose MODULE_REQUIRES pull in a module of the OTHER scope must not be a
+# privilege error; the other-scope dependency is skipped and reported,
+# exactly like a mixed profile (docs/architecture.md Section 4.5).
+@test "install --module <root module> with a user-scope dependency skips the dependency instead of exiting 5" {
+  local work="${OMES_TEST_TMPDIR}/mixed-dep-tree"
+  mkdir -p "$work"
+  cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "$work/"
+  mkdir -p "${work}/modules/user-pre" "${work}/modules/root-leaf"
+  cat > "${work}/modules/user-pre/module.sh" <<'EOF2'
+MODULE_NAME="user-pre"
+MODULE_DESCRIPTION="user-scope preflight"
+MODULE_SCOPE="user"
+MODULE_REQUIRES=()
+module_check() { :; }
+module_apply() { echo "APPLY user-pre"; }
+module_verify() { :; }
+module_rollback() { :; }
+EOF2
+  cat > "${work}/modules/root-leaf/module.sh" <<'EOF2'
+MODULE_NAME="root-leaf"
+MODULE_DESCRIPTION="root-scope module requiring user-pre"
+MODULE_SCOPE="root"
+MODULE_REQUIRES=(user-pre)
+module_check() { :; }
+module_apply() { echo "APPLY root-leaf"; }
+module_verify() { :; }
+module_rollback() { :; }
+EOF2
+
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "${work}/bin/omes" install --module root-leaf --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipping modules that require a different privilege level"* ]]
+  [[ "$output" == *"user-pre"* ]]
+  [[ "$output" == *"APPLY root-leaf"* ]]
+  [[ "$output" != *"APPLY user-pre"* ]]
+
+  # Naming the wrong-scope module itself is still a privilege error.
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "${work}/bin/omes" install --module user-pre --yes
+  [ "$status" -eq 5 ]
+}

@@ -196,8 +196,14 @@ _omes_check_explicit_module_scope() {
   local command="$1"
   shift
   [[ -z "$OMES_PROFILE" ]] || return 0
+  # Only the modules the operator literally named count as "explicit".
+  # Dependencies pulled in transitively through MODULE_REQUIRES may live
+  # in the other scope (e.g. a root-scope session module that requires a
+  # user-scope preflight module); those are filtered and reported like a
+  # mixed profile, never treated as a privilege error.
+  [[ "${#OMES_SELECTED_MODULES[@]}" -gt 0 ]] || return 0
   local -a bad=()
-  mapfile -t bad < <(module_other_scope_modules "$@")
+  mapfile -t bad < <(module_other_scope_modules "${OMES_SELECTED_MODULES[@]}")
   if [[ "${#bad[@]}" -gt 0 ]]; then
     _omes_json_die "$command" "$OMES_EX_PRIVILEGE" "requested module(s) do not match the current privilege level (current: $(module_current_scope)): ${bad[*]}"
   fi
@@ -804,8 +810,21 @@ cmd_uninstall() {
 
   # Reverse dependency order: dependents removed before their
   # dependencies (the opposite of install's apply order).
+  # module_resolve_order expands MODULE_REQUIRES transitively (what
+  # install needs); uninstall must not cascade into dependencies the
+  # operator did not ask to remove, so keep only the selected modules.
+  local -a expanded=()
+  mapfile -t expanded < <(module_resolve_order "${in_scope[@]}")
   local -a order=()
-  mapfile -t order < <(module_resolve_order "${in_scope[@]}")
+  local e s
+  for e in "${expanded[@]}"; do
+    for s in "${in_scope[@]}"; do
+      if [[ "$e" == "$s" ]]; then
+        order+=("$e")
+        break
+      fi
+    done
+  done
   local -a reverse=()
   local i
   for ((i = ${#order[@]} - 1; i >= 0; i--)); do
