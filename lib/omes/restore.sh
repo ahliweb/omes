@@ -46,9 +46,12 @@ backup_target_dir() {
 # backup_manifest_validate <backup-dir>
 # Structural validation only (not hash verification): the MANIFEST must
 # exist and be readable, and every non-blank line must match the
-# "<64-hex-sha256>  /absolute/path" format `sha256sum`/backup_path write.
-# A malformed MANIFEST is treated as corrupt - callers must refuse to
-# restore from it (exit 9) rather than attempt a partial/best-guess parse.
+# "<64-hex-sha256>  <path-relative-to-/>" format backup_path (lib/omes/
+# backup.sh) writes - note the path field has NO leading slash (it is the
+# original absolute path with the leading "/" stripped, so the backup
+# directory tree can mirror it; restore re-adds the "/"). A malformed
+# MANIFEST is treated as corrupt - callers must refuse to restore from it
+# (exit 9) rather than attempt a partial/best-guess parse.
 backup_manifest_validate() {
   local dir="$1"
   local manifest="${dir}/MANIFEST"
@@ -61,7 +64,7 @@ backup_manifest_validate() {
   local line
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
-    if ! [[ "$line" =~ ^[0-9a-f]{64}\ \ / ]]; then
+    if ! [[ "$line" =~ ^[0-9a-f]{64}\ \ [^[:space:]] ]]; then
       log_error "restore: MANIFEST is corrupt (malformed line): ${manifest}"
       return 1
     fi
@@ -105,13 +108,13 @@ restore_backup() {
 
   local manifest="${dir}/MANIFEST"
   local restored=0
-  local line sha path rel src actual
+  local line sha rel path src actual
 
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
     sha="${line%%  *}"
-    path="${line#*  }"
-    rel="${path#/}"
+    rel="${line#*  }"
+    path="/${rel}"
     src="${dir}/${rel}"
 
     if [[ ! -f "$src" ]]; then
@@ -171,6 +174,7 @@ restore_backup() {
 # exists (meaning <path> was created fresh by OMES, never pre-existing).
 _restore_find_oldest_backup_for_path() {
   local mod="$1" path="$2"
+  local rel="${path#/}"
   local base
   base="$(omes_state_dir)/backups"
   [[ -d "$base" ]] || return 1
@@ -186,7 +190,7 @@ _restore_find_oldest_backup_for_path() {
     while IFS= read -r line || [[ -n "$line" ]]; do
       [[ -z "$line" ]] && continue
       p="${line#*  }"
-      if [[ "$p" == "$path" ]]; then
+      if [[ "$p" == "$rel" ]]; then
         printf '%s\n' "$entry"
         return 0
       fi
@@ -215,7 +219,7 @@ _restore_copy_one() {
   while IFS= read -r line || [[ -n "$line" ]]; do
     [[ -z "$line" ]] && continue
     p="${line#*  }"
-    if [[ "$p" == "$path" ]]; then
+    if [[ "$p" == "$rel" ]]; then
       expected="${line%%  *}"
       break
     fi

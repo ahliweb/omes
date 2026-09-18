@@ -55,15 +55,15 @@ teardown() {
 }
 
 @test "restore --list shows the session after a backup" {
-  "$OMES_BIN" backup >/dev/null
+  "$OMES_BIN" backup --module demo >/dev/null
   run "$OMES_BIN" restore --list
   [ "$status" -eq 0 ]
   [[ "$output" == *"module=demo"* ]]
 }
 
 @test "restore --list --json is valid JSON and lists the session" {
-  "$OMES_BIN" backup >/dev/null
-  run "$OMES_BIN" restore --list --json
+  "$OMES_BIN" backup --module demo >/dev/null
+  omes_run_stdout_only "$OMES_BIN" restore --list --json
   [ "$status" -eq 0 ]
   run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="restore"; assert len(d["backups"])==1; assert d["backups"][0]["module"]=="demo"' <<< "$output"
   [ "$status" -eq 0 ]
@@ -124,7 +124,7 @@ teardown() {
 
 @test "restore --json emits a single valid JSON object on success" {
   "$OMES_BIN" backup >/dev/null
-  run "$OMES_BIN" restore --yes --json
+  omes_run_stdout_only "$OMES_BIN" restore --yes --json
   [ "$status" -eq 0 ]
   run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="restore"; assert d["ok"] is True; assert d["exit_code"]==0' <<< "$output"
   [ "$status" -eq 0 ]

@@ -116,7 +116,7 @@ _install_apt_base() {
 
 @test "uninstall --json emits a single valid JSON object" {
   _install_apt_base
-  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" uninstall --module apt-base --yes --json
+  OMES_TEST=1 OMES_FAKE_ROOT=1 omes_run_stdout_only "$OMES_BIN" uninstall --module apt-base --yes --json
   [ "$status" -eq 0 ]
   run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="uninstall"; assert d["ok"] is True; assert d["modules"][0]["name"]=="apt-base"; assert d["modules"][0]["status"]=="removed"' <<< "$output"
   [ "$status" -eq 0 ]

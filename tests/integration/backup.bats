@@ -85,7 +85,7 @@ _seed_state() {
 
 @test "backup --json emits a single valid JSON object" {
   _seed_state
-  run "$OMES_BIN" backup --json
+  omes_run_stdout_only "$OMES_BIN" backup --json
   [ "$status" -eq 0 ]
   run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="backup"; assert d["ok"] is True; assert d["files_backed_up"]==2' <<< "$output"
   [ "$status" -eq 0 ]
