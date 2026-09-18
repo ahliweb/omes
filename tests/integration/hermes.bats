@@ -62,6 +62,16 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
+@test "install --profile hermes never backs up \$HERMES_HOME/.env (secret boundary)" {
+  run "$OMES_BIN" install --profile hermes --yes
+  [ "$status" -eq 0 ]
+  [ -f "${OMES_HERMES_HOME}/.env" ]
+
+  run find "${OMES_STATE_DIR}/backups" -type f -name '.env'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
 @test "install --profile hermes exits 7 when hermes doctor fails verification" {
   export SHIM_HERMES_DOCTOR_EXIT=1
   export SHIM_HERMES_DOCTOR_OUTPUT="FAIL: telegram gateway unreachable"

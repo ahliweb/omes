@@ -196,20 +196,29 @@ _hermes_remove_marker_block() {
 # _hermes_ensure_env_file <home>
 # Creates $home/.env (mode 0600) if absent. Never overwrites an existing
 # .env (that would destroy operator-managed secrets).
+#
+# Deliberately NOT registered via omes_manage_path: .env holds operator
+# secrets (Telegram bot token, provider API keys - see docs/security.md
+# §5 and docs/hermes-integration.md §5). omes_manage_path causes
+# lib/omes/backup.sh to copy the registered path into
+# <state-dir>/backups/ on every apply, and to restore/delete it on
+# module_rollback - all of which would put a live secret into a backup
+# directory and make rollback able to destroy an operator's credentials.
+# OMES may create this file and fix its mode; it never backs it up,
+# restores it, or deletes it.
 _hermes_ensure_env_file() {
   local home="$1"
   local env_file="${home}/.env"
 
   if omes_dry_run; then
-    log_info "[dry-run] would ensure ${env_file} exists with mode 0600"
+    log_info "[dry-run] would ensure ${env_file} exists with mode 0600 (never backed up)"
     return 0
   fi
 
-  omes_manage_path "$env_file"
   if [[ ! -e "$env_file" ]]; then
     mkdir -p "$home"
     : > "$env_file"
-    log_info "hermes: created ${env_file}"
+    log_info "hermes: created ${env_file} (not a managed/backed-up path - see docs/hermes-integration.md §5)"
   fi
   chmod 600 "$env_file"
 }

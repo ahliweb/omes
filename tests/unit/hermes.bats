@@ -216,6 +216,36 @@ EOF
   [ "$output" -eq 1 ]
 }
 
+# --- module_apply: secret boundary (.env is never backed up) ---------------
+
+@test "module_apply never backs up \$HERMES_HOME/.env (secret boundary)" {
+  export SHIM_HERMES_VERSION="1.2.3"
+  # A pre-existing .bashrc proves the backup mechanism is actually
+  # exercised in this test (backup_path is a no-op for a path that does
+  # not exist yet - see lib/omes/backup.sh), so the .env assertion below
+  # is a real negative, not a vacuous one.
+  printf '# existing bashrc\n' > "${HOME}/.bashrc"
+
+  backup_begin "hermes" "pre-apply" >/dev/null
+  run module_apply
+  [ "$status" -eq 0 ]
+  backup_finish >/dev/null
+
+  local backups_dir
+  backups_dir="$(omes_state_dir)/backups"
+
+  run find "$backups_dir" -type f -name '.bashrc'
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+
+  run find "$backups_dir" -type f -name '.env'
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  run grep -c '\.env' "${backups_dir}"/*/MANIFEST
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
 # --- module_verify -----------------------------------------------------------
 
 @test "module_verify fails when hermes doctor fails, with actionable output" {

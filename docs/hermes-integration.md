@@ -8,8 +8,9 @@
 > Gateway service integration (`hermes-gateway`, user/system systemd units)
 > is documented separately once implemented — tracked in issue
 > [#12](https://github.com/ahliweb/omes/issues/12). Telegram-specific
-> security guidance lives in [`docs/telegram-security.md`](./telegram-security.md),
-> tracked in issue [#13](https://github.com/ahliweb/omes/issues/13).
+> security guidance will live in `docs/telegram-security.md`, tracked in
+> issue [#13](https://github.com/ahliweb/omes/issues/13) — **not created
+> yet** as of this document.
 >
 > OMES is an independent, MIT-licensed, Omarchy-inspired compatibility
 > layer. It is not official Omarchy and Hermes Agent is a separate upstream
@@ -85,7 +86,7 @@ invariant in `docs/architecture.md` §10.
 |---|---|---|
 | `~/.hermes/hermes-agent/`, `~/.local/bin/hermes` | The upstream Hermes installer (invoked by OMES) | OMES does not vendor or modify this code; `module_rollback` never deletes it. |
 | `$HERMES_HOME/config.yaml` | The operator, via `hermes config set <key> <value>` | OMES never writes this file directly. |
-| `$HERMES_HOME/.env` | OMES creates it (empty, mode `0600`) **only if absent**; the operator fills in secrets | OMES never overwrites an existing `.env`, never reads secret values out of it, and never writes a provider or Telegram credential into it. See §5. |
+| `$HERMES_HOME/.env` | OMES creates it (empty, mode `0600`) **only if absent**; the operator fills in secrets | OMES never overwrites an existing `.env`, never reads secret values out of it, and never writes a provider or Telegram credential into it. **Not** registered via `omes_manage_path`: unlike every other path in this table, `.env` is never backed up, never restored, and never deleted by `module_rollback` — it is deliberately outside the backup/restore/uninstall system entirely, so a live secret is never copied into `<state-dir>/backups/`. See §5. |
 | `${XDG_DATA_HOME:-~/.local/share}/omes/hermes-path.sh` | OMES (fully) | A small, marker-commented snippet exporting `PATH="$HOME/.local/bin:$PATH"` when not already present. Overwritten idempotently on every `module_apply`. |
 | `~/.bashrc`, `~/.profile` | OMES appends one marker-delimited block sourcing the snippet above; the rest of the file is the operator's | Backed up (via `omes_manage_path`) before the first append; a file that already contains the marker block is left untouched on re-run. |
 | Provider/model configuration (LLM API keys, `hermes model`) | The operator, entirely | See §5 — OMES never automates this. |
@@ -98,6 +99,27 @@ credential into `.env` or anywhere else.** `module_apply` only ever
 exist, so a fresh install has a secrets file with the right permissions
 ready for the operator to populate — it never contains a real or
 placeholder-real-looking secret written by OMES itself.
+
+**`.env` is never backed up, restored, or deleted by OMES.** Every other
+path this module touches is registered via `omes_manage_path`, which makes
+`lib/omes/backup.sh` copy it into `<state-dir>/backups/<timestamp>/` before
+each apply so it can be restored or removed later (`docs/architecture.md`
+§4.6, §7). `.env` is the one deliberate exception: it is created/mode-fixed
+directly, without ever calling `omes_manage_path` on it. This means:
+
+- `omes install`/`omes update` never copies a live secret into a backup
+  directory.
+- `omes restore` never overwrites an operator's current `.env` with an old
+  one, and never needs to (there is nothing to restore it *from*).
+- `module_rollback` (`omes uninstall`) never deletes `.env` — rotating or
+  removing a Telegram/provider credential is always the operator's own
+  action, never a side effect of OMES rollback.
+
+This is a hard rule, not a default: it applies to every OMES module that
+touches a Hermes secrets file (see issue #12 for the gateway and issue #13
+for Telegram allowlist tooling), and CI/test coverage in
+`tests/unit/hermes.bats` and `tests/integration/hermes.bats` asserts that
+no backup session ever contains a file named `.env`.
 
 Provider and model configuration is entirely a manual, documented, operator
 action, using the Hermes CLI directly:
@@ -112,8 +134,8 @@ This is deliberate: embedding a credential-writing step in an installer
 module would mean OMES scripts handle plaintext secrets, and would give any
 `omes install` run the ability to silently overwrite operator-managed
 credentials. Neither is acceptable per `docs/security.md` §5. Telegram bot
-token handling specifically is documented in
-[`docs/telegram-security.md`](./telegram-security.md) (issue #13).
+token handling specifically will be documented in `docs/telegram-security.md`
+(issue #13 — not created yet as of this document).
 
 ## 6. The doctor gate
 
@@ -170,8 +192,11 @@ only what OMES itself created:
 It **never** deletes `$HERMES_HOME` or `~/.local/bin/hermes` — that is
 real Hermes data and the operator's install, not something OMES has enough
 information to safely destroy (config, secrets, session history, skills).
-Instead, it prints the exact command a human would run to fully remove
-Hermes themselves:
+In particular, `$HERMES_HOME/.env` is never touched by rollback (it was
+never registered as a managed path in the first place — see §4/§5), so
+rollback cannot delete an operator's Telegram/provider credentials as a
+side effect. Instead, it prints the exact command a human would run to
+fully remove Hermes themselves:
 
 ```text
 [omes] WARN hermes: to fully remove Hermes yourself, run: rm -rf '/home/<user>/.hermes' "$HOME/.local/bin/hermes"
