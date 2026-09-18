@@ -1,13 +1,20 @@
 name: Compatibility
 
-# Exercises `bin/omes` inside the OS containers from docs/compatibility-matrix.md
-# on every pull request, every push to main, weekly on a schedule, and on
-# demand. The core installer (bin/omes, lib/omes/*.sh, modules/, profiles/)
-# is tracked separately in issue #6 and may not exist yet on this branch;
-# every step that depends on it is guarded with `if: hashFiles('bin/omes') != ''`
-# so this workflow is a harmless no-op before #6 merges and exercises the
-# real CLI once it does. See docs/ci.md for how this matrix maps to the
-# compatibility-matrix.md support tiers.
+# Runs scripts/test-matrix.sh (issue #15) against the OS containers from
+# docs/compatibility-matrix.md on every pull request, every push to main,
+# weekly on a schedule, and on demand. The core installer (bin/omes,
+# lib/omes/*.sh, modules/, profiles/) is tracked separately in issue #6 and
+# may not exist yet on a given branch; the matrix job is guarded with
+# `if: hashFiles('scripts/test-matrix.sh') != ''` so this workflow is a
+# harmless no-op before that merges. See docs/testing.md for how this
+# matrix maps to the compatibility-matrix.md support tiers and how its
+# results feed docs/business/release-gates.md.
+#
+# scripts/test-matrix.sh does its own `docker run`/`docker exec` against
+# the target OS images, so this workflow runs it on the GitHub-hosted
+# runner directly (Docker preinstalled there) rather than inside a
+# `container:` job - nesting Docker inside a `container:` job is not
+# supported the same way.
 
 on:
   pull_request:
@@ -26,105 +33,91 @@ permissions:
 
 jobs:
   matrix:
-    name: ${{ matrix.image }}
+    name: ${{ matrix.image }} (tier ${{ matrix.tier }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        image:
-          - "ubuntu:24.04"
-          - "ubuntu:22.04"
-          - "linuxmintd/mint22-amd64"
-    container:
-      image: ${{ matrix.image }}
+        include:
+          # Tier 1 (per docs/compatibility-matrix.md section 1): a
+          # regression here blocks the release, so these are blocking.
+          - image: "ubuntu:24.04"
+            tier: "1"
+            advisory: false
+          - image: "linuxmintd/mint22-amd64"
+            tier: "1"
+            advisory: false
+          # Tier 2: best-effort, tested but not gating by itself.
+          - image: "ubuntu:22.04"
+            tier: "2"
+            advisory: true
+    continue-on-error: ${{ matrix.advisory }}
     steps:
-      - name: Install prerequisites (sudo, curl, ca-certificates, git)
-        run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -y
-          apt-get install -y --no-install-recommends sudo curl ca-certificates git
-
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
-      - name: bin/omes version --json
-        if: hashFiles('bin/omes') != ''
-        run: bin/omes version --json
+      - name: scripts/test-matrix.sh (fresh, rerun, offline, partial-failure, reboot, rollback)
+        if: hashFiles('scripts/test-matrix.sh') != ''
+        env:
+          OMES_MATRIX_IMAGES: ${{ matrix.image }}
+        run: ./scripts/test-matrix.sh
 
-      - name: bin/omes check --json
-        if: hashFiles('bin/omes') != ''
-        # Allowed to report a non-zero preflight result (e.g. a container
-        # legitimately failing a hardware/network check) -- this step
-        # records the result rather than gating the job on it.
-        run: bin/omes check --json || echo "[compatibility] omes check exited non-zero (recorded above, not fatal)"
-
-      - name: bin/omes install --module apt-base --dry-run --yes
-        if: hashFiles('bin/omes') != ''
-        run: bin/omes install --module apt-base --dry-run --yes
-
-      - name: bin/omes install --profile server --dry-run --yes (recorded, not gating)
-        if: hashFiles('bin/omes') != ''
-        # The full server profile includes security-baseline, whose
-        # preflight requires systemd; a plain container has none, so this
-        # legitimately exits 4 here. Recorded for the log; the VM matrix
-        # (tests/vm, #15) is where the full profile is proven.
-        run: bin/omes install --profile server --dry-run --yes || echo "[compatibility] full-profile dry-run exited non-zero in a container (recorded above, not fatal)"
-
-      - name: bin/omes not present yet
-        if: hashFiles('bin/omes') == ''
+      - name: scripts/test-matrix.sh not present yet
+        if: hashFiles('scripts/test-matrix.sh') == ''
         run: |
-          echo "bin/omes not present yet (core installer #6 not merged); skipping. Tracked in #6."
+          echo "scripts/test-matrix.sh not present yet; skipping. Tracked in #15."
 
-  real-install-ubuntu-24-04:
-    name: Real install + idempotency (ubuntu:24.04, root)
-    runs-on: ubuntu-24.04
-    # A plain container has no systemd, so the full server profile (which
-    # now includes security-baseline: ufw + journald + unattended-upgrades)
-    # correctly fails preflight here. This job therefore proves the real
-    # install + idempotency contract for the container-safe module
-    # (apt-base); full-profile real installs, reboot survival and the
-    # firewall run in the VM matrix (tests/vm, #15). See docs/ci.md.
-    continue-on-error: true
-    container:
-      image: ubuntu:24.04
-    steps:
-      - name: Install prerequisites (sudo, curl, ca-certificates, git)
+      - name: Sanitize image name for artifact naming
+        if: always()
+        id: sanitize
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update -y
-          apt-get install -y --no-install-recommends sudo curl ca-certificates git
+          safe="$(printf '%s' '${{ matrix.image }}' | tr ':/' '--')"
+          echo "name=${safe}" >> "$GITHUB_OUTPUT"
 
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - name: First install (real, non-dry-run, as root)
-        if: hashFiles('bin/omes') != ''
-        run: bin/omes install --module apt-base --yes
-
-      - name: Second install (idempotency check)
-        if: hashFiles('bin/omes') != ''
-        run: bin/omes install --module apt-base --yes
-
-      - name: bin/omes not present yet
-        if: hashFiles('bin/omes') == ''
-        run: |
-          echo "bin/omes not present yet (core installer #6 not merged); skipping. Tracked in #6."
-
-      - name: Locate the omes log directory
-        if: always() && hashFiles('bin/omes') != ''
-        id: logdir
-        run: |
-          dir="/var/lib/omes/logs"
-          if [[ -d "$dir" ]]; then
-            echo "path=$dir" >> "$GITHUB_OUTPUT"
-          else
-            echo "path=" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Upload omes logs
-        if: always() && steps.logdir.outputs.path != ''
+      - name: Upload tests/matrix/ results and logs
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
-          name: omes-logs-ubuntu-24.04
-          path: ${{ steps.logdir.outputs.path }}
+          name: omes-test-matrix-${{ steps.sanitize.outputs.name }}
+          path: |
+            tests/matrix/results/
+            tests/matrix/logs/
+          if-no-files-found: ignore
+
+  real-install-ubuntu-24-04:
+    name: Real install + idempotency (ubuntu:24.04, root, apt-base)
+    runs-on: ubuntu-24.04
+    # BLOCKING as of issue #15: apt-base (#6) is implemented, so a real,
+    # non-dry-run install and its idempotent re-run now have an applicable
+    # module to prove end-to-end. This duplicates scripts/test-matrix.sh's
+    # `fresh`+`rerun` scenarios for ubuntu:24.04 specifically (also run by
+    # the `matrix` job above) - kept as its own named, always-blocking job
+    # per this issue's brief, rather than folded away, so its pass/fail
+    # history stays visible on its own regardless of the broader matrix's
+    # advisory/blocking split.
+    continue-on-error: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: scripts/test-matrix.sh (fresh + rerun only)
+        if: hashFiles('scripts/test-matrix.sh') != ''
+        env:
+          OMES_MATRIX_IMAGES: "ubuntu:24.04"
+          OMES_MATRIX_SCENARIOS: "fresh rerun"
+        run: ./scripts/test-matrix.sh
+
+      - name: scripts/test-matrix.sh not present yet
+        if: hashFiles('scripts/test-matrix.sh') == ''
+        run: |
+          echo "scripts/test-matrix.sh not present yet; skipping. Tracked in #15."
+
+      - name: Upload tests/matrix/ results and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: omes-real-install-ubuntu-24.04
+          path: |
+            tests/matrix/results/
+            tests/matrix/logs/
           if-no-files-found: ignore
