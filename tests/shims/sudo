@@ -3,13 +3,15 @@
 # tests/shims/sudo - fake sudo for bats tests.
 #
 # `sudo -n true` reports availability via $SHIM_SUDO_AVAILABLE (1/0,
-# default 1). Any other invocation just logs and runs the command as-is
-# (tests never rely on a real privilege change from this shim).
+# default 1). Any other invocation logs and execs the command as-is
+# (tests never rely on a real privilege change from this shim) - e.g.
+# `sudo loginctl enable-linger <user>` (#12) execs `loginctl enable-linger
+# <user>` against tests/shims/loginctl.
 
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'sudo %s\n' "$*" >> "$SHIM_LOG"
+  printf 'sudo %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 if [[ "${1:-}" == "-n" ]] && [[ "${2:-}" == "true" ]]; then
@@ -17,5 +19,4 @@ if [[ "${1:-}" == "-n" ]] && [[ "${2:-}" == "true" ]]; then
   exit 1
 fi
 
-shift || true
 exec "$@"
