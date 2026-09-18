@@ -314,6 +314,24 @@ Prints the full usage text (commands, global flags, exit codes). **Exit codes:**
 help`), 2 (no command given at all).
 **JSON schema:** `{"command":"help","ok":true,"usage":"<the same text as human mode>","exit_code":0}`
 
+## 4.12 Extension commands
+
+Additional top-level commands are loaded from `lib/omes/cmd/<name>.sh`
+(see [lib/omes/cmd/README.md](../lib/omes/cmd/README.md)). `omes help`
+lists them under "Extension commands". For an extension command,
+`bin/omes` parses global flags only up to the first token it does not
+recognize; everything from that token on (subcommands, names,
+command-specific flags) is passed to the extension verbatim. Put global
+flags directly after the command word:
+
+```bash
+omes <extension> --json <subcommand> <args...>   # --json parsed by bin/omes
+omes <extension> <subcommand> --json             # --json passed to the extension
+```
+
+Extension commands follow the same exit-code and JSON contract as the
+built-in commands.
+
 ## 5. Worked examples
 
 **First run on a fresh Ubuntu Server 24.04 host:**
