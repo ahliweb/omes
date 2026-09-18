@@ -1,0 +1,11 @@
+PRETTY_NAME="Linux Mint Debian Edition 6"
+NAME="LMDE"
+VERSION_ID="6"
+VERSION="6 (Faye)"
+VERSION_CODENAME=faye
+ID=linuxmint
+ID_LIKE=debian
+HOME_URL="https://www.linuxmint.com/"
+SUPPORT_URL="https://forums.linuxmint.com/"
+BUG_REPORT_URL="https://linuxmint-troubleshooting-guide.readthedocs.io/en/latest/"
+PRIVACY_POLICY_URL="https://www.linuxmint.com/"
