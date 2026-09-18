@@ -118,10 +118,21 @@ module_check() {
     return 1
   fi
 
+  # Deliberately NOT a hard failure when hermes is absent here: the
+  # check-all-then-apply runner (docs/architecture.md §3.2) runs
+  # module_check for every module in the run BEFORE any module_apply, so
+  # on a fresh `omes install --profile hermes` the `hermes` module has not
+  # been applied yet at the point this check runs, even though
+  # MODULE_REQUIRES=(hermes) guarantees it applies first once the apply
+  # phase starts. Hard-failing here would make a first-ever install of
+  # this profile always fail preflight. module_apply below will fail
+  # loudly (and safely - no partial state) if hermes truly never gets
+  # installed, e.g. an isolated `--module hermes-gateway` run.
   _hgw_ensure_runtime_path
-  if ! command -v hermes >/dev/null 2>&1 || ! hermes --version >/dev/null 2>&1; then
-    log_error "hermes-gateway: the 'hermes' CLI is not installed/runnable; apply the 'hermes' module first"
-    return 1
+  if command -v hermes >/dev/null 2>&1 && hermes --version >/dev/null 2>&1; then
+    log_info "hermes-gateway: hermes CLI is present and runnable"
+  else
+    log_info "hermes-gateway: hermes CLI not yet installed (expected before the 'hermes' module has applied in this run)"
   fi
 
   if _hgw_headless; then

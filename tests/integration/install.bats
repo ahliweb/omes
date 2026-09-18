@@ -23,15 +23,18 @@ UBUNTU_CODENAME=noble
 EOF
   export OMES_OS_RELEASE_FILE
 
-  # The server profile now includes the user-scope `hermes` module (#11).
-  # Override $HOME (the bats docker container's real $HOME is "/", not
-  # writable by a non-root uid) and simulate an already-installed, healthy
-  # Hermes via the hermes shim so these apt-base-focused tests exercise
-  # hermes as a trivial no-op rather than a real (network-touching)
-  # install; hermes's own behavior is covered by tests/*/hermes*.bats.
+  # The server profile now includes the user-scope `hermes` and
+  # `hermes-gateway` modules (#11, #12). Override $HOME (the bats docker
+  # container's real $HOME is "/", not writable by a non-root uid) and
+  # simulate an already-installed, healthy Hermes + gateway via the shims
+  # so these apt-base-focused tests exercise both as a trivial no-op
+  # rather than a real (network-touching) install; their own behavior is
+  # covered by tests/*/hermes*.bats and tests/*/hermes-gateway*.bats.
   export HOME="${OMES_TEST_TMPDIR}/home"
   mkdir -p "$HOME"
   export SHIM_HERMES_VERSION="1.2.3"
+  export SHIM_USER_ENABLED_FILE="${OMES_TEST_TMPDIR}/user-enabled"
+  export SHIM_USER_ACTIVE_FILE="${OMES_TEST_TMPDIR}/user-active"
 }
 
 teardown() {

@@ -58,10 +58,14 @@ teardown() {
   [[ "$output" == *"hermes-gateway-system"* ]]
 }
 
-@test "module_check fails when the hermes CLI is not runnable" {
+@test "module_check does not hard-fail when hermes is not yet installed (check-all runs before any apply)" {
+  # MODULE_REQUIRES=(hermes) only orders the APPLY phase; check-all runs
+  # for every module before any module_apply, so on a first-ever install
+  # hermes legitimately is not installed yet when this check runs.
   unset SHIM_HERMES_VERSION || true
   run module_check
-  [ "$status" -eq 1 ]
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not yet installed"* ]]
 }
 
 @test "module_check passes when hermes is installed and systemctl exists" {

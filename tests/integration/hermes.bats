@@ -36,6 +36,13 @@ EOF
   # curl's -o/download behavior is never exercised in this file - see
   # tests/unit/hermes.bats for that.
   export SHIM_HERMES_VERSION="1.2.3"
+
+  # profiles/hermes.profile now also includes hermes-gateway (#12); give
+  # its --user systemctl calls isolated statefiles so it applies/verifies
+  # as a trivial success here too - hermes-gateway's own behavior is
+  # covered by tests/*/hermes-gateway*.bats.
+  export SHIM_USER_ENABLED_FILE="${OMES_TEST_TMPDIR}/user-enabled"
+  export SHIM_USER_ACTIVE_FILE="${OMES_TEST_TMPDIR}/user-active"
 }
 
 teardown() {
