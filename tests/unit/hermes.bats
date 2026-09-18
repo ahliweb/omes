@@ -48,7 +48,7 @@ teardown() {
 _set_fake_installer() {
   local body="$1"
   local f="${OMES_TEST_TMPDIR}/fake-installer.sh"
-  printf '%s\n' "$body" > "$f"
+  printf '%s\n' "$body" >"$f"
   export SHIM_CURL_OUTPUT_FILE="$f"
 }
 
@@ -73,7 +73,7 @@ EOF
 @test "module_check fails when curl is not on PATH" {
   local stripped=""
   local dir
-  IFS=':' read -ra parts <<< "$PATH"
+  IFS=':' read -ra parts <<<"$PATH"
   for dir in "${parts[@]}"; do
     [[ -x "${dir}/curl" ]] && continue
     stripped="${stripped:+${stripped}:}${dir}"
@@ -100,7 +100,7 @@ EOF
 
 @test "module_apply skips the installer download when already installed (no version pin)" {
   export SHIM_HERMES_VERSION="1.2.3"
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_apply
   [ "$status" -eq 0 ]
   [[ "$output" == *"skipping installer download"* ]]
@@ -143,7 +143,7 @@ EOF
 
 @test "module_apply executes the installer when the sha256 pin matches" {
   local installer="${OMES_TEST_TMPDIR}/installer.sh"
-  _fake_installer_body > "$installer"
+  _fake_installer_body >"$installer"
   export SHIM_CURL_OUTPUT_FILE="$installer"
 
   local expected
@@ -187,7 +187,7 @@ EOF
 @test "module_apply never overwrites an existing .env" {
   export SHIM_HERMES_VERSION="1.2.3"
   mkdir -p "$OMES_HERMES_HOME"
-  printf 'TELEGRAM_BOT_TOKEN=do-not-clobber\n' > "${OMES_HERMES_HOME}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=do-not-clobber\n' >"${OMES_HERMES_HOME}/.env"
   chmod 600 "${OMES_HERMES_HOME}/.env"
   run module_apply
   [ "$status" -eq 0 ]
@@ -200,8 +200,8 @@ EOF
 
 @test "module_apply wires the PATH snippet into .bashrc and .profile exactly once across re-runs" {
   export SHIM_HERMES_VERSION="1.2.3"
-  : > "${HOME}/.bashrc"
-  : > "${HOME}/.profile"
+  : >"${HOME}/.bashrc"
+  : >"${HOME}/.profile"
 
   run module_apply
   [ "$status" -eq 0 ]
@@ -224,7 +224,7 @@ EOF
   # exercised in this test (backup_path is a no-op for a path that does
   # not exist yet - see lib/omes/backup.sh), so the .env assertion below
   # is a real negative, not a vacuous one.
-  printf '# existing bashrc\n' > "${HOME}/.bashrc"
+  printf '# existing bashrc\n' >"${HOME}/.bashrc"
 
   backup_begin "hermes" "pre-apply" >/dev/null
   run module_apply
@@ -276,13 +276,13 @@ EOF
 
 @test "module_rollback removes the PATH snippet and marker block but never \$HERMES_HOME" {
   export SHIM_HERMES_VERSION="1.2.3"
-  : > "${HOME}/.bashrc"
+  : >"${HOME}/.bashrc"
   run module_apply
   [ "$status" -eq 0 ]
   [ -f "$(_hermes_path_snippet_file)" ]
 
   mkdir -p "$OMES_HERMES_HOME"
-  : > "${OMES_HERMES_HOME}/marker-user-data"
+  : >"${OMES_HERMES_HOME}/marker-user-data"
 
   run module_rollback
   [ "$status" -eq 0 ]

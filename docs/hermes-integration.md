@@ -4,13 +4,14 @@
 > implemented yet** are tracked by the linked issue; everything else
 > reflects `modules/hermes/module.sh` as it exists today.
 >
-> This document covers the `hermes` module (issue [#11](https://github.com/ahliweb/omes/issues/11)).
-> Gateway service integration (`hermes-gateway`, user/system systemd units)
-> is documented separately once implemented — tracked in issue
-> [#12](https://github.com/ahliweb/omes/issues/12). Telegram-specific
-> security guidance will live in `docs/telegram-security.md`, tracked in
-> issue [#13](https://github.com/ahliweb/omes/issues/13) — **not created
-> yet** as of this document.
+> This document covers the `hermes` module (part 1, issue
+> [#11](https://github.com/ahliweb/omes/issues/11)) and the
+> `hermes-gateway`/`hermes-gateway-system` modules (part 2, issue
+> [#12](https://github.com/ahliweb/omes/issues/12), sections 11+).
+> Telegram-specific security guidance will live in
+> `docs/telegram-security.md`, tracked in issue
+> [#13](https://github.com/ahliweb/omes/issues/13) — **not created yet**
+> as of this document.
 >
 > OMES is an independent, MIT-licensed, Omarchy-inspired compatibility
 > layer. It is not official Omarchy and Hermes Agent is a separate upstream
@@ -211,10 +212,8 @@ fully remove Hermes themselves:
 | `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it | unset (proceeds with a `WARN`) |
 | `OMES_HERMES_INSTALLER_URL` | Overrides the installer URL | `https://hermes-agent.nousresearch.com/install.sh` (testing only; not a documented operator knob) |
 
-## 10. Not implemented yet
+## 10. Not implemented yet (part 1 / `hermes` module)
 
-- Gateway services (`hermes gateway install`, user/system systemd units,
-  `loginctl enable-linger`) — tracked in issue #12.
 - Telegram allowlist tooling and security documentation — tracked in issue
   #13.
 - `omes doctor`/`omes update`/`omes uninstall` as first-class CLI commands
@@ -225,7 +224,7 @@ fully remove Hermes themselves:
 
 <!-- OMES-MERMAID: docs/hermes-integration.md -->
 
-## Visual summary
+## Visual summary (part 1)
 
 ```mermaid
 flowchart LR
@@ -236,3 +235,238 @@ flowchart LR
     Operator --> Runtime[Hermes runtime]
 ```
 
+---
+
+# Part 2: `hermes-gateway` and `hermes-gateway-system`
+
+> Covers issue [#12](https://github.com/ahliweb/omes/issues/12):
+> `modules/hermes-gateway/module.sh` (`MODULE_SCOPE=user`, the default
+> path, wired into `profiles/server.profile` and `profiles/hermes.profile`)
+> and `modules/hermes-gateway-system/module.sh` (`MODULE_SCOPE=root`,
+> opt-in only, not wired into any profile file).
+>
+> **Why two modules, not one with a flag:** `OMES_GATEWAY_MODE=user|system`
+> exists as documented intent and as a guard (the user-mode module refuses
+> outright if `OMES_GATEWAY_MODE=system` is set — see §12.2), but it cannot
+> be the *only* thing that decides which module runs, because
+> `MODULE_SCOPE` is a single fixed value read once when a module is loaded
+> (`docs/architecture.md` §4.5), and the runner refuses (exit 5) to run a
+> `root`-scope module as non-root or a `user`-scope module as root. A
+> single module cannot legitimately serve both privilege levels, so the
+> system path lives in its own module, `modules/hermes-gateway-system/`,
+> exactly as the issue brief anticipated as an acceptable design ("if that
+> is cleaner under the scope contract, and say so in the PR" — this is
+> that note).
+
+## 11. User vs. system: decision table
+
+| | **User mode (default)** — `modules/hermes-gateway` | **System mode (opt-in)** — `modules/hermes-gateway-system` |
+|---|---|---|
+| Applied via | `omes install --profile server` / `--profile hermes` (wired in by default) | `sudo omes install --module hermes-gateway-system` (never wired into a profile; explicit opt-in only) |
+| Runs as | The invoking user, via `systemctl --user` | Root runs the *installation* step only; the resulting system unit runs the gateway process under a dedicated, non-root service account (never root — this module refuses outright to target the root account, see §12.5) |
+| Best for | A workstation/desktop with an interactive login session, or a server where the operator is comfortable relying on `loginctl enable-linger` for persistence | A headless server/VPS where no user is expected to stay "logged in," or where gateway lifecycle should be independent of any one account's session |
+| Reboot/logout survival | Survives reboot once enabled (`systemctl --user enable`); survives **logout** only if lingering is enabled (§12.3) — without it, the `--user` service manager itself stops when the last session for that user ends | Survives reboot and logout unconditionally — a system unit has no session dependency at all |
+| Privilege footprint | Never root at any point | Root is used only for the one-time `hermes gateway install --system` + systemd wiring step; the running gateway process itself is not root |
+| Logs | `journalctl --user -u hermes-gateway -f` | `journalctl -u hermes-gateway -f` |
+| Status | `systemctl --user status hermes-gateway`, `hermes gateway status` | `systemctl status hermes-gateway`, `sudo -u <user> hermes gateway status` (the CLI belongs to the target user, not root) |
+| Restart | `systemctl --user restart hermes-gateway` | `sudo systemctl restart hermes-gateway` |
+| Rollback | `module_rollback` stops/disables the `--user` unit, removes OMES's drop-in, disables lingering **only if OMES itself enabled it** (state-tracked) | `module_rollback` stops/disables the system unit and removes OMES's drop-in |
+
+**Recommendation:** start with user mode. It is the default in every
+profile that includes the gateway, needs no extra flags, and is what the
+architecture's "least privilege by default" posture (`docs/security.md`
+§1) prefers. Reach for system mode only when the workstation-vs-server
+trade-off above genuinely calls for it (a headless box where you do not
+want gateway uptime tied to any one login session).
+
+## 12. User mode (`modules/hermes-gateway`)
+
+### 12.1 What `module_apply` does
+
+1. Ensures `~/.local/bin` is on `PATH` for the rest of the run (same
+   runtime-PATH mechanism as the `hermes` module).
+2. Runs `hermes gateway install`.
+3. Writes an OMES-managed systemd `--user` drop-in at
+   `~/.config/systemd/user/hermes-gateway.service.d/omes-path.conf`
+   (registered via `omes_manage_path`, so it is backed up before every
+   overwrite) containing an explicit `Environment=PATH=...`. A `--user`
+   unit does **not** inherit an interactive shell's `PATH`, so without
+   this drop-in the gateway process may not find `node`, `ffmpeg`, or
+   other tools it shells out to. Set `OMES_HERMES_GATEWAY_EXTRA_PATH`
+   (colon-separated directories, e.g. wherever `nvm`/`fnm` or a
+   manually-installed `ffmpeg` actually live) before running `omes
+   install` to have those directories prepended into the drop-in's
+   `PATH=` value; the module has no way to auto-discover them.
+4. `systemctl --user daemon-reload`, then `systemctl --user enable --now
+   hermes-gateway`.
+5. On a headless/server host only (detected via
+   `lib/omes/detect.sh`'s `detect_session`), offers to run `sudo loginctl
+   enable-linger <user>` (§12.3).
+
+### 12.2 `OMES_GATEWAY_MODE`
+
+`OMES_GATEWAY_MODE` defaults to `user`. Setting it to `system` before
+running `omes install` against the user-mode module makes `module_check`
+fail immediately with a message pointing at
+`--module hermes-gateway-system` instead — it exists so a misconfigured
+environment variable fails loudly and early rather than silently applying
+the wrong mode.
+
+### 12.3 Lingering: why, when, and consent
+
+**Why:** `systemctl --user` (the whole `--user` service manager instance,
+not just this one unit) is normally torn down when a user's last session
+ends. `loginctl enable-linger <user>` tells `systemd-logind` to keep that
+user's `--user` manager running even with no active session — this is
+what lets the gateway survive a plain SSH logout on a headless host.
+
+**When OMES offers it:** only when `detect_session` reports a
+headless/server session (never on a desktop session — a desktop user is
+expected to stay logged in, and unconditionally enabling lingering there
+would be a needless privilege-adjacent change for no benefit).
+
+**Consent, always:** OMES never runs `sudo loginctl enable-linger` without
+explicit consent — `--yes`/`OMES_NONINTERACTIVE=1`, or an interactive `y`
+answer to the prompt. Declining is not an error: `module_apply` still
+succeeds, the gateway still runs while the user stays logged in, and a
+`WARN` explains exactly what to run manually later
+(`sudo loginctl enable-linger <user>`).
+
+**State-tracked, so rollback undoes only what OMES did:** whether OMES
+itself enabled lingering is recorded in
+`module.hermes-gateway.linger_enabled` (`true`/`false`). `module_rollback`
+only ever runs `loginctl disable-linger` when this key is `true` — if the
+operator had already enabled lingering themselves (or declined the OMES
+prompt and enabled it manually later), OMES rollback leaves it alone.
+
+### 12.4 Status, logs, restart (user mode)
+
+```console
+$ systemctl --user status hermes-gateway
+$ journalctl --user -u hermes-gateway -f
+$ systemctl --user restart hermes-gateway
+$ hermes gateway status
+```
+
+### 12.5 Failure recovery (user mode)
+
+- **Unit enabled but not active** (crashed, or never started):
+  `module_verify` fails with an explicit "is not active" message.
+  Check `journalctl --user -u hermes-gateway -f` for the crash reason,
+  fix it (often a missing `PATH` entry — see `OMES_HERMES_GATEWAY_EXTRA_PATH`
+  above, or a Hermes config/secret problem covered by `hermes doctor`),
+  then `systemctl --user restart hermes-gateway` or re-run `omes install`.
+- **`hermes gateway install` itself fails**: `module_apply` fails (exit 6)
+  before touching systemd at all; nothing is enabled/started.
+- **Lingering was declined and the operator later logs out**: the gateway
+  stops (this is expected, not a bug) until the next login, or until
+  lingering is enabled manually.
+
+## 13. System mode (`modules/hermes-gateway-system`)
+
+### 13.1 Required configuration
+
+`OMES_HERMES_GATEWAY_SYSTEM_USER` **must** be set to the existing,
+non-root account whose Hermes install (`$HERMES_HOME`) the system gateway
+should use. `module_check` refuses (exit 4 at `omes check`/preflight) when:
+
+- the variable is unset,
+- it names `root` (OMES never configures a system gateway for the root
+  user — this is a hard, non-overridable refusal), or
+- the named account does not exist.
+
+This module also does **not** attempt to install Hermes itself for that
+user, and does not install/symlink a system-reachable `hermes` binary; it
+assumes one is already reachable on root's `PATH` before it runs (Hermes
+itself always installs per-user — issue #11 — so making a system-scope
+`hermes` reachable, e.g. via a symlink, is a manual operator step this
+module's `module_check` will tell you about if `hermes` is not found).
+
+### 13.2 What `module_apply` does
+
+1. `hermes gateway install --system`.
+2. Writes an OMES-managed drop-in at
+   `/etc/systemd/system/hermes-gateway.service.d/omes-path.conf`
+   (registered via `omes_manage_path`) with an explicit
+   `Environment=PATH=<target user's home>/.local/bin:...` (plus
+   `OMES_HERMES_GATEWAY_EXTRA_PATH` if set, same mechanism as user mode).
+3. `systemctl daemon-reload`, then `systemctl enable --now hermes-gateway`
+   (no `--user` — this is the system manager).
+
+### 13.3 Status, logs, restart (system mode)
+
+```console
+$ systemctl status hermes-gateway
+$ journalctl -u hermes-gateway -f
+$ sudo systemctl restart hermes-gateway
+$ sudo -u <user> hermes gateway status   # the CLI itself belongs to <user>, not root
+```
+
+### 13.4 Failure recovery (system mode)
+
+Same shape as user mode (§12.5): a "not active" `module_verify` failure
+means check `journalctl -u hermes-gateway -f`; an `install --system`
+failure means nothing was enabled. There is no lingering concept in system
+mode — the unit's persistence is unconditional, not session-dependent.
+
+## 14. Green signals can lie: what `module_verify` actually proves
+
+**This is the single most important caveat in this document.** Both
+`module_verify` implementations check, in order:
+
+1. `systemctl [--user] is-enabled hermes-gateway` — proves the unit is
+   configured to start.
+2. `systemctl [--user] is-active hermes-gateway` — proves the **process**
+   is currently running.
+3. `hermes gateway status` (user mode only — see §13.1 for why system mode
+   cannot easily run this as the target user from a root-scope module) —
+   proves the CLI itself considers the gateway reachable.
+
+**None of the above proves the messaging adapter (e.g. Telegram) is
+actually connected.** A unit can be `enabled` + `active` — every green
+light `systemctl` can show you — while the underlying Telegram long-poll
+connection is failing (bad token, revoked bot, network egress blocked,
+rate-limited). This is exactly the failure mode where an operator trusts
+`systemctl status` and never notices the bot has been silently
+unreachable for days.
+
+Both modules' `module_verify` therefore **always** logs an explicit `WARN`
+stating this limitation, every single time verification runs — not just
+on failure — specifically so it appears in ordinary `omes install` output,
+not only when something is already broken. When `hermes gateway status`'s
+own output contains a recognizable disconnected-looking phrase
+(`disconnected`, `not connected`, `unauthorized`, `unreachable`), an
+additional, more specific `WARN` is logged quoting that output. This is a
+narrow, best-effort heuristic, not a guarantee — the authoritative way to
+confirm adapter connectivity is the safe Telegram diagnostics documented
+in `docs/telegram-security.md` (issue #13, not yet written), which
+explicitly avoid the prohibited `getUpdates` call (see `docs/security.md`
+§2).
+
+There is no separate `module_doctor` function in the module contract
+(`docs/architecture.md` §4.2 defines exactly four: `check`/`apply`/
+`verify`/`rollback`); the doctor-style adapter-connectivity check
+described here lives inside `module_verify` itself rather than as a fifth
+function, so it runs on every `omes install` without requiring a future
+`omes doctor` command (tracked separately in issue #14) to exist first.
+
+## 15. Environment variables this part reads
+
+| Variable | Purpose | Default | Applies to |
+|---|---|---|---|
+| `OMES_GATEWAY_MODE` | Guards against applying the user-mode module when system mode was intended | `user` | `hermes-gateway` |
+| `OMES_HERMES_GATEWAY_EXTRA_PATH` | Colon-separated extra directories prepended into the managed `PATH=` drop-in | unset | both |
+| `OMES_HERMES_GATEWAY_SYSTEM_USER` | The non-root account the system gateway serves; required, no default | unset (module_check fails without it) | `hermes-gateway-system` |
+| `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | Overrides the system drop-in directory | `/etc/systemd/system` (testing-only override; not a documented operator knob) | `hermes-gateway-system` |
+
+## 16. Not implemented yet (part 2)
+
+- Telegram allowlist tooling and safe chat-discovery diagnostics — tracked
+  in issue #13.
+- A first-class `omes doctor` command that would run the adapter-caveat
+  check on demand without a full `install` — tracked in issue #14; today
+  the same check runs as part of every `module_verify`, so it is not
+  unreachable, just not independently invocable yet.
+- Automatic discovery of Node/ffmpeg/etc. install locations for
+  `OMES_HERMES_GATEWAY_EXTRA_PATH` — this is a manual, documented operator
+  step (§12.1), not automated.

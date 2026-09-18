@@ -12,7 +12,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -88,7 +88,7 @@ teardown() {
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]

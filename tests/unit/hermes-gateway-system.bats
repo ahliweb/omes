@@ -128,7 +128,7 @@ teardown() {
   export OMES_TEST=1 OMES_FAKE_ROOT=1
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_SYSTEM_ACTIVE_FILE"
+  : >"$SHIM_SYSTEM_ACTIVE_FILE"
   run module_verify
   [ "$status" -eq 1 ]
 }
@@ -148,7 +148,7 @@ teardown() {
   export OMES_TEST=1 OMES_FAKE_ROOT=1
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   run module_rollback
   [ "$status" -eq 0 ]

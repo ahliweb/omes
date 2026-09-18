@@ -164,7 +164,7 @@ module_apply() {
   dropin_file="$(_hgw_dropin_file)"
   mkdir -p "$dropin_dir"
   omes_manage_path "$dropin_file"
-  _hgw_dropin_content > "$dropin_file"
+  _hgw_dropin_content >"$dropin_file"
   chmod 644 "$dropin_file"
   log_info "hermes-gateway: wrote PATH drop-in at ${dropin_file}"
 

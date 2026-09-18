@@ -156,7 +156,7 @@ teardown() {
   export OMES_NONINTERACTIVE=1
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_apply
   [ "$status" -eq 0 ]
   run grep -c 'loginctl' "$SHIM_LOG"
@@ -176,7 +176,7 @@ teardown() {
   run module_apply
   [ "$status" -eq 0 ]
   # Simulate the unit crashing/stopping without being disabled.
-  : > "$SHIM_USER_ACTIVE_FILE"
+  : >"$SHIM_USER_ACTIVE_FILE"
 
   run module_verify
   [ "$status" -eq 1 ]
@@ -217,7 +217,7 @@ teardown() {
   export OMES_NONINTERACTIVE=1
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   run module_rollback
   [ "$status" -eq 0 ]
@@ -233,7 +233,7 @@ teardown() {
 @test "module_rollback never calls disable-linger when OMES never enabled it" {
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   run module_rollback
   [ "$status" -eq 0 ]
