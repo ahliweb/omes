@@ -19,7 +19,7 @@ setup() {
   export OMES_HERMES_HOME="${HOME}/.hermes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -36,6 +36,13 @@ EOF
   # curl's -o/download behavior is never exercised in this file - see
   # tests/unit/hermes.bats for that.
   export SHIM_HERMES_VERSION="1.2.3"
+
+  # profiles/hermes.profile now also includes hermes-gateway (#12); give
+  # its --user systemctl calls isolated statefiles so it applies/verifies
+  # as a trivial success here too - hermes-gateway's own behavior is
+  # covered by tests/*/hermes-gateway*.bats.
+  export SHIM_USER_ENABLED_FILE="${OMES_TEST_TMPDIR}/user-enabled"
+  export SHIM_USER_ACTIVE_FILE="${OMES_TEST_TMPDIR}/user-active"
 }
 
 teardown() {
@@ -97,7 +104,7 @@ teardown() {
   mode="$(stat -c '%a' "${OMES_HERMES_HOME}/.env")"
   [ "$mode" = "600" ]
 
-  printf 'TELEGRAM_BOT_TOKEN=keepme\n' > "${OMES_HERMES_HOME}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=keepme\n' >"${OMES_HERMES_HOME}/.env"
   chmod 600 "${OMES_HERMES_HOME}/.env"
 
   run "$OMES_BIN" install --profile hermes --yes

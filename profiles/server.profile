@@ -6,5 +6,8 @@
 apt-base
 # security-baseline (#7)
 hermes
-# hermes-gateway (#12)
+hermes-gateway
+# hermes-gateway-system is intentionally NOT listed here (opt-in only via
+# `sudo omes install --module hermes-gateway-system`); see
+# docs/hermes-integration.md part 2's user-vs-system decision table.
 # containers (#7, optional)

@@ -12,7 +12,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -23,15 +23,18 @@ UBUNTU_CODENAME=noble
 EOF
   export OMES_OS_RELEASE_FILE
 
-  # The server profile now includes the user-scope `hermes` module (#11).
-  # Override $HOME (the bats docker container's real $HOME is "/", not
-  # writable by a non-root uid) and simulate an already-installed, healthy
-  # Hermes via the hermes shim so these apt-base-focused tests exercise
-  # hermes as a trivial no-op rather than a real (network-touching)
-  # install; hermes's own behavior is covered by tests/*/hermes*.bats.
+  # The server profile now includes the user-scope `hermes` and
+  # `hermes-gateway` modules (#11, #12). Override $HOME (the bats docker
+  # container's real $HOME is "/", not writable by a non-root uid) and
+  # simulate an already-installed, healthy Hermes + gateway via the shims
+  # so these apt-base-focused tests exercise both as a trivial no-op
+  # rather than a real (network-touching) install; their own behavior is
+  # covered by tests/*/hermes*.bats and tests/*/hermes-gateway*.bats.
   export HOME="${OMES_TEST_TMPDIR}/home"
   mkdir -p "$HOME"
   export SHIM_HERMES_VERSION="1.2.3"
+  export SHIM_USER_ENABLED_FILE="${OMES_TEST_TMPDIR}/user-enabled"
+  export SHIM_USER_ACTIVE_FILE="${OMES_TEST_TMPDIR}/user-active"
 }
 
 teardown() {
@@ -85,7 +88,7 @@ teardown() {
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]

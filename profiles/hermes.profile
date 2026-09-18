@@ -5,4 +5,4 @@
 
 apt-base
 hermes
-# hermes-gateway (#12)
+hermes-gateway

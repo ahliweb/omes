@@ -3,14 +3,85 @@
 # tests/shims/systemctl - fake systemctl for bats tests.
 #
 # `get-default` prints $SHIM_DEFAULT_TARGET (default multi-user.target).
-# `is-enabled <svc>` succeeds only for services listed (space-separated)
-# in $SHIM_ENABLED_SERVICES.
+#
+# `is-enabled <svc>` (no `--user`, no statefile configured) preserves the
+# original pre-#12 behavior: succeeds only for services listed
+# (space-separated) in $SHIM_ENABLED_SERVICES - existing callers (e.g.
+# lib/omes/detect.sh's detect_display_manager) are unaffected.
+#
+# Extended for #12 (modules/hermes-gateway, modules/hermes-gateway-system):
+# a `--user` flag (anywhere in argv) selects the user-manager scope, and
+# `enable`/`disable`/`start`/`stop`/`is-enabled`/`is-active` become
+# stateful, tracked in per-scope statefiles so a module_apply -> is-enabled
+# / is-active check in the same test sees consistent results:
+#
+#   SHIM_USER_ENABLED_FILE / SHIM_SYSTEM_ENABLED_FILE
+#     one enabled unit name per line for `--user`/system scope respectively
+#   SHIM_USER_ACTIVE_FILE / SHIM_SYSTEM_ACTIVE_FILE
+#     one active (running) unit name per line, same split
+#
+# Setting SHIM_SYSTEM_ENABLED_FILE opts `is-enabled` (system scope) into
+# the new statefile-backed behavior instead of the legacy
+# SHIM_ENABLED_SERVICES list; `--user` scope always uses the statefiles
+# (there was no user-scope shim behavior before #12).
+#
+# `daemon-reload` and any other subcommand not listed above are silent
+# no-ops that still get logged.
 
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'systemctl %s\n' "$*" >> "$SHIM_LOG"
+  printf 'systemctl %s\n' "$*" >>"$SHIM_LOG"
 fi
+
+scope="system"
+filtered=()
+for a in "$@"; do
+  if [[ "$a" == "--user" ]]; then
+    scope="user"
+  else
+    filtered+=("$a")
+  fi
+done
+set -- "${filtered[@]+"${filtered[@]}"}"
+
+_enabled_file() {
+  if [[ "$scope" == "user" ]]; then
+    printf '%s\n' "${SHIM_USER_ENABLED_FILE:-}"
+  else
+    printf '%s\n' "${SHIM_SYSTEM_ENABLED_FILE:-}"
+  fi
+}
+
+_active_file() {
+  if [[ "$scope" == "user" ]]; then
+    printf '%s\n' "${SHIM_USER_ACTIVE_FILE:-}"
+  else
+    printf '%s\n' "${SHIM_SYSTEM_ACTIVE_FILE:-}"
+  fi
+}
+
+_list_has() {
+  local file="$1" needle="$2"
+  [[ -n "$file" ]] && [[ -r "$file" ]] || return 1
+  grep -qxF "$needle" "$file" 2>/dev/null
+}
+
+_list_add() {
+  local file="$1" needle="$2"
+  [[ -n "$file" ]] || return 0
+  mkdir -p "$(dirname "$file")" 2>/dev/null || true
+  touch "$file"
+  _list_has "$file" "$needle" && return 0
+  printf '%s\n' "$needle" >>"$file"
+}
+
+_list_remove() {
+  local file="$1" needle="$2"
+  [[ -n "$file" ]] && [[ -r "$file" ]] || return 0
+  grep -vxF "$needle" "$file" >"${file}.tmp" 2>/dev/null || true
+  mv -f "${file}.tmp" "$file"
+}
 
 case "${1:-}" in
   get-default)
@@ -19,14 +90,65 @@ case "${1:-}" in
     ;;
   is-enabled)
     svc="${2:-}"
-    for s in ${SHIM_ENABLED_SERVICES:-}; do
-      if [[ "$s" == "$svc" ]]; then
-        printf 'enabled\n'
-        exit 0
-      fi
-    done
+    if [[ "$scope" == "system" ]] && [[ -z "${SHIM_SYSTEM_ENABLED_FILE:-}" ]]; then
+      for s in ${SHIM_ENABLED_SERVICES:-}; do
+        if [[ "$s" == "$svc" ]]; then
+          printf 'enabled\n'
+          exit 0
+        fi
+      done
+      printf 'disabled\n' >&2
+      exit 1
+    fi
+    if _list_has "$(_enabled_file)" "$svc"; then
+      printf 'enabled\n'
+      exit 0
+    fi
     printf 'disabled\n' >&2
     exit 1
+    ;;
+  is-active)
+    svc="${2:-}"
+    if _list_has "$(_active_file)" "$svc"; then
+      printf 'active\n'
+      exit 0
+    fi
+    printf 'inactive\n' >&2
+    exit 3
+    ;;
+  enable)
+    shift
+    now=0
+    svc=""
+    for a in "$@"; do
+      case "$a" in
+        --now) now=1 ;;
+        -*) ;;
+        *) svc="$a" ;;
+      esac
+    done
+    _list_add "$(_enabled_file)" "$svc"
+    [[ "$now" -eq 1 ]] && _list_add "$(_active_file)" "$svc"
+    exit 0
+    ;;
+  disable)
+    svc="${2:-}"
+    _list_remove "$(_enabled_file)" "$svc"
+    _list_remove "$(_active_file)" "$svc"
+    exit 0
+    ;;
+  start)
+    svc="${2:-}"
+    _list_add "$(_active_file)" "$svc"
+    exit 0
+    ;;
+  stop)
+    svc="${2:-}"
+    _list_remove "$(_active_file)" "$svc"
+    exit 0
+    ;;
+  daemon-reload)
+    exit 0
     ;;
   *)
     exit 0
