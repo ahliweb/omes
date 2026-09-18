@@ -17,6 +17,13 @@ ID_LIKE=debian
 UBUNTU_CODENAME=noble
 EOF
   export OMES_OS_RELEASE_FILE
+
+  # The server profile now also includes the root-scope `security-baseline`
+  # module (#7) - see tests/integration/install.bats for the identical
+  # rationale/pattern.
+  export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
+  export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
+  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {

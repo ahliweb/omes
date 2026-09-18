@@ -126,7 +126,15 @@ _security_journald_conf_content() {
 _security_sshd_port() {
   local port=""
   if command -v sshd >/dev/null 2>&1; then
-    port="$(sshd -T 2>/dev/null | awk 'tolower($1)=="port"{print $2; exit}')"
+    # Captured to a variable FIRST, then parsed via a here-string (never
+    # piped directly into awk): real `sshd -T` prints dozens of
+    # directives, and an `awk ... {exit}` that stops reading after the
+    # `port` line risks an intermittent non-zero pipeline status from
+    # SIGPIPE under `set -o pipefail` (lib/omes/core.sh) even though the
+    # match itself succeeded - see the identical fix in module_doctor.
+    local sshd_out
+    sshd_out="$(sshd -T 2>/dev/null || true)"
+    port="$(awk 'tolower($1)=="port"{print $2; exit}' <<< "$sshd_out")"
   fi
   if [[ -z "$port" ]]; then
     local cfg
@@ -188,10 +196,15 @@ _security_ssh_reason() {
 
 # _security_ssh_rule_present <status-verbose-output> <ssh-port>
 # True when <status-verbose-output> (the text of `ufw status verbose`)
-# already contains an ALLOW rule for OpenSSH or the given port.
+# already contains an ALLOW rule for OpenSSH or the given port. Matched
+# with bash's own =~ (never piped into `grep -q`): under `set -o
+# pipefail` (lib/omes/core.sh), a producer piped into a consumer that can
+# stop reading early risks an intermittent non-zero pipeline status from
+# SIGPIPE even though the match itself succeeded.
 _security_ssh_rule_present() {
   local status_out="$1" port="$2"
-  printf '%s\n' "$status_out" | grep -qE "(OpenSSH|${port}/tcp).*ALLOW"
+  local re="(OpenSSH|${port}/tcp).*ALLOW"
+  [[ "$status_out" =~ $re ]]
 }
 
 # ---------------------------------------------------------------------------
@@ -493,13 +506,30 @@ module_rollback() {
 }
 
 # module_doctor
-# Optional diagnostics (not part of the required module contract; not yet
-# wired into `omes doctor`, which is a stub tracked in #14 - bin/omes is
-# outside this module's file scope). Read-only. Reports firewall state,
-# a simulated count of pending security updates, and NTP sync state.
+# Optional diagnostics (`lib/omes/module.sh`'s required contract is only
+# check/apply/verify/rollback; `module_doctor` is an additive convention
+# `bin/omes cmd_doctor` calls when present, treating a non-zero return as
+# WARN - docs/threat-model.md T06: "omes doctor/status reports any active
+# privilege-widening flag every run, not just at install time"). Read-only.
+# Reports firewall state, a simulated count of pending security updates,
+# and NTP sync state; returns non-zero (WARN) when the firewall is not
+# active or the clock is not NTP-synchronized.
 module_doctor() {
-  local fw_line
-  fw_line="$(ufw status verbose 2>/dev/null | head -n1 || echo unknown)"
+  local warn=0
+
+  # Captured to a variable first, then sliced (never piped into `head`):
+  # under `set -o pipefail` (lib/omes/core.sh), `ufw status verbose | head
+  # -n1` can intermittently report a non-zero pipeline status if `head`
+  # closes its end of the pipe before `ufw` finishes writing (SIGPIPE),
+  # which would make `|| echo unknown` fire even though the real command
+  # succeeded.
+  local fw_out fw_line
+  fw_out="$(ufw status verbose 2>/dev/null || true)"
+  fw_line="${fw_out%%$'\n'*}"
+  [[ -n "$fw_line" ]] || fw_line="unknown"
+  if [[ "$fw_line" != "Status: active" ]]; then
+    warn=1
+  fi
   log_info "security-baseline: firewall: ${fw_line}"
 
   local pending
@@ -510,6 +540,7 @@ module_doctor() {
     log_info "security-baseline: NTP synchronized: yes"
   else
     log_warn "security-baseline: NTP synchronized: no"
+    warn=1
   fi
 
   if command -v journalctl >/dev/null 2>&1; then
@@ -521,5 +552,5 @@ module_doctor() {
     fi
   fi
 
-  return 0
+  return "$warn"
 }

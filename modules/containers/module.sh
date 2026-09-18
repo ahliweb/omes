@@ -60,8 +60,18 @@ _containers_supported_codenames() {
   printf 'noble\njammy\nfocal\nbionic\n'
 }
 
+# _containers_codename_supported <codename>
+# Matched via a bash loop (never piped into `grep -q`): under `set -o
+# pipefail` (lib/omes/core.sh), a producer piped into a consumer that can
+# stop reading early (a `grep -q` match on a non-last line) risks an
+# intermittent non-zero pipeline status from SIGPIPE even though the
+# match itself succeeded.
 _containers_codename_supported() {
-  _containers_supported_codenames | grep -qxF "$1"
+  local target="$1" c
+  while IFS= read -r c; do
+    [[ "$c" == "$target" ]] && return 0
+  done < <(_containers_supported_codenames)
+  return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -356,29 +366,40 @@ module_rollback() {
 }
 
 # module_doctor
-# Optional diagnostics (not part of the required module contract; not yet
-# wired into `omes doctor`, tracked in #14). Read-only.
+# Optional diagnostics (`lib/omes/module.sh`'s required contract is only
+# check/apply/verify/rollback; `module_doctor` is an additive convention
+# `bin/omes cmd_doctor` calls when present, treating a non-zero return as
+# WARN). Read-only. Returns non-zero (WARN) when docker is unreachable,
+# the service is not enabled, or - per docs/threat-model.md T06 ("omes
+# doctor/status reports any active privilege-widening flag every run, not
+# just at install time") - OMES granted docker-group membership, since
+# that grant is root-equivalent and must stay visible on every run.
 module_doctor() {
+  local warn=0
+
   local ver
   if ver="$(docker version 2>&1)"; then
     log_info "containers: docker: reachable"
   else
     log_warn "containers: docker: NOT reachable (${ver})"
+    warn=1
   fi
 
   if systemctl is-enabled docker >/dev/null 2>&1; then
     log_info "containers: docker.service: enabled"
   else
     log_warn "containers: docker.service: not enabled"
+    warn=1
   fi
 
   local group_user
   group_user="$(state_get "module.containers.docker_group_user" 2>/dev/null || true)"
   if [[ -n "$group_user" ]]; then
     log_warn "containers: access policy: '${group_user}' is in the docker group (ROOT-EQUIVALENT)"
+    warn=1
   else
     log_info "containers: access policy: sudo docker (no group membership granted by OMES)"
   fi
 
-  return 0
+  return "$warn"
 }
