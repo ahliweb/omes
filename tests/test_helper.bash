@@ -62,9 +62,16 @@ omes_fixture_path() {
 # `python3 -m json.tool`/`json.loads` for a command that also logs.
 omes_run_stdout_only() {
   # status/output are bats convention names, read by the test body exactly
-  # like a normal `run` would set them.
+  # like a normal `run` would set them. The `|| status=$?` form (rather
+  # than a bare assignment followed by `status=$?`) is required: bats
+  # runs helper functions under errexit-like semantics, so a bare
+  # `output="$(cmd)"` whose cmd exits non-zero would abort this function
+  # immediately - before status is ever set - for every non-success
+  # command under test (usage errors, preflight failures, etc.), which is
+  # exactly the case this helper exists to support.
+  local rc=0
   # shellcheck disable=SC2034
-  output="$("$@" 2>/dev/null)"
+  output="$("$@" 2>/dev/null)" || rc=$?
   # shellcheck disable=SC2034
-  status=$?
+  status="$rc"
 }
