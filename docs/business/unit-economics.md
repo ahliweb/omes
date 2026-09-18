@@ -10,7 +10,7 @@ OMES is an independent, MIT-licensed, Omarchy-inspired compatibility layer and d
 toolkit for Ubuntu Server 24.04 LTS and Linux Mint 22.x, with Hermes Agent as the automation
 layer. It is **not** the official Omarchy project. No number in this model should be read as a
 market-size, willingness-to-pay, or final-price claim — see
-[section 9, "Research limitations"](research-and-implementation-plan.md) of the implementation
+[section 9, "Research limitations"](../research-and-implementation-plan.md) of the implementation
 plan and the "Sources" note at the end of this document.
 
 Per the plan's MVP commercial recommendation (`docs/research-and-implementation-plan.md`,
