@@ -23,6 +23,7 @@ architecture and state model."
 | [0009](0009-testing-with-bats-in-containers.md) | Testing with bats-core in containers | Accepted |
 | [0010](0010-versioning-and-change-fragments.md) | Versioning via SemVer + change fragments compiled at release | Accepted |
 | [0011](0011-control-center-and-provider-boundaries.md) | Control Center and external provider boundaries | Accepted as design boundary |
+| [0014](0014-graphify-integration-boundary.md) | Graphify integration boundary | Accepted as design boundary |
 | [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Accepted as design boundary |
 
 ## Conventions
