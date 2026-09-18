@@ -2,13 +2,34 @@
 # shellcheck shell=bash
 # tests/shims/lspci - fake lspci for bats tests.
 #
-# Prints $SHIM_LSPCI_OUTPUT (default a benign single VGA line) so
-# detect_gpu has something deterministic to parse.
+# `lspci` (no -k): prints $SHIM_LSPCI_OUTPUT (default a benign single VGA
+# line) - unchanged from before this file was extended, so
+# lib/omes/detect.sh's detect_gpu keeps working exactly as it did.
+#
+# `lspci -k` (new): prints $SHIM_LSPCI_K_OUTPUT (default a VGA line plus a
+# tab-indented "Kernel driver in use:" line, matching real lspci -k's
+# format) - used by modules/desktop-preflight/checks.sh's
+# _dp_lspci_driver to distinguish Intel/AMD/NVIDIA/nouveau/virtio.
 
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'lspci %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+has_k=0
+for arg in "$@"; do
+  [[ "$arg" == "-k" ]] && has_k=1
+done
+
+if [[ "$has_k" -eq 1 ]]; then
+  if [[ -n "${SHIM_LSPCI_K_OUTPUT:-}" ]]; then
+    printf '%s\n' "$SHIM_LSPCI_K_OUTPUT"
+  else
+    printf '00:02.0 VGA compatible controller: Example GPU\n'
+    printf '\tKernel driver in use: i915\n'
+  fi
+  exit 0
 fi
 
 if [[ -n "${SHIM_LSPCI_OUTPUT:-}" ]]; then

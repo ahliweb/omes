@@ -1,0 +1,41 @@
+/* OMES default Waybar style. Omarchy-inspired, not copied. Installed by
+ * modules/desktop-config at ~/.config/waybar/style.css. Deliberately
+ * minimal/neutral - edit freely; OMES will not overwrite it again without
+ * --yes once it exists and differs (see modules/desktop-config/module.sh).
+ */
+
+* {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 13px;
+  min-height: 0;
+}
+
+window#waybar {
+  background-color: rgba(30, 30, 30, 0.9);
+  color: #e0e0e0;
+}
+
+#workspaces button {
+  padding: 0 8px;
+  color: #e0e0e0;
+}
+
+#workspaces button.active {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+#clock,
+#network,
+#pulseaudio,
+#battery,
+#tray {
+  padding: 0 10px;
+}
+
+#battery.warning {
+  color: #e5c07b;
+}
+
+#battery.critical {
+  color: #e06c75;
+}

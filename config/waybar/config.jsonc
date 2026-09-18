@@ -1,0 +1,56 @@
+// OMES default Waybar configuration. Omarchy-inspired, not copied.
+// Installed by modules/desktop-config at ~/.config/waybar/config.jsonc.
+// waybar availability on Ubuntu 24.04 "noble" universe: verify per release
+// (see docs/linux-mint.md).
+{
+  "layer": "top",
+  "position": "top",
+  "height": 32,
+  "spacing": 4,
+  "modules-left": ["hyprland/workspaces"],
+  "modules-center": ["clock"],
+  "modules-right": [
+    "network",
+    "pulseaudio",
+    "battery",
+    "tray"
+  ],
+
+  "hyprland/workspaces": {
+    "format": "{icon}",
+    "format-icons": {
+      "default": "*"
+    }
+  },
+
+  "clock": {
+    "format": "{:%Y-%m-%d %H:%M}",
+    "tooltip-format": "{:%A, %d %B %Y}"
+  },
+
+  "network": {
+    "format-wifi": "wifi {signalStrength}%",
+    "format-ethernet": "eth",
+    "format-disconnected": "offline",
+    "tooltip-format": "{ifname}: {ipaddr}/{cidr}"
+  },
+
+  "pulseaudio": {
+    "format": "vol {volume}%",
+    "format-muted": "muted",
+    "on-click": "pavucontrol"
+  },
+
+  "battery": {
+    "format": "bat {capacity}%",
+    "format-charging": "chg {capacity}%",
+    "states": {
+      "warning": 20,
+      "critical": 10
+    }
+  },
+
+  "tray": {
+    "spacing": 8
+  }
+}

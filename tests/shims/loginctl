@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# tests/shims/loginctl - fake loginctl for bats tests (#12).
+# tests/shims/loginctl - fake loginctl for bats tests.
 #
-# modules/hermes-gateway only ever calls `loginctl enable-linger <user>`
-# (via `sudo loginctl ...`, so this shim is invoked through tests/shims/sudo)
-# and, on rollback, `loginctl disable-linger <user>`. Behavior:
+# modules/hermes-gateway calls `loginctl enable-linger <user>` (via `sudo
+# loginctl ...`, so this shim is invoked through tests/shims/sudo) and, on
+# rollback, `loginctl disable-linger <user>`. Behavior:
 #
 #   SHIM_LOGINCTL_ENABLE_EXIT    exit code for `enable-linger` (default 0)
 #   SHIM_LOGINCTL_DISABLE_EXIT   exit code for `disable-linger` (default 0)
+#
+# modules/desktop-preflight/checks.sh's dp_check_logind calls
+# `loginctl list-sessions`, which succeeds (prints a fake session line)
+# unless $SHIM_LOGINCTL_FAIL=1, which simulates systemd-logind being
+# unreachable.
 
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'loginctl %s\n' "$*" >>"$SHIM_LOG"
+  printf 'loginctl %s\n' "$*" >> "$SHIM_LOG"
 fi
 
 case "${1:-}" in
@@ -21,6 +26,14 @@ case "${1:-}" in
     ;;
   disable-linger)
     exit "${SHIM_LOGINCTL_DISABLE_EXIT:-0}"
+    ;;
+  list-sessions)
+    if [[ "${SHIM_LOGINCTL_FAIL:-0}" == "1" ]]; then
+      exit 1
+    fi
+    printf 'SESSION UID USER SEAT TTY\n'
+    printf '1       1000 user seat0 -\n'
+    exit 0
     ;;
   *)
     exit 0

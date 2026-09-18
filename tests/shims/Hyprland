@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/Hyprland - fake Hyprland compositor binary for bats tests.
+#
+# Only ever invoked (in tests) via `command -v Hyprland` resolution from
+# modules/hyprland-session/module.sh's module_verify and the wrapper
+# script it writes. Never actually executed as a compositor in tests.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'Hyprland %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+printf 'Hyprland (fake shim, for tests) v0.0.0\n'
+exit 0
