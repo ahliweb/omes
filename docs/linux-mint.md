@@ -11,12 +11,14 @@
 > Omarchy and must never be described as such — see
 > [docs/scope.md](scope.md) and [docs/branding-and-trademarks.md](branding-and-trademarks.md).
 > `omes backup`/`omes restore`/`omes uninstall` are implemented (issue
-> [#10](https://github.com/ahliweb/omes/issues/10)) and used throughout
-> this document. `omes doctor`/`omes update` are **not implemented yet**
-> (tracked in [#14](https://github.com/ahliweb/omes/issues/14)); the
-> best-effort crash-report logic this document describes lives inside
-> `hyprland-session`'s `module_verify` today, not behind an `omes doctor`
-> command.
+> [#10](https://github.com/ahliweb/omes/issues/10)), and `omes doctor`/`omes
+> update` are implemented too (issue
+> [#14](https://github.com/ahliweb/omes/issues/14)) — all four are used
+> throughout this document. `hyprland-session`'s best-effort crash report
+> (`module_doctor`, folded into `module_verify` for its own `omes
+> install`/`omes check` output) is also reachable directly via `sudo omes
+> doctor` once `hyprland-session` has been applied — `omes doctor` calls
+> any module's optional `module_doctor` hook automatically.
 
 ## 1. Supported versions and hardware
 
@@ -308,11 +310,10 @@ same way the `server`/`hermes` profiles do — see
 - `config/nvim/` ships only a README pointing at LazyVim's own installer;
   OMES does not template or install a Neovim configuration
   (`docs/omarchy-compatibility-inventory.md` categorizes this **DEFER**).
-- `omes doctor`/`omes update` are not implemented yet (tracked in
-  [#14](https://github.com/ahliweb/omes/issues/14)); the equivalent
-  best-effort crash-reporting logic this document describes is folded
-  into `hyprland-session`'s `module_verify` today, not behind an
-  `omes doctor` subcommand.
+- `omes update` fast-forwards the OMES checkout itself via `git`; it does
+  not update Hyprland or any package this profile installed (that stays
+  on `apt`'s own update cadence, per `docs/security.md` §4 — the desktop
+  profile does not enable unattended upgrades).
 - Fingerprint/FIDO2 login and the Walker launcher are DEFERred (not part
   of this profile) — see
   [docs/omarchy-compatibility-inventory.md](omarchy-compatibility-inventory.md).
