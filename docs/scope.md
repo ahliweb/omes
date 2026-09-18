@@ -108,6 +108,8 @@ OMES explicitly does **not**:
 8. Claim to be, or imply affiliation with, official Omarchy, Ubuntu
    Canonical, or Linux Mint. See
    [docs/branding-and-trademarks.md](branding-and-trademarks.md).
+9. Treat a future web Control Center as part of the local CLI runtime. AWCMS/awcms-one may provide a companion business/control plane, but it must not become an arbitrary remote shell, a second Hermes runtime, or the source of truth for host state.
+10. Treat Cloudflare, SRS-X, GitHub, Coolify, Nomad, or Kubernetes as mandatory core dependencies. Provider integrations are staged optional work with explicit capabilities and manual fallback.
 
 ## 5. Destructive-operation policy
 

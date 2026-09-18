@@ -71,6 +71,10 @@ controls at the layer it manages (installer, configuration, service wiring).
 | TB10 | Multi-user host | Each user's own `HERMES_HOME` and session | Other local accounts on a shared host; a system-scope gateway service shared across users |
 | TB11 | Network exposure | Loopback-only services, explicit firewall rules | The LAN/internet-facing network interface |
 | TB12 | GitHub Actions / CI | Repository maintainer-reviewed workflow files | Third-party Actions referenced by tag/branch (mutable) instead of pinned SHA |
+| TB13 | Control Center ↔ OMES host boundary | Authenticated local/mTLS/pull job channel and OMES policy | Public web requests, compromised tenant session, or forged job payload |
+| TB14 | OMES ↔ registrar/DNS providers | Scoped provider credentials and verified adapter responses | Provider API, asynchronous status, unsupported capability, and stale external state |
+| TB15 | Control Center billing ↔ provider operation | Immutable invoice/price snapshot and reconciliation | Payment event replay, provider failure after payment, or false success assumption |
+| TB16 | `.id` document workflow | Encrypted object storage and tenant-scoped access | Registrant PII, expiring upload links, provider review state, and unauthorized download |
 
 ## 4. Assets
 
@@ -85,6 +89,9 @@ controls at the layer it manages (installer, configuration, service wiring).
 | A7 | Host integrity (packages, systemd units, firewall rules, kernel-adjacent config) | What the installer and modules mutate; the thing rollback must be able to restore |
 | A8 | OMES state and backups (`state` file, `<state-dir>/backups/*`) | Records what was changed and holds copies of managed files, including `.env` |
 | A9 | GitHub repository, history, and CI (Actions secrets, workflow files) | Supply-chain integrity of OMES itself; a compromise here reaches every OMES install |
+| A10 | Control Center tenant, entitlement, invoice, and job records | Cross-tenant disclosure or unauthorized mutation could provision infrastructure, expose billing data, or misrepresent service state |
+| A11 | Registrar/DNS/GitHub provider credentials and external resource identifiers | Provider credentials can register domains, modify DNS, access repositories, or create financial liability |
+| A12 | Domain registrant contacts and `.id` verification documents | Personal/business identity data and documents may be required for registration and must not leak across tenants |
 
 ## 5. STRIDE threat table
 
@@ -127,6 +134,12 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 | T30 | Desktop session left unlocked while an agent with shell access is running, allowing a passerby (or a screen-shared viewer) physical/visual access to an authenticated session | Information Disclosure, Elevation of Privilege | A5, A6 | L | M | Document that lock-screen/idle-lock configuration is the operator's responsibility; OMES does not disable idle locking and, where it configures idle behavior for the desktop profile, defaults to enabling a lock timeout rather than disabling one | operator-responsibility; out-of-scope for enforcement | #8 |
 | T31 | An attacker with write access to a backup (T20) or to the repository tampers with a backup or a module's rollback path so that `omes restore`/`module_rollback` re-applies malicious state instead of the last-known-good one | Tampering | A7, A8 | L | H | MANIFEST sha256 verification (T21) also protects against tampered restores; state file changes are append/overwrite with explicit `applied_at` timestamps that CI/QA can diff against expectations in #17 | implemented-in-OMES | #10, #17 |
 | T32 | No audit trail of what the agent's shell tool actually executed, making incident response and repudiation claims ("the agent did this, not me") impossible to resolve | Repudiation | A3, A7 | M | M | Document that Hermes session transcripts/logs are the audit trail and must be retained per the backup policy; OMES itself logs every module action it takes (apply/verify/rollback) with timestamps to the state file and log file | implemented-in-OMES (installer actions); operator-responsibility (agent tool-call transcript retention is upstream Hermes behavior) | #14, #17 |
+| T33 | A compromised Control Center session submits an arbitrary host command or targets another tenant's server | Elevation of Privilege, Tampering | A4, A7, A10 | M | H | Versioned allowlisted operations, server-side tenant/target authorization, no arbitrary shell, idempotent audited jobs, local/mTLS/pull boundary, and cross-tenant integration tests | design requirement; not implemented yet | #89, #90, #91 |
+| T34 | A replayed or forged provider webhook creates duplicate invoice, domain order, entitlement, or deployment state | Spoofing, Tampering, Repudiation | A10, A11 | M | H | Verify signature, event ID, timestamp, source, and idempotency before applying events; process outside transactions and reconcile provider state | design requirement; not implemented yet | #94, #99, #100, #101, #102 |
+| T35 | Provider capability drift causes OMES to advertise or charge for an unsupported registrar/DNS operation | Tampering, Financial Denial of Service | A10, A11 | M | M | Capability matrix by account/extension/operation, immutable price/capability snapshot, visible manual fallback, and periodic reconciliation | design requirement; not implemented yet | #98, #99, #100, #102 |
+| T36 | Cloudflare or SRS-X registration is accepted asynchronously but OMES reports success before reconciliation | Repudiation, Financial Denial of Service | A10, A11 | M | H | Distinguish submitted/pending/action-required/succeeded/failed; poll or read provider state; never treat timeout as success | design requirement; not implemented yet | #90, #99, #100 |
+| T37 | `.id` registrant data or verification documents are exposed through tenant leakage, logs, long-lived upload URLs, or support exports | Information Disclosure | A12 | M | H | Encrypted object storage, short-lived signed upload/download capability, tenant-scoped access, audit, redaction, retention, deletion/legal hold | design requirement; not implemented yet | #100, #102 |
+| T38 | Payment success or subscription suspension directly stops a healthy deployment without policy, grace period, or rollback | Tampering, Denial of Service | A10, A7 | M | H | Separate invoice, entitlement, and deployment state; explicit grace/suspension policy; approval for destructive action; no automatic stop by default | design requirement; not implemented yet | #92, #93, #94, #102 |
 
 ## 6. Residual risk summary
 
@@ -142,12 +155,16 @@ responsibility of the operator, not OMES:
   disable the firewall, add a NOPASSWD sudoers line by hand). OMES's job is to make the safe
   path the default and the unsafe path explicit and logged, not to make unsafe configurations
   impossible.
+- Until issues #89–#102 land, the Control Center, billing, registrar, DNS, and GitHub controls
+  described in T33–T38 are design requirements, not implemented protections. A public pilot
+  must not advertise them as available.
 
 ## 7. Review cadence
 
 This threat model must be revisited whenever: a new module is added, a new network-facing
-service is introduced, Hermes's upstream security posture changes materially, or a security
-incident (real or near-miss) occurs during a pilot. Until then, treat it as the gate referenced
+service is introduced, Hermes's upstream security posture changes materially, an external
+provider adapter is added or changes capability, or a security incident (real or near-miss)
+occurs during a pilot. Until then, treat it as the gate referenced
 in `docs/research-and-implementation-plan.md` §4 (Phase 0).
 
 <!-- OMES-MERMAID: docs/threat-model.md -->
