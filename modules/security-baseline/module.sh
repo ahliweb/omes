@@ -257,10 +257,15 @@ _security_write_if_changed() {
 # ---------------------------------------------------------------------------
 
 module_check() {
-  if ! command -v ufw >/dev/null 2>&1; then
-    log_error "security-baseline: ufw not found (expected from apt-base; MODULE_REQUIRES=(apt-base))"
-    return 1
-  fi
+  # ufw is NOT required to already be on PATH here: apt-base
+  # (MODULE_REQUIRES) installs it via its own module_apply, which - like
+  # this module's - never actually runs under --dry-run. A fresh host's
+  # first `omes install --profile server --dry-run` must still pass
+  # check-all (lib/omes/module.sh runs every module's module_check before
+  # any module_apply), so ufw's *availability* is validated the same way
+  # apt-base validates its own packages: pkg_missing/pkg_exists_in_repos
+  # below, never a hard `command -v` gate on a package this very module
+  # is responsible for installing.
   if ! command -v systemctl >/dev/null 2>&1; then
     log_error "security-baseline: systemctl not found"
     return 1
