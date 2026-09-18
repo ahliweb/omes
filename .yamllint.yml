@@ -1,0 +1,19 @@
+---
+# yamllint config for OMES. Used by scripts/lint.sh yamllint (and directly by
+# the yamllint job in .github/workflows/lint.yml) to lint .github/workflows/*.
+# See docs/ci.md for how to add or adjust a rule here.
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: warning
+  document-start: disable
+  truthy:
+    # GitHub Actions workflow syntax uses bare `on:` as a mapping key, and
+    # comparisons like `if: steps.x.outputs.y == 'true'` are strings, not
+    # YAML booleans -- only flag actual boolean-looking scalar *values*.
+    check-keys: false
+  comments-indentation: disable
+  braces:
+    max-spaces-inside: 1
