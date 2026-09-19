@@ -419,45 +419,13 @@ list. Summary of the subcommands this design defines interfaces for:
 | `omes content export --since DATE --out DIR` | #68 | redacted export of reports/audit |
 | `omes content prune --older-than DAYS [--dry-run] [--yes]` | #68 | delete archived media/reports (never `sessions/`/audit) |
 | `omes content plan <job> [--actor ID] [--caption TEXT] [--target PLATFORM]...` | #66 | record targets/caption, `queued` → `approval-required` |
-| `omes content publish <job> --platform NAME [--worker-executable PATH]` | #66 | run the platform worker's `prepare`/`publish`/`verify` |
+| `omes content publish <job> --platform NAME [--worker-executable PATH] [--cover PATH] [--check-links] [--force-validation]` | #66/#69 | validate, then run the platform worker's `prepare`/`publish`/`verify` |
 | `omes content session login <platform> --actor ID` | #66 | run `bootstrap-session` (manual login only; never publishes) |
 | `omes content session revoke <platform> --actor ID [--yes]` | #66 | run `revoke-session` and clear the local profile directory |
 | `omes content edit <job> --actor ID [--caption T] [--target P]... [--channel telegram]` | #65 | edit a plan's caption/targets while `approval-required` |
+| `omes content edit <job> --actor ID --platform P --caption-file F` | #69 | save a versioned per-platform caption variant (`caption.v<n>`) |
 | `omes content notify <job> [--chat-id ID]` | #65 | send the Telegram approval-request preview |
 | `omes content status <job> [--telegram] [--chat-id ID]` | #65 | print (and optionally send) a job's status |
-
-## 14. Telegram approval front end (#65)
-
-- **Outbound only.** `lib/omes/py/content/telegram.py` never calls Telegram's
-  long-polling read endpoint and never receives inbound messages — Hermes owns
-  Telegram messaging (AGENTS.md section 2). Inbound chat commands are mapped to
-  `omes content <verb>` calls by a Hermes skill, documented (not executed) in
-  this repository at `skills/content/SKILL.md`.
-- **Token handling mirrors `telegram-allowlist.sh` exactly.** `TELEGRAM_BOT_TOKEN`
-  is read from `$HERMES_HOME/.env` in-process; the only place it ever appears is
-  inside a mode-`0600` temporary `curl -K` config file, created immediately
-  before the API call and deleted immediately after — never in argv, never in a
-  printed/logged URL, never in this module's return values (redacted
-  defensively, same `TOKEN|KEY|SECRET|PASSWORD|COOKIE` pattern as #68's audit
-  redaction).
-- **Preview content.** `omes content notify <job> --chat-id <id>` (or the
-  `OMES_CONTENT_TELEGRAM_CHAT_ID` default) sends the caption, planned target
-  platforms, and the artifact's immutable sha256 hash — built entirely from the
-  job record, never from `content/sessions/`. A small ffmpeg-generated
-  thumbnail is attached when `ffmpeg` is installed (`make_thumbnail()`);
-  otherwise the message is text-only. No cookie, token, or session path is ever
-  part of the preview.
-- **Approver authorization.** `approve`/`reject`/`edit --channel telegram`
-  require the acting Telegram user id to be in the intersection of
-  `OMES_CONTENT_APPROVERS` and Hermes's `TELEGRAM_ALLOWED_USERS` — see section 7
-  above. `--channel cli` (the MVP default) is never subject to this check.
-- **Hash and staleness.** `--expected-hash` on `approve` refuses a mismatch
-  against the job's current `source.sha256`; the underlying approval TTL
-  (`OMES_CONTENT_APPROVAL_TTL_SECONDS`, section 7) applies identically
-  regardless of channel — Telegram gets no separate, looser expiry rule.
-- **`omes content status <job> --telegram`** replies with the job's current
-  state, platform, resulting URL, and attempt count via `send_message` — never
-  raw JSON, never a `sessions/` path.
 
 ## 13. Worker isolation implementation (#66)
 
@@ -510,3 +478,100 @@ This section documents the concrete implementation of §6/§8 for the
   a subsequent `omes content publish <job> --platform <p>` call is what actually
   re-invokes the worker (`jobs.publish_job` accepts a job already in
   `publishing`, so a retry does not need its own separate transition).
+
+## 14. Telegram approval front end (#65)
+
+- **Outbound only.** `lib/omes/py/content/telegram.py` never calls Telegram's
+  long-polling read endpoint and never receives inbound messages — Hermes owns
+  Telegram messaging (AGENTS.md section 2). Inbound chat commands are mapped to
+  `omes content <verb>` calls by a Hermes skill, documented (not executed) in
+  this repository at `skills/content/SKILL.md`.
+- **Token handling mirrors `telegram-allowlist.sh` exactly.** `TELEGRAM_BOT_TOKEN`
+  is read from `$HERMES_HOME/.env` in-process; the only place it ever appears is
+  inside a mode-`0600` temporary `curl -K` config file, created immediately
+  before the API call and deleted immediately after — never in argv, never in a
+  printed/logged URL, never in this module's return values (redacted
+  defensively, same `TOKEN|KEY|SECRET|PASSWORD|COOKIE` pattern as #68's audit
+  redaction).
+- **Preview content.** `omes content notify <job> --chat-id <id>` (or the
+  `OMES_CONTENT_TELEGRAM_CHAT_ID` default) sends the caption, planned target
+  platforms, and the artifact's immutable sha256 hash — built entirely from the
+  job record, never from `content/sessions/`. A small ffmpeg-generated
+  thumbnail is attached when `ffmpeg` is installed (`make_thumbnail()`);
+  otherwise the message is text-only. No cookie, token, or session path is ever
+  part of the preview.
+- **Approver authorization.** `approve`/`reject`/`edit --channel telegram`
+  require the acting Telegram user id to be in the intersection of
+  `OMES_CONTENT_APPROVERS` and Hermes's `TELEGRAM_ALLOWED_USERS` — see section 7
+  above. `--channel cli` (the MVP default) is never subject to this check.
+- **Hash and staleness.** `--expected-hash` on `approve` refuses a mismatch
+  against the job's current `source.sha256`; the underlying approval TTL
+  (`OMES_CONTENT_APPROVAL_TTL_SECONDS`, section 7) applies identically
+  regardless of channel — Telegram gets no separate, looser expiry rule.
+- **`omes content status <job> --telegram`** replies with the job's current
+  state, platform, resulting URL, and attempt count via `send_message` — never
+  raw JSON, never a `sessions/` path.
+
+## 15. Platform-aware caption/cover/policy validation (#69)
+
+`lib/omes/py/content/validation.py` + `lib/omes/py/content/platforms/<name>.json`.
+
+- **Ship policy: no fabricated numbers presented as fact.** Every profile field
+  is either a bare value (author-asserted) or `{"value": ..., "verified": bool,
+  "source"/"note": "..."}`. `generic.json` (the fallback for any platform with
+  no dedicated profile) marks every single field `"verified": false` on
+  purpose — it is a conservative placeholder, never a real platform's
+  documented limit. `youtube.json` (the one concrete profile shipped here) marks
+  its title/description length limits `"verified": true` with a citation
+  (`https://support.google.com/youtube/answer/57404`, fetched 2026-09-19);
+  every other field in it (hashtag count, cover formats/resolution, link count)
+  is explicitly `"verified": false` with a note explaining what was and was not
+  confirmed against an official page. A field with `"verified": false` can
+  never produce a blocking `error` — only a `warning` — precisely so an
+  unverified, possibly-wrong number can never silently block (or worse, falsely
+  legitimize) a real publish decision.
+- **Rules implemented:** caption length, title length (when a title is
+  tracked separately from the caption), hashtag count, link syntax (always
+  `error` regardless of verification — a malformed URL is a fact about the
+  caption, not a platform limit), link count, an opt-in HEAD-request
+  reachability check (`--check-links`, off by default; a failed reachability
+  probe is always a `warning`, never an `error`, since a transient network
+  issue on the validating host must not silently block a publish), cover
+  required/format, unsupported-claim detection (regex list per profile;
+  always `error`, since "AI-generated captions are suggestions until
+  approved; no unverified factual claim should be auto-published" is about
+  the caption's own content, not a platform fact), and missing required
+  disclosures (a `trigger_pattern`/`require_pattern` pair per profile entry —
+  e.g. a caption mentioning an affiliate code/discount link without a
+  `#ad`/"sponsored" disclosure).
+- **`omes content plan`** computes and displays this validation for every
+  currently-planned target platform (using whichever caption currently applies
+  to that platform — see below) without blocking `plan` itself; `plan` only
+  records intent, it never invokes a worker.
+- **`omes content publish <job> --platform <p>`** is where validation actually
+  gates a publish: a blocking (`error`-severity) issue moves the job
+  `approved`/`retryable-failure` → `publishing` → `manual-review` (the same
+  two-step pattern as a `prepare`-not-ready result, docs section 13) **before**
+  any worker subprocess is invoked, and — because each `publish` call is
+  scoped to exactly one `--platform` — this blocks only that one platform's
+  publish, never any other target on the same job (issue #69's acceptance
+  criterion). `--force-validation` is an explicit operator override that
+  proceeds despite blocking errors; `--cover PATH` and `--check-links` opt
+  into the cover and link-reachability rules.
+- **`source/` stays separate from `variants/<platform>/`, and edits never lose
+  the generated version.** `processing/<job-id>/source.<ext>` (the immutable,
+  hashed original) is never touched by validation or editing.
+  `omes content edit <job> --platform <p> --caption-file <f>` writes a new,
+  never-overwritten `processing/<job-id>/variants/<platform>/caption.v<n>`
+  (`jobs.save_caption_variant()`) — the job record's own `plan.caption` (the
+  original/generated draft) is left completely untouched by this call.
+  `jobs.resolve_caption_for_platform()` picks the latest `caption.v<n>` for a
+  platform if one exists, falling back to `plan.caption` otherwise; both
+  `plan`'s validation preview and `publish`'s actual validation/worker payload
+  use this resolution, so an operator's edited variant is what actually gets
+  validated and published, while the original generated caption remains
+  recoverable in the job record and in every earlier `caption.v<n>` file.
+- **Adding a platform's validation profile:** copy `generic.json`, replace each
+  field's value, and set `"verified": true` **only** after confirming it
+  against that platform's own current documentation — see `generic.json`'s own
+  top-level `"description"` field for this same instruction in-repo.

@@ -436,6 +436,56 @@ def edit_plan(
 
 
 # ---------------------------------------------------------------------------
+# Per-platform caption variants (issue #69) - kept out of the job record
+# schema entirely (no schema_version bump needed): a variant is just a
+# file under processing/<job>/variants/<platform>/caption.v<n>, never in
+# variants/<platform>/source.* - source stays untouched and immutable.
+# ---------------------------------------------------------------------------
+
+
+def _next_caption_variant_path(variants_dir: Path) -> Path:
+    n = 1
+    while (variants_dir / f"caption.v{n}").exists():
+        n += 1
+    return variants_dir / f"caption.v{n}"
+
+
+def save_caption_variant(job_id: str, platform: str, caption_text: str, root: Path | None = None) -> Path:
+    """Writes a new, never-overwritten `caption.v<n>` for `platform`
+    under this job's own `variants/<platform>/` directory (issue #69:
+    "allows operator edits without losing the generated version"). The
+    job record's own `plan.caption` (the original/generated draft) is
+    never modified by this call."""
+    variants_dir = paths.job_variants_dir(job_id, platform, root)
+    variants_dir.mkdir(parents=True, exist_ok=True)
+    variant_path = _next_caption_variant_path(variants_dir)
+    variant_path.write_text(caption_text, encoding="utf-8")
+    return variant_path
+
+
+def latest_caption_variant(job_id: str, platform: str, root: Path | None = None) -> Path | None:
+    variants_dir = paths.job_variants_dir(job_id, platform, root)
+    if not variants_dir.is_dir():
+        return None
+    candidates = sorted(
+        variants_dir.glob("caption.v*"),
+        key=lambda p: int(p.name.rsplit("v", 1)[1]) if p.name.rsplit("v", 1)[1].isdigit() else -1,
+    )
+    return candidates[-1] if candidates else None
+
+
+def resolve_caption_for_platform(record: dict[str, Any], platform: str, root: Path | None = None) -> tuple[str | None, str | None]:
+    """Returns (caption_text, source_description): the latest per-
+    platform caption variant if one exists, otherwise the job's generic
+    `plan.caption` untouched. `source_description` is `"variant:<path>"`
+    or `"plan.caption"`, purely informational."""
+    latest = latest_caption_variant(record["job_id"], platform, root)
+    if latest is not None:
+        return latest.read_text(encoding="utf-8"), f"variant:{latest}"
+    return record["plan"].get("caption"), "plan.caption"
+
+
+# ---------------------------------------------------------------------------
 # Publish / verify orchestration (issue #67; real workers land in #66)
 # ---------------------------------------------------------------------------
 
@@ -480,6 +530,7 @@ def publish_job(
     worker_version: str | None = None,
     allowed_paths: dict[str, str] | None = None,
     root: Path | None = None,
+    caption_override: str | None = None,
 ) -> dict[str, Any]:
     """Runs `worker_executable`'s `publish` operation for `record`,
     classifies the result, and applies the resulting transition. Refuses
@@ -516,7 +567,7 @@ def publish_job(
     payload = {
         "job_id": record["job_id"],
         "source_path": _absolute_source_path(record, root),
-        "caption": record["plan"].get("caption"),
+        "caption": caption_override if caption_override is not None else record["plan"].get("caption"),
         "targets": record["plan"].get("targets", []),
         "platform": record.get("platform"),
         "allowed_paths": allowed_paths or {},

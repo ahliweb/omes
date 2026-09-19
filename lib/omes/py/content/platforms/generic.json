@@ -1,0 +1,52 @@
+{
+  "platform": "generic",
+  "description": "Conservative, deliberately unverified defaults used when no platform-specific profile exists. Every numeric limit here is a made-up-safe placeholder, not a real platform's documented limit - lib/omes/py/content/validation.py treats every field lacking \"verified\": true as advisory (a warning, never a publish-blocking error) for exactly this reason. An operator adding a new platform should copy this file, then replace each field's value and set \"verified\": true only after confirming it against that platform's own current documentation - never carry this file's numbers forward as if they were verified.",
+  "caption": {
+    "max_length": {
+      "value": 2200,
+      "verified": false,
+      "note": "verify against the target platform's docs before enabling this as a hard block"
+    }
+  },
+  "hashtags": {
+    "max_count": {
+      "value": 10,
+      "verified": false,
+      "note": "verify against the target platform's docs"
+    }
+  },
+  "links": {
+    "max_count": {
+      "value": 5,
+      "verified": false,
+      "note": "verify against the target platform's docs"
+    }
+  },
+  "cover": {
+    "required": {
+      "value": false,
+      "verified": false
+    },
+    "formats": {
+      "value": ["jpg", "jpeg", "png"],
+      "verified": false,
+      "note": "verify against the target platform's docs"
+    }
+  },
+  "required_disclosures": [
+    {
+      "trigger_pattern": "\\b(use (my|this) (code|link)|affiliate link|discount code|promo code)\\b",
+      "require_pattern": "\\b(ad|sponsored|paid partnership)\\b|#ad\\b|#sponsored\\b",
+      "message": "caption mentions an affiliate/discount link or code but includes no sponsored/#ad disclosure - verify against the target platform's actual disclosure requirements"
+    }
+  ],
+  "unsupported_claim_patterns": [
+    "\\bguarantee(d|s)?\\b",
+    "\\bcure(s|d)?\\s+(for|of)\\b",
+    "\\b100%\\s*(effective|safe|guaranteed)\\b",
+    "\\brisk[- ]free\\b",
+    "\\bno\\s+side\\s+effects\\b",
+    "\\bmiracle\\s+(cure|treatment)\\b",
+    "\\bproven\\s+to\\s+(cure|treat|heal)\\b"
+  ]
+}
