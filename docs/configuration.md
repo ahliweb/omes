@@ -267,6 +267,24 @@ format, CLI reference, and lifecycle model.
 
 
 
+## 12b. `job` extension command (issue #90; `lib/omes/cmd/job.sh`, `lib/omes/py/jobs/`)
+
+The OMES-side control job runner used by a future Control Center (issue
+#89). Never referenced by any installer profile. See
+[docs/jobs.md](jobs.md) for the full design.
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_JOBS_TENANT_ID` | unset (default-deny) | Operator | The tenant this OMES instance is enrolled under. If unset, `omes job submit` refuses every request (no implicit tenant). If set, a request whose `tenant_id` does not match is rejected as cross-tenant and audited. Read by `lib/omes/py/jobs/store.py`. |
+| `OMES_JOBS_SERVER_ID` | unset (not checked) | Operator | If set, a request whose `target.server_id` does not match is rejected as cross-tenant and audited. |
+| `OMES_JOBS_AUTO_APPROVE` | `preflight,status,backup` | Operator | Comma-separated allowlist of operation names that `omes job run` may auto-approve from `queued` without an explicit `omes job approve`. A destructive operation (`restore`, `rollback`, `stop`, `configure`) is never auto-approvable regardless of this list. |
+| `OMES_JOBS_TTL_SECONDS` | `3600` | Operator | Age (from `created_at`) after which `omes job expire` moves a `queued`/`approved` job to `expired`. |
+| `OMES_JOBS_TIMEOUT_SECONDS` | `120` | Operator | Per-command timeout for both the operation's execution and its read-back verification. A timeout is never reported as success. |
+| `OMES_JOBS_TEST_MODE` | unset | Test-only | Must be `1` for `OMES_JOBS_TEST_ARGV_OVERRIDE` to have any effect; a stray override env var alone never redirects real execution. |
+| `OMES_JOBS_TEST_ARGV_OVERRIDE` | unset | Test-only | A JSON array replacing the argv `omes job run` would otherwise execute, used by `tests/py/jobs/test_runner.py` to exercise the timeout path deterministically. Never set in a production deployment. |
+
+
+
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
 <!-- OMES-MERMAID: docs/configuration.md -->

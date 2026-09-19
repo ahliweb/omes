@@ -153,6 +153,9 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 
 | T40 | A per-agent systemd deployment is applied with the wrong privilege scope (a `serviceMode: user` agent applied as root, or a `system` unit written by a non-root caller), or two agents collide on the same `HERMES_HOME`/unit name, mixing isolation boundaries | Elevation of Privilege, Information Disclosure | A1, A3, A4, A6 | M | H | `omes agent apply`/`rollback` refuse a privilege mismatch (exit 5, no mutation) before touching the filesystem; manifest name validation rejects path traversal/unsafe unit identifiers and a filename/`metadata.name` mismatch (duplicate-name protection); each agent gets its own `HERMES_HOME`, unit, and state file, never shared by default | implemented-in-OMES | #87 |
 
+| T40 | A crafted or unusually large captured command output makes the job runner's log-redaction step consume excessive CPU (regex backtracking denial of service) before a job's error/evidence is recorded | Denial of Service | A4, A7 | M | M | `lib/omes/py/jobs/audit.py`'s secret-redaction regex uses bounded (`{0,32}`) quantifiers instead of unbounded (`*`) ones on either side of the secret-keyword alternation, and `capped_redacted_tail()` truncates to 4096 characters BEFORE running the redaction regex, not after — bounding the regex's input size regardless of how large the captured output is (found and fixed during #90's own test suite, which took 4+ minutes before the fix and under a second after) | implemented-in-OMES | #90 |
+
+
 
 ## 6. Residual risk summary
 
