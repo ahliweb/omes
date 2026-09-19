@@ -2,8 +2,12 @@
 
 > Status: implemented. Covers `lib/omes/py/provenance/{record,audit}.py`,
 > the bash helper `provenance_record_component` and `omes audit
-> provenance` in `lib/omes/cmd/audit-provenance.sh`, and
-> `modules/hermes/module.sh`'s provenance recording at install.
+> provenance` in `lib/omes/cmd/audit-provenance.sh`,
+> `modules/hermes/module.sh`'s provenance recording at install (both for
+> the Hermes CLI itself and for uv-tool-/pipx-managed packages discovered
+> on the host), and `modules/apt-base`/`modules/containers`'s
+> package-manager provenance recording for every apt-managed package they
+> install, via `lib/omes/pkg.sh`'s `pkg_record_provenance`.
 >
 > **A provenance report is not a security certification.** It records
 > what OMES observed about how a component was installed and whether a
@@ -44,9 +48,12 @@ mode `0600`):
 `checksum.status` is one of: `verified` (a pin was supplied and
 matched), `pinned` (a pin exists but was not independently reverified in
 this record), `unverified` (no pin was supplied — the default when
-`OMES_HERMES_INSTALLER_SHA256` is unset), `unknown` (audit-time state,
-e.g. an unparseable record), or `locally-built` (no remote checksum
-concept applies, e.g. a component built from local source).
+`OMES_HERMES_INSTALLER_SHA256` is unset, and the default for a
+uv-tool-/pipx-managed package with no known index URL — see §1a below),
+`unknown` (audit-time state, e.g. an unparseable record),
+`locally-built` (no remote checksum concept applies, e.g. a component
+built from local source), or `package_manager_verified` (apt/dpkg
+verified the package's signature/hash itself at install time — see §1a).
 
 **This record never contains a credential, token, or `.env` content.**
 `provenance_record_component`/`record.py` only ever accept the fields
@@ -63,6 +70,67 @@ It honors `--dry-run` (skips the write, logs what would happen) and
 never fails the caller's `module_apply` — a recording failure is logged
 as a `WARN` and swallowed, since a provenance record is diagnostic, not
 a precondition for the install itself.
+
+## 1a. Package-manager provenance (apt, uv, pipx)
+
+Beyond the Hermes installer record above, every package-manager-managed
+component OMES installs also gets a provenance record, populating the
+schema's `package_manager` field: `{"name": "apt"|"uv"|"pipx",
+"package": "<name>", "version": "<resolved version>", "origin":
+"<url or null>"}`.
+
+**apt-managed packages (`modules/apt-base`, `modules/containers`).**
+After a successful `module_apply`, both modules call
+`lib/omes/pkg.sh`'s `pkg_record_provenance <pkg...>` for every package
+they manage (not just the ones that specific run happened to install),
+so the record always reflects the currently-resolved state:
+
+- `resolved_version` — `dpkg-query -W -f='${Version}' <pkg>`.
+- `installer_source_url` / `package_manager.origin` — the repository
+  origin URL from `apt-cache policy <pkg>` (the first source line under
+  "Version table:" for the current candidate).
+- `checksum.status` — `package_manager_verified`. apt/dpkg verifies each
+  package's signature and hash as part of `apt-get install` itself; OMES
+  did not additionally pin or re-verify a checksum, but this is
+  meaningfully different from `unverified` (see `omes audit provenance`
+  below — `package_manager_verified` does not produce a WARN).
+- Component name is the package name itself (e.g. `curl`, `docker-ce`),
+  so `<state-dir>/provenance/curl.json` etc. sit alongside `hermes.json`.
+
+A package that ends up not installed (e.g. `module_check` failed before
+`module_apply` ran) is skipped — `pkg_record_provenance` never writes a
+record for a package it cannot find via `dpkg-query`.
+
+**uv-tool-/pipx-managed packages (`modules/hermes`).** After a
+successful `module_apply`, the `hermes` module also discovers and
+records provenance for any package already managed by `uv tool` or
+`pipx` on the host — this is a general host-side discovery, not tied to
+Hermes installing anything itself; today it is mainly relevant to
+graphify (`uv tool install graphifyy` / `pipx install graphifyy`, see
+[docs/graphify.md](graphify.md)), once
+[#50](https://github.com/ahliweb/omes/issues/50) lands:
+
+- **uv**: `uv tool list` output is parsed for each top-level
+  `<name> <version>` line (indented entrypoint lines are ignored).
+- **pipx**: `pipx list --json` is parsed (stdlib `json`, per
+  [ADR-0012](adr/0012-python-stdlib-for-workflow-engines.md) — no `jq`
+  dependency) for each venv's `metadata.main_package`.
+- Component name is `uv:<package>` / `pipx:<package>` (e.g.
+  `uv:graphifyy`), so these never collide with an apt package or with
+  `hermes` itself.
+- **Neither `uv tool list` nor `pipx list` exposes an index/origin URL.**
+  `installer_source_url`/`package_manager.origin` are therefore always
+  empty for these components today, and `checksum.status` is
+  `unverified` — this is a documented current limitation, not a silent
+  downgrade: `omes audit provenance` surfaces it as a `WARN`
+  (`checksum_unverified`) and a missing-metadata `WARN`
+  (`installer_source_url` is a required field), exactly as it would for
+  any other unverified/incomplete record. If a future upstream `uv`/
+  `pipx` release exposes the configured package index URL, that value
+  should be threaded through here instead of leaving it empty.
+- Both are best-effort and silent when `uv`/`pipx`/`python3` are not on
+  PATH, or produce no parseable output — this is a discovery step, never
+  a precondition for `module_apply` succeeding.
 
 ## 2. `omes audit provenance [--profile <name>] [--json]`
 
@@ -128,11 +196,12 @@ finding, never silently.
 - It does not execute, sandbox-run, or statically analyze the content of
   any discovered file — only stat/hash.
 - It does not verify a package's contents against an upstream registry
-  (e.g. it does not re-download and re-hash an apt package or an npm
-  global); apt/uv/pipx/npm provenance recorded here is what the local
-  package manager itself reports (`dpkg-query`, `apt-cache policy`, `uv
-  tool list`, `pipx list`, npm global package **names only** — never
-  npm package contents).
+  (e.g. it does not re-download and re-hash an apt package); apt/uv/pipx
+  provenance recorded here (see §1a) is exactly what the local package
+  manager itself reports (`dpkg-query`, `apt-cache policy`, `uv tool
+  list`, `pipx list --json`) — never a re-verification against the
+  upstream registry. npm-managed component provenance is **not
+  implemented yet** (tracked in #84's remaining scope, if ever needed).
 - It is not a replacement for `scripts/check-supply-chain.sh` (CI-time
   checks) or `docs/security.md` §6's supply-chain rules — it is a
   runtime, host-side, diagnostic layer on top of them.

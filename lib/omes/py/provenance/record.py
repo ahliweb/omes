@@ -28,9 +28,9 @@ payload.json (all optional except where noted):
       "algorithm": "sha256",
       "expected": "<hex>"|null,
       "actual": "<hex>"|null,
-      "status": "verified"|"pinned"|"unverified"|"unknown"|"locally-built"
+      "status": "verified"|"pinned"|"unverified"|"unknown"|"locally-built"|"package_manager_verified"
     },
-    "package_manager": {"kind": "apt", "version": "...", "origin": "..."}
+    "package_manager": {"name": "apt"|"uv"|"pipx", "package": "...", "version": "...", "origin": "..."|null}
   }
 
 Exit codes: 0 on success, 1 on invalid input/usage.
@@ -49,7 +49,18 @@ import tempfile
 EXIT_OK = 0
 EXIT_ERROR = 1
 
-VALID_CHECKSUM_STATUSES = {"verified", "pinned", "unverified", "unknown", "locally-built"}
+VALID_CHECKSUM_STATUSES = {
+    "verified",
+    "pinned",
+    "unverified",
+    "unknown",
+    "locally-built",
+    # A package manager (apt/dpkg) verified the package's signature/hash
+    # itself at install time; OMES did not independently re-verify a
+    # pinned checksum, but this is not "unverified" either (issue #84's
+    # apt/uv/pipx package-manager provenance gap).
+    "package_manager_verified",
+}
 
 
 def _now() -> str:

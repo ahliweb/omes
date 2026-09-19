@@ -3,9 +3,10 @@
 # lib/omes/pkg.sh - apt package helpers, package-name mapping, repo validation.
 #
 # Meant to be sourced after lib/omes/core.sh, lib/omes/log.sh,
-# lib/omes/detect.sh, lib/omes/state.sh and lib/omes/module.sh (uses
-# state_get/state_set, detect_network, log_*, omes_run, omes_dry_run,
-# omes_manage_path, and the OMES_EX_* exit-code constants).
+# lib/omes/json.sh, lib/omes/detect.sh, lib/omes/state.sh and
+# lib/omes/module.sh (uses state_get/state_set, detect_network, log_*,
+# omes_run, omes_dry_run, omes_manage_path, json_obj/json_kv, and the
+# OMES_EX_* exit-code constants).
 #
 # ---------------------------------------------------------------------------
 # Return-code convention
@@ -32,6 +33,19 @@ if [[ -n "${OMES_PKG_SH_LOADED:-}" ]]; then
   return 0 2>/dev/null || exit 0
 fi
 OMES_PKG_SH_LOADED=1
+
+# pkg_provenance_payload/pkg_record_provenance (below) need json_obj/
+# json_kv (lib/omes/json.sh) and provenance_record_component
+# (lib/omes/cmd/audit-provenance.sh, itself only needing omes_dry_run/
+# log_*/omes_state_dir, already sourced by every caller of this file per
+# its own header above). Both are idempotent to source, so they are
+# pulled in here defensively - the same pattern lib/omes/versions.sh uses
+# for its own dependencies - rather than requiring every apt-installing
+# module to remember two extra `source` lines in the right order.
+# shellcheck source=./json.sh
+source "${OMES_ROOT}/lib/omes/json.sh"
+# shellcheck source=./cmd/audit-provenance.sh
+source "${OMES_ROOT}/lib/omes/cmd/audit-provenance.sh"
 
 # ---------------------------------------------------------------------------
 # Install-state queries (read-only, safe from module_check)
@@ -126,6 +140,88 @@ pkg_candidate_version() {
   out="$(apt-cache policy "$pkg" 2>/dev/null || true)"
   candidate="$(printf '%s\n' "$out" | awk -F': ' '/^[[:space:]]*Candidate:/ {print $2; exit}')"
   printf '%s\n' "${candidate:-}"
+}
+
+# ---------------------------------------------------------------------------
+# Package-manager provenance (issue #84)
+# ---------------------------------------------------------------------------
+
+# pkg_installed_version <pkg>
+# Prints the installed version of <pkg> per dpkg (`dpkg-query -W -f
+# '${Version}'`), or empty when not installed/unknown. Read-only.
+pkg_installed_version() {
+  local pkg="$1"
+  dpkg-query -W -f='${Version}' "$pkg" 2>/dev/null || true
+}
+
+# pkg_apt_origin <pkg>
+# Prints the apt repository origin URL for <pkg>'s currently configured
+# candidate (the first "<priority> <url> ..." line under `apt-cache
+# policy`'s "Version table:"), or empty when it cannot be determined.
+# Read-only - used to populate a package-manager provenance record's
+# installer_source_url/package_manager.origin (issue #84); this is NOT a
+# guarantee the candidate shown is what is actually installed.
+pkg_apt_origin() {
+  local pkg="$1"
+  local out
+  out="$(apt-cache policy "$pkg" 2>/dev/null || true)"
+  printf '%s\n' "$out" | awk '/^[[:space:]]+[0-9]+[[:space:]]+https?:\/\// {print $2; exit}'
+}
+
+# pkg_provenance_payload <pkg>
+# Builds the JSON payload provenance_record_component (see
+# lib/omes/cmd/audit-provenance.sh) expects for an apt-managed package:
+# resolved_version (dpkg), installer_source_url/package_manager.origin
+# (apt-cache policy), and checksum.status "package_manager_verified"
+# (apt/dpkg verifies package signatures itself; OMES did not
+# independently pin/re-verify a checksum here - see docs/provenance.md).
+# Requires lib/omes/json.sh to already be sourced (json_obj/json_kv).
+# Prints nothing (and returns 1) when <pkg> is not currently installed,
+# so a caller never records a provenance entry for a package that was
+# not actually installed.
+pkg_provenance_payload() {
+  local pkg="$1"
+  local version origin
+  version="$(pkg_installed_version "$pkg")"
+  if [[ -z "$version" ]]; then
+    return 1
+  fi
+  origin="$(pkg_apt_origin "$pkg")"
+
+  local pkgmgr_obj checksum_obj
+  pkgmgr_obj="$(json_obj \
+    "$(json_kv name apt)" \
+    "$(json_kv package "$pkg")" \
+    "$(json_kv version "$version")" \
+    "$(json_kv origin "$origin")")"
+  checksum_obj="$(json_obj \
+    "$(json_kv algorithm "")" \
+    "$(json_kv expected "")" \
+    "$(json_kv actual "")" \
+    "$(json_kv status package_manager_verified)")"
+
+  json_obj \
+    "$(json_kv installer_source_url "$origin")" \
+    "$(json_kv resolved_version "$version")" \
+    "$(json_kv install_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
+    "$(json_kv checksum "$checksum_obj" --raw)" \
+    "$(json_kv package_manager "$pkgmgr_obj" --raw)"
+}
+
+# pkg_record_provenance <pkg...>
+# Calls provenance_record_component (lib/omes/cmd/audit-provenance.sh -
+# the caller must have sourced that file) for each installed <pkg>,
+# using pkg_provenance_payload. Best-effort and silent about packages
+# that turn out not to be installed (pkg_provenance_payload's own
+# contract); never fails the caller's module_apply, matching
+# provenance_record_component's own never-fail contract. Honors
+# OMES_DRY_RUN via provenance_record_component itself.
+pkg_record_provenance() {
+  local pkg payload
+  for pkg in "$@"; do
+    payload="$(pkg_provenance_payload "$pkg")" || continue
+    provenance_record_component "$pkg" "${OMES_PROFILE:-}" "$payload"
+  done
 }
 
 # pkg_exists_in_repos <pkg>

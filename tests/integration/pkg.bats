@@ -62,3 +62,45 @@ teardown() {
   run grep -q '^module.apt-base.installed_packages=' "${OMES_STATE_DIR}/state"
   [ "$status" -eq 0 ]
 }
+
+@test "install records apt package-manager provenance (issue #84) for every apt-base package" {
+  export SHIM_DPKG_VERSION="8.5.0-2ubuntu10.6"
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
+  [ "$status" -eq 0 ]
+
+  local target="${OMES_STATE_DIR}/provenance/curl.json"
+  [ -f "$target" ]
+
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["component"] == "curl"
+assert d["resolved_version"] == "8.5.0-2ubuntu10.6"
+assert d["checksum"]["status"] == "package_manager_verified"
+pm = d["package_manager"]
+assert pm["name"] == "apt"
+assert pm["package"] == "curl"
+assert pm["version"] == "8.5.0-2ubuntu10.6"
+assert pm["origin"]
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes audit provenance --json reports apt-recorded packages as ok (package_manager_verified is not a WARN)" {
+  export SHIM_DPKG_VERSION="8.5.0-2ubuntu10.6"
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
+  [ "$status" -eq 0 ]
+
+  OMES_TEST=1 omes_run_stdout_only "$OMES_BIN" audit provenance --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+curl = next(c for c in d["components"] if c["component"] == "curl")
+assert curl["checksum_status"] == "package_manager_verified"
+assert not any(f["component"] == "curl" and f["kind"] == "checksum_unverified" for f in d["findings"])
+'
+  [ "$status" -eq 0 ]
+}

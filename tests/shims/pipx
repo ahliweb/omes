@@ -22,7 +22,12 @@ case "${1:-}" in
     printf '%s\n' "${SHIM_PIPX_VERSION:-1.4.3}"
     ;;
   list)
-    printf '%s\n' "${SHIM_PIPX_LIST_JSON:-{\"venvs\":{}}}"
+    # Not inlined into the ${VAR:-default} expansion below: a default
+    # value containing unbalanced literal braces (as this JSON does)
+    # confuses bash's brace-matching for the expansion's own closing
+    # brace, silently appending stray characters to the output.
+    default_list_json='{"venvs":{}}'
+    printf '%s\n' "${SHIM_PIPX_LIST_JSON:-$default_list_json}"
     ;;
 esac
 

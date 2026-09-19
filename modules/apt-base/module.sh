@@ -77,6 +77,15 @@ module_apply() {
   pkg_apt_update || return $?
   pkg_install "${missing[@]}" || return $?
 
+  # Package-manager provenance (issue #84): record a provenance entry for
+  # every managed package that ended up installed (not just the ones this
+  # call happened to install), so `omes audit provenance` always reflects
+  # the currently-resolved dpkg version and apt origin. Best-effort, never
+  # fails module_apply - see lib/omes/pkg.sh's pkg_record_provenance.
+  if ! omes_dry_run; then
+    pkg_record_provenance "${APT_BASE_PACKAGES[@]}"
+  fi
+
   return 0
 }
 

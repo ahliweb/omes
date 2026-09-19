@@ -28,6 +28,8 @@ source "${OMES_ROOT}/lib/omes/module.sh"
 source "${OMES_ROOT}/lib/omes/pkg.sh"
 # shellcheck source=lib/omes/restore.sh
 source "${OMES_ROOT}/lib/omes/restore.sh"
+# shellcheck source=lib/omes/versions.sh
+source "${OMES_ROOT}/lib/omes/versions.sh"
 
 omes_install_err_trap
 
@@ -499,6 +501,27 @@ _omes_last_log_path() {
   return 0
 }
 
+# _omes_status_evidence_json
+# Prints the runtime version/compatibility evidence report (issue #83) for
+# `cmd_status` to embed as the JSON object's "evidence" key: the exact same
+# shape `omes health versions --json` emits (see lib/omes/versions.sh,
+# lib/omes/py/provenance/versions.py). Never fails `omes status`: when
+# python3 is unavailable or the collector errors, prints a small
+# `{"ok":false,"error":"..."}` object instead so the surrounding JSON
+# remains a single valid object either way.
+_omes_status_evidence_json() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf '{"ok":false,"error":"evidence collection unavailable: python3 not found"}'
+    return 0
+  fi
+  local out
+  if out="$(versions_collect_json 2>/dev/null)" && [[ -n "$out" ]]; then
+    printf '%s' "$out"
+  else
+    printf '{"ok":false,"error":"evidence collection failed"}'
+  fi
+}
+
 cmd_status() {
   detect_os || true
   detect_arch || true
@@ -515,6 +538,9 @@ cmd_status() {
 
   local last_log
   last_log="$(_omes_last_log_path)"
+
+  local evidence_json
+  evidence_json="$(_omes_status_evidence_json)"
 
   if [[ "$OMES_JSON" == "1" ]]; then
     local -a mod_objs=()
@@ -534,6 +560,7 @@ cmd_status() {
       "$(json_kv modules "$(json_array "${mod_objs[@]}")" --raw)" \
       "$(json_kv backup_count "${#backups[@]}" --raw)" \
       "$(json_kv last_log "$last_log")" \
+      "$(json_kv evidence "$evidence_json" --raw)" \
       "$(json_kv exit_code 0 --raw)"
     printf '\n'
   else
@@ -555,6 +582,11 @@ cmd_status() {
     fi
     printf '[omes] backups: %d session(s)\n' "${#backups[@]}"
     printf '[omes] last log: %s\n' "${last_log:-none}"
+    if command -v python3 >/dev/null 2>&1; then
+      versions_print_human_summary "$evidence_json" "status evidence"
+    else
+      printf '[omes] status evidence: unavailable (python3 not found)\n'
+    fi
   fi
 
   exit "$OMES_EX_OK"

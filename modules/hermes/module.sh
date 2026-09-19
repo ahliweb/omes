@@ -164,6 +164,117 @@ _hermes_record_provenance() {
   provenance_record_component "hermes" "${OMES_PROFILE:-}" "$payload"
 }
 
+# _hermes_record_pkgmgr_provenance <kind> <package> <version> <origin>
+# Records a package-manager provenance entry for a uv-tool- or
+# pipx-managed package discovered on this host (issue #84's
+# uv/pipx-managed-installs gap). <origin> is the package index URL when
+# determinable (neither `uv tool list` nor `pipx list` currently expose
+# one; this is a documented current limitation - see docs/provenance.md),
+# else empty, in which case checksum.status is "unverified" rather than
+# a guessed verified state. Component name is "<kind>:<package>" so
+# `omes audit provenance` lists each discovered tool separately from
+# "hermes" itself. Best-effort via provenance_record_component's own
+# never-fail contract.
+_hermes_record_pkgmgr_provenance() {
+  local kind="$1" package="$2" version="$3" origin="$4"
+
+  local pkgmgr_obj checksum_obj payload
+  pkgmgr_obj="$(json_obj \
+    "$(json_kv name "$kind")" \
+    "$(json_kv package "$package")" \
+    "$(json_kv version "$version")" \
+    "$(json_kv origin "$origin")")"
+  checksum_obj="$(json_obj \
+    "$(json_kv algorithm "")" \
+    "$(json_kv expected "")" \
+    "$(json_kv actual "")" \
+    "$(json_kv status unverified)")"
+  payload="$(json_obj \
+    "$(json_kv installer_source_url "$origin")" \
+    "$(json_kv resolved_version "$version")" \
+    "$(json_kv install_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
+    "$(json_kv checksum "$checksum_obj" --raw)" \
+    "$(json_kv package_manager "$pkgmgr_obj" --raw)")"
+
+  provenance_record_component "${kind}:${package}" "${OMES_PROFILE:-}" "$payload"
+}
+
+# _hermes_record_uv_provenance
+# Parses `uv tool list` (one top-level "<name> <version>" line per
+# installed tool, followed by indented entrypoint lines OMES ignores) and
+# records a provenance entry per tool. No-op when uv is not on PATH.
+# Read-only besides the provenance write itself.
+_hermes_record_uv_provenance() {
+  command -v uv >/dev/null 2>&1 || return 0
+
+  local out
+  out="$(uv tool list 2>/dev/null || true)"
+  [[ -z "$out" ]] && return 0
+
+  local line name version
+  while IFS= read -r line; do
+    [[ "$line" =~ ^[[:space:]] ]] && continue
+    [[ -z "$line" ]] && continue
+    name="${line%% *}"
+    version="${line#* }"
+    version="${version%% *}"
+    [[ -z "$name" ]] && continue
+    _hermes_record_pkgmgr_provenance "uv" "$name" "$version" ""
+  done <<< "$out"
+}
+
+# _hermes_record_pipx_provenance
+# Parses `pipx list --json` (stdlib python3, per ADR-0012 - no jq
+# dependency) and records a provenance entry per installed venv's main
+# package. No-op when pipx is not on PATH or python3 is unavailable.
+# Read-only besides the provenance write itself.
+_hermes_record_pipx_provenance() {
+  command -v pipx >/dev/null 2>&1 || return 0
+  command -v python3 >/dev/null 2>&1 || return 0
+
+  local out
+  out="$(pipx list --json 2>/dev/null || true)"
+  [[ -z "$out" ]] && return 0
+
+  local parsed
+  parsed="$(OMES_PIPX_JSON="$out" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_PIPX_JSON"])
+except ValueError:
+    raise SystemExit(0)
+
+for name, venv in (d.get("venvs") or {}).items():
+    pkg = ((venv.get("metadata") or {}).get("main_package") or {})
+    package = pkg.get("package") or name
+    version = pkg.get("package_version") or ""
+    print(f"{package}\t{version}")
+' 2>/dev/null || true)"
+  [[ -z "$parsed" ]] && return 0
+
+  local package version
+  while IFS=$'\t' read -r package version; do
+    [[ -z "$package" ]] && continue
+    _hermes_record_pkgmgr_provenance "pipx" "$package" "$version" ""
+  done <<< "$parsed"
+}
+
+# _hermes_record_package_manager_provenance
+# Records package-manager provenance (issue #84) for any uv-tool- or
+# pipx-managed package already present on this host, e.g. graphify once
+# #50 lands (docs/graphify.md - uv tool/pipx is graphify's own installer,
+# never system pip). Called from module_apply, after the Hermes
+# install/evidence steps, so this snapshot always reflects what is
+# currently discoverable rather than only what THIS apply call installed.
+# Honors dry-run (module_apply's own dry-run branches already return
+# before install steps run; this is a read-only discovery either way).
+_hermes_record_package_manager_provenance() {
+  _hermes_record_uv_provenance
+  _hermes_record_pipx_provenance
+}
+
 # _hermes_ensure_path_snippet
 # Creates/refreshes the OMES-managed PATH snippet and sources it from
 # ~/.bashrc and ~/.profile if not already wired in (idempotent: a rc file
@@ -358,6 +469,7 @@ module_apply() {
   if ! omes_dry_run; then
     state_set "module.hermes.home" "$home"
     _hermes_record_evidence
+    _hermes_record_package_manager_provenance
   fi
 
   return 0

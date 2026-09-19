@@ -1,9 +1,10 @@
 # Compatibility evidence (issue #83)
 
 > Status: implemented. Covers `lib/omes/versions.sh`,
-> `lib/omes/py/provenance/versions.py`, `omes health versions`, and the
+> `lib/omes/py/provenance/versions.py`, `omes health versions`, the
 > `evidence.*` state keys `modules/hermes/module.sh` writes at apply and
-> on `omes doctor`.
+> on `omes doctor`, and the `evidence` object `omes status`/`omes status
+> --json` embeds (see §7 below).
 >
 > **Evidence is not a guarantee.** This document records what OMES
 > *observed* about the host and Hermes deployment at a point in time, by
@@ -112,3 +113,28 @@ exit code (this command reports evidence, it does not gate anything).
   provenance` (issue #84).
 - `docs/cli.md` §4.12 — `omes health versions` usage.
 - `docs/configuration.md` — environment variables consulted.
+
+## 7. `omes status`/`omes status --json` (issue #83)
+
+`omes status` embeds this same evidence report as its `evidence` key
+(`bin/omes`'s `cmd_status`, via `lib/omes/versions.sh`'s
+`versions_collect_json`) — the acceptance criterion "exposes stable
+human and JSON output through `omes status`/`omes doctor`" is satisfied
+by this plus `omes doctor`'s existing `module_doctor` hook (§1 above).
+
+- **`--json`**: `evidence` is exactly the object `omes health versions
+  --json` prints (`ok`, `generated_at`, `components`, `warnings`) —
+  `omes status`'s own JSON stays a single object either way. If the
+  collector cannot run at all (`python3` missing, or an internal
+  collector error), `evidence` is instead `{"ok": false, "error":
+  "..."}`, and `omes status`'s own `ok`/`exit_code` are unaffected —
+  `omes status` never fails because evidence collection failed.
+- **Human mode**: a `status evidence:` summary line, followed by each
+  component's value (or `null (<reason>)`) and any warnings, using the
+  same formatting `omes health versions` uses (shared via
+  `lib/omes/versions.sh`'s `versions_print_human_summary`, so the two
+  human summaries cannot drift apart).
+- This is the same read-only, argv-safe, timeout-bounded collection
+  described in §1-§5 above; `omes status` does not add, remove, or
+  weaken any component or redaction rule — it only changes where the
+  report is exposed.

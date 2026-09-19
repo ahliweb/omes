@@ -128,7 +128,7 @@ def evaluate_record(component: str, data: Optional[dict], load_error: Optional[s
                 "detail": f"recorded checksum mismatch (expected {expected}, actual {actual}) - fail closed",
             }
         )
-    elif status not in ("verified", "pinned", "locally-built"):
+    elif status not in ("verified", "pinned", "locally-built", "package_manager_verified"):
         findings.append(
             {
                 "component": component,
@@ -212,6 +212,7 @@ def audit(state_dir: str, profile: Optional[str], hermes_home: Optional[str]) ->
                 "resolved_version": data.get("resolved_version"),
                 "checksum_status": (data.get("checksum") or {}).get("status"),
                 "installer_source_url": data.get("installer_source_url"),
+                "package_manager": data.get("package_manager"),
             }
         )
         findings.extend(evaluate_record(component, rec["data"], rec["error"]))
