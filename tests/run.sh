@@ -142,6 +142,23 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Control Center contract fixtures (issue #89)
+# ---------------------------------------------------------------------------
+
+if [[ -d contracts ]]; then
+  log "running python3 scripts/check-contracts.py"
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 scripts/check-contracts.py; then
+      err "scripts/check-contracts.py failed"
+      FAILED=1
+    fi
+  else
+    err "python3 not available; cannot run scripts/check-contracts.py"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # bash -n on every shell script (fast syntax sanity check)
 # ---------------------------------------------------------------------------
 
