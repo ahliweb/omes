@@ -179,7 +179,7 @@ These gates map directly to the QA/security issues that produce the evidence:
 
 ## 8. Control Center and provider integration security
 
-The web Control Center and provider adapters are **not implemented in the current CLI branch**. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are implemented, the following are release requirements:
+The web Control Center and provider adapters are **not implemented in the current CLI branch**. The OMES-side control job runner (`omes job`, issue [#90](https://github.com/ahliweb/omes/issues/90), `lib/omes/py/jobs/`) IS implemented and already enforces several of the bullets below locally — see [docs/jobs.md](jobs.md) for what it does today. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are fully implemented (including the Control Center itself and a transport), the following are release requirements:
 
 - AWCMS is a companion control plane; it must not expose arbitrary shell or replace Hermes.
 - Every host/provider mutation uses an allowlisted, idempotent, audited job with tenant, actor, target, correlation ID, and reconciliation evidence.
@@ -192,6 +192,19 @@ The web Control Center and provider adapters are **not implemented in the curren
 - Existing panels such as Herman may inform UX, but their local single-user security model is not an OMES control. Any web-panel feature must pass the fit matrix, tenant/job/audit requirements, and provenance rules in `docs/web-panel-reference-evaluation.md` and ADR-0012.
 
 See [docs/control-center-and-integrations.md](control-center-and-integrations.md), [docs/web-panel-reference-evaluation.md](web-panel-reference-evaluation.md), and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md) for the normative boundary.
+
+### 8.1 `omes job` controls implemented today (issue #90)
+
+| Control | Implemented in |
+|---|---|
+| Allowlisted operations only; no free-form command field | `contracts/control-center/v1/deployment.request.schema.json` (#89), enforced by `lib/omes/py/jobs/cli.py`'s `cmd_submit` before a job record is even created |
+| Idempotent submission; a replay never re-executes | `lib/omes/py/jobs/store.py`'s `submit()`, `idempotency.json` index |
+| Destructive operations (`restore`, `rollback`, `stop`, `configure`) require explicit approval | `lib/omes/py/jobs/store.py`'s `is_destructive()`/`can_auto_approve()`, enforced in `runner.run()` |
+| Cross-tenant/cross-target rejection, audited | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks |
+| Append-only, hash-chained audit log | `lib/omes/py/jobs/audit.py` (`append()`/`verify_chain()`) |
+| Redacted logs and capped command-output tails, with a bounded-backtracking redaction regex (fixed during #90's own test suite — see docs/threat-model.md T40) | `lib/omes/py/jobs/audit.py`'s `redact_structure()`/`capped_redacted_tail()` |
+| Read-back verification; a timeout is never reported as success | `lib/omes/py/jobs/runner.py`'s `_compare_desired_observed()` |
+| No arbitrary shell: operation → command mapping is a fixed Python literal, unimplemented operations fail typed rather than falling back to a shell | `lib/omes/py/jobs/runner.py`'s `build_argv()` |
 
 ## 9. What OMES does NOT claim
 

@@ -711,6 +711,18 @@ isolated systemd service, from a versioned JSON manifest at
 lifecycle states, isolation model, and secret handling:
 [docs/agent-deployment.md](agent-deployment.md).
 
+## 4.14 `omes job` (Control Center control jobs)
+
+> Status: implemented (#90). `lib/omes/cmd/job.sh` (a thin wrapper, per
+> the extension-command contract in section 4.12) and
+> `lib/omes/py/jobs/` (stdlib-only Python, ADR-0012). Never referenced by
+> any installer profile. See [docs/jobs.md](jobs.md) for the full design
+> (state machine, approval policy, operation→command table, retry and
+> reconciliation semantics) and
+> [docs/control-center-contracts.md](control-center-contracts.md) (#89)
+> for the wire contract a submitted request must satisfy.
+
+
 **Synopsis:**
 
 ```bash
@@ -736,6 +748,40 @@ planned unit name, `HERMES_HOME`, secret **reference names** (never
 values), and resource limits, mutating nothing. `rollback` removes only
 the OMES-managed unit and drop-in recorded in the agent's own state -
 never Hermes's own data under `HERMES_HOME`.
+
+omes job submit --file <deployment-request.json> [--json]
+omes job approve <job-id> --actor <id> [--json]
+omes job run <job-id> [--actor <id>] [--json]
+omes job status <job-id> [--json]
+omes job list [--state STATE] [--json]
+omes job cancel <job-id> --actor <id> [--json]
+omes job expire [--json]
+
+- `submit` validates `<file>` against
+  `contracts/control-center/v1/deployment.request.schema.json` (rejecting,
+  among other things, any free-form `command` field or unlisted
+  `operation`) and creates (or, for a repeated `idempotency_key`,
+  replays) a job in `queued`.
+- `approve` moves a `queued` job to `approved`. Required before `run` for
+  a destructive operation (`restore`, `rollback`, `stop`, `configure`)
+  unless its operation name is in `OMES_JOBS_AUTO_APPROVE`.
+- `run` executes the job by mapping its operation to a fixed `bin/omes`
+  argv (never a shell, never a field from the request), then re-runs the
+  corresponding read-back command and compares desired vs. observed state
+  before reporting `succeeded`/`rolled_back`. A non-destructive job in
+  `queued` is auto-approved as part of `run` when its operation is in
+  `OMES_JOBS_AUTO_APPROVE`.
+- `status`/`list` are read-only.
+- `cancel` moves a `queued`/`approved` job to `cancelled` (not `running`
+  — see docs/jobs.md's state machine for why).
+- `expire` moves every `queued`/`approved` job older than
+  `OMES_JOBS_TTL_SECONDS` to `expired`.
+
+**Exit codes:** 0 (success; for `run`, only when the job reached
+`succeeded`/`rolled_back`), 1 (error — schema validation failure,
+cross-tenant rejection, missing approval, invalid state transition,
+exhausted retries, job failed), 2 (usage error).
+
 
 
 ## 5. Worked examples
