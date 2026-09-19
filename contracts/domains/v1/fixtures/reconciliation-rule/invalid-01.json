@@ -1,0 +1,10 @@
+{
+  "rule_id": "rule-invoice-vs-registrar",
+  "state_domain": "invoice",
+  "authoritative_source": "registrar",
+  "reconciled_with": [
+    "billing"
+  ],
+  "last_reconciled_at": "2026-09-19T02:10:00Z",
+  "drift_detected": false
+}

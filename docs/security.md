@@ -263,6 +263,16 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | The minimum GitHub App permission set OMES requests is named and reviewable, with excluded permissions and their rationale recorded alongside it | `lib/omes/py/domains/profiles/github.py`'s `MINIMUM_PERMISSIONS`/`EXCLUDED_PERMISSIONS_RATIONALE` |
 
 
+### 8.6 Domain billing/reconciliation controls implemented today (issue #102)
+
+| Control | Implemented in |
+|---|---|
+| Every checkout snapshot requires payment (and, where configured, approval) before a registration/renewal job may proceed; the gate raises rather than silently allowing an unconfirmed billable operation | `lib/omes/py/domains/billing.py`'s `create_checkout_snapshot()`/`assert_registration_allowed()` |
+| A replayed idempotency key from ANY event source (payment provider, registrar, DNS, GitHub) is recognized as a duplicate of the first-seen event, never a new domain order/invoice/renewal | `lib/omes/py/domains/billing.py`'s `DedupeIndex` (see docs/threat-model.md T45) |
+| A domain order that has reached `succeeded`/`active`/`renewal_due` at the provider is never refundable through this ledger | `lib/omes/py/domains/billing.py`'s `refund_eligibility()` |
+| Registrar, invoice, entitlement, and DNS state are named as distinct state domains; a reconciliation rule cannot claim a state domain is reconciled against itself | `lib/omes/py/domains/billing.py`'s `build_reconciliation_rule()` |
+
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/checkout-snapshot.schema.json",
+  "title": "checkout-snapshot",
+  "type": "object",
+  "required": [
+    "checkout_id",
+    "tenant_id",
+    "correlation_id",
+    "product_id",
+    "price_snapshot_id",
+    "payment_required",
+    "approval_required",
+    "captured_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "checkout_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "product_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "price_snapshot_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "payment_required": {
+      "type": "boolean",
+      "const": true
+    },
+    "approval_required": {
+      "type": "boolean"
+    },
+    "captured_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

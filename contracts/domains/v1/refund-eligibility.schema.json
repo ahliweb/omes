@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/refund-eligibility.schema.json",
+  "title": "refund-eligibility",
+  "type": "object",
+  "required": [
+    "order_id",
+    "operation",
+    "order_state",
+    "refundable",
+    "reason"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "registration",
+        "renewal",
+        "transfer"
+      ]
+    },
+    "order_state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "action_required",
+        "failed",
+        "succeeded",
+        "active",
+        "expired",
+        "renewal_due",
+        "cancelled"
+      ]
+    },
+    "refundable": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/renewal-reminder.schema.json",
+  "title": "renewal-reminder",
+  "type": "object",
+  "required": [
+    "reminder_id",
+    "tenant_id",
+    "domain",
+    "order_id",
+    "schedule",
+    "scheduled_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "reminder_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.-]{1,253}$"
+    },
+    "order_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "schedule": {
+      "type": "string",
+      "enum": [
+        "day_90",
+        "day_30",
+        "day_7",
+        "payment_failure",
+        "action_required",
+        "manual_fallback"
+      ]
+    },
+    "scheduled_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "sent_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

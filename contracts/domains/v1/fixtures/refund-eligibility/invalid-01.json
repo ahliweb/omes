@@ -1,0 +1,7 @@
+{
+  "order_id": "order-0001",
+  "operation": "registration",
+  "order_state": "purchased",
+  "refundable": true,
+  "reason": "x"
+}
