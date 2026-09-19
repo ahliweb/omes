@@ -424,7 +424,11 @@ built-in commands.
 > front end (`lib/omes/py/content/telegram.py`); inbound chat commands are
 > mapped to these CLI verbs by a Hermes skill documented at
 > `skills/content/SKILL.md`, never received by OMES directly. Platform-aware
-> caption/cover validation lands with #69. See
+> caption/cover/policy validation implemented (#69):
+> `lib/omes/py/content/validation.py` + `lib/omes/py/content/platforms/
+> {generic,youtube}.json`; `publish` validates before invoking a worker and
+> blocks only that one platform on a blocking issue (see
+> [docs/content-distribution.md](content-distribution.md) section 15). See
 > [docs/content-distribution.md](content-distribution.md) for the full
 > design (job schema, state machine, worker contract, security
 > boundaries) and [ADR-0015](adr/0015-content-distribution-workflow.md)
@@ -452,10 +456,11 @@ omes content report <job-id> [--md|--json]
 omes content export --since YYYY-MM-DD --out DIR [--json]
 omes content prune --older-than DAYS [--dry-run] [--yes] [--json]
 omes content plan <job-id> [--actor ID] [--caption TEXT] [--target PLATFORM]... [--json]
-omes content publish <job-id> --platform NAME [--worker-executable PATH] [--worker-version V] [--json]
+omes content publish <job-id> --platform NAME [--worker-executable PATH] [--worker-version V] [--cover PATH] [--check-links] [--force-validation] [--json]
 omes content session login <platform> --actor ID [--json]
 omes content session revoke <platform> --actor ID [--yes] [--json]
 omes content edit <job-id> --actor ID [--caption TEXT] [--target PLATFORM]... [--channel cli|telegram] [--json]
+omes content edit <job-id> --actor ID --platform NAME --caption-file FILE [--json]
 omes content notify <job-id> [--chat-id ID] [--json]
 omes content status <job-id> [--telegram] [--chat-id ID] [--json]
 ```
@@ -490,10 +495,14 @@ omes content status <job-id> [--telegram] [--chat-id ID] [--json]
   against the artifact changing between a Telegram preview and the tap
   that approves it). `reject` moves the job to `cancelled`.
 - `edit <job-id>` updates `--caption`/`--target` while the job is
-  `approval-required` (issue #65; #69 adds versioned per-platform caption
-  files). It never changes the job's state — a fresh `approve` is still
-  required afterwards. Accepts the same `--channel telegram` gate as
-  `approve`/`reject`.
+  `approval-required` (issue #65). It never changes the job's state — a fresh
+  `approve` is still required afterwards. Accepts the same `--channel telegram`
+  gate as `approve`/`reject`. **With `--platform NAME --caption-file FILE`**
+  (issue #69) it instead saves a new, never-overwritten
+  `processing/<job-id>/variants/<platform>/caption.v<n>` — the job's generic
+  `plan.caption` (the original/generated draft) is left untouched, and
+  `publish`/`plan`'s validation preview both use the latest variant for that
+  platform if one exists (docs/content-distribution.md section 15).
 - `notify <job-id>` sends the Telegram approval-request preview (caption,
   target platforms, artifact sha256, and an ffmpeg-generated thumbnail
   when available) to `--chat-id` or `OMES_CONTENT_TELEGRAM_CHAT_ID`. Never
@@ -555,10 +564,23 @@ omes content status <job-id> [--telegram] [--chat-id ID] [--json]
   `--target <platform>` values, then moves the job `queued` →
   `planning` → `approval-required` (`jobs.plan_job`). `--target` is
   advisory at plan time; `publish` refuses a platform that is not one of
-  the recorded targets (unless no targets were recorded at all).
-- `publish <job-id> --platform NAME` (issue #66) is the manager side of
-  the worker contract in `docs/content-distribution.md` section 6/13: it
-  resolves `NAME` to a worker executable via
+  the recorded targets (unless no targets were recorded at all). The
+  output also includes a `validation` object (issue #69): for every
+  planned target, the caption/cover validation issues that would apply if
+  `publish` ran right now (using whichever caption currently applies to
+  that platform — see `edit --platform` below). This is a preview only —
+  `plan` itself is never blocked by a validation issue, only `publish` is.
+- `publish <job-id> --platform NAME` (issues #66/#69) is the manager side of
+  the worker contract in `docs/content-distribution.md` section 6/13. **First**
+  it resolves the caption that currently applies to `NAME` (the latest
+  `edit --platform --caption-file` variant, or the generic `plan.caption` —
+  `jobs.resolve_caption_for_platform()`) and validates it against
+  `lib/omes/py/content/platforms/<NAME>.json` (`--cover PATH` and
+  `--check-links` opt into the cover and link-reachability rules). A
+  blocking (`error`-severity) issue moves the job straight to
+  `manual-review` **without invoking any worker**, blocking only this one
+  `--platform`'s publish; `--force-validation` overrides this. If validation
+  passes (or is overridden), it resolves `NAME` to a worker executable via
   `lib/omes/py/content/workers/registry.py` (or uses
   `--worker-executable PATH` directly, mainly for tests), builds the
   explicit filesystem allowlist (`processing_dir`/`session_dir`/

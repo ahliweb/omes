@@ -112,6 +112,14 @@ def job_evidence_dir(job_id: str, root: Path | None = None) -> Path:
     return reports_dir(root) / job_id / "evidence"
 
 
+def job_variants_dir(job_id: str, platform: str, root: Path | None = None) -> Path:
+    """Per-platform generated/edited caption variants (issue #69),
+    deliberately kept separate from `job_processing_dir()`'s immutable
+    `source.<ext>` - editing a platform's caption must never touch, move,
+    or re-hash the original source file."""
+    return job_processing_dir(job_id, root) / "variants" / platform
+
+
 def ensure_layout(root: Path | None = None) -> Path:
     """Create the full directory layout under `root` (default
     content_root()). sessions/ and state/ are created 0700; everything else

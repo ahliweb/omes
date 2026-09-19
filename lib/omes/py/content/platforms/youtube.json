@@ -1,0 +1,63 @@
+{
+  "platform": "youtube",
+  "description": "The one concrete platform profile shipped in this repository (issue #69). Fields marked \"verified\": true were fetched directly from the cited official Google Support page on 2026-09-19 - see each field's \"source\". Fields marked \"verified\": false are third-party-reported or estimated values that were NOT found on an official Google page as of that date; lib/omes/py/content/validation.py treats them as advisory (warnings, never publish-blocking errors) for exactly that reason. Re-verify all of this against https://support.google.com/youtube before relying on it for a real publish, since platform limits change without notice.",
+  "caption": {
+    "title_max_length": {
+      "value": 100,
+      "verified": true,
+      "source": "https://support.google.com/youtube/answer/57404 (fetched 2026-09-19): \"Video titles have a character limit of 100 characters and cannot include invalid characters.\""
+    },
+    "description_max_length": {
+      "value": 5000,
+      "verified": true,
+      "source": "https://support.google.com/youtube/answer/57404 (fetched 2026-09-19): \"Video descriptions have a character limit of 5,000 characters and cannot include invalid characters.\""
+    }
+  },
+  "hashtags": {
+    "max_count": {
+      "value": 15,
+      "verified": false,
+      "note": "Widely reported by third-party SEO sites (e.g. more than 15 hashtags across title+description are reportedly all ignored by YouTube) as of 2026-09-19, but not confirmed on an official Google Support page during this review - treated as a warning, not a hard block, until verified."
+    }
+  },
+  "links": {
+    "max_count": {
+      "value": null,
+      "verified": false,
+      "note": "YouTube does not appear to publish an explicit maximum link count in a video description - not verified either way; only syntax validation is enforced for this platform."
+    }
+  },
+  "cover": {
+    "required": {
+      "value": false,
+      "verified": false,
+      "note": "A custom thumbnail is optional on YouTube in the general case, but eligibility can depend on channel standing; not verified as an absolute rule."
+    },
+    "formats": {
+      "value": ["jpg", "jpeg", "png", "gif", "bmp"],
+      "verified": false,
+      "note": "Commonly cited thumbnail formats; not independently re-verified against an official page during this review - verify before relying on this list."
+    },
+    "recommended_resolution": {
+      "value": "1280x720",
+      "verified": false,
+      "note": "Commonly cited recommended thumbnail resolution; verify against platform docs."
+    }
+  },
+  "required_disclosures": [
+    {
+      "trigger_pattern": "\\b(use (my|this) (code|link)|affiliate link|discount code|promo code)\\b",
+      "require_pattern": "\\b(ad|sponsored|paid partnership|includes paid promotion)\\b|#ad\\b|#sponsored\\b",
+      "message": "caption mentions an affiliate/discount link or code but includes no sponsored/#ad disclosure; YouTube requires disclosure of paid promotions (verify current wording requirements against YouTube's advertiser-friendly guidelines before publishing)"
+    }
+  ],
+  "unsupported_claim_patterns": [
+    "\\bguarantee(d|s)?\\b",
+    "\\bcure(s|d)?\\s+(for|of)\\b",
+    "\\b100%\\s*(effective|safe|guaranteed)\\b",
+    "\\brisk[- ]free\\b",
+    "\\bno\\s+side\\s+effects\\b",
+    "\\bmiracle\\s+(cure|treatment)\\b",
+    "\\bproven\\s+to\\s+(cure|treat|heal)\\b"
+  ]
+}

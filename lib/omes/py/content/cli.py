@@ -14,7 +14,7 @@ import os
 import sys
 from pathlib import Path
 
-from . import inbox, jobs, paths, reports
+from . import inbox, jobs, paths, reports, validation
 from .workers import registry as worker_registry
 
 
@@ -192,23 +192,46 @@ def cmd_reject(args: argparse.Namespace) -> int:
 
 def cmd_edit(args: argparse.Namespace) -> int:
     root = paths.ensure_layout()
-    channel = getattr(args, "channel", "cli")
     try:
         record = jobs.load_job(args.job_id, root)
         auth_error = _authorize_channel_actor(args)
         if auth_error:
             print(f"error: {auth_error}", file=sys.stderr)
             return EX_ERROR
-        jobs.edit_plan(record, actor=args.actor, caption=args.caption, targets=args.target)
-        reports.audit_append_for_job(root, record, actor=args.actor)
-        jobs.save_job(record, root)
+
+        if args.platform and args.caption_file:
+            # issue #69: a per-platform, versioned edit. Never touches
+            # plan.caption (the generated/original draft) or job state -
+            # it only appends a new caption.v<n> under this job's own
+            # variants/<platform>/ directory.
+            caption_text = Path(args.caption_file).read_text(encoding="utf-8")
+            variant_path = jobs.save_caption_variant(record["job_id"], args.platform, caption_text, root)
+            reports.audit_append(
+                root,
+                actor=args.actor,
+                job_id=record["job_id"],
+                from_state=record["state"],
+                to_state=record["state"],
+                platform=args.platform,
+                note=f"caption variant saved: {variant_path.name}",
+            )
+            result = {"job_id": record["job_id"], "platform": args.platform, "variant": variant_path.name}
+        else:
+            jobs.edit_plan(record, actor=args.actor, caption=args.caption, targets=args.target)
+            reports.audit_append_for_job(root, record, actor=args.actor)
+            jobs.save_job(record, root)
+            result = {
+                "job_id": record["job_id"],
+                "state": record["state"],
+                "caption": record["plan"]["caption"],
+                "targets": record["plan"]["targets"],
+            }
     except jobs.ContentJobsError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
+
     if args.json:
-        _print_json(
-            {"job_id": record["job_id"], "state": record["state"], "caption": record["plan"]["caption"], "targets": record["plan"]["targets"]}
-        )
+        _print_json(result)
     else:
         print(f"{record['job_id']}: plan edited by {args.actor}")
     return EX_OK
@@ -462,6 +485,21 @@ def _allowed_paths_for(root: Path, job_id: str, platform: str) -> dict[str, str]
     }
 
 
+def _validation_preview_for_targets(record: dict, root: Path) -> dict[str, list[dict]]:
+    """Issue #69: "plan shows the generated caption and cover plan" and
+    its validation - computed per target platform, using whatever caption
+    variant currently applies to that platform (falling back to the
+    generic plan.caption). This never blocks `plan` itself; only
+    `publish` (per-platform) acts on blocking issues."""
+    preview: dict[str, list[dict]] = {}
+    for platform in record["plan"].get("targets") or []:
+        caption_text, _source = jobs.resolve_caption_for_platform(record, platform, root)
+        profile = validation.load_platform_profile(platform)
+        issues = validation.validate_platform(caption_text, profile)
+        preview[platform] = [i.to_dict() for i in issues]
+    return preview
+
+
 def cmd_plan(args: argparse.Namespace) -> int:
     root = paths.ensure_layout()
     try:
@@ -471,13 +509,29 @@ def cmd_plan(args: argparse.Namespace) -> int:
     except jobs.ContentJobsError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
+
+    validation_preview = _validation_preview_for_targets(record, root)
+
     if args.json:
         _print_json(
-            {"job_id": record["job_id"], "state": record["state"], "targets": record["plan"]["targets"]}
+            {
+                "job_id": record["job_id"],
+                "state": record["state"],
+                "caption": record["plan"]["caption"],
+                "targets": record["plan"]["targets"],
+                "validation": validation_preview,
+            }
         )
     else:
         targets = ", ".join(record["plan"]["targets"]) or "(none)"
         print(f"{record['job_id']}: planned -> {record['state']} (targets: {targets})")
+        print(f"caption: {record['plan']['caption'] or '(none)'}")
+        for platform, issues in validation_preview.items():
+            if not issues:
+                print(f"  [{platform}] no validation issues")
+                continue
+            for issue in issues:
+                print(f"  [{platform}] {issue['severity']}: {issue['rule']}: {issue['message']}")
     return EX_OK
 
 
@@ -507,6 +561,40 @@ def cmd_publish(args: argparse.Namespace) -> int:
             return EX_ERROR
 
     record["platform"] = args.platform
+
+    caption_text, _caption_source = jobs.resolve_caption_for_platform(record, args.platform, root)
+    profile = validation.load_platform_profile(args.platform)
+    issues = validation.validate_platform(
+        caption_text, profile, cover_path=args.cover, check_link_reachability=args.check_links
+    )
+    blocking = [i for i in issues if i.severity == "error"]
+    if blocking and not args.force_validation:
+        # approved -> publishing -> manual-review, same two-step pattern
+        # as the "prepare not ready" case below: validation failing this
+        # one platform's caption/cover is a publish-phase outcome, and
+        # blocks only THIS platform's publish (issue #69) - other
+        # targets on the same job are unaffected, since each `publish`
+        # call is scoped to one --platform.
+        summary = "; ".join(f"{i.rule}: {i.message}" for i in blocking)
+        jobs.apply_transition(record, "publishing", actor="system", note="publish started")
+        jobs.apply_transition(
+            record, "manual-review", actor="system", note=f"validation blocked ({args.platform}): {summary}"
+        )
+        _persist(record, root, "system")
+        if args.json:
+            _print_json(
+                {
+                    "job_id": record["job_id"],
+                    "state": record["state"],
+                    "validation": [i.to_dict() for i in issues],
+                }
+            )
+        else:
+            print(f"{record['job_id']}: validation blocked publish to {args.platform!r} -> manual-review", file=sys.stderr)
+            for issue in blocking:
+                print(f"  error: {issue.rule}: {issue.message}", file=sys.stderr)
+        return EX_ERROR
+
     allowed_paths = _allowed_paths_for(root, record["job_id"], args.platform)
 
     prepare_result = jobs.prepare_worker(record, worker_executable, allowed_paths=allowed_paths, root=root)
@@ -530,7 +618,12 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
     try:
         publish_result = jobs.publish_job(
-            record, worker_executable, worker_version=args.worker_version, allowed_paths=allowed_paths, root=root
+            record,
+            worker_executable,
+            worker_version=args.worker_version,
+            allowed_paths=allowed_paths,
+            root=root,
+            caption_override=caption_text,
         )
     except jobs.ApprovalError as exc:
         _persist(record, root, "system")
@@ -680,11 +773,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_reject.add_argument("--json", action="store_true")
     p_reject.set_defaults(func=cmd_reject)
 
-    p_edit = sub.add_parser("edit", help="edit a plan's caption/targets while approval-required")
+    p_edit = sub.add_parser("edit", help="edit a plan's caption/targets, or save a per-platform caption variant")
     p_edit.add_argument("job_id")
     p_edit.add_argument("--actor", required=True)
     p_edit.add_argument("--caption", default=None)
     p_edit.add_argument("--target", action="append", dest="target")
+    p_edit.add_argument("--platform", default=None, help="with --caption-file, saves a versioned per-platform caption variant (#69)")
+    p_edit.add_argument("--caption-file", default=None, dest="caption_file")
     p_edit.add_argument("--channel", choices=("cli", "telegram"), default="cli")
     p_edit.add_argument("--json", action="store_true")
     p_edit.set_defaults(func=cmd_edit)
@@ -757,6 +852,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_publish.add_argument("--platform", required=True, help="e.g. generic_browser")
     p_publish.add_argument("--worker-executable", default=None, help="override the registry lookup (mainly for tests)")
     p_publish.add_argument("--worker-version", default=None)
+    p_publish.add_argument("--cover", default=None, help="cover/thumbnail image path, validated against the platform profile (#69)")
+    p_publish.add_argument("--check-links", action="store_true", dest="check_links", help="opt-in HEAD reachability check on caption links (#69)")
+    p_publish.add_argument("--force-validation", action="store_true", dest="force_validation", help="publish despite blocking validation errors (operator override)")
     p_publish.add_argument("--json", action="store_true")
     p_publish.set_defaults(func=cmd_publish)
 
