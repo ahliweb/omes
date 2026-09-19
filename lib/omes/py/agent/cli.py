@@ -62,7 +62,7 @@ def _load_manifest(name: str, omes_root: Path):
     path = paths.manifest_path(name)
     if not path.exists():
         raise manifest_mod.ManifestError([f"no manifest found for agent '{name}' at {path}"])
-    return manifest_mod.load_and_validate(path, omes_root)
+    return manifest_mod.load_and_validate(path, omes_root, expected_name=name)
 
 
 def _check_privilege(service_mode: str) -> Optional[str]:
@@ -93,7 +93,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         entry["state"] = st.get("state", "declared")
         if manifest_file.exists():
             try:
-                data = manifest_mod.load_and_validate(manifest_file, omes_root)
+                data = manifest_mod.load_and_validate(manifest_file, omes_root, expected_name=name)
                 entry["role"] = data["spec"]["role"]
                 entry["serviceMode"] = data["spec"]["serviceMode"]
             except manifest_mod.ManifestError as exc:

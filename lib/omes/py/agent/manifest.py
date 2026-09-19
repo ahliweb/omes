@@ -113,10 +113,17 @@ def validate(data: Any, omes_root: Path) -> List[str]:
     return errors
 
 
-def load_and_validate(path: Path, omes_root: Path) -> dict:
+def load_and_validate(path: Path, omes_root: Path, expected_name: str = None) -> dict:
     """Loads a manifest file and validates it, raising ManifestError with
     every collected error on failure (never partially-applies a manifest
-    that failed validation - see plan.py/cli.py callers)."""
+    that failed validation - see plan.py/cli.py callers).
+
+    `expected_name`, when given, must equal `metadata.name` - this is how
+    callers that look manifests up by filename (paths.manifest_path(name))
+    catch a duplicate/mismatched declaration: two files cannot silently
+    both claim to be the same logical agent, and a copy-pasted manifest
+    saved under a new filename cannot silently keep the old agent's name
+    (which would collide on the derived systemd unit name)."""
     try:
         with open(path, "r", encoding="utf-8") as fh:
             data = json.load(fh)
@@ -124,6 +131,13 @@ def load_and_validate(path: Path, omes_root: Path) -> dict:
         raise ManifestError([f"could not read/parse manifest {path}: {exc}"]) from exc
 
     errors = validate(data, omes_root)
+    if expected_name is not None and isinstance(data, dict):
+        actual_name = data.get("metadata", {}).get("name")
+        if actual_name != expected_name:
+            errors.append(
+                f"manifest file {path.name} declares metadata.name '{actual_name}' "
+                f"but was looked up as '{expected_name}' - refusing a mismatched/duplicate name"
+            )
     if errors:
         raise ManifestError(errors)
     return data
