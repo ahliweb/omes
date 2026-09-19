@@ -336,7 +336,8 @@ built-in commands.
 
 > Status: `scan`, `rescan`, `list` implemented (#64). `approve`, `reject`,
 > `retry`, `cancel`, `resume`, `reconcile` implemented (#67). `report`,
-> `export`, `prune` are tracked in #68. `plan`/`publish` as full end-to-end
+> `export`, `prune`, the append-only audit log, and archive-on-terminal-
+> state implemented (#68). `plan`/`publish` as full end-to-end
 > CLI verbs (driving a real platform worker) land with #66; the state
 > machine and orchestration functions they will call
 > (`jobs.plan_job`/`jobs.publish_job`/`jobs.verify_job`) already exist. See
@@ -363,6 +364,9 @@ omes content retry <job-id> --actor ID [--yes] [--force] [--json]
 omes content cancel <job-id> --actor ID [--yes] [--json]
 omes content resume [--json]
 omes content reconcile [--json]
+omes content report <job-id> [--md|--json]
+omes content export --since YYYY-MM-DD --out DIR [--json]
+omes content prune --older-than DAYS [--dry-run] [--yes] [--json]
 ```
 
 - `scan` walks `$OMES_CONTENT_ROOT/inbox` (never following symlinks, never
@@ -406,6 +410,38 @@ omes content reconcile [--json]
   `retryable-failure` with an elapsed or exhausted backoff, or an
   `approval-required` job with no/expired/mismatched approval), each
   with a human-readable reason.
+- Every state transition and side effect is appended to
+  `state/audit.jsonl` (one JSON object per line: `ts`, `actor`, `job`,
+  `from`, `to`, `platform`, `artifact_hash`, `url`, `worker_version`,
+  `note`), redacted of anything matching
+  `TOKEN|KEY|SECRET|PASSWORD|COOKIE`, and hash-chained (`prev_hash`/
+  `line_hash`) so a rewritten, inserted, or reordered line is detectable.
+  The audit log is never read by `export`'s reports copy and never
+  deleted by `prune` (see below); it is append-only by construction, not
+  by filesystem permissions alone.
+- As soon as a job reaches `succeeded`, `failed`, or `cancelled` (via
+  `approve`/`reject`/`retry`/`cancel`/`resume`), it is automatically
+  archived: its `processing/<job-id>/` evidence moves to
+  `uploaded/<job-id>/` (succeeded), `failed/<job-id>/` (failed), or
+  `review/<job-id>/` (cancelled/manual-review, once acted on), and a
+  `reports/<job-id>/report.json` + `report.md` pair is generated.
+  Archiving never overwrites existing evidence at the destination.
+- `report <job-id>` prints the path to the latest report (default),
+  its JSON content (`--json`), or its Markdown content (`--md`),
+  generating one first if the job has none yet. Regenerating an
+  existing report never overwrites `report.json`/`report.md` — it
+  writes `report-2.json`/`report-2.md`, then `report-3.*`, and so on.
+- `export --since DATE --out DIR` copies every job's reports and the
+  portion of the audit log at/after `DATE` into `DIR`, already redacted.
+  It never reads or copies `content/sessions/`.
+- `prune --older-than DAYS` deletes the archived media
+  (`uploaded/`/`failed/`/`review/<job-id>/`) and reports
+  (`reports/<job-id>/`) of jobs in the `archived` state whose
+  `updated_at` is older than `DAYS`. It never touches `content/sessions/`
+  or `state/audit.jsonl` (audit rotation is a separate, not-yet-
+  implemented concern). `--dry-run` reports what would be deleted
+  without deleting anything; without `--dry-run`, `--yes` (or an
+  interactive confirmation) is required.
 
 **Exit codes:** 0 (success, including "nothing new to scan"), 1 (error,
 e.g. `scan` while another scan holds the lock, `rescan` finding a hash
