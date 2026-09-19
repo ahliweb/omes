@@ -10,10 +10,31 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
 from . import inbox, jobs, paths
+
+
+def _default_approval_ttl_seconds() -> int:
+    raw = os.environ.get("OMES_CONTENT_APPROVAL_TTL_SECONDS")
+    if raw:
+        try:
+            return int(raw)
+        except ValueError:
+            pass
+    return jobs.DEFAULT_APPROVAL_TTL_SECONDS
+
+
+def _confirm(args: argparse.Namespace, prompt: str) -> bool:
+    if getattr(args, "yes", False):
+        return True
+    if sys.stdin.isatty():
+        answer = input(f"{prompt} [y/N] ").strip().lower()
+        return answer in ("y", "yes")
+    print("error: this is a mutating operation; pass --yes to confirm", file=sys.stderr)
+    return False
 
 EX_OK = 0
 EX_ERROR = 1
@@ -74,6 +95,147 @@ def cmd_list(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def cmd_approve(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+        jobs.approve_job(record, actor=args.actor, ttl_seconds=args.ttl_seconds)
+        jobs.save_job(record, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json({"job_id": record["job_id"], "state": record["state"]})
+    else:
+        print(f"{record['job_id']}: approved by {args.actor}")
+    return EX_OK
+
+
+def cmd_reject(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+        jobs.reject_job(record, actor=args.actor)
+        jobs.save_job(record, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json({"job_id": record["job_id"], "state": record["state"]})
+    else:
+        print(f"{record['job_id']}: rejected by {args.actor}")
+    return EX_OK
+
+
+def cmd_retry(args: argparse.Namespace) -> int:
+    if not _confirm(args, f"Retry job {args.job_id}?"):
+        return EX_ERROR
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+        jobs.retry_job(record, actor=args.actor, force=args.force)
+        jobs.save_job(record, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json({"job_id": record["job_id"], "state": record["state"]})
+    else:
+        print(f"{record['job_id']}: retry recorded by {args.actor} -> {record['state']}")
+    return EX_OK
+
+
+def cmd_cancel(args: argparse.Namespace) -> int:
+    if not _confirm(args, f"Cancel job {args.job_id}?"):
+        return EX_ERROR
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+        jobs.cancel_job(record, actor=args.actor)
+        jobs.save_job(record, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json({"job_id": record["job_id"], "state": record["state"]})
+    else:
+        print(f"{record['job_id']}: cancelled by {args.actor}")
+    return EX_OK
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    """Re-runs verify (never publish) for every job stuck in `publishing`
+    or `verifying`, e.g. after a process restart. This is the load-bearing
+    rule against duplicate publication (docs/content-distribution.md
+    section 5.3)."""
+    root = paths.ensure_layout()
+    resumed = []
+    skipped = []
+    for record in jobs.list_jobs(root):
+        if record["state"] not in ("publishing", "verifying"):
+            continue
+        worker_executable = record["publish"].get("worker_executable")
+        if not worker_executable:
+            jobs.apply_transition(
+                record, "manual-review", actor="system", note="resume: no worker recorded for this job"
+            )
+            jobs.save_job(record, root)
+            skipped.append(record["job_id"])
+            continue
+        if record["state"] == "publishing":
+            # A crash mid-publish is uncertain by definition: we do not
+            # know whether the worker's publish call landed. Move to
+            # manual-review rather than guessing either way.
+            jobs.apply_transition(
+                record, "manual-review", actor="system", note="resume: publish outcome unknown after restart"
+            )
+            jobs.save_job(record, root)
+            skipped.append(record["job_id"])
+            continue
+        # verifying: safe to re-run verify only.
+        jobs.verify_job(record, worker_executable)
+        jobs.save_job(record, root)
+        resumed.append(record["job_id"])
+    result = {"resumed": resumed, "skipped_to_manual_review": skipped}
+    if args.json:
+        _print_json(result)
+    else:
+        print(f"resumed (re-verified): {len(resumed)}")
+        print(f"skipped to manual-review: {len(skipped)}")
+    return EX_OK
+
+
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    needs_review = []
+    for record in jobs.list_jobs(root):
+        reasons = []
+        if record["state"] == "manual-review":
+            reasons.append("in manual-review")
+        if record["state"] == "retryable-failure":
+            attempts = record["publish"]["attempts"]
+            max_attempts = record["publish"].get("max_attempts", jobs.DEFAULT_MAX_ATTEMPTS)
+            if attempts >= max_attempts:
+                reasons.append(f"exhausted max_attempts ({attempts}/{max_attempts})")
+            else:
+                delay = jobs.compute_backoff_seconds(attempts)
+                elapsed = jobs.seconds_since_last_history_entry(record)
+                if elapsed >= delay:
+                    reasons.append("retry backoff elapsed; ready for `omes content retry`")
+        if record["state"] == "approval-required":
+            valid, reason = jobs.is_approval_valid(record) if record["approvals"] else (False, "not yet approved")
+            if not valid:
+                reasons.append(reason)
+        if reasons:
+            needs_review.append({"job_id": record["job_id"], "state": record["state"], "reasons": reasons})
+    if args.json:
+        _print_json({"jobs": needs_review})
+    else:
+        for j in needs_review:
+            print(f"{j['job_id']} ({j['state']}): {'; '.join(j['reasons'])}")
+    return EX_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omes content")
     sub = parser.add_subparsers(dest="subcommand", required=True)
@@ -91,6 +253,42 @@ def build_parser() -> argparse.ArgumentParser:
     p_list.add_argument("--json", action="store_true")
     p_list.add_argument("--state", choices=jobs.STATES, default=None)
     p_list.set_defaults(func=cmd_list)
+
+    p_approve = sub.add_parser("approve", help="record an approval decision")
+    p_approve.add_argument("job_id")
+    p_approve.add_argument("--actor", required=True)
+    p_approve.add_argument("--ttl-seconds", type=int, default=_default_approval_ttl_seconds())
+    p_approve.add_argument("--json", action="store_true")
+    p_approve.set_defaults(func=cmd_approve)
+
+    p_reject = sub.add_parser("reject", help="reject a pending approval")
+    p_reject.add_argument("job_id")
+    p_reject.add_argument("--actor", required=True)
+    p_reject.add_argument("--json", action="store_true")
+    p_reject.set_defaults(func=cmd_reject)
+
+    p_retry = sub.add_parser("retry", help="retry a retryable-failure/manual-review job")
+    p_retry.add_argument("job_id")
+    p_retry.add_argument("--actor", required=True)
+    p_retry.add_argument("--yes", action="store_true")
+    p_retry.add_argument("--force", action="store_true", help="bypass the backoff delay")
+    p_retry.add_argument("--json", action="store_true")
+    p_retry.set_defaults(func=cmd_retry)
+
+    p_cancel = sub.add_parser("cancel", help="cancel a non-terminal job")
+    p_cancel.add_argument("job_id")
+    p_cancel.add_argument("--actor", required=True)
+    p_cancel.add_argument("--yes", action="store_true")
+    p_cancel.add_argument("--json", action="store_true")
+    p_cancel.set_defaults(func=cmd_cancel)
+
+    p_resume = sub.add_parser("resume", help="re-verify jobs stuck in publishing/verifying after a restart")
+    p_resume.add_argument("--json", action="store_true")
+    p_resume.set_defaults(func=cmd_resume)
+
+    p_reconcile = sub.add_parser("reconcile", help="list jobs needing operator review, with reasons")
+    p_reconcile.add_argument("--json", action="store_true")
+    p_reconcile.set_defaults(func=cmd_reconcile)
 
     return parser
 

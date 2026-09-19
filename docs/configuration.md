@@ -133,6 +133,7 @@ Never referenced by any installer profile — see
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
 | `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
+| `OMES_CONTENT_APPROVAL_TTL_SECONDS` | `3600` | Operator | Default `--ttl-seconds` for `omes content approve` (docs/content-distribution.md section 7). Read by `lib/omes/py/content/cli.py`; an explicit `--ttl-seconds` flag overrides it. |
 
 ## 13. Reserved but not read by any code path yet
 

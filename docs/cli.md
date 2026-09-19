@@ -334,9 +334,12 @@ built-in commands.
 
 ## 4.13 `omes content` (optional content distribution workflow)
 
-> Status: `scan`, `rescan`, `list` implemented (#64). `resume`, `reconcile`,
-> `retry`, `cancel`, `approve` are tracked in #67; `report`, `export`,
-> `prune` are tracked in #68. See
+> Status: `scan`, `rescan`, `list` implemented (#64). `approve`, `reject`,
+> `retry`, `cancel`, `resume`, `reconcile` implemented (#67). `report`,
+> `export`, `prune` are tracked in #68. `plan`/`publish` as full end-to-end
+> CLI verbs (driving a real platform worker) land with #66; the state
+> machine and orchestration functions they will call
+> (`jobs.plan_job`/`jobs.publish_job`/`jobs.verify_job`) already exist. See
 > [docs/content-distribution.md](content-distribution.md) for the full
 > design (job schema, state machine, worker contract, security
 > boundaries) and [ADR-0015](adr/0015-content-distribution-workflow.md)
@@ -354,6 +357,12 @@ docs/content-distribution.md section 9.
 omes content scan [--json] [--settle-seconds N]
 omes content rescan [--json]
 omes content list [--state STATE] [--json]
+omes content approve <job-id> --actor ID [--ttl-seconds N] [--json]
+omes content reject <job-id> --actor ID [--json]
+omes content retry <job-id> --actor ID [--yes] [--force] [--json]
+omes content cancel <job-id> --actor ID [--yes] [--json]
+omes content resume [--json]
+omes content reconcile [--json]
 ```
 
 - `scan` walks `$OMES_CONTENT_ROOT/inbox` (never following symlinks, never
@@ -374,10 +383,34 @@ omes content list [--state STATE] [--json]
   (one of `queued`, `planning`, `approval-required`, `approved`,
   `publishing`, `verifying`, `succeeded`, `retryable-failure`,
   `manual-review`, `failed`, `cancelled`, `archived`).
+- `approve`/`reject` record an approval decision bound to the job's
+  current artifact hash, with a staleness expiry (`--ttl-seconds`,
+  default `OMES_CONTENT_APPROVAL_TTL_SECONDS`/3600s). This is the
+  always-available MVP approval path; #65 adds a Telegram front end that
+  writes the same approval record shape. `reject` moves the job to
+  `cancelled`.
+- `retry` moves a `retryable-failure` or `manual-review` job back to
+  `publishing`. Requires `--actor`; requires `--yes` (non-interactive) or
+  an interactive y/N confirmation. Refuses to run before the computed
+  exponential-backoff delay has elapsed unless `--force` is also given,
+  and refuses once `max_attempts` is exhausted.
+- `cancel` moves any non-terminal job to `cancelled`. Requires `--actor`
+  and `--yes`/confirmation.
+- `resume` re-runs **verify only** for every job left in `publishing` or
+  `verifying` (e.g. after a crash/restart). A job found in `publishing`
+  is moved to `manual-review` instead of being re-verified, because the
+  worker's publish outcome for that attempt is unknown — this is the
+  rule that prevents duplicate publication across a restart
+  (docs/content-distribution.md section 5.3).
+- `reconcile` lists jobs that need operator attention (`manual-review`,
+  `retryable-failure` with an elapsed or exhausted backoff, or an
+  `approval-required` job with no/expired/mismatched approval), each
+  with a human-readable reason.
 
 **Exit codes:** 0 (success, including "nothing new to scan"), 1 (error,
-e.g. `scan` while another scan holds the lock, or `rescan` finding a
-hash mismatch), 2 (usage error).
+e.g. `scan` while another scan holds the lock, `rescan` finding a hash
+mismatch, an invalid state transition, a retry attempted before its
+backoff delay, or a missing `--yes`/confirmation), 2 (usage error).
 
 **JSON schema (`scan`):**
 `{"created": ["<job-id>", ...], "duplicates": ["<job-id>", ...], "pending": ["<path>", ...]}`

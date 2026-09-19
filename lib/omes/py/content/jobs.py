@@ -182,3 +182,292 @@ def record_history(record: dict[str, Any], to_state: str, actor: str, note: str 
     )
     record["state"] = to_state
     record["updated_at"] = now_iso()
+
+
+# ---------------------------------------------------------------------------
+# State machine (issue #67) - docs/content-distribution.md section 5.
+# ---------------------------------------------------------------------------
+
+TRANSITIONS: dict[str, frozenset[str]] = {
+    "queued": frozenset({"planning", "cancelled"}),
+    "planning": frozenset({"approval-required", "cancelled"}),
+    "approval-required": frozenset({"approved", "cancelled"}),
+    "approved": frozenset({"publishing", "cancelled"}),
+    "publishing": frozenset({"verifying", "manual-review", "retryable-failure", "failed", "cancelled"}),
+    "verifying": frozenset({"succeeded", "manual-review", "retryable-failure", "cancelled"}),
+    "retryable-failure": frozenset({"publishing", "failed", "cancelled"}),
+    "manual-review": frozenset({"publishing", "cancelled"}),
+    "succeeded": frozenset({"archived"}),
+    "failed": frozenset({"archived"}),
+    "cancelled": frozenset({"archived"}),
+    "archived": frozenset(),
+}
+
+CANCELLABLE_STATES = frozenset(
+    s for s, targets in TRANSITIONS.items() if "cancelled" in targets
+)
+
+# Default per-platform retry policy (docs/content-distribution.md section 5.2).
+DEFAULT_BASE_SECONDS = 30
+DEFAULT_MAX_SECONDS = 1800
+DEFAULT_MAX_ATTEMPTS = 5
+DEFAULT_APPROVAL_TTL_SECONDS = 3600
+
+
+def validate_transition(from_state: str, to_state: str) -> None:
+    allowed = TRANSITIONS.get(from_state)
+    if allowed is None or to_state not in allowed:
+        raise InvalidTransitionError(from_state, to_state)
+
+
+def apply_transition(record: dict[str, Any], to_state: str, actor: str, note: str = "") -> None:
+    """Validates and applies a state transition, appending a history
+    entry. Raises InvalidTransitionError without mutating `record` when
+    the transition is not in TRANSITIONS."""
+    validate_transition(record["state"], to_state)
+    record_history(record, to_state, actor, note)
+
+
+def compute_backoff_seconds(
+    attempt: int,
+    base_seconds: int = DEFAULT_BASE_SECONDS,
+    max_seconds: int = DEFAULT_MAX_SECONDS,
+) -> int:
+    """Bounded exponential backoff: base * 2**attempt, capped at
+    max_seconds. `attempt` is 0-based (the number of prior attempts)."""
+    if attempt < 0:
+        attempt = 0
+    return min(base_seconds * (2**attempt), max_seconds)
+
+
+def classify_worker_result(result: dict[str, Any]) -> str:
+    """Maps a worker's publish/verify JSON result (docs/content-
+    distribution.md section 6) to the next job state, given the job is
+    currently in `publishing` or `verifying`.
+
+    - status "ok" with a URL -> the caller decides "verifying" (from
+      publishing) or "succeeded" (from verifying); this function returns
+      the outcome kind instead: "ok", "uncertain", or one of
+      "retryable"/"nonretryable" for errors, so callers can combine it
+      with their own current-state-specific target.
+    """
+    status = result.get("status")
+    if status == "ok":
+        return "ok"
+    if status == "uncertain":
+        return "uncertain"
+    if status == "error":
+        return "retryable" if result.get("retryable") else "nonretryable"
+    # Anything else (missing/garbled status) is treated as uncertain, never
+    # as a silent success or a silent failure.
+    return "uncertain"
+
+
+def next_state_after_publish(result: dict[str, Any]) -> str:
+    outcome = classify_worker_result(result)
+    return {
+        "ok": "verifying",
+        "uncertain": "manual-review",
+        "retryable": "retryable-failure",
+        "nonretryable": "failed",
+    }[outcome]
+
+
+def next_state_after_verify(result: dict[str, Any]) -> str:
+    outcome = classify_worker_result(result)
+    return {
+        "ok": "succeeded",
+        "uncertain": "manual-review",
+        "retryable": "retryable-failure",
+        "nonretryable": "failed",
+    }[outcome]
+
+
+# ---------------------------------------------------------------------------
+# Approvals (docs/content-distribution.md section 7)
+# ---------------------------------------------------------------------------
+
+
+def approve_job(
+    record: dict[str, Any],
+    actor: str,
+    channel: str = "cli",
+    ttl_seconds: int = DEFAULT_APPROVAL_TTL_SECONDS,
+) -> None:
+    from datetime import timedelta
+
+    ts = datetime.now(timezone.utc)
+    approval = {
+        "actor": actor,
+        "decision": "approved",
+        "artifact_hash": record["source"]["sha256"],
+        "approved_at": ts.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "expires_at": (ts + timedelta(seconds=ttl_seconds)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "channel": channel,
+    }
+    record["approvals"].append(approval)
+    apply_transition(record, "approved", actor, note=f"approved via {channel}")
+
+
+def reject_job(record: dict[str, Any], actor: str, channel: str = "cli") -> None:
+    approval = {
+        "actor": actor,
+        "decision": "rejected",
+        "artifact_hash": record["source"]["sha256"],
+        "approved_at": now_iso(),
+        "expires_at": now_iso(),
+        "channel": channel,
+    }
+    record["approvals"].append(approval)
+    apply_transition(record, "cancelled", actor, note=f"rejected via {channel}")
+
+
+def latest_approval(record: dict[str, Any]) -> dict[str, Any] | None:
+    approvals = record.get("approvals") or []
+    return approvals[-1] if approvals else None
+
+
+def is_approval_valid(record: dict[str, Any]) -> tuple[bool, str]:
+    """Returns (valid, reason). A valid approval must be the most recent
+    approval, decided "approved", bound to the job's current artifact
+    hash, and not expired."""
+    approval = latest_approval(record)
+    if approval is None:
+        return False, "no approval on record"
+    if approval["decision"] != "approved":
+        return False, f"latest decision is {approval['decision']!r}"
+    if approval["artifact_hash"] != record["source"]["sha256"]:
+        return False, "approval artifact hash does not match current job artifact hash"
+    expires_at = datetime.strptime(approval["expires_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    if datetime.now(timezone.utc) > expires_at:
+        return False, "approval has expired"
+    return True, "ok"
+
+
+# ---------------------------------------------------------------------------
+# Retry / cancel (issue #67)
+# ---------------------------------------------------------------------------
+
+
+class RetryTooSoonError(ContentJobsError):
+    pass
+
+
+class ApprovalError(ContentJobsError):
+    pass
+
+
+def seconds_since_last_history_entry(record: dict[str, Any]) -> float:
+    last = record["history"][-1]
+    last_ts = datetime.strptime(last["ts"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+    return (datetime.now(timezone.utc) - last_ts).total_seconds()
+
+
+def retry_job(record: dict[str, Any], actor: str, force: bool = False) -> None:
+    """Moves a retryable-failure or manual-review job back to
+    `publishing`. Never re-invokes a worker itself - the caller
+    (cli.py's `retry` command) does that after this transition succeeds.
+    Enforces the bounded-backoff delay unless `force`."""
+    if record["state"] not in ("retryable-failure", "manual-review"):
+        raise InvalidTransitionError(record["state"], "publishing")
+
+    attempts = record["publish"]["attempts"]
+    max_attempts = record["publish"].get("max_attempts", DEFAULT_MAX_ATTEMPTS)
+    if attempts >= max_attempts:
+        raise ContentJobsError(
+            f"job {record['job_id']} has exhausted max_attempts={max_attempts}"
+        )
+
+    if not force and record["state"] == "retryable-failure":
+        delay = compute_backoff_seconds(attempts)
+        elapsed = seconds_since_last_history_entry(record)
+        if elapsed < delay:
+            raise RetryTooSoonError(
+                f"retry available in {delay - elapsed:.0f}s (backoff {delay}s since last attempt)"
+            )
+
+    record["publish"]["attempts"] = attempts + 1
+    apply_transition(record, "publishing", actor, note="retry")
+
+
+def cancel_job(record: dict[str, Any], actor: str, note: str = "cancelled by operator") -> None:
+    if record["state"] not in CANCELLABLE_STATES:
+        raise InvalidTransitionError(record["state"], "cancelled")
+    apply_transition(record, "cancelled", actor, note=note)
+
+
+def plan_job(record: dict[str, Any], actor: str = "system", caption: str | None = None, targets: list[str] | None = None) -> None:
+    """queued -> planning -> approval-required. Caption generation itself
+    (optionally via Hermes) is out of scope here (#69); this only records
+    whatever caption/targets the caller already produced (or none, for a
+    plan an operator will fill in by hand before approving)."""
+    apply_transition(record, "planning", actor, note="plan started")
+    record["plan"]["caption"] = caption
+    record["plan"]["caption_source"] = "operator" if caption else None
+    record["plan"]["targets"] = targets or []
+    apply_transition(record, "approval-required", actor, note="plan complete")
+
+
+# ---------------------------------------------------------------------------
+# Publish / verify orchestration (issue #67; real workers land in #66)
+# ---------------------------------------------------------------------------
+
+
+def publish_job(record: dict[str, Any], worker_executable: str, worker_version: str | None = None) -> dict[str, Any]:
+    """Runs `worker_executable`'s `publish` operation for `record`,
+    classifies the result, and applies the resulting transition. Refuses
+    to run without a current, valid approval (approval-gated by default -
+    docs/content-distribution.md section 8)."""
+    from . import worker as worker_mod
+
+    if record["state"] != "approved":
+        raise InvalidTransitionError(record["state"], "publishing")
+
+    valid, reason = is_approval_valid(record)
+    if not valid:
+        apply_transition(record, "manual-review", actor="system", note=f"approval invalid: {reason}")
+        raise ApprovalError(reason)
+
+    apply_transition(record, "publishing", actor="system", note="publish started")
+    record["publish"]["worker_version"] = worker_version
+    record["publish"]["worker_executable"] = worker_executable
+
+    payload = {
+        "job_id": record["job_id"],
+        "source_path": record["source"]["processing_path"],
+        "caption": record["plan"].get("caption"),
+        "targets": record["plan"].get("targets", []),
+        "session_dir": None,
+    }
+    result = worker_mod.run_worker(worker_executable, "publish", payload)
+    record["publish"]["attempts"] += 1
+    record["publish"]["last_result"] = result
+    if result.get("url"):
+        record["publish"]["resulting_url"] = result["url"]
+
+    to_state = next_state_after_publish(result)
+    apply_transition(record, to_state, actor="system", note=result.get("note", ""))
+    return result
+
+
+def verify_job(record: dict[str, Any], worker_executable: str) -> dict[str, Any]:
+    """Runs `worker_executable`'s `verify` operation for `record` (must be
+    in `verifying`) and applies the resulting transition."""
+    from . import worker as worker_mod
+
+    if record["state"] != "verifying":
+        raise InvalidTransitionError(record["state"], "succeeded")
+
+    payload = {
+        "job_id": record["job_id"],
+        "url": record["publish"].get("resulting_url"),
+        "session_dir": None,
+    }
+    result = worker_mod.run_worker(worker_executable, "verify", payload)
+    record["publish"]["last_result"] = result
+    if result.get("url"):
+        record["publish"]["resulting_url"] = result["url"]
+
+    to_state = next_state_after_verify(result)
+    apply_transition(record, to_state, actor="system", note=result.get("note", ""))
+    return result
