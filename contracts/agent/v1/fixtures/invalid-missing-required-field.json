@@ -1,0 +1,19 @@
+{
+  "apiVersion": "omes.ahliweb.com/v1",
+  "kind": "AgentDeployment",
+  "metadata": {
+    "name": "researcher",
+    "workspace": "ahliweb",
+    "environment": "production"
+  },
+  "spec": {
+    "runtime": "hermes",
+    "profile": "researcher",
+    "role": "generic",
+    "backend": "systemd",
+    "serviceMode": "user",
+    "restartPolicy": "always",
+    "health": { "command": "omes agent health researcher", "timeout": "10s" },
+    "storage": { "memory": "private", "sessions": "isolated", "skills": "managed" }
+  }
+}

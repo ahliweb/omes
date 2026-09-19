@@ -1,0 +1,115 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ahliweb.com/schemas/omes/agent-deployment/v1",
+  "title": "OMES AgentDeployment manifest v1",
+  "description": "Versioned schema for the native OMES + Hermes + systemd agent deployment manifest (issue #87). Field names mirror the illustrative manifest in docs/agent-orchestration-roadmap.md section 4. Validated by lib/omes/py/agent/manifest.py's stdlib validator, not scripts/check-contracts.py (that script belongs to a different contract area).",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "spec"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "omes.ahliweb.com/v1" },
+    "kind": { "const": "AgentDeployment" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "workspace", "environment"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$",
+          "description": "Stable logical agent name. Also used to derive the systemd unit name (omes-agent-<name>.service) and the HERMES_HOME isolation path, so it is restricted to a safe, unambiguous character set."
+        },
+        "workspace": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "environment": { "type": "string", "enum": ["production", "staging", "development"] }
+      }
+    },
+    "spec": {
+      "type": "object",
+      "required": [
+        "runtime",
+        "profile",
+        "role",
+        "backend",
+        "serviceMode",
+        "restartPolicy",
+        "resources",
+        "health",
+        "storage"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "runtime": {
+          "type": "string",
+          "enum": ["hermes"],
+          "description": "MVP supports only 'hermes' (issue #87 acceptance criterion); any other value must fail preflight before mutation."
+        },
+        "profile": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "description": "Hermes profile name; used to derive the agent's isolated HERMES_HOME, never a shared one."
+        },
+        "role": { "type": "string", "enum": ["generic", "specialist"] },
+        "backend": { "type": "string", "enum": ["systemd"] },
+        "serviceMode": { "type": "string", "enum": ["user", "system"] },
+        "restartPolicy": { "type": "string", "enum": ["always", "on-failure", "no"] },
+        "capabilities": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "deny": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "resources": {
+          "type": "object",
+          "required": ["memory", "cpu", "pids"],
+          "additionalProperties": false,
+          "properties": {
+            "memory": {
+              "type": "string",
+              "pattern": "^[0-9]+[KMG]$",
+              "description": "systemd MemoryMax=/MemoryHigh= value, e.g. '1G'."
+            },
+            "cpu": {
+              "type": "string",
+              "pattern": "^[0-9]+(\\.[0-9]+)?$",
+              "description": "CPU quota expressed as core-count, rendered into systemd CPUQuota= (e.g. '1.0' -> '100%')."
+            },
+            "pids": { "type": "integer", "minimum": 1, "maximum": 100000 }
+          }
+        },
+        "health": {
+          "type": "object",
+          "required": ["command", "timeout"],
+          "additionalProperties": false,
+          "properties": {
+            "command": { "type": "string", "minLength": 1, "maxLength": 512 },
+            "timeout": {
+              "type": "string",
+              "pattern": "^[0-9]+s$",
+              "description": "Bounded health-check timeout, seconds, e.g. '10s'."
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "required": ["memory", "sessions", "skills"],
+          "additionalProperties": false,
+          "properties": {
+            "memory": { "type": "string", "enum": ["private", "shared"] },
+            "sessions": { "type": "string", "enum": ["isolated", "shared"] },
+            "skills": { "type": "string", "enum": ["managed", "shared"] }
+          }
+        },
+        "secrets": {
+          "type": "array",
+          "description": "Secret REFERENCES only (env var / secret-store key names). Never a value.",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z_][A-Za-z0-9_-]{0,127}$"
+          }
+        }
+      }
+    }
+  }
+}
