@@ -177,6 +177,20 @@ using only the safe read-only methods:
 None of these can conflict with a running poller; all are safe to call at
 any time, including while the gateway is actively running.
 
+`telegram-allowlist.sh health` (issue [#79](https://github.com/ahliweb/omes/issues/79),
+used by `omes health agent`/`omes health gateway`'s channel layer — see
+[docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79))
+adds two more safe read-only methods, via the same `curl -K` pattern:
+
+- **`getMe`** — confirms the bot token is valid and resolves to a bot.
+- **`getWebhookInfo`** — reports `pending_update_count` and webhook
+  configuration state; it does **not** deliver or consume any pending
+  update (unlike the prohibited long-polling read endpoint below).
+
+Neither can conflict with a running poller either, for the same reason:
+they read metadata about the bot/webhook configuration, never the update
+queue itself.
+
 **How to actually discover an unknown chat id in the first place**
 (before you have anything to `diagnose`), safely:
 

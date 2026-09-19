@@ -394,6 +394,67 @@ cmd_diagnose() {
   fi
 }
 
+# cmd_health
+# Read-only channel-health probe for issue #79's layered health model
+# (lib/omes/py/health/hermes.py's "channel" layer): calls ONLY getMe and
+# getWebhookInfo (reusing _ta_api_call's curl -K pattern - the token
+# never touches argv or a logged URL) and prints a single JSON object on
+# stdout: {"enabled", "reachable", "pending_update_count", "connected",
+# "detail"}. Deliberately never calls the long-polling read endpoint
+# (see the header comment above and docs/telegram-security.md) - a
+# reachable getWebhookInfo response is evidence the bot token is valid
+# and Telegram's API is reachable, NOT proof a running polling gateway
+# is actually connected and processing updates (see
+# docs/hermes-integration.md "Health and readiness" for that caveat).
+cmd_health() {
+  local file
+  file="$(_ta_env_file)"
+
+  local token
+  if ! token="$(_ta_env_get TELEGRAM_BOT_TOKEN "$file")" || [[ -z "$token" ]]; then
+    printf '{"enabled": false, "reachable": false, "pending_update_count": null, "connected": false, "detail": "TELEGRAM_BOT_TOKEN not set"}\n'
+    return 0
+  fi
+
+  local me_out wh_out me_rc=0 wh_rc=0
+  me_out="$(_ta_api_call getMe "")" || me_rc=$?
+  wh_out="$(_ta_api_call getWebhookInfo "")" || wh_rc=$?
+
+  if [[ "$me_rc" -ne 0 ]] || [[ "$wh_rc" -ne 0 ]]; then
+    printf '{"enabled": true, "reachable": false, "pending_update_count": null, "connected": false, "detail": "getMe or getWebhookInfo failed"}\n'
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf '{"enabled": true, "reachable": true, "pending_update_count": null, "connected": true, "detail": "python3 not found; could not parse pending_update_count"}\n'
+    return 0
+  fi
+
+  ME_JSON="$me_out" WH_JSON="$wh_out" python3 -c '
+import json
+import os
+
+try:
+    me = json.loads(os.environ["ME_JSON"])
+    wh = json.loads(os.environ["WH_JSON"])
+    ok = bool(me.get("ok")) and bool(wh.get("ok"))
+    pending = wh.get("result", {}).get("pending_update_count") if ok else None
+    detail = "getMe and getWebhookInfo succeeded" if ok else "Telegram reported ok=false"
+except (ValueError, TypeError, KeyError):
+    ok = False
+    pending = None
+    detail = "could not parse Telegram API response"
+
+print(json.dumps({
+    "enabled": True,
+    "reachable": ok,
+    "pending_update_count": pending,
+    "connected": ok,
+    "detail": detail,
+}))
+'
+}
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
@@ -414,6 +475,10 @@ Commands:
                                --member is given. See docs/telegram-security.md
                                for why the long-polling read endpoint is
                                never used here.
+  health                       Read-only channel-health probe (getMe,
+                                getWebhookInfo only) for issue #79's
+                                layered health model; prints one JSON
+                                object on stdout.
 
 Every add/remove prints the exact restart command; the gateway is never
 restarted automatically.
@@ -447,6 +512,9 @@ main() {
       }
       shift
       cmd_diagnose "$@"
+      ;;
+    health)
+      cmd_health
       ;;
     -h | --help | "")
       _ta_usage
