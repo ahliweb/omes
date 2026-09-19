@@ -396,3 +396,110 @@ assert d['path'].endswith('/project')
   run "$OMES_BIN" graphify skill
   [ "$status" -eq 2 ]
 }
+
+# ---------------------------------------------------------------------------
+# graphify-mcp module + omes graphify mcp health (issue #52)
+# ---------------------------------------------------------------------------
+
+@test "install --module graphify-mcp installs the [mcp] extra and verifies" {
+  # tests/shims/graphify-mcp is present by default (this suite's baseline
+  # PATH), so this exercises the "already present, skip install" branch -
+  # module_apply's own install-call path is covered directly in
+  # tests/unit/graphify-mcp.bats.
+  run "$OMES_BIN" install --module graphify-mcp --yes
+  [ "$status" -eq 0 ]
+  run grep -c 'pip install' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "install --module graphify-mcp is not wired into any default profile" {
+  run grep -c '^graphify-mcp$' "${OMES_TEST_ROOT}/profiles/server.profile"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  run grep -c '^graphify-mcp$' "${OMES_TEST_ROOT}/profiles/desktop.profile"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  run grep -c '^graphify-mcp$' "${OMES_TEST_ROOT}/profiles/hermes.profile"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "install --module graphify-mcp as (simulated) root (explicit wrong-scope request) exits 5" {
+  OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --module graphify-mcp --yes
+  [ "$status" -eq 5 ]
+}
+
+@test "uninstall --module graphify-mcp reinstalls graphifyy without the extra" {
+  run "$OMES_BIN" install --module graphify-mcp --yes
+  [ "$status" -eq 0 ]
+  : > "$SHIM_LOG"
+  run "$OMES_BIN" uninstall --module graphify-mcp --yes
+  [ "$status" -eq 0 ]
+  run grep -c '^uv tool install --reinstall graphifyy$' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+}
+
+@test "install/uninstall --module graphify-mcp never touches hermes-gateway (systemctl is never called)" {
+  run "$OMES_BIN" install --module graphify-mcp --yes
+  [ "$status" -eq 0 ]
+  run "$OMES_BIN" uninstall --module graphify-mcp --yes
+  [ "$status" -eq 0 ]
+  run grep -c 'systemctl' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  run grep -c '^hermes' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "omes graphify mcp health reports not_applicable when graphify-mcp is not installed" {
+  local stripped="" dir
+  IFS=':' read -ra parts <<<"$PATH"
+  for dir in "${parts[@]}"; do
+    [[ -x "${dir}/graphify-mcp" ]] && continue
+    stripped="${stripped:+${stripped}:}${dir}"
+  done
+  PATH="$stripped" run "$OMES_BIN" graphify mcp health
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not_applicable"* ]]
+}
+
+@test "omes graphify mcp health --json reports not_applicable with ok true" {
+  local stripped="" dir
+  IFS=':' read -ra parts <<<"$PATH"
+  for dir in "${parts[@]}"; do
+    [[ -x "${dir}/graphify-mcp" ]] && continue
+    stripped="${stripped:+${stripped}:}${dir}"
+  done
+  PATH="$stripped" omes_run_stdout_only "$OMES_BIN" graphify mcp health --json
+  [ "$status" -eq 0 ]
+  run python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert d['command']=='graphify'; assert d['subcommand']=='mcp'; assert d['action']=='health'; assert d['ok'] is True; assert d['status']=='not_applicable'" "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "omes graphify mcp health reports unhealthy when the graph file is missing" {
+  run "$OMES_BIN" graphify mcp health --graph "${OMES_TEST_TMPDIR}/does-not-exist/graph.json"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"unhealthy"* ]]
+  [[ "$output" == *"graph file not found"* ]]
+}
+
+@test "omes graphify mcp health reports ok when graphify-mcp is present and the graph file exists" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  printf '{"nodes":[],"links":[]}\n' > "${OMES_TEST_TMPDIR}/project/graph.json"
+  run "$OMES_BIN" graphify mcp health --graph "${OMES_TEST_TMPDIR}/project/graph.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok"* ]]
+}
+
+@test "omes graphify mcp health never invokes systemctl or the graphify-mcp server itself" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  printf '{"nodes":[],"links":[]}\n' > "${OMES_TEST_TMPDIR}/project/graph.json"
+  run "$OMES_BIN" graphify mcp health --graph "${OMES_TEST_TMPDIR}/project/graph.json"
+  [ "$status" -eq 0 ]
+  run grep -c 'systemctl' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  # Only --help is ever passed to the shim by a health check - a real
+  # server invocation (no args, or --transport stdio) would block/serve.
+  run grep -c '^graphify-mcp --help$' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+  run grep -vc '^graphify-mcp --help$' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || true
+}

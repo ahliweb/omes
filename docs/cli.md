@@ -618,12 +618,14 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
-### `omes graphify` (update / uninstall / run / skill)
+### `omes graphify` (update / uninstall / run / skill / mcp health)
 
-`lib/omes/cmd/graphify.sh` (issues #50/#51). Full synopsis, exit codes, JSON schemas, and
+`lib/omes/cmd/graphify.sh` (issues #50/#51/#52). Full synopsis, exit codes, JSON schemas, and
 examples for every `omes graphify <subcommand>` live in
-[docs/graphify.md](graphify.md) §2/§3, not here, to keep this shared reference file's
-graphify footprint minimal — see that document for the authoritative CLI contract.
+[docs/graphify.md](graphify.md) §2/§3/§4, not here, to keep this shared reference file's
+graphify footprint minimal — see that document for the authoritative CLI contract. The optional
+`graphify-mcp` server itself is installed via `omes install --module graphify-mcp`, like any
+other OMES module (docs/graphify.md §4.2).
 
 ## 5. Worked examples
 
