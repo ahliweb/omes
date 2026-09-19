@@ -627,7 +627,10 @@ def cmd_publish(args: argparse.Namespace) -> int:
         )
     except jobs.ApprovalError as exc:
         _persist(record, root, "system")
-        print(f"error: {exc}", file=sys.stderr)
+        if args.json:
+            _print_json({"job_id": record["job_id"], "state": record["state"], "error": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
     except jobs.ContentJobsError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -636,6 +639,12 @@ def cmd_publish(args: argparse.Namespace) -> int:
     if record["state"] == "verifying":
         jobs.verify_job(record, worker_executable, allowed_paths=allowed_paths)
 
+    # Capture the outcome BEFORE _persist() auto-archives a terminal
+    # state (succeeded/failed/cancelled -> archived, issue #68) - the
+    # exit code must reflect what actually happened (a failed publish is
+    # still a failure once archived), even though the printed/JSON
+    # `state` correctly shows the final `archived` state to the caller.
+    outcome_state = record["state"]
     _persist(record, root, "system")
 
     if args.json:
@@ -650,7 +659,7 @@ def cmd_publish(args: argparse.Namespace) -> int:
     else:
         url = record["publish"].get("resulting_url") or "(none)"
         print(f"{record['job_id']}: publish -> {record['state']} (url: {url})")
-    return EX_OK if record["state"] not in ("failed", "manual-review", "retryable-failure") else EX_ERROR
+    return EX_OK if outcome_state not in ("failed", "manual-review", "retryable-failure") else EX_ERROR
 
 
 def cmd_session_login(args: argparse.Namespace) -> int:

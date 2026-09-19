@@ -26,6 +26,9 @@ for as long as it is active (docs/threat-model.md T06).
 
 | Compatibility evidence collection (`omes health versions`, issue #83) | Read-only, argv-safe, timeout-bounded probes only; never reads `$HERMES_HOME/.env`; only a fixed non-secret Hermes config key allowlist may be queried; never dumps `os.environ` | None — the allowlist and the `.env` exclusion are hard invariants, not configurable | `lib/omes/py/provenance/versions.py`, `lib/omes/versions.sh` (see `docs/compatibility-evidence.md`) |
 
+| Content distribution (optional; issues #63–#70) | `content/sessions/<platform>/` mode `0700`, created only by a platform worker's own `prepare`/`bootstrap-session` op; never referenced by `reports.py`/export/audit/backup code; publish approval-gated by default with an immutable artifact-hash binding and staleness expiry; each `publish` call scoped to one platform | Fully automatic (no-approval) publishing is out of scope for this repository — not offered as a flag | `lib/omes/py/content/{paths,jobs,workers/base,reports}.py`; see `docs/content-threat-model.md` |
+
+
 
 ## 2. Telegram policy
 
