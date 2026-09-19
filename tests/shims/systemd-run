@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/systemd-run - fake systemd-run for bats tests.
+#
+# Not called directly by any module yet; provided alongside
+# tests/shims/systemd-analyze so a future check that transiently probes
+# directive support with `systemd-run --scope -p ...` has a safe,
+# logged, no-op shim to run against instead of touching real systemd.
+#
+#   SHIM_SYSTEMD_RUN_EXIT   exit code to return (default 0)
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'systemd-run %s\n' "$*" >>"$SHIM_LOG"
+fi
+
+exit "${SHIM_SYSTEMD_RUN_EXIT:-0}"

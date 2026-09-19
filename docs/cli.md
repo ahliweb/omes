@@ -205,6 +205,10 @@ least one check is `FAIL`.
 
 **Example:** `sudo omes doctor --json | jq '.checks[] | select(.level!="OK")'`
 
+The `hermes-gateway`/`hermes-gateway-system` `module_doctor` hooks additionally report the
+active systemd hardening profile (`off` by default) and resolved resource limits — see
+[`docs/hermes-hardening.md`](./hermes-hardening.md) for the `OMES_HERMES_HARDENING` opt-in.
+
 ### `omes update`
 
 **Synopsis:** `omes update [--dry-run] [--json]`

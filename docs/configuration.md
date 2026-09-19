@@ -98,7 +98,23 @@ reference (`OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, `OMES_UV_INSTALLE
 introducing none of its own) — kept there rather than duplicated here to minimize this shared
 reference file's graphify footprint.
 
+`OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
+there rather than duplicated here to minimize this shared reference file's graphify footprint.
+### 8a. Gateway hardening (issue #81; see [`docs/hermes-hardening.md`](./hermes-hardening.md))
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_HERMES_HARDENING` | `off` | Operator | `off`, `conservative` (recommended), or `strict`; any other value is treated as `off`. |
+| `OMES_HERMES_MEMORY_MAX` | `2G` | Operator | `MemoryMax=`/`MemoryHigh=` value for the hardening drop-in. |
+| `OMES_HERMES_CPU_QUOTA` | unset | Operator | `CPUQuota=` value; omitted from the drop-in when unset. |
+| `OMES_HERMES_RW_PATHS` | unset | Operator | Colon-separated extra `ReadWritePaths=` for strict mode, alongside `$HERMES_HOME`. |
+| `OMES_HERMES_HARDENING_TIMEOUT` | `15` | Operator | Seconds to wait for the unit to become active after a hardening-triggered restart before auto-rolling back the drop-in. |
+
+
 ## 10. `desktop-preflight` / `hyprland-session` modules
+
+
+
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|

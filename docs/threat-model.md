@@ -75,6 +75,7 @@ controls at the layer it manages (installer, configuration, service wiring).
 | TB14 | OMES ↔ registrar/DNS providers | Scoped provider credentials and verified adapter responses | Provider API, asynchronous status, unsupported capability, and stale external state |
 | TB15 | Control Center billing ↔ provider operation | Immutable invoice/price snapshot and reconciliation | Payment event replay, provider failure after payment, or false success assumption |
 | TB16 | `.id` document workflow | Encrypted object storage and tenant-scoped access | Registrant PII, expiring upload links, provider review state, and unauthorized download |
+| TB17 | Hermes gateway systemd sandbox | The OMES-managed hardening drop-in (`docs/hermes-hardening.md`), off by default | A compromised or misbehaving gateway process attempting to escalate privileges, exhaust host resources, or reach outside `$HERMES_HOME` |
 
 ## 4. Assets
 

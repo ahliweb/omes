@@ -147,6 +147,38 @@ case "${1:-}" in
     _list_remove "$(_active_file)" "$svc"
     exit 0
     ;;
+  restart)
+    svc="${2:-}"
+    if [[ "${SHIM_RESTART_FAILS:-0}" == "1" ]]; then
+      _list_remove "$(_active_file)" "$svc"
+      exit 1
+    fi
+    _list_add "$(_active_file)" "$svc"
+    exit 0
+    ;;
+  show)
+    # `show <unit> -p Prop1 -p Prop2 [--value]` - prints canned values so
+    # callers (hardening_verify/hardening_doctor) get deterministic,
+    # secret-free output without needing a real systemd.
+    value_only=0
+    props=()
+    prev=""
+    for a in "$@"; do
+      [[ "$a" == "--value" ]] && value_only=1
+      if [[ "$prev" == "-p" ]]; then
+        props+=("$a")
+      fi
+      prev="$a"
+    done
+    if [[ "$value_only" -eq 1 ]]; then
+      printf '%s\n' "${SHIM_SYSTEMCTL_SHOW_VALUE:-infinity}"
+      exit 0
+    fi
+    for p in "${props[@]}"; do
+      printf '%s=%s\n' "$p" "${SHIM_SYSTEMCTL_SHOW_VALUE:-infinity}"
+    done
+    exit 0
+    ;;
   daemon-reload)
     exit 0
     ;;

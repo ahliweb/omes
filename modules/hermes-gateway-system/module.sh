@@ -46,6 +46,9 @@ MODULE_PROFILES=(server)
 
 HERMES_GATEWAY_UNIT="hermes-gateway"
 
+# shellcheck source=../hermes-gateway/hardening.sh
+source "${OMES_ROOT}/modules/hermes-gateway/hardening.sh"
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -133,6 +136,8 @@ module_check() {
     return 1
   fi
 
+  hardening_check "system" "$(_hgws_user_home "$user")/.hermes"
+
   return 0
 }
 
@@ -169,6 +174,12 @@ module_apply() {
 
   state_set "module.hermes-gateway-system.mode" "system"
   state_set "module.hermes-gateway-system.target_user" "$user"
+
+  if ! hardening_apply "system" "${home}/.hermes"; then
+    log_error "hermes-gateway-system: hardening apply failed and was automatically rolled back (see above)"
+    return 1
+  fi
+
   return 0
 }
 
@@ -189,6 +200,7 @@ module_verify() {
   fi
 
   _hgws_doctor_caveat
+  hardening_verify "system"
   return 0
 }
 
@@ -196,9 +208,11 @@ module_rollback() {
   log_warn "hermes-gateway-system: rollback stops/disables the OMES-managed system service and removes OMES's drop-in; it never removes Hermes itself or the target user's data"
 
   if omes_dry_run; then
-    log_info "[dry-run] would stop/disable ${HERMES_GATEWAY_UNIT} (system) and remove $(_hgws_dropin_file)"
+    log_info "[dry-run] would stop/disable ${HERMES_GATEWAY_UNIT} (system), remove $(_hgws_dropin_file), and remove any hardening drop-in"
     return 0
   fi
+
+  hardening_rollback "system"
 
   systemctl stop "$HERMES_GATEWAY_UNIT" >/dev/null 2>&1 || true
   systemctl disable "$HERMES_GATEWAY_UNIT" >/dev/null 2>&1 || true
@@ -259,5 +273,10 @@ print("ready=%s connected=%s gateway=%s" % (d.get("ready"), d.get("connected"), 
 ' 2>/dev/null || printf 'health checker output could not be summarized')"
 
   printf 'health: %s\n' "$summary"
-  [[ "$rc" -eq 0 ]]
+  local health_ok=0
+  [[ "$rc" -eq 0 ]] || health_ok=1
+
+  hardening_doctor "system"
+
+  return "$health_ok"
 }

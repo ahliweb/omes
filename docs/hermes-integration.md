@@ -496,6 +496,16 @@ Not implemented / manual by design:
   `OMES_HERMES_GATEWAY_EXTRA_PATH` — this is a manual, documented operator
   step (§12.1), not automated.
 
+## 16a. Systemd hardening profiles (issue #81)
+
+Both gateway modules now also manage an opt-in, off-by-default systemd
+hardening drop-in (`conservative`/`strict`, via `OMES_HERMES_HARDENING`) -
+see [`docs/hermes-hardening.md`](hermes-hardening.md) for the full
+directive-by-directive rationale, compatibility notes, and the
+env-var/`module_check`/`module_apply`/`module_verify`/`module_doctor`/
+`module_rollback` wiring (`modules/hermes-gateway/hardening.sh`, shared
+by both modules).
+
 ## 17. Health and readiness (issue #79)
 
 `omes health agent` and `omes health gateway` (via
