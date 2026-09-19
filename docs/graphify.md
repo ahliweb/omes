@@ -2,10 +2,11 @@
 
 > Status: §1 is the accepted design boundary (issue
 > [#49](https://github.com/ahliweb/omes/issues/49)). §2 (install module, #50),
-> §3 (workflow/skill, #51), §4 (MCP integration, #52), and §5 (safe Obsidian
-> export, #53) are all implemented, as described. Later sections (§6+) remain
-> placeholders for their own stacked issues and must not be read as
-> implemented until their own issue lands.
+> §3 (workflow/skill, #51), §4 (MCP integration, #52), §5 (safe Obsidian
+> export, #53), and §6 (incremental sync/change detection, #54) are all
+> implemented, as described. Later sections (§7+) remain placeholders for
+> their own stacked issues and must not be read as implemented until their
+> own issue lands.
 >
 > Upstream facts in this document were verified 2026-09-19 against
 > `graphify` version `0.9.64` (see
@@ -614,4 +615,204 @@ omes graphify export ~/code/myrepo/graphify-out --vault ~/Documents/MyVault --ye
 OBSIDIAN_VAULT_PATH=~/Documents/MyVault omes graphify export ~/code/myrepo/graphify-out --yes
 omes graphify export ~/code/myrepo/graphify-out --vault ~/Documents/NewVault --init-vault --yes
 omes graphify export rollback --yes                          # undo the last export
+```
+
+## §6 Incremental sync and change detection (`omes graphify sync` / `omes graphify status`)
+
+Implemented (issue #54). `omes graphify sync <path> [--vault <path>] [--min-interval <sec>]
+[--allow-nested-vault] [--dry-run] [--yes] [--json]` re-runs extraction only when the source
+tree has actually changed since the last sync, using an OMES-owned manifest -
+`<graphify-out>/omes-sync.json` - of every tracked source file's sha256 and mtime. `omes graphify
+status <path> [--vault <path>] [--json]` is the read-only counterpart: it compares the current
+tree against that manifest without ever invoking `graphify` or writing anything, reporting
+`no_manifest` (never synced), `stale` (changes detected), or `up_to_date`.
+
+### 6.1 Correction: upstream DOES have `update`/`watch` subcommands (re-verified 2026-09-19)
+
+§1.8 (written for issue #49, before this issue actually re-verified the full command list) states
+that `graphify --help` exposes no literal `--update`/`--watch` **flag** - that specific, narrow
+claim is still correct. It did not go on to check whether `update`/`watch` exist as **top-level
+subcommands**, and they do. Re-verified against graphify 0.9.64 (`docker run --rm python:3.12-slim
+bash -c 'pip install -q graphifyy && graphify --help'`, plus a live `extract`/`update` run on a
+synthetic 2-file repo):
+
+- **`graphify update <path>`** — "re-extract code files and update the graph (no LLM needed)".
+  Confirmed empirically: it re-scans and re-parses every code file (AST only, no LLM, no `--out`
+  option — it always writes in place to `<path>/graphify-out/`), but only rewrites
+  `graph.json`/`graph.html`/`GRAPH_REPORT.md` when it actually detects a topology change; a
+  second, no-op `update` call printed `No code-graph topology changes detected; outputs left
+  untouched.` and returned in ~0.18s. Flags: `--force` (overwrite even if the rebuild has fewer
+  nodes; also `GRAPHIFY_FORCE=1`) and `--no-cluster`.
+- **`graphify watch <path>`** — "watch a folder and rebuild the graph on code changes": a
+  continuous, long-running folder watcher.
+- **`graphify check-update <path>`** — "check needs_update flag and notify if semantic
+  re-extraction is pending (cron-safe)": upstream's own staleness check for the *semantic* pass
+  specifically (not wrapped by `omes graphify status`, which checks the OMES-owned manifest
+  instead and never depends on graphify's own `needs_update` bookkeeping).
+- The `update` command's own success message ends with `For doc/paper/image changes run /graphify
+  --update in your AI assistant.` — this refers to an **assistant slash-command convention**
+  (`graphify claude install`/`graphify hermes install` write a `/graphify` skill that itself
+  accepts an `--update` argument), not a `graphify` CLI flag; §1.8's original, narrower claim
+  about the CLI's own flag surface remains accurate on that specific point.
+
+This does not change §1.4/§1.5's non-goals: `omes graphify sync` never enables semantic
+extraction (it only ever calls `extract --code-only` or `update`, both 100% local, no LLM/API key
+involved) and never wraps `graphify watch` as an OMES-supervised service (§6.5).
+
+**Naming note:** `omes graphify update` (§2.5) is a *different* command — it upgrades the
+`graphifyy` tool-env install itself (`uv tool upgrade graphifyy`). `omes graphify sync` is what
+internally shells out to the upstream `graphify update <path>` *subcommand*. The two are not
+related beyond sharing an upstream word.
+
+### 6.2 `omes graphify sync`: change detection, debounce, and the two extraction paths
+
+**Synopsis:** `omes graphify sync <path> [--vault <path>] [--min-interval <sec>]
+[--allow-nested-vault] [--dry-run] [--yes] [--json]`.
+
+Requires the `graphify` module to already be installed (`omes install --module graphify`),
+exactly like `omes graphify run`. `<path>` is validated the same way `run`/`export` validate
+their own path argument (must exist, canonicalized via `realpath`, refused if it is or is nested
+inside a `graphify-out/` directory).
+
+1. **Debounce first, before any tree scan** (`--min-interval <seconds>`, default 0/disabled): if
+   the manifest's `last_run_at` is more recent than `--min-interval` seconds ago, the call is
+   skipped entirely (`"action":"skipped_debounced"`, exit 0) without even walking the source
+   tree - a debounced call costs one small JSON file read.
+2. **Change detection**: the source tree is walked (skipping `.git/`, symlinks - never followed,
+   matching #56's "symlinks are refused/skipped" requirement - and a best-effort, top-level-only
+   `.gitignore` match; full `.gitignore`/`.graphifyignore` semantics are #55's concern), hashing
+   every file and comparing against the manifest. A file only counts as modified when its sha256
+   differs - an mtime-only change (e.g. a touch, or a checkout that preserves content) is not a
+   change.
+3. **No changes**: reports `"action":"none"` and exits 0. The manifest's `last_run_at` is still
+   refreshed (via a `--write` scan with no extraction) so `--min-interval` correctly throttles
+   repeated no-op calls, without ever invoking `graphify`.
+4. **Changes found — which upstream command runs**:
+   - **First sync** (no existing `graphify-out/graph.json`): `graphify extract <path> --code-only
+     --out <throwaway-temp-dir>` (which writes `<temp-dir>/graphify-out/`, per graphify's own
+     `--out DIR ... writes <DIR>/graphify-out/`), then an atomic `mv` of that directory into place
+     as `<path>/graphify-out/` - a genuinely temp-dir-plus-atomic-rename recovery mechanism for
+     the very first run, satisfying issue #54's "recovery from interrupted runs" for the case
+     where nothing valid exists yet to fall back to.
+   - **Subsequent syncs**: `graphify update <path>` (§6.1 - cheap, no LLM, in place). Since
+     `update` has no `--out` option and mutates `<path>/graphify-out/` directly, OMES instead
+     takes its own backup first (`lib/omes/backup.sh`, module `graphify-sync`) and restores it
+     (`lib/omes/restore.sh`'s `restore_backup`) if `update` exits non-zero OR leaves a
+     missing/invalid `graph.json` behind (checked via a plain JSON-parse sanity check) - the same
+     recovery guarantee as the first-sync path, using the same backup primitive every other OMES
+     mutation already uses instead of a second, redundant temp-dir mechanism.
+   - Either path always requires confirmation (`--yes` or an interactive `y`) before running,
+     same as every other real-write OMES command.
+5. On success, the manifest is rewritten (`--write` scan) to the current tree snapshot.
+
+**Semantic re-extraction is never triggered by `sync`.** `sync` only ever calls `extract
+--code-only` or `update` - both 100% local, no provider credential ever read or required
+(§1.5). A semantic pass (`INFERRED` edges) must be re-triggered explicitly via `omes graphify run
+--mode semantic` (§3.1) after a sync; **every** semantic re-run re-processes and re-pays for
+whatever content the configured backend charges for per call, since `sync` has no concept of
+semantic caching - this is the "token/cost implication" issue #54 asks to be documented: running
+`sync` frequently (even via a systemd timer, §6.6) is safe and free (100% local, no LLM), but
+re-running semantic extraction on a schedule is a recurring provider-API cost the operator opts
+into explicitly and separately, every time.
+
+### 6.3 Loop avoidance
+
+`sync`'s own change-detection walk always excludes the target `graphify-out/` directory (its own
+manifest and graph output would otherwise look like an ever-changing source file, causing `sync`
+to perpetually detect "changes" against its own prior output). When `--vault <path>` (or
+`OBSIDIAN_VAULT_PATH`) is also given - purely so `sync` can exclude it from its own scan, `sync`
+itself never exports anything - a vault that resolves *inside* the source tree is refused outright
+(exit 2) unless `--allow-nested-vault` is passed explicitly, because a human might otherwise run
+`omes graphify export` into that nested vault subdirectory and immediately have `sync` see its own
+exported notes as new "source changes," triggering a pointless (and, if a scheduled timer is
+involved, unattended and repeating) re-extraction loop. Passing `--allow-nested-vault` still
+always excludes the vault path from the scan - it only removes the refusal, never the exclusion.
+
+### 6.4 Recovery from interrupted runs
+
+See §6.2 point 4 above for the mechanism (temp-dir-plus-rename for a first sync, backup-plus-
+restore for a subsequent one). In both cases, a failed or interrupted `sync` leaves the source
+tree completely untouched and either leaves no `graphify-out/` behind at all (first-run
+failure - nothing was ever moved into place) or restores `graphify-out/` to its exact pre-sync
+state (subsequent-run failure) - `omes graphify sync` never leaves a partially-written or
+corrupt `graphify-out/` in place for a later `omes graphify run`/`export`/`status` call to trip
+over.
+
+### 6.5 `--watch` is explicitly not implemented
+
+`omes graphify sync` has no `--watch` flag and starts no background process, timer, or daemon of
+its own. Upstream's own `graphify watch <path>` (§6.1) is available directly to an operator who
+wants continuous rebuilding, entirely outside OMES's supervision - OMES never starts, stops,
+enables, or health-checks it, matching the same "always-on watch mode remains optional until
+resources and security behavior are tested" posture issue #54 itself asks for. Wrapping `graphify
+watch` as an OMES-supervised, `systemd`-managed long-running service is explicitly left as
+possible future work, not attempted here.
+
+### 6.6 Optional systemd user timer (documented only, never installed by default)
+
+`omes graphify sync` is designed to be safe to invoke repeatedly and unattended (idempotent
+no-op when nothing changed, debounced via `--min-interval`, and it never touches provider
+credentials). An operator who wants scheduled syncing may install a user-level systemd timer
+manually - OMES never creates, enables, or references this unit itself:
+
+```ini
+# ~/.config/systemd/user/omes-graphify-sync.service
+[Unit]
+Description=OMES graphify sync (%h/code/myrepo)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/omes graphify sync %h/code/myrepo --yes --min-interval 300
+```
+
+```ini
+# ~/.config/systemd/user/omes-graphify-sync.timer
+[Unit]
+Description=Run omes-graphify-sync.service periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable with `systemctl --user enable --now omes-graphify-sync.timer`. As with the equivalent
+`omes-content-scan.timer` example (docs/cli.md §5), the target repo path and `--min-interval`
+above are illustrative - substitute the operator's own path/cadence. `loginctl enable-linger
+<user>` is required for a headless host, exactly as it already is for `hermes-gateway`
+(docs/configuration.md).
+
+### 6.7 Environment variables
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_GRAPHIFY_PROJECT_NAME` | derived from the source path's basename | Operator | Same variable `omes graphify export` (§5) reads; `sync`/`status` do not use it themselves (they have no vault subdirectory naming concern), listed here only to avoid a second definition elsewhere. |
+
+`sync`/`status` introduce no new environment variables of their own beyond the flags already
+listed in their synopses (`--min-interval`, `--allow-nested-vault`) and the same
+`OBSIDIAN_VAULT_PATH` §5 already documents (used here only for the exclude/refuse check, §6.3).
+
+**Exit codes:** 0 (`sync`: success, no-op, or debounced; `status`: any of `no_manifest`/`stale`/
+`up_to_date` — status is informational, never a failure by itself), 1 (`graphify extract`/`update`
+itself failed, python3/graphify.cli invocation failed, or confirmation declined without `--yes`),
+2 (usage error: missing `<path>`, `<path>` does not exist or resolves inside a `graphify-out/`
+directory, invalid `--min-interval`, graphify not installed, or a nested vault without
+`--allow-nested-vault`).
+
+**JSON schema:**
+`{"command":"graphify","subcommand":"sync","ok":true,"action":"update","path":"/abs/path","out_dir":"/abs/path/graphify-out","exit_code":0}`
+(`action` is one of `extract`, `update`, `none`, or `skipped_debounced`),
+`{"command":"graphify","subcommand":"status","ok":true,"path":"/abs/path","status":"stale","detail":{...},"exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify sync ~/code/myrepo --yes                              # first run: extract --code-only
+omes graphify sync ~/code/myrepo --yes                              # later runs: update (only if changed)
+omes graphify sync ~/code/myrepo --min-interval 300 --yes            # debounced, e.g. from a timer
+omes graphify status ~/code/myrepo --json                            # read-only: no_manifest|stale|up_to_date
+omes graphify sync ~/code/myrepo --vault ~/Documents/MyVault --yes    # excludes the vault from the scan
 ```

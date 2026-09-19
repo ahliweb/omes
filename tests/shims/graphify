@@ -103,6 +103,61 @@ NOTEEOF
     fi
     exit 0
     ;;
+  extract)
+    # Used both by `omes graphify run` (issue #51, no file assertions
+    # rely on this) and `omes graphify sync`'s first-run path (issue
+    # #54, which DOES check the resulting graph.json). Supports --out
+    # (writes <out>/graphify-out/graph.json, matching real graphify's
+    # own "--out DIR ... writes <DIR>/graphify-out/" behavior) alongside
+    # the default <path>/graphify-out/graph.json.
+    #   SHIM_GRAPHIFY_EXTRACT_FAIL   1 => exit 1, writes nothing.
+    shift
+    extract_path="${1:-.}"
+    extract_out=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --out | --output)
+          extract_out="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    if [[ "${SHIM_GRAPHIFY_EXTRACT_FAIL:-0}" == "1" ]]; then
+      exit 1
+    fi
+    extract_out_dir="${extract_out:-$extract_path}/graphify-out"
+    mkdir -p "$extract_out_dir"
+    printf '{"nodes": [{"id": "f1", "type": "file", "path": "src/a.py"}], "edges": []}\n' \
+      >"${extract_out_dir}/graph.json"
+    exit 0
+    ;;
+  update)
+    # Simulates upstream `graphify update <path>` (issue #54,
+    # docs/graphify.md §6.1) - always in-place at <path>/graphify-out/,
+    # no --out support (matching the real command's own --help).
+    #   SHIM_GRAPHIFY_UPDATE_FAIL      1 => exit 1, writes nothing.
+    #   SHIM_GRAPHIFY_UPDATE_CORRUPT   1 => exit 0 but leaves graph.json
+    #                                   truncated/invalid, simulating an
+    #                                   interrupted run for the recovery
+    #                                   test.
+    shift
+    update_path="${1:-.}"
+    if [[ "${SHIM_GRAPHIFY_UPDATE_FAIL:-0}" == "1" ]]; then
+      exit 1
+    fi
+    update_out_dir="${update_path}/graphify-out"
+    mkdir -p "$update_out_dir"
+    if [[ "${SHIM_GRAPHIFY_UPDATE_CORRUPT:-0}" == "1" ]]; then
+      printf 'not valid json {{{' >"${update_out_dir}/graph.json"
+      exit 0
+    fi
+    printf '{"nodes": [{"id": "f1", "type": "file", "path": "src/a.py"}, {"id": "f2", "type": "file", "path": "src/b.py"}], "edges": []}\n' \
+      >"${update_out_dir}/graph.json"
+    exit 0
+    ;;
   *)
     exit 0
     ;;
