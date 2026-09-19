@@ -244,7 +244,9 @@ class TestPublishVerifyWithFakeWorker(unittest.TestCase):
         self.assertEqual(publish_calls_after_resume, 1, "resume must never re-publish")
 
         resumed_record = jobs.load_job(record["job_id"], self.root)
-        self.assertEqual(resumed_record["state"], "succeeded")
+        # cli.cmd_resume archives a job as soon as it reaches a terminal
+        # state (issue #68), so "succeeded" immediately becomes "archived".
+        self.assertEqual(resumed_record["state"], "archived")
 
     def test_publishing_survives_crash_as_manual_review_not_a_second_publish(self):
         counter_file = Path(self._tmp) / "publish-counter.txt"
