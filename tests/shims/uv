@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# tests/shims/uv - fake `uv` CLI for bats tests (modules/graphify, issue #50).
+# tests/shims/uv - fake `uv` CLI for bats tests (modules/graphify, issue #50;
+# compatibility evidence / provenance, issues #83, #84).
 #
 # Logs every invocation (space-joined argv) to $SHIM_LOG and returns
-# success by default, with plausible output for the subcommands
-# modules/graphify/module.sh and lib/omes/cmd/graphify.sh actually run:
-# `uv tool install/upgrade/uninstall <pkgspec>` and `uv tool list`.
+# success by default, with plausible output for the subcommands OMES runs:
+# `uv --version`, `uv tool install/upgrade/uninstall <pkgspec>`, `uv tool list`.
 #
 #   SHIM_UV_EXIT              exit code for any subcommand (default 0)
+#   SHIM_UV_VERSION           output for `uv --version` (default "uv 0.4.29")
 #   SHIM_UV_TOOL_LIST_OUTPUT  overrides `uv tool list` output
+#   SHIM_UV_TOOL_LIST         alias of SHIM_UV_TOOL_LIST_OUTPUT
 #                             (default: "graphifyy v0.9.64")
 
 set -Eeuo pipefail
@@ -17,8 +19,15 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'uv %s\n' "$*" >>"$SHIM_LOG"
 fi
 
-if [[ "${1:-}" == "tool" ]] && [[ "${2:-}" == "list" ]]; then
-  printf '%s\n' "${SHIM_UV_TOOL_LIST_OUTPUT:-graphifyy v0.9.64}"
-fi
+case "${1:-}" in
+  --version)
+    printf '%s\n' "${SHIM_UV_VERSION:-uv 0.4.29}"
+    ;;
+  tool)
+    if [[ "${2:-}" == "list" ]]; then
+      printf '%s\n' "${SHIM_UV_TOOL_LIST_OUTPUT:-${SHIM_UV_TOOL_LIST:-graphifyy v0.9.64}}"
+    fi
+    ;;
+esac
 
 exit "${SHIM_UV_EXIT:-0}"

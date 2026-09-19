@@ -354,6 +354,18 @@ profiles, and remediation guidance.
 `OMES_OLLAMA_MODEL` is set) — a failure there is reported as a WARN, it
 never fails `omes doctor` outright.
 
+`omes health versions [--json]` (issue
+[#83](https://github.com/ahliweb/omes/issues/83), via
+[`lib/omes/versions.sh`](../lib/omes/versions.sh) and
+[`lib/omes/py/provenance/versions.py`](../lib/omes/py/provenance/versions.py))
+reports runtime version/compatibility evidence — OMES, OS/arch/kernel,
+Hermes, gateway mode, python3, node, browser, ffmpeg, docker (client
+only), Ollama, and a documented allowlist of non-secret Hermes config
+keys. See [docs/compatibility-evidence.md](compatibility-evidence.md)
+for the full field list and the "evidence is not a guarantee" scope note.
+Exit codes: 0 (this is a read-only report, not a pass/fail gate), 1 on an
+internal error only.
+
 **Exit codes:** 0 ready, 7 not ready, 4 service missing (binary/endpoint
 entirely unreachable — nothing further could be checked), 2 (usage
 error, e.g. an unknown target or missing flag value).

@@ -21,6 +21,9 @@ MODULE_REQUIRES=()
 # shellcheck disable=SC2034
 MODULE_PROFILES=(server desktop hermes)
 
+# shellcheck source=../../lib/omes/versions.sh
+source "${OMES_ROOT}/lib/omes/versions.sh"
+
 # Default upstream installer location (verified 2026-09-18). Overridable via
 # OMES_HERMES_INSTALLER_URL purely for testability; there is no documented
 # operator reason to change it.
@@ -223,6 +226,45 @@ _hermes_ensure_env_file() {
   chmod 600 "$env_file"
 }
 
+# _hermes_record_evidence
+# Snapshots lib/omes/versions.sh's compatibility evidence report
+# (issue #83) into state keys `evidence.<component>.version` /
+# `evidence.<component>.observed_at`, for the small set of components
+# that have a single scalar value (composite objects like
+# `provider_config` and nested `os`/`omes` are intentionally skipped
+# here - they stay available via `omes health versions --json`, not
+# duplicated into flat state keys). Best-effort: a collection failure
+# here never fails module_apply or module_doctor.
+_hermes_record_evidence() {
+  local json
+  json="$(versions_collect_json 2>/dev/null)" || return 0
+  [[ -n "$json" ]] || return 0
+
+  local pairs
+  pairs="$(OMES_HERMES_EVIDENCE_JSON="$json" python3 -c '
+import json
+import os
+
+d = json.loads(os.environ["OMES_HERMES_EVIDENCE_JSON"])
+components = d.get("components", {})
+for name in ("hermes", "gateway_mode", "python3", "node", "browser", "ffmpeg", "docker", "ollama"):
+    fact = components.get(name)
+    if not isinstance(fact, dict) or "value" not in fact:
+        continue
+    value = fact.get("value") or ""
+    observed_at = fact.get("observed_at") or ""
+    print(f"{name}\t{value}\t{observed_at}")
+' 2>/dev/null || true)"
+  [[ -n "$pairs" ]] || return 0
+
+  local line name value observed_at
+  while IFS=$'\t' read -r name value observed_at; do
+    [[ -n "$name" ]] || continue
+    state_set "evidence.${name}.version" "$value"
+    state_set "evidence.${name}.observed_at" "$observed_at"
+  done <<<"$pairs"
+}
+
 # ---------------------------------------------------------------------------
 # Module contract
 # ---------------------------------------------------------------------------
@@ -285,6 +327,7 @@ module_apply() {
 
   if ! omes_dry_run; then
     state_set "module.hermes.home" "$home"
+    _hermes_record_evidence
   fi
 
   return 0
@@ -371,7 +414,7 @@ _hermes_ollama_configured() {
 # WARN in `omes doctor`, it never fails `module_verify` itself, and it is
 # a complete no-op (prints nothing, returns 0) when Ollama is not
 # configured for this install at all.
-module_doctor() {
+_hermes_doctor_print_ollama() {
   if ! _hermes_ollama_configured; then
     printf 'ollama: not configured for this install (set OMES_OLLAMA_ENABLED=1, or install the ollama binary and set OMES_OLLAMA_MODEL)\n'
     return 0
@@ -409,3 +452,60 @@ print("ready=%s service=%s model=%s" % (d.get("ready"), d.get("service", {}).get
   printf 'ollama: %s\n' "$summary"
   [[ "$rc" -eq 0 ]]
 }
+
+# module_doctor
+# Runs every additive doctor section (Ollama, then versions/compatibility
+# evidence) and combines their results: a WARN from any section makes
+# `omes doctor` report this module as WARN, but never fails
+# module_verify itself.
+module_doctor() {
+  local overall=0
+
+  _hermes_doctor_print_ollama || overall=1
+  _hermes_doctor_print_versions || overall=1
+
+  return "$overall"
+}
+
+# =============================================================================
+# BEGIN module_doctor versions section (issue #83)
+# =============================================================================
+#
+# Appended to module_doctor's output: refreshes the evidence.* state
+# snapshot and prints a one-line compatibility-evidence summary plus any
+# known-unsupported-combination warnings. Advisory only, like the Ollama
+# section above - never fails module_verify.
+_hermes_doctor_print_versions() {
+  _hermes_record_evidence
+
+  local json rc=0
+  json="$(versions_collect_json 2>/dev/null)" || rc=$?
+  if [[ -z "$json" ]]; then
+    printf 'versions: evidence collector produced no output (see docs/compatibility-evidence.md)\n'
+    return 1
+  fi
+
+  OMES_HERMES_EVIDENCE_JSON="$json" python3 -c '
+import json
+import os
+
+d = json.loads(os.environ["OMES_HERMES_EVIDENCE_JSON"])
+c = d.get("components", {})
+hermes_v = (c.get("hermes") or {}).get("value")
+gw = (c.get("gateway_mode") or {}).get("value")
+print("versions: hermes=%s gateway_mode=%s python3=%s node=%s ffmpeg=%s docker=%s" % (
+    hermes_v, gw,
+    (c.get("python3") or {}).get("value"),
+    (c.get("node") or {}).get("value"),
+    (c.get("ffmpeg") or {}).get("value"),
+    (c.get("docker") or {}).get("value"),
+))
+for w in d.get("warnings", []):
+    print("versions: WARN %s" % w)
+' 2>/dev/null || printf 'versions: evidence report could not be summarized\n'
+
+  return "$rc"
+}
+# =============================================================================
+# END module_doctor versions section (issue #83)
+# =============================================================================

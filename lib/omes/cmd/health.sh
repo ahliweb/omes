@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama] [options]
+Usage: omes health [agent|gateway|ollama|versions] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -31,6 +31,10 @@ Targets:
   ollama    Layered service/model/capability health checks for the
             optional Ollama local AI runtime (issue #71).
             Options: --json  --profile <name>  --model <id>
+  versions  Runtime version/compatibility evidence: OMES, OS/arch/kernel,
+            Hermes, gateway mode, python3, node, browser, ffmpeg, docker
+            (client only), Ollama, and non-secret Hermes config keys
+            (issue #83; see docs/compatibility-evidence.md). Options: --json
 
 Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.md):
   OMES_HEALTH_TIMEOUT           per-probe timeout in seconds (default 10)
@@ -263,9 +267,107 @@ _health_run_ollama() {
   exit "$rc"
 }
 
+# =============================================================================
+# BEGIN omes health versions (issue #83) - see docs/compatibility-evidence.md
+# =============================================================================
+#
+# `omes health versions` reports the same runtime/compatibility evidence
+# lib/omes/versions.sh collects for modules/hermes/module.sh's
+# module_doctor, as a standalone read-only report. This block is
+# deliberately self-contained (its own usage text branch, its own
+# runner) so it can be lifted out or extended without touching the
+# agent/gateway/ollama targets above.
+
+# shellcheck source=../versions.sh
+source "${OMES_ROOT}/lib/omes/versions.sh"
+
+# _health_print_versions_human <json>
+# Prints a short human-readable summary of the versions.py evidence
+# report. See _health_print_ollama_human's comment for why the JSON is
+# passed via an env var rather than stdin/argv.
+_health_print_versions_human() {
+  OMES_HEALTH_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_JSON"])
+except ValueError:
+    print("[omes] health versions: the checker did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] health versions: generated_at=%s" % d.get("generated_at"))
+components = d.get("components", {})
+for name, fact in components.items():
+    if name == "provider_config":
+        continue
+    if isinstance(fact, dict) and "value" in fact:
+        print("[omes]   %-14s %s" % (name + ":", fact.get("value") if fact.get("value") is not None else "null (%s)" % fact.get("reason")))
+    else:
+        for sub_name, sub_fact in fact.items():
+            print("[omes]   %-14s %s" % (f"{name}.{sub_name}:", sub_fact.get("value") if sub_fact.get("value") is not None else "null (%s)" % sub_fact.get("reason")))
+for key, fact in components.get("provider_config", {}).items():
+    print("[omes]   provider_config.%-20s %s" % (key + ":", fact.get("value") if fact.get("value") is not None else "not_available (%s)" % fact.get("reason")))
+for w in d.get("warnings", []):
+    print("[omes]   WARN %s" % w)
+'
+}
+
+# _health_run_versions [--json]
+_health_run_versions() {
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health versions: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health versions: python3 not found (required for lib/omes/py/provenance/versions.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local output rc=0
+  output="$(versions_collect_json 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    log_error "health versions: the evidence collector produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_versions_human "$output"
+  fi
+
+  exit "$rc"
+}
+# =============================================================================
+# END omes health versions (issue #83)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
+    return 0
+  fi
+
+  if [[ "${1:-}" == "versions" ]]; then
+    shift
+    _health_run_versions "$@"
     return 0
   fi
 

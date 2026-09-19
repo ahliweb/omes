@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/ffmpeg - fake ffmpeg CLI for bats tests (issue #83).
+#
+#   SHIM_FFMPEG_VERSION_LINE   first line of `ffmpeg -version` output
+#                              (default "ffmpeg version 6.1.1-static")
+#   SHIM_FFMPEG_EXIT           exit code for `ffmpeg -version` (default 0)
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'ffmpeg %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  -version)
+    if [[ "${SHIM_FFMPEG_EXIT:-0}" != "0" ]]; then
+      exit "${SHIM_FFMPEG_EXIT}"
+    fi
+    printf '%s\n' "${SHIM_FFMPEG_VERSION_LINE:-ffmpeg version 6.1.1-static https://johnvansickle.com/ffmpeg/}"
+    printf 'built with gcc 12\n'
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac

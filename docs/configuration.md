@@ -217,6 +217,16 @@ See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-is
 
 
 
+## 13c. `omes health versions` / `lib/omes/py/provenance/versions.py` (issue #83)
+
+See [docs/compatibility-evidence.md](compatibility-evidence.md) for the full field list.
+This command reads no variable beyond what its host facts already come from
+(`OMES_HERMES_HOME` §7, `OMES_HEALTH_TIMEOUT`-style bounding is internal to
+`versions.py` and not independently configurable at this time); it never reads
+`$HERMES_HOME/.env`.
+
+
+
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
 <!-- OMES-MERMAID: docs/configuration.md -->

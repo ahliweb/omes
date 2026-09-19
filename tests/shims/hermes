@@ -15,6 +15,16 @@
 #   SHIM_HERMES_GATEWAY_INSTALL_EXIT   exit code for `hermes gateway install` (default 0)
 #   SHIM_HERMES_GATEWAY_STATUS_EXIT    exit code for `hermes gateway status` (default 0)
 #   SHIM_HERMES_GATEWAY_STATUS_OUTPUT  output for `hermes gateway status` (default "running")
+#   SHIM_HERMES_CONFIG_GET_<KEY>       value for `hermes config get <key>`, with
+#                                      "." replaced by "_" and upper-cased
+#                                      (e.g. SHIM_HERMES_CONFIG_GET_MODEL_PROVIDER
+#                                      for `hermes config get model.provider`);
+#                                      unset => `hermes config get <key>` exits 1
+#                                      with an "unknown command" message (issue #83:
+#                                      simulates a Hermes build that does not
+#                                      support this subcommand at all, unless
+#                                      SHIM_HERMES_CONFIG_GET_SUPPORTED=1 forces
+#                                      a plain "not set" failure instead)
 
 set -Eeuo pipefail
 
@@ -39,7 +49,27 @@ case "${1:-}" in
     exit 0
     ;;
   config)
-    exit 0
+    shift || true
+    case "${1:-}" in
+      get)
+        shift || true
+        key="${1:-}"
+        var_name="SHIM_HERMES_CONFIG_GET_$(printf '%s' "$key" | tr '.' '_' | tr '[:lower:]' '[:upper:]')"
+        if [[ -n "${!var_name:-}" ]]; then
+          printf '%s\n' "${!var_name}"
+          exit 0
+        fi
+        if [[ "${SHIM_HERMES_CONFIG_GET_SUPPORTED:-0}" == "1" ]]; then
+          printf 'not set\n' >&2
+          exit 1
+        fi
+        printf 'unknown command "get" for "hermes config"\n' >&2
+        exit 1
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
     ;;
   model)
     exit 0

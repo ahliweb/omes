@@ -23,6 +23,15 @@
 > [docs/agent-runtime-boundary.md](agent-runtime-boundary.md) and
 > [ADR-0013](adr/0013-agent-runtime-boundary.md) (issue
 > [#85](https://github.com/ahliweb/omes/issues/85)).
+>
+> `modules/hermes/module.sh` also records runtime version/compatibility
+> evidence (`omes health versions`, issue #83; see
+> [docs/compatibility-evidence.md](./compatibility-evidence.md)) at
+> apply time and on `omes doctor` - an additive read-only report layered
+> on top of the module contract described below, not a change to what
+> `module_apply`/`module_verify` require to succeed. Issue #84 adds
+> installer/package-manager supply-chain provenance on top of this in a
+> follow-on change.
 
 ## 1. What the `hermes` module does
 
