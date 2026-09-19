@@ -69,6 +69,25 @@ EOF
   [[ "$output" == *"additional properties not allowed"* ]]
 }
 
+@test "an option-like backup_id is rejected by schema, never reaching bin/omes restore" {
+  cat > "$REQ" <<'EOF'
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-1",
+  "idempotency_key": "idem-option-like",
+  "actor": {"type": "user", "id": "op-1"},
+  "operation": "restore",
+  "target": {"server_id": "srv-1"},
+  "backup_id": "--yes"
+}
+EOF
+  run "$OMES_BIN" job submit --file "$REQ" --json
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"does not match pattern"* ]]
+  run bash -c "ls '${OMES_STATE_DIR}/jobs/'job-*.json 2>/dev/null | wc -l"
+  [ "$output" -eq 0 ]
+}
+
 @test "a cross-tenant request is rejected" {
   cat > "$REQ" <<'EOF'
 {

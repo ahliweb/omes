@@ -53,13 +53,19 @@ def build_argv(record: dict[str, Any]) -> list[str] | None:
     if operation == "restore":
         argv = ["restore", "--json", "--yes"]
         if record.get("backup_id"):
-            argv += ["--from", record["backup_id"]]
+            argv += ["--from", store.require_safe_argv_value("backup_id", record["backup_id"])]
         return argv
     if operation == "rollback":
         # docs/rollback.md: `omes restore --from <timestamp>` IS the
         # rollback mechanism this repository ships; there is no separate
         # `omes rollback` verb to invent.
-        return ["restore", "--json", "--yes", "--from", record["rollback_ref"]]
+        return [
+            "restore",
+            "--json",
+            "--yes",
+            "--from",
+            store.require_safe_argv_value("rollback_ref", record["rollback_ref"]),
+        ]
     # install, configure, update, start, stop, restart: no existing OMES
     # command targets a remote/logical deployment yet (docs/jobs.md
     # "Left for awcms-one" / future OMES work).
@@ -102,11 +108,38 @@ def _timeout_seconds() -> float:
     return DEFAULT_TIMEOUT_SECONDS
 
 
+# Every literal token build_argv() ever emits as a fixed flag/subcommand
+# (never a record-derived value). _run_argv()'s blanket check below
+# treats anything NOT in this set as record-derived, so any current or
+# future value smuggled into argv without going through
+# store.require_safe_argv_value() is still caught here as a second,
+# independent gate - not just at the two call sites in build_argv().
+_KNOWN_FIXED_ARGV_TOKENS = frozenset({"check", "status", "backup", "restore", "--json", "--yes", "--from"})
+
+
+class UnsafeArgvError(Exception):
+    """Raised by _run_argv() when an argv element that is not one of the
+    fixed literal tokens build_argv() emits looks like a CLI option
+    (starts with "-"). This is the blanket, second-layer version of
+    store.require_safe_argv_value()'s per-field check."""
+
+
+def _reject_option_like_argv(argv: list[str]) -> None:
+    for element in argv:
+        if element in _KNOWN_FIXED_ARGV_TOKENS:
+            continue
+        if element.startswith("-"):
+            raise UnsafeArgvError(f"argv element {element!r} looks like a CLI option; refusing to execute")
+
+
 def _run_argv(argv: list[str]) -> dict[str, Any]:
     """Runs `argv` (a bin/omes subcommand, or a test-hook override argv)
     and returns a classified, redacted result. Never raises for a
     subprocess-level failure - always returns a result dict so callers
-    have a single code path."""
+    have a single code path. Exception: UnsafeArgvError, from the
+    defensive check below, which callers must never swallow into a
+    generic "operation_failed" - see run()'s handling."""
+    _reject_option_like_argv(argv)
     override = _test_argv_override()
     full_argv = override if override is not None else [str(_bin_omes())] + argv
     started = time.monotonic()
@@ -192,6 +225,34 @@ def _compare_desired_observed(record: dict[str, Any], readback_result: dict[str,
     return True, "read-back confirms observed state matches desired outcome"
 
 
+def _fail(
+    record: dict[str, Any],
+    root: Path | None,
+    *,
+    code: str,
+    message: str,
+    retryable: bool = False,
+    note: str | None = None,
+) -> dict[str, Any]:
+    """Shared terminal-failure path: sets record["error"], transitions to
+    `failed`, saves, and appends one audit entry (including whatever
+    execute/readback evidence has already been recorded on `record` by
+    the caller). Every failure branch in run() goes through this so the
+    audit/evidence shape is consistent."""
+    record["error"] = {"code": code, "message": message, "retryable": retryable}
+    store.apply_transition(record, "failed", actor="system", note=note or code)
+    store.save_job(record, root)
+    audit.append(
+        root,
+        actor="system",
+        job_id=record["job_id"],
+        event="failed",
+        to_state="failed",
+        detail={"error": record["error"], "evidence": record.get("evidence") or {}},
+    )
+    return record
+
+
 def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[str, Any]:
     """Executes `record` (which must be `approved`, or `failed` with a
     retryable error and remaining attempts - see docs/jobs.md's retry
@@ -223,19 +284,37 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     audit.append(root, actor=actor, job_id=record["job_id"], event="run_started", to_state="running")
 
     record["attempts"] += 1
-    argv = build_argv(record)
-    if argv is None:
-        record["error"] = {
-            "code": "not_implemented",
-            "message": f"operation {record['operation']!r} has no existing OMES command yet",
-            "retryable": False,
-        }
-        store.apply_transition(record, "failed", actor="system", note="not_implemented")
-        store.save_job(record, root)
-        audit.append(root, actor="system", job_id=record["job_id"], event="failed", to_state="failed", detail={"error": record["error"]})
-        return record
 
-    result = _run_argv(argv)
+    # build_argv() re-validates backup_id/rollback_ref against the exact
+    # same pattern the #89 contract enforces at submit time
+    # (store.require_safe_argv_value()), so a job record is never
+    # trusted just because it is already sitting in the store - this is
+    # the second, independent gate the schema's stricter pattern alone
+    # cannot guarantee for a record however it reached disk.
+    try:
+        argv = build_argv(record)
+    except store.UnsafeArgvValueError as exc:
+        return _fail(record, root, code="invalid_argument", message=str(exc), note="invalid_argument")
+
+    if argv is None:
+        return _fail(
+            record,
+            root,
+            code="not_implemented",
+            message=f"operation {record['operation']!r} has no existing OMES command yet",
+            note="not_implemented",
+        )
+
+    try:
+        result = _run_argv(argv)
+    except UnsafeArgvError as exc:
+        # Blanket second-layer catch (see _reject_option_like_argv): this
+        # should be unreachable given the per-field check above, but a
+        # future build_argv() branch that forgets to call
+        # require_safe_argv_value() still fails safe here instead of
+        # executing.
+        return _fail(record, root, code="invalid_argument", message=str(exc), note="invalid_argument")
+
     record["evidence"]["execute"] = {
         "argv": argv,
         "ok": result.get("ok"),
@@ -244,11 +323,8 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     }
 
     if not result.get("ok"):
-        record["error"] = result["error"]
-        store.apply_transition(record, "failed", actor="system", note=record["error"]["code"])
-        store.save_job(record, root)
-        audit.append(root, actor="system", job_id=record["job_id"], event="failed", to_state="failed", detail={"error": record["error"]})
-        return record
+        error = result["error"]
+        return _fail(record, root, code=error["code"], message=error["message"], retryable=error.get("retryable", False), note=error["code"])
 
     rb_argv = readback_argv(record)
     if rb_argv is None:
@@ -258,7 +334,11 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
         audit.append(root, actor="system", job_id=record["job_id"], event="succeeded", to_state="succeeded")
         return record
 
-    readback_result = _run_argv(rb_argv)
+    try:
+        readback_result = _run_argv(rb_argv)
+    except UnsafeArgvError as exc:
+        return _fail(record, root, code="invalid_argument", message=str(exc), note="invalid_argument")
+
     record["evidence"]["readback"] = {
         "argv": rb_argv,
         "ok": readback_result.get("ok"),
@@ -266,17 +346,12 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     }
     matches, reason = _compare_desired_observed(record, readback_result)
     if not matches:
-        record["error"] = {"code": "reconciliation_mismatch", "message": reason, "retryable": False}
         # A rollback whose read-back mismatches did not actually reach the
         # desired rolled-back state - report `failed` with evidence, never
         # a false `rolled_back`. `rolled_back` is reserved for a rollback
         # job whose read-back DID confirm success (see the success branch
         # below).
-        to_state = "failed"
-        store.apply_transition(record, to_state, actor="system", note="reconciliation_mismatch")
-        store.save_job(record, root)
-        audit.append(root, actor="system", job_id=record["job_id"], event="failed", to_state=to_state, detail={"error": record["error"], "evidence": record["evidence"]})
-        return record
+        return _fail(record, root, code="reconciliation_mismatch", message=reason, note="reconciliation_mismatch")
 
     record["error"] = None
     to_state = "rolled_back" if record["operation"] == "rollback" else "succeeded"

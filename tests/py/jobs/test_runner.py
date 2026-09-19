@@ -77,6 +77,58 @@ class TestApprovalGate(RunnerTestBase):
         self.assertEqual(record["state"], "queued")
 
 
+class TestDefensiveArgvValidation(RunnerTestBase):
+    """The #89 contract already rejects an option-like backup_id/
+    rollback_ref at `omes job submit` time (tests/py/jobs/test_cli.py).
+    These tests cover the SECOND, independent gate: even a job record
+    that somehow reached the store with such a value (e.g. hand-edited
+    on disk, or created before the schema was tightened) must never
+    have it placed into a real bin/omes argv."""
+
+    def _stored_record_bypassing_schema(self, **overrides) -> dict:
+        # Builds a job record directly via store.new_job_record/save_job,
+        # deliberately bypassing store.submit()'s schema validation, to
+        # simulate a record that reached the store some other way.
+        request = make_request(operation="restore", target={"server_id": "srv-1"})
+        request.update(overrides)
+        record = store.new_job_record(request)
+        store.save_job(record, self.root)
+        return record
+
+    def test_option_like_backup_id_never_reaches_a_real_subprocess_call(self):
+        record = self._stored_record_bypassing_schema(backup_id="--yes")
+        store.approve(record, actor="approver-1", root=self.root)
+        with mock.patch("subprocess.run") as subprocess_run_mock:
+            updated = runner.run(record, actor="op-1", root=self.root)
+        subprocess_run_mock.assert_not_called()
+        self.assertEqual(updated["state"], "failed")
+        self.assertEqual(updated["error"]["code"], "invalid_argument")
+
+    def test_option_like_rollback_ref_never_reaches_a_real_subprocess_call(self):
+        record = self._stored_record_bypassing_schema(operation="rollback", rollback_ref="-rf")
+        store.approve(record, actor="approver-1", root=self.root)
+        with mock.patch("subprocess.run") as subprocess_run_mock:
+            updated = runner.run(record, actor="op-1", root=self.root)
+        subprocess_run_mock.assert_not_called()
+        self.assertEqual(updated["state"], "failed")
+        self.assertEqual(updated["error"]["code"], "invalid_argument")
+
+    def test_blanket_run_argv_check_catches_an_option_like_value_directly(self):
+        # Exercises _run_argv()'s own second-layer check independent of
+        # build_argv(), in case a future code path ever constructs argv
+        # without going through store.require_safe_argv_value().
+        with self.assertRaises(runner.UnsafeArgvError):
+            runner._run_argv(["restore", "--json", "--yes", "--from", "--not-a-real-id"])
+
+    def test_safe_backup_id_is_unaffected(self):
+        record = self._stored_record_bypassing_schema(backup_id="backup-0001")
+        store.approve(record, actor="approver-1", root=self.root)
+        ok = {"ok": True, "timed_out": False, "duration_seconds": 0.01, "parsed": {"ok": True}, "output_tail": ""}
+        with mock.patch.object(runner, "_run_argv", side_effect=[ok, ok]):
+            updated = runner.run(record, actor="op-1", root=self.root)
+        self.assertEqual(updated["state"], "succeeded")
+
+
 class TestReadbackReconciliation(RunnerTestBase):
     def test_readback_mismatch_reports_failed_with_evidence_never_success(self):
         record, _ = store.submit(

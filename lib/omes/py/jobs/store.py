@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -18,6 +19,40 @@ from typing import Any
 from . import audit, paths
 
 SCHEMA_VERSION = 1
+
+# Mirrors contracts/control-center/v1/deployment.request.schema.json's
+# `backup_id`/`rollback_ref` pattern exactly: must start with an
+# alphanumeric character, so a value can never be mistaken for a CLI
+# option (e.g. "--yes", "-rf") once it is placed into an argv list after
+# a flag like `--from` (runner.py's build_argv). The schema already
+# rejects this at `omes job submit` time; this constant lets runner.py
+# re-check the SAME rule against a job record immediately before
+# execution, so a record loaded from disk - however it got there - is
+# never trusted just because it is sitting in the job store.
+SAFE_ARGV_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$")
+
+
+class UnsafeArgvValueError(Exception):
+    """Raised when a job record field that will be placed into a
+    `bin/omes` argv does not match SAFE_ARGV_VALUE_RE - most importantly,
+    when it looks like a CLI option (starts with "-"). This must never
+    happen for a record that passed schema validation at submit time;
+    it exists as a second, independent gate directly at execution time."""
+
+    def __init__(self, field: str, value: Any):
+        super().__init__(f"{field}={value!r} does not look like a safe argv value (rejected before execution)")
+        self.field = field
+        self.value = value
+
+
+def require_safe_argv_value(field: str, value: Any) -> str:
+    """Returns `value` unchanged if it is a string matching
+    SAFE_ARGV_VALUE_RE; raises UnsafeArgvValueError otherwise. Called by
+    runner.py immediately before any record-derived value is appended to
+    a `bin/omes` argv."""
+    if not isinstance(value, str) or not SAFE_ARGV_VALUE_RE.match(value):
+        raise UnsafeArgvValueError(field, value)
+    return value
 
 # The 11-operation allowlist. This MUST stay in sync with
 # contracts/control-center/v1/deployment.request.schema.json's `operation`
