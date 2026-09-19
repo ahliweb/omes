@@ -56,7 +56,9 @@ teardown() {
 @test "cancel with --yes records the actor" {
   run "$OMES_BIN" content cancel job1 --actor bob --yes --json
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"state": "cancelled"'* ]]
+  # cancel is a terminal outcome, so cli.py's _persist() immediately
+  # archives it (issue #68) - the printed state reflects that.
+  [[ "$output" == *'"state": "archived"'* ]]
   run grep -o '"actor": "bob"' "${CONTENT_ROOT}/state/jobs/job1.json"
   [ "$status" -eq 0 ]
 }
