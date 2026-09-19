@@ -4,6 +4,14 @@
 # tests/py/health/test_hermes.py's mocked subprocess/HTTP boundaries;
 # these integration tests assert the bash <-> python wiring through
 # tests/shims/hermes and tests/shims/systemctl.
+#
+# JSON assertions pass $output to python via an env var and a
+# single-quoted -c script (never string-interpolated into a
+# double-quoted "..." argument): the checker's JSON contains backticks
+# (each layer's "proves" text quotes a command, e.g. `hermes doctor`) -
+# embedded in a double-quoted bash string those would trigger command
+# substitution and corrupt the JSON before python ever sees it. The env
+# var handoff sidesteps that entirely.
 
 setup() {
   load '../test_helper.bash'
@@ -22,25 +30,27 @@ teardown() {
 
 @test "omes health (bare) defaults to the agent target and is valid JSON" {
   omes_run_stdout_only "$OMES_BIN" health --json
-  run python3 -c "
+  OMES_TEST_JSON="$output" run python3 -c '
 import json
-d = json.loads('''$output''')
-assert 'layers' in d
-assert set(['host', 'runtime', 'gateway', 'provider', 'channel']) <= set(d['layers'].keys())
-assert 'ready' in d and 'connected' in d
-"
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert "layers" in d
+assert set(["host", "runtime", "gateway", "provider", "channel"]) <= set(d["layers"].keys())
+assert "ready" in d and "connected" in d
+'
   [ "$status" -eq 0 ]
 }
 
 @test "omes health agent reports runtime failure when hermes is not installed" {
   # tests/shims/hermes fails --version unless SHIM_HERMES_VERSION is set.
   omes_run_stdout_only "$OMES_BIN" health agent --json
-  run python3 -c "
+  OMES_TEST_JSON="$output" run python3 -c '
 import json
-d = json.loads('''$output''')
-assert d['layers']['runtime']['status'] == 'fail'
-assert d['ready'] is False
-"
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["layers"]["runtime"]["status"] == "fail"
+assert d["ready"] is False
+'
   [ "$status" -eq 0 ]
 }
 
@@ -54,25 +64,27 @@ assert d['ready'] is False
   printf 'hermes-gateway\n' >"$SHIM_USER_ACTIVE_FILE"
 
   omes_run_stdout_only "$OMES_BIN" health agent --json
-  run python3 -c "
+  OMES_TEST_JSON="$output" run python3 -c '
 import json
-d = json.loads('''$output''')
-assert d['layers']['runtime']['status'] == 'pass', d['layers']['runtime']
-assert d['layers']['gateway']['status'] == 'pass', d['layers']['gateway']
-assert d['ready'] is True
-"
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["layers"]["runtime"]["status"] == "pass", d["layers"]["runtime"]
+assert d["layers"]["gateway"]["status"] == "pass", d["layers"]["gateway"]
+assert d["ready"] is True
+'
   [ "$status" -eq 0 ]
 }
 
 @test "omes health gateway omits host/runtime layers" {
   omes_run_stdout_only "$OMES_BIN" health gateway --json
-  run python3 -c "
+  OMES_TEST_JSON="$output" run python3 -c '
 import json
-d = json.loads('''$output''')
-assert 'host' not in d['layers']
-assert 'runtime' not in d['layers']
-assert 'gateway' in d['layers']
-"
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert "host" not in d["layers"]
+assert "runtime" not in d["layers"]
+assert "gateway" in d["layers"]
+'
   [ "$status" -eq 0 ]
 }
 

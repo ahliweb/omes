@@ -186,6 +186,19 @@ section 14 and `skills/content/SKILL.md`. `TELEGRAM_BOT_TOKEN` and
 
 
 
+## 13b. `omes audit exposure` / `lib/omes/py/health/exposure.py` (issue #80)
+
+See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80).
+
+| Variable | Default | Kind |
+|---|---|---|
+| `OMES_EXPOSURE_ALLOW` | unset | Operator (`"host:port,host:port"`) |
+| `OMES_SS_BIN` / `OMES_UFW_BIN` | `ss` / `ufw` | Test-only |
+
+
+
+
+
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
 <!-- OMES-MERMAID: docs/configuration.md -->

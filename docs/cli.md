@@ -364,6 +364,29 @@ omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 ```
 
+### `omes audit` (extension command)
+
+**Synopsis:** `omes audit exposure [--json]`
+
+Implemented by [`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh) (issue
+[#80](https://github.com/ahliweb/omes/issues/80)), which delegates to the
+stdlib-only [`lib/omes/py/health/exposure.py`](../lib/omes/py/health/exposure.py)
+checker. Detects unsafe Hermes gateway, browser-control/CDP, MCP, and
+Ollama listener exposure (loopback vs. LAN vs. wildcard, cross-referenced
+with `ufw`) without ever opening a port, altering firewall rules, or
+reading credentials. See
+[docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80)
+for remediation guidance.
+
+**Exit codes:** 0 ok, 7 findings, 4 a required tool (`ss`) is missing.
+
+**Examples:**
+
+```bash
+omes audit exposure --json | jq -e '.ok'
+OMES_EXPOSURE_ALLOW="0.0.0.0:8642" omes audit exposure
+```
+
 ## 4.12 Extension commands
 
 Additional top-level commands are loaded from `lib/omes/cmd/<name>.sh`
