@@ -23,8 +23,15 @@ architecture and state model."
 | [0009](0009-testing-with-bats-in-containers.md) | Testing with bats-core in containers | Accepted |
 | [0010](0010-versioning-and-change-fragments.md) | Versioning via SemVer + change fragments compiled at release | Accepted |
 | [0011](0011-control-center-and-provider-boundaries.md) | Control Center and external provider boundaries | Accepted as design boundary |
+| [0012](0012-python-stdlib-for-workflow-engines.md) | Python 3 stdlib only for workflow engines; bash stays the installer/CLI glue | Accepted |
+| [0013](0013-agent-runtime-boundary.md) | Agent-runtime abstraction boundary, with Hermes as the only implementation | Accepted |
 | [0014](0014-graphify-integration-boundary.md) | Graphify integration boundary | Accepted as design boundary |
 | [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Accepted as design boundary |
+
+ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
+[#85](https://github.com/ahliweb/omes/issues/85), "Define an
+agent-runtime abstraction boundary with Hermes as the first
+implementation."
 
 ## Conventions
 

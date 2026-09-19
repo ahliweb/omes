@@ -16,6 +16,13 @@
 > layer. It is not official Omarchy and Hermes Agent is a separate upstream
 > project (nousresearch.com) that OMES installs and configures, not
 > something OMES authors.
+>
+> For the runtime-neutral contract OMES needs from any agent runtime
+> (install, preflight, verify, service, health, provenance, backup,
+> rollback) and how Hermes fulfils it today, see
+> [docs/agent-runtime-boundary.md](agent-runtime-boundary.md) and
+> [ADR-0013](adr/0013-agent-runtime-boundary.md) (issue
+> [#85](https://github.com/ahliweb/omes/issues/85)).
 
 ## 1. What the `hermes` module does
 
