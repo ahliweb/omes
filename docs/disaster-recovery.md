@@ -5,7 +5,9 @@
 > contract (issue #10) and `docs/testing.md`'s test suite (issue #15). Every runbook below is
 > written to be executable by a non-expert: exact commands, expected output, and what to do if a
 > step doesn't match. `docs/rollback.md` section 8 ("Tested scenarios") lists which automated
-> test proves each one.
+> test proves each one. See also
+> [docs/hermes-deployment-guide.md §§14-16](hermes-deployment-guide.md#14-upgrades)
+> for the Hermes-specific upgrade/rollback/removal-boundary summary.
 
 ## 1. Before you start: two commands that answer most questions
 

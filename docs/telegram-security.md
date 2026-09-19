@@ -9,6 +9,10 @@
 > `hermes-gateway`/`hermes-gateway-system` modules (issue
 > [#12](https://github.com/ahliweb/omes/issues/12), part 2).
 >
+> For the condensed, task-oriented version of this document (add/remove
+> an allowlist entry, restart, verify), see
+> [docs/hermes-deployment-guide.md §8](hermes-deployment-guide.md#8-telegram-allowlists).
+>
 > OMES is an independent, MIT-licensed, Omarchy-inspired compatibility
 > layer. It is not official Omarchy. Telegram, Hermes Agent, and the
 > policies they enforce are upstream products/behavior; OMES configures

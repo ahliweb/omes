@@ -4,7 +4,10 @@
 > `omes backup`, `omes restore`, and `omes uninstall` as they exist in this repository today.
 > `docs/architecture.md` Section 7 is the authoritative backup-model contract; this document
 > is the operator-facing recovery guide built on top of it, plus what is and is not covered by
-> automated tests today.
+> automated tests today. For Hermes-specific removal boundaries (what
+> `omes uninstall`/`omes agent rollback` remove vs. operator-owned Hermes
+> data under `$HERMES_HOME`), see
+> [docs/hermes-deployment-guide.md §16](hermes-deployment-guide.md#16-removal-boundaries).
 
 ## 1. Backup layout
 

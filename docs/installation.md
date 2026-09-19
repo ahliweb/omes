@@ -11,6 +11,10 @@
 > This is the complete operator walkthrough for a clean machine, for both
 > profiles. Every privileged (`sudo`) command below is explained: what it does and
 > why. For symptom-driven recovery, see [docs/troubleshooting.md](troubleshooting.md).
+> For the Hermes-specific end-to-end runbook that builds on this document's
+> `hermes`/`hermes-gateway` install steps (paths, permissions, service
+> persistence, Telegram, health, hardening, backups, rollback, removal),
+> see [docs/hermes-deployment-guide.md](hermes-deployment-guide.md).
 > For the full flag/exit-code/JSON reference, see [docs/cli.md](cli.md). For every
 > environment variable, see [docs/configuration.md](configuration.md).
 

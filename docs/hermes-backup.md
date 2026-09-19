@@ -7,7 +7,9 @@
 > `lib/omes/cmd/README.md`). It complements the general backup/restore
 > model in [docs/rollback.md](./rollback.md), which covers OMES's own
 > managed-path backups; this document is specific to Hermes's own data
-> under `$HERMES_HOME`.
+> under `$HERMES_HOME`. See
+> [docs/hermes-deployment-guide.md §12](hermes-deployment-guide.md#12-backup-classes)
+> for the condensed runbook version.
 
 ## 1. Why a separate tool from `omes backup`/`omes restore`
 

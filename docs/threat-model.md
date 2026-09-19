@@ -7,6 +7,10 @@
 > rows are documented but cannot be enforced by OMES (usually because the behavior belongs
 > to upstream Hermes or Telegram); `out-of-scope` rows are explicitly excluded — see
 > [`docs/security.md`](./security.md) §8. This is not a certified security audit.
+>
+> See [docs/hermes-deployment-guide.md §19](hermes-deployment-guide.md#19-known-limitations-and-bounded-security-claims)
+> for the deployment-runbook summary of the bounded security claims this
+> document backs.
 
 ## 1. Purpose and scope
 

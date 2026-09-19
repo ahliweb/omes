@@ -7,7 +7,9 @@
 > [docs/agent-orchestration-roadmap.md section 2.1](agent-orchestration-roadmap.md)
 > and the rootless Docker Compose isolation backend from
 > [section 2.2](agent-orchestration-roadmap.md). The Coolify phase
-> (section 2.3) is **not implemented**. Ubuntu Server 24.04 VM/CI
+> (section 2.3) is **not implemented**. See
+> [docs/hermes-deployment-guide.md §17](hermes-deployment-guide.md#17-per-agent-deployments-omes-agent)
+> for the condensed runbook version. Ubuntu Server 24.04 VM/CI
 > evidence and a real (non-shimmed) Docker daemon are **not available in
 > this environment** for either backend - see "Left for follow-up" at
 > the end of this document.

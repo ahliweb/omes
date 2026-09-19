@@ -231,6 +231,10 @@ for the security baseline and threat model this project maintains.
 
 ## Further reading
 
+- [docs/hermes-deployment-guide.md](docs/hermes-deployment-guide.md) —
+  authoritative, end-to-end Hermes runtime deployment runbook: paths,
+  permissions, service persistence, logs, Telegram allowlists, health,
+  hardening, backups, upgrades, rollback, and removal boundaries
 - [docs/installation.md](docs/installation.md) — complete operator walkthrough,
   both profiles, every privileged command explained
 - [docs/troubleshooting.md](docs/troubleshooting.md) — symptom → cause → fix,

@@ -4,6 +4,15 @@
 > implemented yet** are tracked by the linked issue; everything else
 > reflects `modules/hermes/module.sh` as it exists today.
 >
+> For a single end-to-end deployment runbook (prerequisites, paths,
+> permissions, service persistence, logs, upgrades, rollback, removal
+> boundaries, and an OMES-vs-Hermes responsibility table) that summarizes
+> and cross-links this document's module-level detail, see
+> [docs/hermes-deployment-guide.md](hermes-deployment-guide.md) — the
+> authoritative reference for issue
+> [#86](https://github.com/ahliweb/omes/issues/86). This document remains
+> the detailed module reference the guide's summaries link back to.
+>
 > This document covers the `hermes` module (part 1, issue
 > [#11](https://github.com/ahliweb/omes/issues/11)) and the
 > `hermes-gateway`/`hermes-gateway-system` modules (part 2, issue
