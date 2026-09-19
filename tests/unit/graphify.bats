@@ -4,11 +4,20 @@
 # Sources lib/omes/*.sh and modules/graphify/module.sh directly
 # (module_load), like tests/unit/hermes.bats. HOME is always overridden to
 # an isolated tmpdir. tests/shims/{graphify,uv,pipx} are already on PATH
-# via test_helper.bash's omes_test_setup. Real python3 (>= 3.10 on any
-# host this suite runs on) is used for the "python OK" path; the
-# "missing"/"too old" paths temporarily manipulate PATH so a fake or
-# absent python3 is seen instead, exactly like tests/unit/hermes.bats
-# strips curl from PATH for its own "missing" test.
+# via test_helper.bash's omes_test_setup.
+#
+# "Not found" simulations (missing python3, missing uv/pipx) use the
+# OMES_GRAPHIFY_PYTHON/OMES_GRAPHIFY_UV_CMD/OMES_GRAPHIFY_PIPX_CMD
+# testability overrides (modules/graphify/module.sh) pointed at a
+# deliberately nonexistent path, rather than stripping a PATH directory -
+# earlier revisions of this file stripped whole PATH entries (like
+# tests/unit/hermes.bats does for curl), which broke on hosts where
+# python3 lives in the same directory as essential coreutils (e.g. `id`,
+# needed by every module_check call via omes_is_root), turning a "python3
+# missing" test into an unrelated "root check" failure. Real python3 (>=
+# 3.10) is still required on PATH for the "python OK" path - a fake one is
+# prepended in setup() so this suite works even on a bats image with no
+# python3 at all (e.g. bats/bats:latest/Alpine).
 
 setup() {
   load '../test_helper.bash'
@@ -18,6 +27,7 @@ setup() {
   mkdir -p "$HOME"
 
   unset OMES_GRAPHIFY_VERSION OMES_GRAPHIFY_INSTALLER OMES_UV_INSTALLER_SHA256 \
+    OMES_GRAPHIFY_PYTHON OMES_GRAPHIFY_UV_CMD OMES_GRAPHIFY_PIPX_CMD \
     SHIM_GRAPHIFY_ABSENT SHIM_GRAPHIFY_VERSION SHIM_GRAPHIFY_HELP_EXIT \
     SHIM_UV_EXIT SHIM_PIPX_EXIT SHIM_CURL_OUTPUT_FILE || true
 
@@ -46,17 +56,6 @@ setup() {
   # specifically exercise "missing"/"too old" need to touch PATH further.
   FAKE_PYTHON_OK_DIR="$(_fake_python3_dir "3.12.0")"
   export PATH="${FAKE_PYTHON_OK_DIR}:${PATH}"
-
-  # On some images (e.g. the Alpine-based bats/bats + python3/git image
-  # tests/run.sh builds), `id` and `python3` live in the SAME directory
-  # (/usr/bin), so _strip_from_path("python3") - which drops a whole PATH
-  # entry - would also hide `id`, breaking omes_is_root()'s `id -u` call
-  # for every test, not just the two that intentionally hide python3.
-  # Keep `id` reachable through a dedicated, never-stripped directory.
-  ESSENTIAL_BIN_DIR="${OMES_TEST_TMPDIR}/essential-bin"
-  mkdir -p "$ESSENTIAL_BIN_DIR"
-  ln -sf "$(command -v id)" "${ESSENTIAL_BIN_DIR}/id"
-  export PATH="${ESSENTIAL_BIN_DIR}:${PATH}"
 }
 
 teardown() {
@@ -76,40 +75,6 @@ _strip_from_path() {
     stripped="${stripped:+${stripped}:}${dir}"
   done
   PATH="$stripped"
-}
-
-# _omit_shims <basename...>
-# tests/shims/{uv,pipx,graphify,curl,...} all live in ONE directory, so
-# _strip_from_path (which drops a whole PATH entry) cannot hide one or two
-# shims without also hiding every sibling in that same directory (e.g.
-# curl, needed by the uv-bootstrap path). This instead rebuilds PATH with
-# a filtered copy of tests/shims (every shim except the given basenames,
-# symlinked) placed first, and the real tests/shims directory removed
-# further down - so `command -v <basename>` fails for exactly the given
-# names while every other shim (and $SHIM_LOG logging) keeps working.
-_omit_shims() {
-  local real_shims="${OMES_TEST_ROOT}/tests/shims"
-  local filtered="${OMES_TEST_TMPDIR}/shims-without-${RANDOM}"
-  mkdir -p "$filtered"
-
-  local f base omit skip
-  for f in "${real_shims}"/*; do
-    base="$(basename "$f")"
-    skip=0
-    for omit in "$@"; do
-      [[ "$base" == "$omit" ]] && skip=1 && break
-    done
-    [[ "$skip" -eq 1 ]] && continue
-    ln -s "$f" "${filtered}/${base}"
-  done
-
-  local rebuilt="" dir
-  IFS=':' read -ra parts <<<"$PATH"
-  for dir in "${parts[@]}"; do
-    [[ "$dir" == "$real_shims" ]] && continue
-    rebuilt="${rebuilt:+${rebuilt}:}${dir}"
-  done
-  PATH="${filtered}:${rebuilt}"
 }
 
 # _fake_python3_dir <version-output>
@@ -138,7 +103,7 @@ EOF
 }
 
 @test "module_check fails clearly when python3 is missing" {
-  _strip_from_path python3
+  export OMES_GRAPHIFY_PYTHON="/nonexistent/python3"
   run module_check
   [ "$status" -eq 1 ]
   [[ "$output" == *"python3 >= 3.10"* ]]
@@ -163,7 +128,7 @@ EOF
 # --- module_check: installer detection --------------------------------------
 
 @test "module_check fails with an actionable message when neither uv nor pipx is present" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   run module_check
   [ "$status" -eq 1 ]
   [[ "$output" == *"neither uv nor pipx found"* ]]
@@ -178,7 +143,7 @@ EOF
 }
 
 @test "module_check falls back to pipx when uv is absent" {
-  _omit_shims uv
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv"
   export SHIM_GRAPHIFY_VERSION="0.9.64"
   run module_check
   [ "$status" -eq 0 ]
@@ -186,7 +151,7 @@ EOF
 }
 
 @test "module_check allows neither uv nor pipx when OMES_GRAPHIFY_INSTALLER=uv-bootstrap and network is available" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   export OMES_GRAPHIFY_INSTALLER="uv-bootstrap"
   export OMES_ASSUME_ONLINE=1
   run module_check
@@ -195,7 +160,7 @@ EOF
 }
 
 @test "module_check fails when OMES_GRAPHIFY_INSTALLER=uv-bootstrap but network is unavailable" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   export OMES_GRAPHIFY_INSTALLER="uv-bootstrap"
   export OMES_ASSUME_OFFLINE=1
   unset OMES_ASSUME_ONLINE || true
@@ -252,7 +217,7 @@ EOF
 }
 
 @test "module_apply installs via pipx when uv is absent" {
-  _omit_shims uv
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv"
   export SHIM_GRAPHIFY_ABSENT=1
   run module_apply
   [ "$status" -eq 0 ]
@@ -373,7 +338,7 @@ EOF
 }
 
 @test "module_rollback is a no-op (not a failure) when neither uv nor pipx is present" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   run module_rollback
   [ "$status" -eq 0 ]
   [[ "$output" == *"nothing to uninstall"* ]]
@@ -382,7 +347,7 @@ EOF
 # --- module_apply: OMES_GRAPHIFY_INSTALLER=uv-bootstrap ----------------------
 
 @test "module_apply bootstraps uv via the downloaded installer when opted in and neither tool is present" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   export OMES_GRAPHIFY_INSTALLER="uv-bootstrap"
   export SHIM_GRAPHIFY_ABSENT=1
 
@@ -408,7 +373,7 @@ EOF
 }
 
 @test "module_check warns to set OMES_UV_INSTALLER_SHA256 is not required but bootstrap proceeds without it" {
-  _omit_shims uv pipx
+  export OMES_GRAPHIFY_UV_CMD="/nonexistent/uv" OMES_GRAPHIFY_PIPX_CMD="/nonexistent/pipx"
   export OMES_GRAPHIFY_INSTALLER="uv-bootstrap"
   export OMES_ASSUME_ONLINE=1
   run module_check

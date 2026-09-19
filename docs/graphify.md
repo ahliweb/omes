@@ -200,14 +200,50 @@ rollback time, it is a no-op, not a failure.
 ### 2.5 `omes graphify update` / `omes graphify uninstall`
 
 Outside the normal install/uninstall lifecycle, `lib/omes/cmd/graphify.sh` adds two
-maintenance subcommands — see `docs/cli.md` §4.12 for the full synopsis, exit codes, and JSON
-schema. `omes graphify run` (the Hermes workflow wrapper) is **not implemented yet (tracked in
-#51)** and exits with a usage error if invoked.
+maintenance subcommands (docs/cli.md §4.12 only points here — this is the authoritative
+reference for the full `omes graphify` CLI contract):
+
+**Synopsis:** `omes graphify {update|uninstall} [--yes] [--dry-run] [--json]`
+
+- `update` wraps `uv tool upgrade graphifyy` (or `pipx upgrade graphifyy` when pipx is the
+  detected installer), then re-records the resolved version in
+  `module.graphify.version_installed`.
+- `uninstall` wraps `uv tool uninstall graphifyy` (or the pipx equivalent). Neither subcommand
+  ever touches a `graphify-out/` directory or any other data graphify itself produces; only the
+  `graphifyy` tool-env install.
+
+Both flags are parsed by the extension itself, not by `bin/omes` (docs/cli.md §4.12) — put
+`--yes`/`--dry-run`/`--json` directly after `update`/`uninstall`.
+
+**Exit codes:** 0, 1 (neither `uv` nor `pipx` found, upgrade/uninstall failed, or declined
+confirmation without `--yes`), 2 (unknown/missing subcommand).
+
+**JSON schema:** `{"command":"graphify","subcommand":"update","ok":true,"installer":"uv","version":"0.9.64","exit_code":0}`,
+`{"command":"graphify","subcommand":"uninstall","ok":true,"installer":"uv","exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify update --yes                # upgrade graphifyy via uv/pipx
+omes graphify uninstall --yes --json      # remove the tool-env install only
+```
+
+`omes graphify run` and `omes graphify skill install`/`uninstall` are documented in §3 below
+(issue #51).
 
 ### 2.6 Environment variables and state
 
-See `docs/configuration.md` §9 for `OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, and
-`OMES_UV_INSTALLER_SHA256`, and the `module.graphify.version_installed` state key.
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_GRAPHIFY_VERSION` | unset | Operator | Pins the installed `graphifyy` version (e.g. `0.9.64`); a mismatch against the currently installed `graphify --version` output triggers a reinstall via `uv tool install graphifyy==<version>` (or the pipx equivalent). |
+| `OMES_GRAPHIFY_INSTALLER` | unset | Operator | Set to `uv-bootstrap` to allow `module_check`/`module_apply` to download and run the official `uv` installer (`https://astral.sh/uv/install.sh`, to a temp file, never `curl \| bash`) when neither `uv` nor `pipx` is already on `PATH`. Without this, `module_check` fails with an actionable message instead of installing anything itself. |
+| `OMES_UV_INSTALLER_SHA256` | unset | Operator | Verifies the downloaded `uv` installer's sha256 before executing it (only relevant with `OMES_GRAPHIFY_INSTALLER=uv-bootstrap`); a mismatch aborts with no execution, mirroring `OMES_HERMES_INSTALLER_SHA256` (docs/configuration.md §7). |
+| `OMES_GRAPHIFY_PYTHON` | `python3` | Test-only | Overrides the python interpreter `module_check`'s version gate probes. Not a documented operator knob — exists so tests can simulate "python3 missing" by pointing at a nonexistent path instead of hiding a whole `PATH` directory (which risks also hiding unrelated coreutils a real host happens to colocate with `python3`). |
+| `OMES_GRAPHIFY_UV_CMD` | `uv` | Test-only | Overrides the command name/path `_graphify_installer_available` checks for `uv`. Detection-only — actual install/upgrade/uninstall calls still invoke the literal `uv` command name. |
+| `OMES_GRAPHIFY_PIPX_CMD` | `pipx` | Test-only | Same idea as `OMES_GRAPHIFY_UV_CMD`, for `pipx`. |
+
+State key `module.graphify.version_installed` records the resolved `graphify --version` output
+after a successful (non-dry-run) install/update, for reproducibility.
 
 ## §3 Workflow (omes graphify run / Hermes skill)
 

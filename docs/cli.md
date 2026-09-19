@@ -445,37 +445,12 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
-### `omes graphify update` / `omes graphify uninstall`
+### `omes graphify` (update / uninstall / run / skill)
 
-**Synopsis:** `omes graphify {update|uninstall} [--yes] [--dry-run] [--json]`
-
-`lib/omes/cmd/graphify.sh` (issue #50). Maintenance subcommands for the Graphify CLI
-(`modules/graphify/module.sh`, `docs/graphify.md` §2) outside the normal
-`install`/`uninstall` lifecycle:
-
-- `update` wraps `uv tool upgrade graphifyy` (or `pipx upgrade graphifyy` when
-  pipx is the detected installer), then re-records the resolved version in
-  `module.graphify.version_installed`.
-- `uninstall` wraps `uv tool uninstall graphifyy` (or the pipx equivalent).
-
-Both flags are parsed by the extension itself, not by `bin/omes` (Section 4.12) — put
-`--yes`/`--dry-run`/`--json` directly after `update`/`uninstall`. Neither subcommand ever
-touches a `graphify-out/` directory or any other data graphify itself produces; only the
-`graphifyy` tool-env install. `omes graphify run` is **not implemented yet (tracked in #51)**
-and exits with a usage error (2) if invoked.
-
-**Exit codes:** 0, 1 (neither `uv` nor `pipx` found, upgrade/uninstall failed, or declined
-confirmation without `--yes`), 2 (unknown/missing subcommand, or `run`).
-
-**JSON schema:** `{"command":"graphify","subcommand":"update","ok":true,"installer":"uv","version":"0.9.64","exit_code":0}`,
-`{"command":"graphify","subcommand":"uninstall","ok":true,"installer":"uv","exit_code":0}`.
-
-**Examples:**
-
-```bash
-omes graphify update --yes                # upgrade graphifyy via uv/pipx
-omes graphify uninstall --yes --json      # remove the tool-env install only
-```
+`lib/omes/cmd/graphify.sh` (issues #50/#51). Full synopsis, exit codes, JSON schemas, and
+examples for every `omes graphify <subcommand>` live in
+[docs/graphify.md](graphify.md) §2/§3, not here, to keep this shared reference file's
+graphify footprint minimal — see that document for the authoritative CLI contract.
 
 ## 5. Worked examples
 

@@ -58,13 +58,21 @@ _graphify_ensure_runtime_path() {
 # _graphify_installer_available
 # Prints "uv" or "pipx" (uv preferred) when found on PATH; prints nothing
 # and returns 1 when neither is found. Does not install anything.
+#
+# OMES_GRAPHIFY_UV_CMD / OMES_GRAPHIFY_PIPX_CMD (default: uv / pipx) let
+# tests point the presence check at a deliberately nonexistent path to
+# simulate "not installed" deterministically, without hiding a whole PATH
+# directory (which risks also hiding unrelated coreutils a real host
+# happens to colocate there). Actual install/upgrade/uninstall calls
+# elsewhere in this file still invoke the literal `uv`/`pipx` command
+# names - these variables affect detection only, never execution.
 _graphify_installer_available() {
   _graphify_ensure_runtime_path
-  if command -v uv >/dev/null 2>&1; then
+  if command -v "${OMES_GRAPHIFY_UV_CMD:-uv}" >/dev/null 2>&1; then
     printf 'uv\n'
     return 0
   fi
-  if command -v pipx >/dev/null 2>&1; then
+  if command -v "${OMES_GRAPHIFY_PIPX_CMD:-pipx}" >/dev/null 2>&1; then
     printf 'pipx\n'
     return 0
   fi
@@ -72,13 +80,18 @@ _graphify_installer_available() {
 }
 
 # _graphify_python_version_ok
-# True (0) when `python3` is present and reports >= 3.10. Parses only the
-# major.minor from `python3 --version` output (e.g. "Python 3.11.4").
+# True (0) when `python3` (or OMES_GRAPHIFY_PYTHON, a test-only override
+# for pointing at a deliberately nonexistent path to simulate "python3
+# missing" without hiding the real PATH directory that also holds
+# essential coreutils like `id`) is present and reports >= 3.10. Parses
+# only the major.minor from `python3 --version` output (e.g. "Python
+# 3.11.4").
 _graphify_python_version_ok() {
-  command -v python3 >/dev/null 2>&1 || return 1
+  local python_cmd="${OMES_GRAPHIFY_PYTHON:-python3}"
+  command -v "$python_cmd" >/dev/null 2>&1 || return 1
 
   local out major minor
-  out="$(python3 --version 2>&1)" || return 1
+  out="$("$python_cmd" --version 2>&1)" || return 1
   # Expected shape: "Python 3.11.4"
   out="${out#Python }"
   major="${out%%.*}"

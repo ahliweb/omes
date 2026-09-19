@@ -91,18 +91,10 @@ has no documented, supported effect and is not recommended.
 
 ## 9. `graphify` module
 
-See [docs/graphify.md](graphify.md) §2 (issue #50) for the full install/update/uninstall
-lifecycle. `modules/graphify/module.sh` (`MODULE_SCOPE=user`, never wired into a default
-profile) and `lib/omes/cmd/graphify.sh` (`omes graphify update`/`uninstall`) both read:
-
-| Variable | Default | Kind | Meaning |
-|---|---|---|---|
-| `OMES_GRAPHIFY_VERSION` | unset | Operator | Pins the installed `graphifyy` version (e.g. `0.9.64`); a mismatch against the currently installed `graphify --version` output triggers a reinstall via `uv tool install graphifyy==<version>` (or the pipx equivalent). |
-| `OMES_GRAPHIFY_INSTALLER` | unset | Operator | Set to `uv-bootstrap` to allow `module_check`/`module_apply` to download and run the official `uv` installer (`https://astral.sh/uv/install.sh`, to a temp file, never `curl \| bash`) when neither `uv` nor `pipx` is already on `PATH`. Without this, `module_check` fails with an actionable message instead of installing anything itself. |
-| `OMES_UV_INSTALLER_SHA256` | unset | Operator | Verifies the downloaded `uv` installer's sha256 before executing it (only relevant with `OMES_GRAPHIFY_INSTALLER=uv-bootstrap`); a mismatch aborts with no execution, mirroring `OMES_HERMES_INSTALLER_SHA256` in §7. |
-
-State key `module.graphify.version_installed` records the resolved `graphify --version` output
-after a successful (non-dry-run) install/update, for reproducibility.
+See [docs/graphify.md](graphify.md) §2/§3 (issues #50/#51) for the full env var/state-key
+reference (`OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, `OMES_UV_INSTALLER_SHA256`,
+`OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
+there rather than duplicated here to minimize this shared reference file's graphify footprint.
 
 ## 10. `desktop-preflight` / `hyprland-session` modules
 
