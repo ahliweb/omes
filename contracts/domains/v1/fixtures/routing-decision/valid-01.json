@@ -1,0 +1,9 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0007",
+  "tld": "id",
+  "operation": "registration",
+  "provider": "srsx",
+  "capability_id": "cap-srsx-id-01",
+  "manual_fallback": false
+}

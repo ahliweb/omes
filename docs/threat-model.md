@@ -160,6 +160,9 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 
 | T40 | Graphify semantic extraction sends source code, docs, or vault content to an external LLM provider when an operator opts in; or an Obsidian export overwrites/leaks into unrelated vault notes | Information Disclosure | A1, A6 | M | M | Code-only/local AST extraction is the only OMES-triggered default (`omes graphify run`/`sync`); semantic mode is always explicit opt-in, gated by `OMES_GRAPHIFY_PROVIDER_ENV` naming (never storing) a credential; vault export writes only under an OMES-owned subdirectory and refuses to overwrite any note lacking the `omes_generated` marker; `.graphifyignore`/`.gitignore` safe defaults exclude secrets/vault dirs; `omes graphify purge` removes only marker/manifest-owned artifacts | implemented-in-OMES | #53, #54, #55 |
 
+| T41 | A TLD/operation is routed to a registrar provider by naive suffix matching (e.g. a bare `endswith(".id")` check), silently sending an unsupported extension or operation to a provider account that cannot actually service it | Tampering, Financial Denial of Service | A10, A11 | M | M | `lib/omes/py/domains/routing.py`'s `Router` resolves a `RegistrarCapability` by extension pattern, account scope, AND operation together, and returns an explicit `manual_fallback: true` `routing-decision` (`contracts/domains/v1/routing-decision.schema.json`) when no capability matches, rather than defaulting to any provider | implemented-in-OMES (contracts + fake-provider tests only; no live Cloudflare/SRS-X adapter yet) | #98 |
+
+
 
 
 ## 6. Residual risk summary

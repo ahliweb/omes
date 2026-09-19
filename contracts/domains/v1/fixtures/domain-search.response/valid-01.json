@@ -1,0 +1,14 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0001",
+  "provider": "cloudflare",
+  "discovery_only": true,
+  "results": [
+    {
+      "domain": "example-shop.com",
+      "tld": "com",
+      "likely_available": true,
+      "premium": false
+    }
+  ]
+}

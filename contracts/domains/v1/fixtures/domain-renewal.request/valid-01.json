@@ -1,0 +1,13 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0004",
+  "idempotency_key": "idem-renew-0001",
+  "actor": {
+    "type": "service",
+    "id": "svc-reminders"
+  },
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "term_years": 1,
+  "price_snapshot_id": "price-0002"
+}

@@ -1,0 +1,12 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0005",
+  "idempotency_key": "idem-transfer-0001",
+  "actor": {
+    "type": "user",
+    "id": "user-1"
+  },
+  "domain": "example-shop.com",
+  "provider": "manual",
+  "auth_code_reference": "RAW-AUTH-CODE-1234"
+}

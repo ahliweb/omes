@@ -1,0 +1,9 @@
+{
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "status": "signed",
+  "ds_records": [
+    "12345 13 2 ABCDEF..."
+  ],
+  "checked_at": "2026-09-19T00:10:00Z"
+}

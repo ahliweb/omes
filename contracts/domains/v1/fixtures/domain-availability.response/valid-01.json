@@ -1,0 +1,11 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0002",
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "available": true,
+  "authoritative": true,
+  "premium": false,
+  "checked_at": "2026-09-19T00:00:01Z",
+  "price_snapshot_id": "price-0001"
+}

@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/routing-decision.schema.json",
+  "title": "routing-decision",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "tld",
+    "operation",
+    "provider",
+    "manual_fallback"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tld": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,63}$"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "search",
+        "availability",
+        "pricing",
+        "registration",
+        "read_sync",
+        "renewal",
+        "transfer",
+        "contact_update",
+        "dns_records",
+        "dnssec",
+        "provider_action_required"
+      ]
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "cloudflare",
+        "srsx",
+        "manual"
+      ]
+    },
+    "capability_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "manual_fallback": {
+      "type": "boolean"
+    },
+    "reason": {
+      "type": "string"
+    }
+  }
+}

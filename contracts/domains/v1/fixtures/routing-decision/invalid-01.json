@@ -1,0 +1,11 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0007",
+  "tld": "xyz-unsupported",
+  "operation": "registration",
+  "provider": "cloudflare",
+  "manual_fallback": false,
+  "reason": "no capability matched but manual_fallback is false",
+  "capability_id": "does-not-exist",
+  "unexpected_field": true
+}

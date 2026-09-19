@@ -1,0 +1,15 @@
+{
+  "reference_id": "cred-cf-scoped-01",
+  "provider": "cloudflare",
+  "kind": "api_token",
+  "reference": {
+    "store": "vault",
+    "key": "cloudflare/registrar/scoped-token"
+  },
+  "scopes": [
+    "registrar:read",
+    "registrar:write",
+    "dns:edit"
+  ],
+  "created_at": "2026-09-19T00:00:00Z"
+}
