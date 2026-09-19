@@ -27,6 +27,13 @@ Change-detection actions (issue #54, docs/graphify.md §6):
 - `status` is the read-only version of `scan` (never writes the
   manifest) - backs `omes graphify status`.
 
+Privacy/deletion actions (issue #55, docs/graphify-privacy.md):
+
+- `purge-plan`/`purge` classify (and, for `purge`, delete) every file
+  under an exported vault subdirectory into OMES-owned (safe to
+  remove) versus everything else (always kept) - backs `omes graphify
+  purge`.
+
 No secrets are ever read, accepted, or emitted by this script.
 """
 
@@ -69,6 +76,10 @@ def _build_args(argv):
         p.add_argument("--exclude", action="append", default=[])
         if name == "scan":
             p.add_argument("--write", action="store_true")
+
+    for name in ("purge-plan", "purge"):
+        p = sub.add_parser(name)
+        p.add_argument("--target-dir", required=True)
 
     return parser.parse_args(argv)
 
@@ -158,12 +169,30 @@ def _run_scan_or_status(args) -> int:
     return 0
 
 
+def _run_purge(args) -> int:
+    if args.action == "purge-plan":
+        removable, skipped = obsidian.plan_purge_export(args.target_dir)
+        print(json.dumps({"ok": True, "removable": removable, "skipped": skipped}))
+        return 0
+
+    removed, skipped = obsidian.purge_export(args.target_dir)
+    print(json.dumps({"ok": True, "removed": removed, "skipped": skipped}))
+    return 0
+
+
 def main(argv=None) -> int:
     args = _build_args(sys.argv[1:] if argv is None else argv)
 
     if args.action in ("scan", "status"):
         try:
             return _run_scan_or_status(args)
+        except OSError as exc:
+            print(json.dumps({"ok": False, "error": str(exc)}))
+            return 1
+
+    if args.action in ("purge-plan", "purge"):
+        try:
+            return _run_purge(args)
         except OSError as exc:
             print(json.dumps({"ok": False, "error": str(exc)}))
             return 1

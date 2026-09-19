@@ -670,19 +670,22 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
-### `omes graphify` (update / uninstall / run / skill / mcp health / export / sync / status)
+### `omes graphify` (update / uninstall / run / skill / mcp health / export / sync / status / init-ignore / purge)
 
-`lib/omes/cmd/graphify.sh` (issues #50/#51/#52/#53/#54). Full synopsis, exit codes, JSON schemas,
-and examples for every `omes graphify <subcommand>` live in
-[docs/graphify.md](graphify.md) §2/§3/§4/§5/§6, not here, to keep this shared reference file's
-graphify footprint minimal — see that document for the authoritative CLI contract. The optional
-`graphify-mcp` server itself is installed via `omes install --module graphify-mcp`, like any
-other OMES module (docs/graphify.md §4.2). `omes graphify export` (docs/graphify.md §5) renders a
-prior extraction into vault-ready Markdown under an operator-supplied Obsidian vault's own
-managed subdirectory only — it never installs or manages Obsidian itself. `omes graphify
-sync`/`status` (docs/graphify.md §6) re-run extraction only when the source tree actually changed
-(an OMES-owned manifest, not an upstream flag — see docs/graphify.md §6.1 for the corrected
-upstream `update`/`watch` facts).
+`lib/omes/cmd/graphify.sh` (issues #50/#51/#52/#53/#54/#55). Full synopsis, exit codes, JSON
+schemas, and examples for every `omes graphify <subcommand>` live in
+[docs/graphify.md](graphify.md) §2/§3/§4/§5/§6 and [docs/graphify-privacy.md](graphify-privacy.md)
+(`init-ignore`/`purge`), not here, to keep this shared reference file's graphify footprint
+minimal — see those documents for the authoritative CLI contract. The optional `graphify-mcp`
+server itself is installed via `omes install --module graphify-mcp`, like any other OMES module
+(docs/graphify.md §4.2). `omes graphify export` (docs/graphify.md §5) renders a prior extraction
+into vault-ready Markdown under an operator-supplied Obsidian vault's own managed subdirectory
+only — it never installs or manages Obsidian itself. `omes graphify sync`/`status`
+(docs/graphify.md §6) re-run extraction only when the source tree actually changed (an OMES-owned
+manifest, not an upstream flag — see docs/graphify.md §6.1 for the corrected upstream
+`update`/`watch` facts). `omes graphify init-ignore`/`purge` (docs/graphify-privacy.md) ship safe
+`.graphifyignore`/`.gitignore` defaults and remove only marker/manifest-owned OMES artifacts,
+never user-authored content.
 
 ## 4.14 `omes agent-backup` (opt-in Hermes data-class backup/restore)
 

@@ -4,9 +4,11 @@
 > [#49](https://github.com/ahliweb/omes/issues/49)). §2 (install module, #50),
 > §3 (workflow/skill, #51), §4 (MCP integration, #52), §5 (safe Obsidian
 > export, #53), and §6 (incremental sync/change detection, #54) are all
-> implemented, as described. Later sections (§7+) remain placeholders for
-> their own stacked issues and must not be read as implemented until their
-> own issue lands.
+> implemented, as described. Privacy controls, safe ignore-file defaults,
+> and the deletion/re-index procedure (issue #55) are documented separately
+> in [docs/graphify-privacy.md](graphify-privacy.md), also implemented.
+> Later sections (§7+) remain placeholders for their own stacked issues and
+> must not be read as implemented until their own issue lands.
 >
 > Upstream facts in this document were verified 2026-09-19 against
 > `graphify` version `0.9.64` (see

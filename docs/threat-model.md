@@ -156,6 +156,9 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 | T40 | A crafted or unusually large captured command output makes the job runner's log-redaction step consume excessive CPU (regex backtracking denial of service) before a job's error/evidence is recorded | Denial of Service | A4, A7 | M | M | `lib/omes/py/jobs/audit.py`'s secret-redaction regex uses bounded (`{0,32}`) quantifiers instead of unbounded (`*`) ones on either side of the secret-keyword alternation, and `capped_redacted_tail()` truncates to 4096 characters BEFORE running the redaction regex, not after — bounding the regex's input size regardless of how large the captured output is (found and fixed during #90's own test suite, which took 4+ minutes before the fix and under a second after) | implemented-in-OMES | #90 |
 
 
+| T40 | Graphify semantic extraction sends source code, docs, or vault content to an external LLM provider when an operator opts in; or an Obsidian export overwrites/leaks into unrelated vault notes | Information Disclosure | A1, A6 | M | M | Code-only/local AST extraction is the only OMES-triggered default (`omes graphify run`/`sync`); semantic mode is always explicit opt-in, gated by `OMES_GRAPHIFY_PROVIDER_ENV` naming (never storing) a credential; vault export writes only under an OMES-owned subdirectory and refuses to overwrite any note lacking the `omes_generated` marker; `.graphifyignore`/`.gitignore` safe defaults exclude secrets/vault dirs; `omes graphify purge` removes only marker/manifest-owned artifacts | implemented-in-OMES | #53, #54, #55 |
+
+
 
 ## 6. Residual risk summary
 
