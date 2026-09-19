@@ -1,0 +1,11 @@
+{
+  "zone_id": "zone-0001",
+  "provider": "cloudflare",
+  "checked_at": "2026-09-19T00:15:00Z",
+  "drift": [
+    {
+      "record_id": "rec-0001",
+      "kind": "renamed"
+    }
+  ]
+}

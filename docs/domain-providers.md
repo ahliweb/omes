@@ -161,11 +161,116 @@ as implemented above is genuinely implemented and tested in this
 repository (`tests/py/domains/`); everything in this subsection is
 explicitly left for `awcms-one` or a future issue.
 
-## 2. Related documents
+## 2. Cloudflare Registrar and DNS profile (issue #99)
+
+### 2.1 What this section covers
+
+This section wires the provider-neutral contracts from section 1 to a
+Cloudflare-specific capability profile, expressed **as data**
+(`lib/omes/py/domains/profiles/cloudflare.py`), plus the additional
+contracts a real Cloudflare adapter (issue #99, not yet built) will need:
+a preflight contract for the scoped API token, a registration polling
+contract that never treats a timeout as success, and a DNS drift-report
+contract. No live Cloudflare client exists in this repository — this
+section documents contracts and fake-provider test coverage only.
+
+### 2.2 Verified provider facts (cited, not invented)
+
+Fetched from Cloudflare's own documentation on 2026-09-19:
+
+- **Registrar API is beta and covers only search, availability, and
+  registration** — [Cloudflare Registrar API](https://developers.cloudflare.com/registrar/registrar-api/)
+  states "Only a subset of supported Cloudflare Registrar extensions are
+  available through the API beta" and that renewals, transfers, and
+  contact updates are **not yet available** via the API. A request for
+  an unsupported extension returns `extension_not_supported_via_api`.
+- **Dashboard support ≠ API support** — the same page: "Some extensions
+  supported in the dashboard are not yet available for programmatic
+  registration."
+- **Registration terms run up to 10 years**, auto-renew defaults on, and
+  **Internationalized Domain Names (IDNs) are not supported** —
+  [Register a domain](https://developers.cloudflare.com/registrar/get-started/register-domain/).
+- **A domain registered through Cloudflare Registrar is locked to
+  Cloudflare DNS** — the same page: "will not be able to change to
+  another DNS provider's nameservers while using Cloudflare Registrar."
+  This is why `lib/omes/py/domains/profiles/cloudflare.py` defines the
+  registrar and DNS capabilities over the same TLD set rather than as
+  independently configurable scopes.
+- **DNSSEC is offered as a follow-on step after registration**, not
+  described as available at registration time.
+
+Cloudflare has not published the exact list of extensions supported
+through the API (the page contains an unfilled placeholder for it as of
+this writing). `cloudflare.REGISTRAR_TLDS` is therefore an explicitly
+"illustrative, not authoritative" small subset (`com`, `net`, `org`) —
+the module docstring states this must be verified against the live
+`extension_not_supported_via_api` response before production use.
+
+### 2.3 Capability profile as data
+
+`lib/omes/py/domains/profiles/cloudflare.py` exports:
+
+- `REGISTRAR_CAPABILITY` — a `RegistrarCapability` dict whose
+  `supported_operations` is `["search", "availability", "pricing",
+  "registration", "read_sync"]` — **`renewal`, `transfer`, and
+  `contact_update` are deliberately absent**, so
+  `lib/omes/py/domains/routing.py`'s capability match fails for them and
+  routing falls through to `manual_fallback`, per AGENTS.md #99: "do not
+  claim automated renewal, transfer, or contact update until the
+  provider API capability is verified."
+- `DNS_CAPABILITY` — a separate `RegistrarCapability` for
+  `dns_records`/`dnssec`, over the same TLD set (see §2.2's DNS-lock
+  fact).
+- `REQUIRED_TOKEN_SCOPES` — the scopes OMES expects a scoped API token
+  to declare (`registrar:read`, `registrar:write`, `dns:edit`); these are
+  OMES's own naming for the access it needs, not a literal Cloudflare
+  permission-group identifier.
+- `MAX_TERM_YEARS`, `SUPPORTS_IDN`, `DNS_LOCKED_TO_PROVIDER` — small
+  constants sourced directly from §2.2, so a future adapter cannot
+  silently drift from the documented facts without a diff being visible
+  in this file.
+
+### 2.4 New contracts
+
+| Schema | Purpose |
+|---|---|
+| `provider-preflight.request` / `.response` | Structural preflight of a `credential-reference`: provider match, secret-reference resolvability, and required-scope coverage — never a live network call from this repository |
+| `registration-poll.response` | The result of one poll of an in-flight registration: `status`, `attempt`, `polled_at`, and an explicit `timed_out` flag so a caller can never mistake a timed-out poll for `succeeded` |
+| `dns-drift-report` | A zone-level report of DNS records that are missing at the provider, mismatched, or unmanaged (present at the provider but not desired by OMES/awcms-one) |
+
+`lib/omes/py/domains/preflight.py`'s `run_preflight()` implements the
+preflight check against these contracts; it inspects only a
+credential's metadata (`provider`, `kind`, `scopes`) and never reads
+`credential["reference"]`'s contents, since that value is a `{"store",
+"key"}` pointer, not the secret itself.
+
+### 2.5 Fake-provider test coverage (issue #99 acceptance criteria)
+
+`tests/py/domains/test_cloudflare_profile.py` and
+`test_preflight.py` cover, against the Cloudflare profile specifically
+(not just the generic #98 fake-provider tests): async polling to a
+terminal state, duplicate-job rejection, a price change between search
+and checkout producing a new snapshot ID, an unsupported-TLD request
+routing to `manual_fallback`, DNS drift detection for a Cloudflare zone,
+and secret redaction of credential-shaped evidence fields.
+
+### 2.6 What remains in awcms-one (or a future OMES issue)
+
+- A live Cloudflare API client (HTTP calls, real scoped-token
+  authentication, real DNS zone management) — this repository ships
+  contracts and a fake provider only.
+- The actual verified list of API-supported extensions — an operator
+  must confirm this against Cloudflare's current API behavior before
+  widening `REGISTRAR_TLDS` beyond its current illustrative subset.
+- Any UI for showing registration/renewal pricing, premium status, or
+  provider terms before customer confirmation.
+- Persistence of poll results, drift reports, or DNSSEC status.
+
+## 3. Related documents
 
 - [ADR-0011 — Control Center and external provider boundaries](adr/0011-control-center-and-provider-boundaries.md)
 - [Control Center and integrations](control-center-and-integrations.md)
 - [OMES control jobs](jobs.md) (#90) — the idempotency/correlation/audit conventions this document reuses
-- [Security baseline](security.md) §8.2
-- [Threat model](threat-model.md) T41
+- [Security baseline](security.md) §8.2, §8.3
+- [Threat model](threat-model.md) T41, T42
 - [contracts/README.md](../contracts/README.md) — the fixture/versioning convention `contracts/domains/v1/` follows
