@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/mapping.schema.json",
+  "title": "mapping",
+  "description": "Binds one OMES logical deployment identity to exactly one Coolify project/environment/resource on exactly one registered Coolify instance (agent-orchestration-roadmap.md 2.3 `spec.coolify{instance,project,environment,resource}`). `correlation_id` and `created_at` are immutable once written - lib/omes/py/coolify/mapping.py never rewrites them, only replaces the whole mapping record with a new correlation_id when a resource is deliberately re-mapped. Each of `project`, `environment`, and `resource` must resolve to exactly one Coolify UUID/name (a `string`); an array here represents an ambiguous match and is a schema violation on purpose, so a caller cannot silently pass a list of candidates through as if it were a single resolved mapping (see docs/coolify-adapter.md 'fail closed on ambiguous mapping').",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "created_at",
+    "omes",
+    "coolify"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "created_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "omes": {
+      "type": "object",
+      "required": [
+        "deployment_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "deployment_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "coolify": {
+      "type": "object",
+      "required": [
+        "instance_id",
+        "project",
+        "environment",
+        "resource"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "resource": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      }
+    }
+  }
+}

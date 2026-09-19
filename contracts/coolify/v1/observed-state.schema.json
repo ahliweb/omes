@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/observed-state.schema.json",
+  "title": "observed-state",
+  "description": "Everything Coolify is the source of truth for about a delegated resource (agent-orchestration-roadmap.md 2.3): external resource id, target server, deployment status, a build history reference, proxy/domain config, and logs *metadata*. `logs_metadata` deliberately has no field for log body/content/lines - additionalProperties=false on it means a raw log body can never validate against this contract, only a reference an operator or Hermes could use to fetch logs through an authorized channel (docs/coolify-adapter.md 'metadata only, never log bodies'). This object never carries OMES logical policy/entitlement fields (role, capability, secret_ref, backup policy, ...) - see reconciliation.schema.json, which restricts a reconciliation patch to exactly this contract's keys.",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "observed_at",
+    "external_resource_id",
+    "target_server",
+    "deployment_status"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "external_resource_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "target_server": {
+      "type": "object",
+      "required": [
+        "server_uuid"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "server_uuid": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "hostname": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$"
+        }
+      }
+    },
+    "deployment_status": {
+      "type": "string",
+      "enum": [
+        "queued",
+        "in_progress",
+        "finished",
+        "failed",
+        "cancelled-by-user",
+        "unknown"
+      ]
+    },
+    "build_history_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "deployment_uuid": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      }
+    },
+    "proxy_domain_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proxy_type": {
+          "type": "string",
+          "enum": [
+            "traefik",
+            "caddy",
+            "none"
+          ]
+        },
+        "domains": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$"
+          }
+        }
+      }
+    },
+    "logs_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "type": "boolean"
+        },
+        "ref": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$"
+        },
+        "last_line_at": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+        },
+        "byte_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

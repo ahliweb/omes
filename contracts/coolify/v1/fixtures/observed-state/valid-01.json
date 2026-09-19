@@ -1,0 +1,24 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "observed_at": "2026-09-19T00:05:00Z",
+  "external_resource_id": "researcher-worker",
+  "target_server": {
+    "server_uuid": "og888os",
+    "hostname": "coolify-node-1.example.com"
+  },
+  "deployment_status": "finished",
+  "build_history_ref": {
+    "deployment_uuid": "cm37r6cqj000008jm0veg5tkm",
+    "commit": "a1b2c3d"
+  },
+  "proxy_domain_config": {
+    "proxy_type": "traefik",
+    "domains": ["researcher-worker.example.com"]
+  },
+  "logs_metadata": {
+    "available": true,
+    "ref": "coolify/deployments/cm37r6cqj000008jm0veg5tkm/logs",
+    "last_line_at": "2026-09-19T00:04:59Z",
+    "byte_count": 20480
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "idempotency_key": "apply-researcher-worker-2026-09-19T00-00-00Z",
+  "actor": {
+    "type": "service",
+    "id": "omes-job-runner"
+  },
+  "operation": "apply",
+  "mapping": {
+    "instance_id": "coolify-production",
+    "project": "agent-platform",
+    "environment": "production",
+    "resource": "researcher-worker"
+  }
+}

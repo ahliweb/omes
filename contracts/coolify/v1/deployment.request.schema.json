@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/deployment.request.schema.json",
+  "title": "deployment.request",
+  "description": "The only mutating shape OMES sends its own Coolify adapter for a delegated resource operation (issue #97). `operation` is a closed enum matching lib/omes/py/coolify's adapter interface: apply (deploy via Coolify's POST /deploy), status, health, redeploy (force rebuild), rollback (Coolify's POST /applications/{uuid}/rollback). additionalProperties=false rejects any free-form field, matching the no-arbitrary-shell rule already enforced for contracts/control-center/v1/deployment.request.schema.json. `rollback_ref`, when present, must be the Coolify deployment UUID to roll back to/from - Coolify is the source of truth for that identifier, OMES never invents one.",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "idempotency_key",
+    "actor",
+    "operation",
+    "mapping"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{8,256}$"
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "apply",
+        "status",
+        "health",
+        "redeploy",
+        "rollback"
+      ]
+    },
+    "mapping": {
+      "type": "object",
+      "required": [
+        "instance_id",
+        "project",
+        "environment",
+        "resource"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "resource": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      }
+    },
+    "rollback_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+    },
+    "force": {
+      "type": "boolean"
+    }
+  }
+}

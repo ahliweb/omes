@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/deployment.response.schema.json",
+  "title": "deployment.response",
+  "description": "Response to a coolify deployment.request (issue #97). `result` never claims success from an accepted-but-unreconciled async Coolify deployment (docs/coolify-adapter.md 'never treat timeout as success', mirroring AGENTS.md 3): `accepted` means Coolify queued the deployment (its ApplicationDeploymentQueue is `queued`/`in_progress`); OMES only reports `applied`/`healthy` after a subsequent status/health read confirms it. `external.deployment_uuid` is Coolify's own deployment identifier (from POST /deploy or POST /applications/{uuid}/rollback) and is the value used as `rollback_ref` on a later rollback request.",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "idempotency_key",
+    "operation",
+    "result"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{8,256}$"
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "apply",
+        "status",
+        "health",
+        "redeploy",
+        "rollback"
+      ]
+    },
+    "result": {
+      "type": "string",
+      "enum": [
+        "accepted",
+        "applied",
+        "degraded",
+        "failed",
+        "rolled_back",
+        "healthy",
+        "unhealthy",
+        "unknown"
+      ]
+    },
+    "external": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "resource_uuid": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "deployment_uuid": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      }
+    },
+    "message": {
+      "type": "string"
+    }
+  }
+}
