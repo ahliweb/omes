@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/domain-product.schema.json",
+  "title": "domain-product",
+  "type": "object",
+  "required": [
+    "product_id",
+    "kind",
+    "tld_pattern",
+    "currency",
+    "active"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "product_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "registration",
+        "renewal",
+        "transfer_manual",
+        "dns_management",
+        "dnssec",
+        "managed_service"
+      ]
+    },
+    "tld_pattern": {
+      "type": "string",
+      "pattern": "^\\^.*\\$$"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "active": {
+      "type": "boolean"
+    }
+  }
+}

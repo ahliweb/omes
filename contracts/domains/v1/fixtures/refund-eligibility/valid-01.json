@@ -1,0 +1,7 @@
+{
+  "order_id": "order-0001",
+  "operation": "registration",
+  "order_state": "failed",
+  "refundable": true,
+  "reason": "registration never reached the provider; no billable operation occurred"
+}

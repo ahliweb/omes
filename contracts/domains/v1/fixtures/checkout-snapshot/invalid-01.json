@@ -1,0 +1,10 @@
+{
+  "checkout_id": "checkout-0001",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0300",
+  "product_id": "prod-registration-intl",
+  "price_snapshot_id": "price-0001",
+  "payment_required": false,
+  "approval_required": false,
+  "captured_at": "2026-09-19T02:00:00Z"
+}

@@ -1,0 +1,8 @@
+{
+  "reminder_id": "reminder-0001",
+  "tenant_id": "tenant-acme",
+  "domain": "example.com",
+  "order_id": "order-0001",
+  "schedule": "day_60",
+  "scheduled_at": "2026-08-20T00:00:00Z"
+}

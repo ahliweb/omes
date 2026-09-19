@@ -1,0 +1,13 @@
+{
+  "report_id": "report-0001",
+  "report_type": "upcoming_renewals",
+  "tenant_id": null,
+  "generated_at": "2026-09-19T03:00:00Z",
+  "rows": [
+    {
+      "domain": "example.com",
+      "expires_at": "2026-10-19T00:00:00Z",
+      "days_remaining": 30
+    }
+  ]
+}

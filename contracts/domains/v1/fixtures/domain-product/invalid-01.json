@@ -1,0 +1,7 @@
+{
+  "product_id": "prod-registration-intl",
+  "kind": "purchase",
+  "tld_pattern": "^(com)$",
+  "currency": "USD",
+  "active": true
+}

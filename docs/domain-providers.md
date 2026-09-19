@@ -493,11 +493,100 @@ tests. All HMAC secrets are generated at runtime via
 - The managed GitHub integration catalog add-on's actual billing
   integration (contract only here; see issue #102).
 
-## 5. Related documents
+## 5. Domain billing and reconciliation (issue #102)
+
+### 5.1 What this section covers
+
+This section connects the domain catalog/orders from sections 1–4 to
+OMES's own billing ledger rules: products, checkout snapshots, a
+payment/approval gate, renewal reminders, duplicate-event dedupe,
+non-refundable-after-success semantics, state-domain reconciliation, and
+reports. Consistent with ADR-0011 §4 ("Billing is an OMES ledger, not
+provider authority"), none of this repository's code calls a payment
+provider, registrar, or DNS API — `lib/omes/py/domains/billing.py` is
+pure rule/data logic, tested against the fake providers only.
+
+### 5.2 New contracts
+
+| Schema | Purpose |
+|---|---|
+| `domain-product` | A billable product: `kind` (`registration`/`renewal`/`transfer_manual`/`dns_management`/`dnssec`/`managed_service`), TLD pattern, currency, active flag |
+| `checkout-snapshot` | `payment_required` is pinned `true` (a domain product is never modeled as free); `approval_required` is a separate, independently-settable flag |
+| `renewal-reminder` | 90/30/7-day date-based reminders, plus state-triggered `payment_failure`/`action_required`/`manual_fallback` reminders |
+| `reconciliation-rule` | Names a `state_domain` (`registrar`/`invoice`/`entitlement`/`dns`), its authoritative source, which other state domains it is reconciled with, and whether drift is currently detected |
+| `billing-event-dedupe` | An idempotency-key record shared across every event source (`payment_provider`/`registrar`/`dns`/`github`), with `duplicate_of` pointing at the first-seen event when replayed |
+| `refund-eligibility` | Per-order refund eligibility keyed by `operation` and `order_state` |
+| `domain-report` | A generic report envelope (`report_type` ∈ margin/upcoming_renewals/failed_registrations/pending_documents/provider_balance_action/reconciliation_drift) with free-form `rows` |
+
+### 5.3 Payment/approval-before-registration rule
+
+`billing.create_checkout_snapshot()` always sets `payment_required:
+true` — this repository does not model a domain product that skips
+payment; a future genuinely-free tier would need its own explicitly
+named product type rather than a `false` value on this field, so a
+reviewer scanning `checkout-snapshot` instances can trust that
+`payment_required` is never silently `false`. `assert_registration_allowed()`
+raises `billing.PaymentRequiredError` — never proceeds silently — when
+payment or (if the checkout requires it) approval is not confirmed.
+
+### 5.4 Non-refundable-after-success and state separation
+
+`billing.refund_eligibility()` treats `succeeded`, `active`, and
+`renewal_due` domain-order states (`lib/omes/py/domains/states.py`) as
+never refundable through this ledger — the provider operation actually
+completed and (for a registrar) a resource now exists that OMES did not
+create and must not silently reverse (AGENTS.md §3: "Never delete...
+provider resources that OMES did not create or explicitly own").
+`billing.build_reconciliation_rule()` enforces that `state_domain` and
+`reconciled_with` are drawn from the same fixed set
+(`registrar`/`invoice`/`entitlement`/`dns`) and rejects a rule that
+claims a state domain is reconciled against itself — reconciliation is
+always a comparison between two *different* sources of truth.
+
+### 5.5 Duplicate-event dedupe
+
+`billing.DedupeIndex` is a single idempotency-key index shared across
+every billing-relevant event source. This matters because a duplicate
+event for the *same* underlying order can legitimately arrive from
+different sources (a payment provider's webhook and a registrar's own
+status callback both referencing the same order) — the dedupe check is
+keyed by `idempotency_key`, not by source, so either arrival recognizes
+the other as a duplicate (see docs/threat-model.md T45).
+
+### 5.6 End-to-end fake-provider fixtures (issue #102 acceptance criterion)
+
+`tests/py/domains/test_e2e_billing.py` runs two full flows, no live
+credentials:
+
+- **Cloudflare international**: checkout → payment gate → async
+  fake-provider registration → polling to `succeeded` → domain-order
+  `pending → succeeded → active` → reconciliation rule → expiry-based
+  reminder schedule → margin report row → non-refundable-after-active
+  check.
+- **SRS-X `.id`**: checkout → payment gate → registration immediately
+  `action_required` → a `pending_documents` report row → document
+  upload/submit/approve → domain-order `action_required → pending →
+  succeeded → active` → cross-source duplicate-event dedupe; a second
+  scenario covers a rejected document producing a `failed_registrations`
+  report row and a refundable (non-`succeeded`) order state.
+
+### 5.7 What remains in awcms-one (or a future OMES issue)
+
+- Any live payment provider integration, invoice generation/PDF,
+  dunning, or customer-facing billing UI.
+- Durable storage for checkout snapshots, reminders, dedupe records, and
+  reports — every structure here is a plain dict returned to the caller,
+  never persisted by this repository.
+- Sending an actual reminder notification (email/Telegram/etc.) — this
+  repository only builds the reminder *record*.
+- Cross-referencing a `domain-report`'s rows against live registrar/DNS
+  state; the report builder accepts whatever rows a caller supplies.
+
+## 6. Related documents
 
 - [ADR-0011 — Control Center and external provider boundaries](adr/0011-control-center-and-provider-boundaries.md)
 - [Control Center and integrations](control-center-and-integrations.md)
 - [OMES control jobs](jobs.md) (#90) — the idempotency/correlation/audit conventions this document reuses
-- [Security baseline](security.md) §8.2, §8.3, §8.4, §8.5
-- [Threat model](threat-model.md) T41, T42, T43, T44
+- [Security baseline](security.md) §8.2, §8.3, §8.4, §8.5, §8.6
+- [Threat model](threat-model.md) T41, T42, T43, T44, T45
 - [contracts/README.md](../contracts/README.md) — the fixture/versioning convention `contracts/domains/v1/` follows

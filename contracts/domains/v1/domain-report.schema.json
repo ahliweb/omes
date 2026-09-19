@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/domain-report.schema.json",
+  "title": "domain-report",
+  "type": "object",
+  "required": [
+    "report_id",
+    "report_type",
+    "generated_at",
+    "rows"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "report_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "report_type": {
+      "type": "string",
+      "enum": [
+        "margin",
+        "upcoming_renewals",
+        "failed_registrations",
+        "pending_documents",
+        "provider_balance_action",
+        "reconciliation_drift"
+      ]
+    },
+    "tenant_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "generated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    }
+  }
+}

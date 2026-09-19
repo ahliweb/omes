@@ -1,0 +1,6 @@
+{
+  "event_id": "event-0001",
+  "source": "bank",
+  "idempotency_key": "idem-pay-0001",
+  "first_seen_at": "2026-09-19T02:05:00Z"
+}
