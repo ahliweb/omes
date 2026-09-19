@@ -125,6 +125,15 @@ No module-specific environment variables; behavior (never overwrite a differing 
 
 See [docs/ci.md](ci.md) for how these are used in `.github/workflows/compatibility.yml`.
 
+## 12a. `content` extension command (optional; `lib/omes/cmd/content.sh`, `lib/omes/py/content/`)
+
+Never referenced by any installer profile — see
+[docs/content-distribution.md](content-distribution.md) section 9.
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
+
 ## 13. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).

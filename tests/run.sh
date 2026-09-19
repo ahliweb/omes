@@ -112,6 +112,23 @@ run_bats "tests/unit"
 run_bats "tests/integration"
 
 # ---------------------------------------------------------------------------
+# Python (stdlib-only) unit tests, ADR-0012
+# ---------------------------------------------------------------------------
+
+if [[ -d tests/py ]]; then
+  log "running python3 -m unittest discover -s tests/py -t ."
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 -m unittest discover -s tests/py -t .; then
+      err "python3 unittest suite failed"
+      FAILED=1
+    fi
+  else
+    err "python3 not available; cannot run tests/py"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # bash -n on every shell script (fast syntax sanity check)
 # ---------------------------------------------------------------------------
 
