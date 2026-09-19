@@ -1246,7 +1246,7 @@ _graphify_cmd_status() {
   fi
 
   local status_json
-  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}")"; then
+  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --max-file-mb "${OMES_GRAPHIFY_MAX_FILE_MB:-5}")"; then
     log_error "graphify: status: scan failed"
     exit "$OMES_EX_ERROR"
   fi
@@ -1394,7 +1394,7 @@ _graphify_cmd_sync() {
   fi
 
   local status_json
-  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}")"; then
+  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --max-file-mb "${OMES_GRAPHIFY_MAX_FILE_MB:-5}")"; then
     log_error "graphify: sync: scan failed"
     exit "$OMES_EX_ERROR"
   fi
@@ -1410,7 +1410,7 @@ _graphify_cmd_sync() {
     else
       # Still advance last_run_at so --min-interval throttles repeated
       # no-op calls, without re-invoking graphify at all.
-      _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --write >/dev/null || true
+      _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --max-file-mb "${OMES_GRAPHIFY_MAX_FILE_MB:-5}" --write >/dev/null || true
     fi
     if [[ "$OMES_JSON" == "1" ]]; then
       json_obj \
@@ -1522,7 +1522,7 @@ _graphify_cmd_sync() {
     exit "$OMES_EX_ERROR"
   fi
 
-  _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --write >/dev/null || true
+  _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --max-file-mb "${OMES_GRAPHIFY_MAX_FILE_MB:-5}" --write >/dev/null || true
   log_info "graphify: sync: ran graphify ${action} and refreshed the change-detection manifest (${manifest})"
 
   if [[ "$OMES_JSON" == "1" ]]; then

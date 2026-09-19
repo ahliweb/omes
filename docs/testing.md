@@ -153,7 +153,32 @@ exact working tree over SSH, runs check → install → a **real** `reboot` → 
 assertions, and writes a timestamped, sha256-summed evidence bundle under `tests/vm/evidence/`
 (gitignored).
 
-### 2.4 Manual desktop checklist
+### 2.4 Graphify integration tests
+
+Fast, shim-driven bats coverage runs as part of `./tests/run.sh` (§2.1) like everything else:
+`tests/integration/graphify*.bats` cover fresh/repeat install and update/uninstall of the
+`graphify` CLI, code-only extraction with a canary provider credential (`OPENAI_API_KEY=canary`
+et al.) asserted to never appear in any shim invocation log or provenance sidecar, export to
+empty and populated vaults, malformed Markdown (a truncated/unclosed front-matter block is
+treated as a safe conflict, never a crash), symlinked source files/directories (skipped, never
+followed), an oversized file (`OMES_GRAPHIFY_MAX_FILE_MB`, excluded like an ignored path),
+`.gitignore`/`.graphifyignore`-ignored paths, interrupted-run recovery (a corrupted or
+failed `graphify update` restored from its pre-sync backup), and the Hermes skill install +
+optional `graphify-mcp` health check working together without touching each other. All of this
+uses `tests/shims/{graphify,graphify-mcp,hermes,uv,pipx}` and synthetic fixtures under
+`tests/fixtures/graphify/` only — no private content, no real network call, no real `graphifyy`
+install.
+
+`tests/graphify/real-smoke.sh` is a separate, **opt-in** real smoke test: it installs the actual
+`graphifyy` package from PyPI inside a throwaway `python:3.12-slim` container and runs a real
+`graphify extract --code-only` against the same synthetic fixture, printing the installed
+version. It is never run by `tests/run.sh` or on every pull request (it makes a real network
+call, which every OMES-triggered code-only invocation is otherwise documented to avoid needing);
+`.github/workflows/compatibility.yml`'s `graphify-real-smoke` job runs it only on the weekly
+schedule or `workflow_dispatch`, non-blocking (`continue-on-error: true`), so normal PR CI stays
+fast and never depends on PyPI availability. Run it by hand with `tests/graphify/real-smoke.sh`.
+
+### 2.5 Manual desktop checklist
 
 Follow [`tests/vm/checklist.md`](../tests/vm/checklist.md) by hand against a real (or virtualized)
 Linux Mint 22.x install. Not automated - see [4. Known gaps](#4-known-gaps) for why.

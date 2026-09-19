@@ -32,27 +32,39 @@ from typing import Dict, List, Tuple
 MANIFEST_SCHEMA_VERSION = 1
 
 
-def _read_gitignore_patterns(root: str) -> List[str]:
-    """Best-effort, non-recursive .gitignore support: reads only
-    <root>/.gitignore's non-comment, non-blank lines as flat glob
-    patterns matched against each path component and the relative path
-    itself. This is intentionally simple (no `**`, no negation, no
-    nested .gitignore) - full .gitignore/.graphifyignore semantics are
-    #55's concern (docs/graphify-privacy.md); this is only enough to
-    keep an obviously-ignored tree (e.g. a committed virtualenv) out of
-    the change-detection walk.
+DEFAULT_MAX_FILE_MB = 5
+
+# Verified 2026-09-19 against graphify 0.9.64: `graphify extract` honors
+# BOTH .gitignore and .graphifyignore by default, with no flag needed
+# (docs/graphify-privacy.md §3) - this scan mirrors that by reading both
+# top-level files, so `omes graphify sync`'s change detection stays
+# consistent with what a subsequent `graphify extract`/`update` call
+# would itself skip.
+_IGNORE_FILE_NAMES = (".gitignore", ".graphifyignore")
+
+
+def _read_ignore_file_patterns(root: str) -> List[str]:
+    """Best-effort, non-recursive .gitignore/.graphifyignore support:
+    reads only <root>/.gitignore and <root>/.graphifyignore's
+    non-comment, non-blank lines as flat glob patterns matched against
+    each path component and the relative path itself. This is
+    intentionally simple (no `**`, no negation, no nested ignore files) -
+    it only needs to keep an obviously-ignored tree (a committed
+    virtualenv, secrets directory) out of the change-detection walk, not
+    reproduce every gitignore edge case.
     """
-    path = os.path.join(root, ".gitignore")
     patterns: List[str] = []
-    try:
-        with open(path, "r", encoding="utf-8", errors="replace") as f:
-            for line in f:
-                line = line.strip()
-                if not line or line.startswith("#"):
-                    continue
-                patterns.append(line.rstrip("/"))
-    except OSError:
-        pass
+    for name in _IGNORE_FILE_NAMES:
+        path = os.path.join(root, name)
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
+                    patterns.append(line.rstrip("/"))
+        except OSError:
+            continue
     return patterns
 
 
@@ -75,20 +87,35 @@ def sha256_file(path: str) -> str:
     return h.hexdigest()
 
 
-def scan_tree(root: str, exclude_abs_dirs: List[str]) -> Dict[str, Dict[str, object]]:
+def scan_tree(
+    root: str,
+    exclude_abs_dirs: List[str],
+    *,
+    max_file_mb: float = DEFAULT_MAX_FILE_MB,
+) -> Dict[str, Dict[str, object]]:
     """Walk `root`, returning {relpath: {"sha256": ..., "mtime": ...,
-    "size": ...}} for every regular file, skipping `.git/`, anything
-    matching a top-level `.gitignore` pattern (best-effort - see
-    `_read_gitignore_patterns`), symlinks (never followed - a symlinked
-    file or directory is skipped entirely, matching #56's "symlinks are
-    refused/skipped" requirement), and any directory whose resolved
-    absolute path is one of `exclude_abs_dirs` (graphify-out/, and the
-    export vault subdirectory when it happens to live inside the
-    source tree - loop avoidance, docs/graphify.md §6.3).
+    "size": ...}} for every regular file, skipping:
+
+    - `.git/`;
+    - anything matching a top-level `.gitignore`/`.graphifyignore`
+      pattern (best-effort - see `_read_ignore_file_patterns`);
+    - symlinks (never followed - a symlinked file or directory is
+      skipped entirely, matching issue #56's "symlinks are
+      refused/skipped" requirement);
+    - any directory whose resolved absolute path is one of
+      `exclude_abs_dirs` (graphify-out/, and the export vault
+      subdirectory when it happens to live inside the source tree -
+      loop avoidance, docs/graphify.md §6.3);
+    - any file larger than `max_file_mb` megabytes (default
+      `DEFAULT_MAX_FILE_MB`, overridable via `OMES_GRAPHIFY_MAX_FILE_MB`
+      by the bash caller - issue #56's size cap: a large file is treated
+      exactly like an ignored path, silently excluded from change
+      detection, never causing an error).
     """
     root = os.path.abspath(root)
     exclude_abs = {os.path.abspath(d) for d in exclude_abs_dirs}
-    patterns = _read_gitignore_patterns(root)
+    patterns = _read_ignore_file_patterns(root)
+    max_bytes = max_file_mb * 1024 * 1024
 
     result: Dict[str, Dict[str, object]] = {}
     for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
@@ -112,6 +139,8 @@ def scan_tree(root: str, exclude_abs_dirs: List[str]) -> Dict[str, Dict[str, obj
             try:
                 stat = os.stat(abs_path)
             except OSError:
+                continue
+            if stat.st_size > max_bytes:
                 continue
             try:
                 digest = sha256_file(abs_path)

@@ -100,7 +100,8 @@ reference file's graphify footprint. `omes graphify export` (issue #53, docs/gra
 `OBSIDIAN_VAULT_PATH` (the vault path, when `--vault` is omitted — never guessed otherwise) and
 `OMES_GRAPHIFY_VAULT_SUBDIR` (default `graphify/<project-name>`; the ONLY subtree of the vault it
 ever writes to), also documented there rather than here. `omes graphify sync`/`status` (issue
-#54, docs/graphify.md §6) introduce no new environment variables beyond their own `--min-interval`/
+#54, docs/graphify.md §6) introduce `OMES_GRAPHIFY_MAX_FILE_MB` (default `5`; issue #56's size
+cap — files larger than this are excluded from change detection) beyond their own `--min-interval`/
 `--allow-nested-vault` flags and reusing `OBSIDIAN_VAULT_PATH` for loop avoidance only.
 `omes graphify init-ignore`/`purge` (issue #55, docs/graphify-privacy.md) introduce no new
 environment variables either — `purge` reuses the same `--vault`/`OBSIDIAN_VAULT_PATH` resolution

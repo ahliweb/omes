@@ -121,3 +121,29 @@ jobs:
             tests/matrix/results/
             tests/matrix/logs/
           if-no-files-found: ignore
+
+  graphify-real-smoke:
+    name: "Graphify real smoke (opt-in, weekly/on-demand only, issue #56)"
+    runs-on: ubuntu-24.04
+    # Guarded to schedule/workflow_dispatch only, NOT pull_request/push -
+    # this installs the real `graphifyy` package from PyPI (network call),
+    # which every OMES-triggered code-only invocation is documented to
+    # avoid needing by default (docs/graphify.md §1.5,
+    # docs/graphify-privacy.md §1); keeping it off the PR path keeps PR CI
+    # fast and never depends on PyPI availability for a normal merge.
+    # Never blocking even when it does run (continue-on-error), since a
+    # transient PyPI/upstream issue must not gate anything.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: tests/graphify/real-smoke.sh
+        if: hashFiles('tests/graphify/real-smoke.sh') != ''
+        run: ./tests/graphify/real-smoke.sh
+
+      - name: tests/graphify/real-smoke.sh not present yet
+        if: hashFiles('tests/graphify/real-smoke.sh') == ''
+        run: |
+          echo "tests/graphify/real-smoke.sh not present yet; skipping. Tracked in #56."
