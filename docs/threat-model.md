@@ -169,6 +169,9 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 | T43 | SRS-X's ambiguous `1001` result code (documented to mean EITHER "pending document" OR "creation failure") is misread as a safe-to-retry transient failure, causing a duplicate/duplicate-cost `.id` registration attempt | Tampering, Financial Denial of Service | A10, A11 | M | H | `lib/omes/py/domains/retry.py`'s `classify_srsx_result_code()` never marks a `1001` result retryable regardless of the caller-tracked `document_pending` flag; only a distinct `TransportError` (a genuinely transient failure, which does not consume the idempotency key) is classified retryable | implemented-in-OMES (fake-provider tests only; no live SRS-X client) | #100 |
 
 
+| T41 | A delegated Coolify resource's deployment ID, log content, or state overwrites/impersonates OMES logical policy, or a rollback/deploy targets an unintended or ambiguous Coolify resource because a mapping was incomplete | Tampering, Elevation of Privilege, Information Disclosure | A7, A10, A11 | M | H | Fail-closed mapping validation (missing/ambiguous instance/project/environment/resource rejected before any operation); `observation_patch` restricted to the closed observed-state key set so it structurally cannot carry a logical/policy field; `logs_metadata` carries no raw log body; rollback rejects any `rollback_ref` not previously observed for the resource; token read only from a named environment variable and redacted from every error; no network call without `OMES_COOLIFY_LIVE=1` | implemented-in-OMES (contracts and fake-provider adapter only; no live HTTP integration, no `omes job`/manifest wiring) | #97 |
+
+
 
 
 ## 6. Residual risk summary
