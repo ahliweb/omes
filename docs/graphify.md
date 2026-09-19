@@ -8,7 +8,7 @@
 >
 > Upstream facts in this document were verified 2026-09-19 against
 > `graphify` version `0.9.64` (see
-> [ADR-0012](adr/0012-graphify-integration-boundary.md) for how that
+> [ADR-0014](adr/0014-graphify-integration-boundary.md) for how that
 > verification was done and why it matters for what OMES commits to).
 
 ## §1 Identity, modes, and ownership boundary
@@ -55,7 +55,7 @@ silently blocked, or accidentally reinvented later.
 
 | Owns / does NOT own | OMES | Upstream Graphify (`Graphify-Labs/graphify` / PyPI `graphifyy`) | Obsidian | Hermes |
 |---|---|---|---|---|
-| Installing/isolating the `graphify` CLI | **Owns** — a dedicated tool environment (`uv tool`/pipx), never system pip (see ADR-0012) | Publishes the package; does not know about OMES | No role | No role |
+| Installing/isolating the `graphify` CLI | **Owns** — a dedicated tool environment (`uv tool`/pipx), never system pip (see ADR-0014) | Publishes the package; does not know about OMES | No role | No role |
 | Invoking the CLI, validating inputs/paths, provenance sidecar | **Owns** — module lifecycle, preflight, path validation, recording what ran and against what commit/version | No role — graphify has no concept of OMES's provenance model | No role | No role |
 | AST/semantic extraction logic, graph format, `query`/`explain`/`path`/`export` subcommands | Never reimplemented by OMES | **Owns** entirely | No role | No role |
 | Provider/backend routing for semantic extraction (`--backend {gemini\|kimi\|claude\|openai\|deepseek\|ollama}`) | Never duplicated; OMES never stores or routes provider credentials for graphify | **Owns** entirely, via its own env-var-driven backend selection | No role | No role |

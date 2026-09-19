@@ -1,4 +1,4 @@
-# ADR-0012 — Graphify integration boundary
+# ADR-0014 — Graphify integration boundary
 
 - **Status:** Accepted as design boundary; implementation tracked in issues
   [#50](https://github.com/ahliweb/omes/issues/50),
