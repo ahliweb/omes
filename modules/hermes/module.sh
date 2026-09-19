@@ -23,6 +23,8 @@ MODULE_PROFILES=(server desktop hermes)
 
 # shellcheck source=../../lib/omes/versions.sh
 source "${OMES_ROOT}/lib/omes/versions.sh"
+# shellcheck source=../../lib/omes/cmd/audit-provenance.sh
+source "${OMES_ROOT}/lib/omes/cmd/audit-provenance.sh"
 
 # Default upstream installer location (verified 2026-09-18). Overridable via
 # OMES_HERMES_INSTALLER_URL purely for testability; there is no documented
@@ -108,8 +110,8 @@ _hermes_download_and_install() {
     return 1
   fi
 
+  local actual="" checksum_status="unverified"
   if [[ -n "${OMES_HERMES_INSTALLER_SHA256:-}" ]]; then
-    local actual
     actual="$(sha256sum "$tmp" | awk '{print $1}')"
     if [[ "$actual" != "${OMES_HERMES_INSTALLER_SHA256}" ]]; then
       log_error "hermes: installer sha256 mismatch (expected ${OMES_HERMES_INSTALLER_SHA256}, got ${actual}); aborting, nothing executed"
@@ -117,6 +119,7 @@ _hermes_download_and_install() {
       return 1
     fi
     log_info "hermes: installer sha256 verified against OMES_HERMES_INSTALLER_SHA256"
+    checksum_status="verified"
   else
     log_warn "hermes: OMES_HERMES_INSTALLER_SHA256 is not set; running the Hermes installer without verifying its integrity (see docs/security.md §6)"
   fi
@@ -131,7 +134,34 @@ _hermes_download_and_install() {
     return 1
   fi
 
+  _hermes_record_provenance "$url" "${OMES_HERMES_INSTALLER_SHA256:-}" "$actual" "$checksum_status"
+
   return 0
+}
+
+# _hermes_record_provenance <installer-url> <expected-sha256> <actual-sha256> <checksum-status>
+# Records a supply-chain provenance entry for the "hermes" component
+# (issue #84) via lib/omes/cmd/audit-provenance.sh's
+# `provenance_record_component` helper. Best-effort: never fails
+# module_apply (see that helper's own contract).
+_hermes_record_provenance() {
+  local url="$1" expected="$2" actual="$3" status="$4"
+  local resolved_version
+  resolved_version="$(_hermes_installed_version || true)"
+
+  local checksum_obj payload
+  checksum_obj="$(json_obj \
+    "$(json_kv algorithm sha256)" \
+    "$(json_kv expected "$expected")" \
+    "$(json_kv actual "$actual")" \
+    "$(json_kv status "$status")")"
+  payload="$(json_obj \
+    "$(json_kv installer_source_url "$url")" \
+    "$(json_kv resolved_version "$resolved_version")" \
+    "$(json_kv install_time "$(date -u +%Y-%m-%dT%H:%M:%SZ)")" \
+    "$(json_kv checksum "$checksum_obj" --raw)")"
+
+  provenance_record_component "hermes" "${OMES_PROFILE:-}" "$payload"
 }
 
 # _hermes_ensure_path_snippet

@@ -12,8 +12,8 @@
 > here can go stale the moment a binary is upgraded, a config key is
 > changed, or a service is restarted. Treat it as a diagnostic snapshot,
 > not a contract. Supply-chain provenance (checksum/installer trust) is a
-> separate, narrower concern, added on top of this in issue #84
-> (`docs/provenance.md`, once that change lands).
+> separate, narrower concern — see [docs/provenance.md](./provenance.md)
+> (issue #84).
 
 ## 1. What is recorded
 

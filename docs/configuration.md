@@ -241,6 +241,16 @@ mapping and command reference.
 
 
 
+## 13d. `omes audit provenance` / `lib/omes/py/provenance/audit.py` (issue #84)
+
+See [docs/provenance.md](provenance.md) for the full field list and remediation guidance.
+
+| Variable | Default | Kind |
+|---|---|---|
+| `OMES_HERMES_INSTALLER_SHA256` | unset | Operator — pins the expected sha256 of the Hermes installer (§7); a mismatch aborts install before execution, and the resulting provenance record's `checksum.status` reflects whether a pin was used. |
+
+
+
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
 <!-- OMES-MERMAID: docs/configuration.md -->

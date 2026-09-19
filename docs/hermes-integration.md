@@ -27,11 +27,12 @@
 > `modules/hermes/module.sh` also records runtime version/compatibility
 > evidence (`omes health versions`, issue #83; see
 > [docs/compatibility-evidence.md](./compatibility-evidence.md)) at
-> apply time and on `omes doctor` - an additive read-only report layered
-> on top of the module contract described below, not a change to what
-> `module_apply`/`module_verify` require to succeed. Issue #84 adds
-> installer/package-manager supply-chain provenance on top of this in a
-> follow-on change.
+> apply time and on `omes doctor`, and installer/package-manager
+> supply-chain provenance (`omes audit provenance`, issue #84; see
+> [docs/provenance.md](./provenance.md)) at install time - both are
+> additive read-only reports layered on top of the module contract
+> described below, not a change to what `module_apply`/`module_verify`
+> require to succeed.
 
 ## 1. What the `hermes` module does
 

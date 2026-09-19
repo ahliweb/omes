@@ -382,7 +382,7 @@ OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 
 ### `omes audit` (extension command)
 
-**Synopsis:** `omes audit exposure [--json]`
+**Synopsis:** `omes audit exposure [--json]` / `omes audit provenance [--profile <name>] [--json]`
 
 Implemented by [`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh) (issue
 [#80](https://github.com/ahliweb/omes/issues/80)), which delegates to the
@@ -402,6 +402,20 @@ for remediation guidance.
 omes audit exposure --json | jq -e '.ok'
 OMES_EXPOSURE_ALLOW="0.0.0.0:8642" omes audit exposure
 ```
+
+`omes audit provenance [--profile <name>] [--json]` (issue
+[#84](https://github.com/ahliweb/omes/issues/84), implemented by
+[`lib/omes/cmd/audit-provenance.sh`](../lib/omes/cmd/audit-provenance.sh)
+and [`lib/omes/py/provenance/audit.py`](../lib/omes/py/provenance/audit.py))
+audits `<state-dir>/provenance/*.json` records written at Hermes install
+time: a recorded checksum mismatch is a `FAIL` (fail-closed), an
+unverified checksum status or a mutable installer-source URL
+(`main`/`latest`/`HEAD`) is a `WARN`, missing required metadata is a
+`WARN`, and executable files under managed `$HERMES_HOME/{skills,
+plugins,mcp}/**` paths are listed (mode/size/sha256) for review —
+**never executed**. See [docs/provenance.md](provenance.md) ("a
+provenance report is not a security certification"). Exit codes: 0
+clean, 7 findings.
 
 ## 4.12 Extension commands
 
