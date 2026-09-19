@@ -263,3 +263,28 @@ follow-up for each:
 Evidence from running the container-matrix side of these scenarios (`scripts/test-matrix.sh`'s
 `dr-*` scenarios, where applicable) is archived the same way `docs/testing.md` section 3
 describes — not committed to the repository, referenced from a PR body / release review instead.
+
+## 10. Session identity: `OMES_CURRENT_BACKUP_DIR`, `OMES_LAST_BACKUP_ID`, `.finished` (issue #129)
+
+`backup_finish` (`lib/omes/backup.sh`) always prints the finished session's directory on
+stdout, exports it as `OMES_LAST_BACKUP_ID` (the session's basename, i.e. what `backup_list`
+prints), and writes a `.finished` marker file into the session directory before it unsets
+`OMES_CURRENT_BACKUP_DIR`. Callers must invoke `backup_finish` as a plain statement — never as
+`ts="$(backup_finish)"` — because a `$(...)` command substitution runs `backup_finish` in a
+subshell, and neither its `unset` nor its `OMES_LAST_BACKUP_ID` export can ever reach the
+calling shell; only the `.finished` marker, being a file, survives that boundary. Every
+callsite in this repository (`lib/omes/module.sh`, `lib/omes/restore.sh`) follows this rule
+today.
+
+The `.finished` marker exists as a defense against exactly that mistake, not as a substitute
+for making it correctly: `backup_begin` clears a leftover `OMES_CURRENT_BACKUP_DIR` at the
+start of a new session when the directory it points at already has a `.finished` marker, and
+`restore_backup` does the same before resolving what to restore, additionally refusing outright
+(exit 9) when `OMES_CURRENT_BACKUP_DIR` still points at the very session being restored from
+*and that session has no `.finished` marker yet* — i.e. it is genuinely still open, not a stale
+reference. `restore_backup` also snapshots the MANIFEST it is restoring (`mapfile`) before
+iterating it, and always opens a brand-new `pre-restore-backup` session for the file it is
+about to overwrite rather than reusing whatever `OMES_CURRENT_BACKUP_DIR` happens to be — so a
+stale reference can no longer make restore append into, and loop over, its own source
+MANIFEST. See `tests/unit/backup.bats` and `tests/unit/restore.bats` for the regression
+coverage.

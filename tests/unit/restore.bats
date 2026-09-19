@@ -220,6 +220,142 @@ teardown() {
   [ "$(cat "$SRC")" = "original" ]
 }
 
+# --- #129 regressions: backup_finish via $(...), restore self-manifest loop -
+
+@test "#129: ts=\"\$(backup_finish)\" leaves a stale OMES_CURRENT_BACKUP_DIR, but restore_backup still terminates and restores correctly" {
+  printf 'original content\n' > "$SRC"
+
+  backup_begin "demo" "pre-apply" >/dev/null
+  backup_path "$SRC"
+  local ts
+  ts="$(backup_finish)"
+
+  # Confirm the bug's precondition is actually reproduced here: capturing
+  # backup_finish via command substitution must NOT have cleared
+  # OMES_CURRENT_BACKUP_DIR in this (the caller's) shell, because the
+  # `unset` ran in the subshell backup_finish executed inside. The same is
+  # true of OMES_LAST_BACKUP_ID's export - no variable assignment inside a
+  # `$(...)` subshell can ever reach the parent shell, which is exactly
+  # why OMES_LAST_BACKUP_ID is only useful to callers that invoke
+  # backup_finish as a plain statement (see the next assertions and the
+  # separate plain-statement test below).
+  [ -n "${OMES_CURRENT_BACKUP_DIR:-}" ]
+  [ "$OMES_CURRENT_BACKUP_DIR" = "$ts" ]
+  [ -z "${OMES_LAST_BACKUP_ID:-}" ]
+
+  printf 'modified content\n' > "$SRC"
+
+  # Run the restore in a child process under `timeout` so this test fails
+  # fast instead of hanging the whole suite if the self-manifest loop ever
+  # regresses. The stale OMES_CURRENT_BACKUP_DIR from above is inherited by
+  # the child exactly as it would be by any real caller.
+  run timeout 20 bash -c '
+    set -Eeuo pipefail
+    source "${OMES_TEST_ROOT}/lib/omes/core.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/log.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/state.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/restore.sh"
+    state_init >/dev/null
+    restore_backup ""
+  '
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SRC")" = "original content" ]
+}
+
+@test "#129: restore_backup never appends into the MANIFEST it is restoring from" {
+  printf 'original\n' > "$SRC"
+
+  backup_begin "demo" "pre-apply" >/dev/null
+  local dir="$OMES_CURRENT_BACKUP_DIR"
+  backup_path "$SRC"
+  backup_finish >/dev/null
+
+  local before_lines
+  before_lines="$(wc -l < "${dir}/MANIFEST")"
+
+  printf 'modified\n' > "$SRC"
+
+  # Simulate the stale-current-session precondition explicitly (as
+  # ts="$(backup_finish)" would leave it) so the pre-restore-backup step
+  # below is exercised under the exact condition #129 describes.
+  export OMES_CURRENT_BACKUP_DIR="$dir"
+
+  run timeout 20 bash -c '
+    set -Eeuo pipefail
+    source "${OMES_TEST_ROOT}/lib/omes/core.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/log.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/state.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/restore.sh"
+    state_init >/dev/null
+    restore_backup ""
+  '
+  [ "$status" -eq 0 ]
+
+  local after_lines
+  after_lines="$(wc -l < "${dir}/MANIFEST")"
+  [ "$after_lines" -eq "$before_lines" ]
+}
+
+@test "#129: restore_backup refuses to restore from a session that is still current (never finished)" {
+  printf 'original\n' > "$SRC"
+
+  backup_begin "demo" "pre-apply" >/dev/null
+  local dir="$OMES_CURRENT_BACKUP_DIR"
+  backup_path "$SRC"
+  # No backup_finish: this session is genuinely still open, unlike the
+  # stale-but-finished case covered above.
+
+  local ts
+  ts="$(basename "$dir")"
+
+  run timeout 20 bash -c '
+    set -Eeuo pipefail
+    source "${OMES_TEST_ROOT}/lib/omes/core.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/log.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/state.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+    source "${OMES_TEST_ROOT}/lib/omes/restore.sh"
+    state_init >/dev/null
+    restore_backup "'"$ts"'"
+  '
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"still-open"* ]]
+  [ "$(cat "$SRC")" = "original" ]
+}
+
+@test "#129: restore_backup preserves the caller's own already-open outer backup session" {
+  printf 'original\n' > "$SRC"
+
+  backup_begin "demo" "pre-apply" >/dev/null
+  local dir_a="$OMES_CURRENT_BACKUP_DIR"
+  backup_path "$SRC"
+  backup_finish >/dev/null
+  local ts_a
+  ts_a="$(basename "$dir_a")"
+
+  printf 'modified\n' > "$SRC"
+
+  # The caller has its own outer backup session open (genuinely in
+  # progress, not finished) when it calls restore_backup - e.g. a module
+  # that wraps a restore inside its own backup_begin/backup_finish pair
+  # (feature branches such as lib/omes/cmd/graphify.sh call restore_backup
+  # this way). restore_backup's internal pre-restore-backup calls
+  # (backup_begin/backup_path/backup_finish) must not clobber or drop this
+  # outer session.
+  backup_begin "outer" "outer-session" >/dev/null
+  local outer_dir="$OMES_CURRENT_BACKUP_DIR"
+
+  run restore_backup "$ts_a"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SRC")" = "original" ]
+
+  [ -n "${OMES_CURRENT_BACKUP_DIR:-}" ]
+  [ "$OMES_CURRENT_BACKUP_DIR" = "$outer_dir" ]
+  [ ! -e "${outer_dir}/.finished" ]
+}
+
 # --- module_rollback_managed_paths -------------------------------------------
 
 @test "module_rollback_managed_paths restores a path that pre-existed OMES's first touch" {

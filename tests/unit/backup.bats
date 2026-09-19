@@ -101,6 +101,35 @@ teardown() {
   [ -z "${OMES_CURRENT_BACKUP_DIR:-}" ]
 }
 
+@test "backup_finish writes a .finished marker into the session directory" {
+  backup_begin "m" "pre-apply" >/dev/null
+  local dir="$OMES_CURRENT_BACKUP_DIR"
+  backup_finish >/dev/null
+  [ -e "${dir}/.finished" ]
+}
+
+@test "backup_finish exports OMES_LAST_BACKUP_ID when called as a plain statement (#129)" {
+  backup_begin "m" "pre-apply" >/dev/null
+  local dir="$OMES_CURRENT_BACKUP_DIR"
+  backup_finish >/dev/null
+  [ "${OMES_LAST_BACKUP_ID:-}" = "$(basename "$dir")" ]
+}
+
+@test "backup_begin clears a stale OMES_CURRENT_BACKUP_DIR left by \"ts=\$(backup_finish)\" (#129)" {
+  backup_begin "m" "r1" >/dev/null
+  local ts
+  ts="$(backup_finish)"
+  # The subshell's unset never reached this shell.
+  [ "${OMES_CURRENT_BACKUP_DIR:-}" = "$ts" ]
+
+  backup_begin "m" "r2" >/dev/null
+  # backup_begin must have replaced the stale reference with a brand-new
+  # session, not left it pointed at the already-finished one.
+  [ "$OMES_CURRENT_BACKUP_DIR" != "$ts" ]
+  [ -e "${OMES_CURRENT_BACKUP_DIR}/META" ]
+  grep -q '^reason=r2$' "${OMES_CURRENT_BACKUP_DIR}/META"
+}
+
 @test "backup_list lists sessions oldest first" {
   local d1 d2
   backup_begin "m" "r1" >/dev/null
