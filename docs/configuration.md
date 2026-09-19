@@ -99,7 +99,9 @@ introducing none of its own) — kept there rather than duplicated here to minim
 reference file's graphify footprint. `omes graphify export` (issue #53, docs/graphify.md §5) adds
 `OBSIDIAN_VAULT_PATH` (the vault path, when `--vault` is omitted — never guessed otherwise) and
 `OMES_GRAPHIFY_VAULT_SUBDIR` (default `graphify/<project-name>`; the ONLY subtree of the vault it
-ever writes to), also documented there rather than here.
+ever writes to), also documented there rather than here. `omes graphify sync`/`status` (issue
+#54, docs/graphify.md §6) introduce no new environment variables beyond their own `--min-interval`/
+`--allow-nested-vault` flags and reusing `OBSIDIAN_VAULT_PATH` for loop avoidance only.
 
 `OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
 there rather than duplicated here to minimize this shared reference file's graphify footprint.

@@ -13,11 +13,15 @@
 #   omes graphify export <out-dir>   --vault <path> [--init-vault]
 #                                     [--dry-run] [--yes] [--json]
 #   omes graphify export rollback    [--timestamp <ts>] [--yes] [--json]
+#   omes graphify sync <path>        [--vault <path>] [--min-interval <sec>]
+#                                     [--allow-nested-vault] [--dry-run]
+#                                     [--yes] [--json]
+#   omes graphify status <path>      [--vault <path>] [--json]
 #
 # Full synopsis/exit-codes/JSON schema for every subcommand: docs/graphify.md
 # §2 (update/uninstall, issue #50), §3 (run/skill, issue #51), §4
-# (mcp health, issue #52), and §5 (export/export rollback, issue #53).
-# `omes install`/`uninstall --module graphify-mcp`
+# (mcp health, issue #52), §5 (export/export rollback, issue #53), and §6
+# (sync/status, issue #54). `omes install`/`uninstall --module graphify-mcp`
 # (modules/graphify-mcp/module.sh) install/remove the `graphifyy[mcp]`
 # extra itself - `mcp health` here is a read-only status check only, and
 # never touches hermes-gateway or any Hermes runtime state.
@@ -27,7 +31,10 @@
 # `uninstall` never touch graphify-out/ at all - only the `graphifyy`
 # tool-env install (docs/graphify.md §1.4, §2). `export` writes ONLY under
 # <vault>/<subdir>/ (docs/graphify.md §5) - it never touches unrelated
-# vault notes or the vault's .obsidian/ directory.
+# vault notes or the vault's .obsidian/ directory. `sync`/`status` never
+# touch a vault at all - `--vault` there is accepted ONLY for loop
+# avoidance (excluding it from the source-tree scan / refusing a nested
+# vault), see docs/graphify.md §6.3.
 
 # _graphify_cmd_parse_flags <args...>
 # Extracts --yes/--dry-run/--json from an extension command's own argument
@@ -1071,6 +1078,463 @@ _graphify_cmd_export() {
   exit "$OMES_EX_OK"
 }
 
+# _graphify_sync_resolve <path>
+# Resolves <path> the same way `omes graphify run`/`export` do: must
+# exist, canonicalized via realpath, refused if it is (or is nested
+# inside) a graphify-out/ directory. Prints "<resolved>\n<out_dir>\n" on
+# success, or "ERROR:<message>\n" on failure. NEVER calls `exit` itself -
+# this is always invoked via process substitution (`< <(...)`), which
+# runs in a subshell; an `exit` there only ends that subshell, and the
+# reading `read` in the caller's shell would then fail with an unrelated,
+# wrong exit code once the subshell's output stream closes early. The
+# caller checks for the "ERROR:" prefix and exits directly, in its own
+# shell, instead.
+_graphify_sync_resolve() {
+  local path="$1"
+
+  if [[ ! -e "$path" ]]; then
+    printf 'ERROR:graphify: path does not exist: %s\n\n' "$path"
+    return 0
+  fi
+  local resolved
+  if ! resolved="$(realpath "$path" 2>/dev/null)"; then
+    printf 'ERROR:graphify: failed to resolve path: %s\n\n' "$path"
+    return 0
+  fi
+  if [[ "$(basename "$resolved")" == "graphify-out" ]] || [[ "/${resolved}/" == */graphify-out/* ]]; then
+    printf 'ERROR:graphify: refusing to operate on a path inside a graphify-out/ directory: %s\n\n' "$resolved"
+    return 0
+  fi
+
+  local out_dir
+  if [[ -d "$resolved" ]]; then
+    out_dir="${resolved}/graphify-out"
+  else
+    out_dir="$(dirname "$resolved")/graphify-out"
+  fi
+
+  printf '%s\n%s\n' "$resolved" "$out_dir"
+}
+
+# _graphify_sync_check_resolve_error <first-line>
+# Exits OMES_EX_USAGE with an actionable message when
+# _graphify_sync_resolve's first printed line starts with "ERROR:"; a
+# no-op otherwise. Always called directly (never via command/process
+# substitution) so its `exit` actually ends the real process.
+_graphify_sync_check_resolve_error() {
+  case "$1" in
+    ERROR:*)
+      log_error "${1#ERROR:}"
+      exit "$OMES_EX_USAGE"
+      ;;
+  esac
+}
+
+# _graphify_sync_resolve_vault <resolved-source-path> <allow-nested>
+# Resolves --vault/OBSIDIAN_VAULT_PATH (optional for sync/status, used
+# only for loop avoidance - docs/graphify.md §6.3). Prints the resolved
+# vault path (or nothing if none given/it does not yet exist), or
+# "REFUSED:<path>" when the vault resolves inside the source tree and
+# <allow-nested> is not "1" - the caller decides how to report/exit on
+# that prefix. This function ALWAYS returns 0 itself (never `exit`s and
+# never returns non-zero) so that calling it via command substitution
+# under `set -e` (bin/omes's strict mode) never trips errexit on its own
+# account; only the caller's own explicit `exit` after inspecting the
+# printed value ends the process.
+_graphify_sync_resolve_vault() {
+  local resolved_source="$1" allow_nested="$2"
+  local vault="${OMES_GRAPHIFY_SYNC_VAULT_ARG:-${OBSIDIAN_VAULT_PATH:-}}"
+  [[ -n "$vault" ]] || return 0
+  [[ -e "$vault" ]] || return 0
+
+  local resolved_vault
+  resolved_vault="$(realpath "$vault" 2>/dev/null)" || return 0
+
+  if [[ "/${resolved_vault}/" == "/${resolved_source}/"* ]] || [[ "$resolved_vault" == "$resolved_source" ]]; then
+    if [[ "$allow_nested" != "1" ]]; then
+      printf 'REFUSED:%s\n' "$resolved_vault"
+      return 0
+    fi
+  fi
+
+  printf '%s\n' "$resolved_vault"
+}
+
+# _graphify_sync_check_vault_refusal <vault-resolve-result> <resolved-source>
+# Exits OMES_EX_USAGE with an actionable message when
+# _graphify_sync_resolve_vault's output starts with "REFUSED:"; a no-op
+# otherwise. Split out from _graphify_sync_resolve_vault itself so the
+# `exit` happens directly in the caller's own shell (never inside a
+# command-substitution subshell - see that function's own comment).
+_graphify_sync_check_vault_refusal() {
+  local result="$1" resolved_source="$2"
+  case "$result" in
+    REFUSED:*)
+      log_error "graphify: the vault (${result#REFUSED:}) is nested inside the source path (${resolved_source}) - this would let a future export feed back into sync's own change detection; pass --allow-nested-vault to proceed anyway (the vault path is still always excluded from the scan)"
+      exit "$OMES_EX_USAGE"
+      ;;
+  esac
+}
+
+# _graphify_sync_json_valid <path>
+# True when <path> parses as JSON - used as a minimal post-run sanity
+# check (docs/graphify.md §6.4's "recovery from interrupted runs") after
+# `graphify extract`/`update` return 0, since a killed/interrupted
+# process could still have left a truncated graph.json behind.
+_graphify_sync_json_valid() {
+  python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$1" >/dev/null 2>&1
+}
+
+_graphify_cmd_status() {
+  local path="" vault=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --vault)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --vault requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        vault="$2"
+        shift 2
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      -*)
+        log_error "graphify: unknown flag: $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+      *)
+        if [[ -n "$path" ]]; then
+          log_error "graphify: unexpected extra argument: $1"
+          exit "$OMES_EX_USAGE"
+        fi
+        path="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$path" ]]; then
+    log_error "graphify: usage: omes graphify status <path> [--vault <path>] [--json]"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local resolved out_dir
+  {
+    read -r resolved
+    read -r out_dir
+  } < <(_graphify_sync_resolve "$path")
+  _graphify_sync_check_resolve_error "$resolved"
+
+  local resolved_vault=""
+  [[ -n "$vault" ]] && OMES_GRAPHIFY_SYNC_VAULT_ARG="$vault"
+  resolved_vault="$(_graphify_sync_resolve_vault "$resolved" 1)"
+  unset OMES_GRAPHIFY_SYNC_VAULT_ARG
+
+  local manifest="${out_dir}/omes-sync.json"
+  local -a exclude_args=(--exclude "$out_dir")
+  [[ -n "$resolved_vault" ]] && exclude_args+=(--exclude "$resolved_vault")
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "graphify: python3 is required for 'omes graphify status' but was not found"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local status_json
+  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}")"; then
+    log_error "graphify: status: scan failed"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local first_run changed status_word
+  first_run="$(_graphify_json_field "$status_json" first_run)"
+  changed="$(_graphify_json_field "$status_json" changed)"
+  if [[ "$first_run" == "True" ]]; then
+    status_word="no_manifest"
+  elif [[ "$changed" == "True" ]]; then
+    status_word="stale"
+  else
+    status_word="up_to_date"
+  fi
+
+  log_info "graphify: status: ${status_word} (${resolved})"
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand status)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv path "$resolved")" \
+      "$(json_kv status "$status_word")" \
+      "$(json_kv detail "$status_json" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
+_graphify_cmd_sync() {
+  local path="" vault="" min_interval=0 allow_nested=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --vault)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --vault requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        vault="$2"
+        shift 2
+        ;;
+      --min-interval)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --min-interval requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        min_interval="$2"
+        shift 2
+        ;;
+      --allow-nested-vault)
+        allow_nested=1
+        shift
+        ;;
+      --yes)
+        # shellcheck disable=SC2034  # read by omes_confirm/omes_noninteractive in core.sh
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --dry-run)
+        # shellcheck disable=SC2034  # read by omes_dry_run in core.sh
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      -*)
+        log_error "graphify: unknown flag: $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+      *)
+        if [[ -n "$path" ]]; then
+          log_error "graphify: unexpected extra argument: $1"
+          exit "$OMES_EX_USAGE"
+        fi
+        path="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$path" ]]; then
+    log_error "graphify: usage: omes graphify sync <path> [--vault <path>] [--min-interval <sec>] [--allow-nested-vault] [--dry-run] [--yes] [--json]"
+    exit "$OMES_EX_USAGE"
+  fi
+  if ! [[ "$min_interval" =~ ^[0-9]+$ ]]; then
+    log_error "graphify: --min-interval must be a non-negative integer (seconds)"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "graphify: python3 is required for 'omes graphify sync' but was not found"
+    exit "$OMES_EX_ERROR"
+  fi
+  module_load graphify
+  if ! command -v graphify >/dev/null 2>&1; then
+    log_error "graphify: the graphify CLI is not installed - run 'omes install --module graphify' first"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local resolved out_dir
+  {
+    read -r resolved
+    read -r out_dir
+  } < <(_graphify_sync_resolve "$path")
+  _graphify_sync_check_resolve_error "$resolved"
+
+  [[ -n "$vault" ]] && OMES_GRAPHIFY_SYNC_VAULT_ARG="$vault"
+  local vault_result resolved_vault=""
+  vault_result="$(_graphify_sync_resolve_vault "$resolved" "$allow_nested")"
+  unset OMES_GRAPHIFY_SYNC_VAULT_ARG
+  _graphify_sync_check_vault_refusal "$vault_result" "$resolved"
+  resolved_vault="$vault_result"
+
+  local manifest="${out_dir}/omes-sync.json"
+  local -a exclude_args=(--exclude "$out_dir")
+  [[ -n "$resolved_vault" ]] && exclude_args+=(--exclude "$resolved_vault")
+
+  # Debounce (docs/graphify.md §6.2): checked BEFORE the (potentially
+  # expensive) tree scan, using the manifest's own last_run_at field, so
+  # a debounced call costs nothing beyond reading one small JSON file.
+  if [[ "$min_interval" -gt 0 ]] && [[ -f "$manifest" ]]; then
+    local last_run_at now_epoch last_epoch elapsed
+    last_run_at="$(_graphify_json_field "$(cat "$manifest")" last_run_at)"
+    if [[ -n "$last_run_at" ]]; then
+      last_epoch="$(python3 -c 'import sys,datetime; print(int(datetime.datetime.strptime(sys.argv[1], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc).timestamp()))' "$last_run_at" 2>/dev/null || printf '0')"
+      now_epoch="$(date -u +%s)"
+      elapsed=$((now_epoch - last_epoch))
+      if [[ "$elapsed" -lt "$min_interval" ]]; then
+        log_info "graphify: sync: debounced (${elapsed}s since last run, --min-interval ${min_interval}s)"
+        if [[ "$OMES_JSON" == "1" ]]; then
+          json_obj \
+            "$(json_kv command graphify)" \
+            "$(json_kv subcommand sync)" \
+            "$(json_kv ok true --raw)" \
+            "$(json_kv action skipped_debounced)" \
+            "$(json_kv path "$resolved")" \
+            "$(json_kv exit_code 0 --raw)"
+          printf '\n'
+        fi
+        exit "$OMES_EX_OK"
+      fi
+    fi
+  fi
+
+  local status_json
+  if ! status_json="$(_graphify_export_py status --path "$resolved" --manifest "$manifest" "${exclude_args[@]}")"; then
+    log_error "graphify: sync: scan failed"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local first_run changed
+  first_run="$(_graphify_json_field "$status_json" first_run)"
+  changed="$(_graphify_json_field "$status_json" changed)"
+
+  if [[ "$changed" != "True" ]]; then
+    log_info "graphify: sync: up to date, nothing to do (${resolved})"
+    if omes_dry_run; then
+      : # nothing to preview either
+    else
+      # Still advance last_run_at so --min-interval throttles repeated
+      # no-op calls, without re-invoking graphify at all.
+      _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --write >/dev/null || true
+    fi
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand sync)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv action none)" \
+        "$(json_kv path "$resolved")" \
+        "$(json_kv detail "$status_json" --raw)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  local action="update"
+  [[ "$first_run" == "True" ]] && action="extract"
+
+  if omes_dry_run; then
+    log_info "[dry-run] would run: graphify ${action} ${resolved} (then update ${manifest})"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand sync)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv action "$action")" \
+        "$(json_kv path "$resolved")" \
+        "$(json_kv detail "$status_json" --raw)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! omes_confirm "Run graphify ${action} on ${resolved}? (code-only, no LLM/provider credential involved)"; then
+    log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand sync)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local run_failed=0
+  if [[ "$action" == "extract" ]]; then
+    # First run: no existing graphify-out/ to update in place, so use
+    # `--out <temp-dir>` (writes <temp-dir>/graphify-out/, per graphify's
+    # own --help) and an atomic rename - docs/graphify.md §6.4's "temp
+    # output dir + atomic rename" recovery mechanism for a fresh sync.
+    local tmp_out
+    tmp_out="$(mktemp -d "${TMPDIR:-/tmp}/omes-graphify-sync.XXXXXX")"
+    if omes_run graphify extract "$resolved" --code-only --out "$tmp_out"; then
+      if [[ -f "${tmp_out}/graphify-out/graph.json" ]] && _graphify_sync_json_valid "${tmp_out}/graphify-out/graph.json"; then
+        mv "${tmp_out}/graphify-out" "$out_dir"
+      else
+        log_error "graphify: sync: extract reported success but graph.json is missing or invalid; nothing was moved into place"
+        run_failed=1
+      fi
+    else
+      run_failed=1
+    fi
+    rm -rf "$tmp_out"
+  else
+    # Subsequent run: `graphify update` has no --out option and mutates
+    # <path>/graphify-out/ in place, so OMES takes its own backup first
+    # (docs/graphify.md §6.4) and restores it if the run fails or leaves
+    # a corrupt graph.json - the same recovery-from-interrupted-runs
+    # guarantee as the first-run path, using lib/omes/backup.sh instead
+    # of a redundant second temp-dir mechanism.
+    backup_begin "graphify-sync" "pre-sync: ${out_dir}" >/dev/null
+    # Capture the session directory (and its basename/timestamp) BEFORE
+    # calling backup_finish, and always call backup_finish as a plain
+    # statement rather than via command substitution: backup_finish's
+    # `unset OMES_CURRENT_BACKUP_DIR` (lib/omes/backup.sh) only takes
+    # effect in the shell it actually runs in, and command substitution
+    # runs in a subshell - `ts="$(backup_finish)"` would leave
+    # OMES_CURRENT_BACKUP_DIR still set in THIS shell, which would then
+    # make restore_backup's own pre-restore-backup step reuse this same
+    # active session instead of opening its own, corrupting/looping over
+    # the very manifest restore_backup is reading. Both the OMES_ROOT
+    # backup/restore helpers themselves are outside this issue's file
+    # scope, so this sequencing is worked around here instead.
+    local backup_session_dir="$OMES_CURRENT_BACKUP_DIR"
+    local backup_ts
+    backup_ts="$(basename "$backup_session_dir")"
+    backup_path "$out_dir"
+    if omes_run graphify update "$resolved"; then
+      if [[ -f "${out_dir}/graph.json" ]] && _graphify_sync_json_valid "${out_dir}/graph.json"; then
+        backup_finish >/dev/null
+      else
+        log_error "graphify: sync: update reported success but graph.json is missing or invalid; restoring the pre-sync backup"
+        backup_finish >/dev/null
+        restore_backup "$backup_ts" || true
+        run_failed=1
+      fi
+    else
+      backup_finish >/dev/null
+      restore_backup "$backup_ts" || true
+      run_failed=1
+    fi
+  fi
+
+  if [[ "$run_failed" -eq 1 ]]; then
+    log_error "graphify: sync: graphify ${action} failed; source tree left as-is, graphify-out/ recovered to its pre-sync state"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand sync)" "$(json_kv ok false --raw)" "$(json_kv action "$action")" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  _graphify_export_py scan --path "$resolved" --manifest "$manifest" "${exclude_args[@]}" --write >/dev/null || true
+  log_info "graphify: sync: ran graphify ${action} and refreshed the change-detection manifest (${manifest})"
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand sync)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv action "$action")" \
+      "$(json_kv path "$resolved")" \
+      "$(json_kv out_dir "$out_dir")" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
 cmd_graphify() {
   local sub="${1:-}"
   if [[ -n "$sub" ]]; then
@@ -1096,8 +1560,14 @@ cmd_graphify() {
     export)
       _graphify_cmd_export "$@"
       ;;
+    sync)
+      _graphify_cmd_sync "$@"
+      ;;
+    status)
+      _graphify_cmd_status "$@"
+      ;;
     *)
-      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export} [args...]"
+      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export|sync|status} [args...]"
       exit "$OMES_EX_USAGE"
       ;;
   esac
