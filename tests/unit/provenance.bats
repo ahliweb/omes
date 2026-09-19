@@ -144,6 +144,7 @@ assert d["checksum"]["status"] == "verified", d
   # shellcheck source=../../lib/omes/module.sh
   source "${OMES_TEST_ROOT}/lib/omes/module.sh"
   export SHIM_HERMES_VERSION="1.0.0"
+  export SHIM_UV_TOOL_LIST="graphifyy v0.3.0"
   module_load hermes
   declare -ga OMES_MANAGED_PATHS=()
 
