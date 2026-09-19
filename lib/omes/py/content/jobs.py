@@ -556,6 +556,13 @@ def publish_job(
 
     valid, reason = is_approval_valid(record)
     if not valid:
+        # `manual-review` is only reachable from `publishing` (see
+        # TRANSITIONS), never directly from `approved` - take the same
+        # two-step path as every other publish-phase rejection (prepare
+        # not ready, validation blocked) rather than raising
+        # InvalidTransitionError here.
+        if record["state"] == "approved":
+            apply_transition(record, "publishing", actor="system", note="publish started")
         apply_transition(record, "manual-review", actor="system", note=f"approval invalid: {reason}")
         raise ApprovalError(reason)
 
