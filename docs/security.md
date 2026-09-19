@@ -208,6 +208,7 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Redacted logs and capped command-output tails, with a bounded-backtracking redaction regex (fixed during #90's own test suite — see docs/threat-model.md T40) | `lib/omes/py/jobs/audit.py`'s `redact_structure()`/`capped_redacted_tail()` |
 | Read-back verification; a timeout is never reported as success | `lib/omes/py/jobs/runner.py`'s `_compare_desired_observed()` |
 | No arbitrary shell: operation → command mapping is a fixed Python literal, unimplemented operations fail typed rather than falling back to a shell | `lib/omes/py/jobs/runner.py`'s `build_argv()` |
+| Control Center screens receive a self-describing, previously-decided permission (`granted`, `policy_id`) on every operation request, and a desired/observed/error-evidence split on every deployment view, instead of a trust-me boolean or a single merged state blob | `contracts/control-center/v1/operation-request.schema.json`, `contracts/control-center/v1/deployment-view.schema.json` (#91) |
 
 ## 9. What OMES does NOT claim
 

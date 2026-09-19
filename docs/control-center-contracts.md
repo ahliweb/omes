@@ -58,6 +58,8 @@ Each has at least one valid and one invalid fixture under
 | Health/readiness response | `health-readiness.response.schema.json` | OMES → Control Center |
 | Backup status response | `backup-status.response.schema.json` | OMES → Control Center |
 | Rollback request | `rollback.request.schema.json` | Control Center → OMES |
+| Operation request (issue #91) | `operation-request.schema.json` | Control Center → OMES |
+| Deployment view (issue #91) | `deployment-view.schema.json` | OMES → Control Center |
 
 ### 2.1 Mutating-request common fields
 
@@ -120,6 +122,55 @@ name (`host`, `runtime`, `gateway`, `provider`, `channel`, ...) to
 `ready`/`connected` booleans computed by that module's `aggregate()`. This
 contract does not redefine issue #79's aggregation rules; it only fixes
 the JSON shape those rules already produce.
+
+### 2.5 `operation-request` and `deployment-view` (issue #91)
+
+Issue #91 asks awcms-one to build the first Control Center web GUI over this
+job/contract boundary; see
+[docs/control-center-foundation.md](control-center-foundation.md) for the
+full split of what is implemented in awcms-one versus this repository. The
+two contracts this repository adds for it:
+
+- **`operation-request.schema.json`** — the shape a tenant-scoped screen
+  sends when a user asks for a safe lifecycle operation. `operation` is a
+  narrower, closed enum than `deployment.request`'s
+  (`status, preflight, start, stop, restart, update, backup, rollback` —
+  no `install`/`configure`/`restore`, which stay job-runner-only, direct
+  operations) because these are the eight operations issue #91's
+  acceptance criteria name explicitly. It additionally requires a
+  `permission` object (`granted`, `policy_id`, optional `reason` and
+  `requires_approval`) carrying the RBAC/ABAC decision AWCMS already made
+  for this actor/operation/target. **OMES does not trust `granted: true`
+  on its own** — the job runner (issue #90) re-derives its own
+  allowlist/approval decision from the translated `deployment.request`;
+  `permission` exists so the end-to-end request is self-describing and
+  auditable, and so a denied request that still tries to smuggle a
+  `command` field is rejected by the schema itself
+  (`fixtures/operation-request/invalid-permission-denied-with-command-field.json`).
+  `additionalProperties: false` on `target` also rejects an attempt to
+  carry a second, conflicting tenant scope inside the target object
+  (`fixtures/operation-request/invalid-cross-tenant-scope-in-target.json`)
+  — real cross-tenant authorization is AWCMS's row-level-security
+  responsibility (§1), this is only the schema-level backstop that a
+  smuggled second tenant identifier cannot ride along silently.
+- **`deployment-view.schema.json`** — the read shape behind issue #91's
+  "show desired state separately from observed state, including last
+  reconciliation and error evidence" acceptance criterion. `desired_state`
+  and `observed_state` are separate required objects (never merged into
+  one "current state" blob a UI could misrender as consistent when it is
+  not); `last_reconciled_at` is required so a screen can show staleness;
+  `error_evidence` is a required field (not merely optional) that must be
+  either `null` or `{"message", "occurred_at", "code"?}` — a producer
+  cannot omit it while a reconciliation is failing.
+  `fixtures/deployment-view/valid-02-drift-with-error.json` is a worked
+  example of desired/observed drift with non-null `error_evidence`.
+
+Neither contract introduces a new secret field; both are covered by the
+same unconditional `scan_for_raw_secrets()` pass as every other contract
+in this set (see `fixtures/deployment-view/invalid-raw-secret-in-error-evidence.json`,
+which is rejected for a bearer-token-shaped string inside the otherwise
+schema-legal `error_evidence.message` field — the pattern-based secret-value
+check, not the key-name check, catches it).
 
 ## 3. Versioned events (v1)
 
