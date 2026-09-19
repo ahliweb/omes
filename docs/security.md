@@ -231,6 +231,15 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Renewal/transfer/contact-update are not claimed automated for Cloudflare; the capability profile omits them so routing falls through to `manual_fallback` | `lib/omes/py/domains/profiles/cloudflare.py`'s `REGISTRAR_CAPABILITY["supported_operations"]` (see docs/threat-model.md T42) |
 | A registration poll never reports success on a timed-out or incomplete check | `lib/omes/py/domains/fake_provider.py`'s `poll_registration()`; `contracts/domains/v1/registration-poll.response.schema.json`'s `timed_out` field |
 
+### 8.4 SRS-X profile controls implemented today (issue #100)
+
+| Control | Implemented in |
+|---|---|
+| An SRS-X config's password reference, egress IP, and required fields are structurally validated (never logged, never a live request) before a job may use them | `lib/omes/py/domains/preflight.py`'s `run_srsx_preflight()` |
+| The document-required lifecycle (`documents_required` → ... → `active`/`rejected`) is tracked separately from the raw API result code, so an ambiguous `1001` never silently becomes a false success or a blind retry | `lib/omes/py/domains/retry.py`'s `classify_srsx_result_code()` (see docs/threat-model.md T43); `contracts/domains/v1/document-lifecycle.schema.json` |
+| A document upload reference expires and a late submission is rejected rather than silently accepted | `lib/omes/py/domains/fake_provider.py`'s `request_document_upload()`/`submit_documents()` tick-based expiry |
+| Transfer, contact update, and DNS/DNSSEC are not claimed automated for SRS-X until verified against a live/sandbox account | `lib/omes/py/domains/profiles/srsx.py`'s `REGISTRAR_CAPABILITY["supported_operations"]` |
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

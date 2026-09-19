@@ -1,0 +1,12 @@
+{
+  "config_id": "cfg-srsx-01",
+  "reseller_id": "reseller-0001",
+  "api_username": "acme-reseller",
+  "password_reference": {
+    "store": "vault",
+    "key": "srsx/api-password"
+  },
+  "endpoint": "https://srb3.srs-x.com/api",
+  "mode": "sandbox",
+  "authorized_egress_ip": "203.0.113.10"
+}

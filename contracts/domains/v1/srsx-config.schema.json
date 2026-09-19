@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/srsx-config.schema.json",
+  "title": "srsx-config",
+  "type": "object",
+  "required": [
+    "config_id",
+    "reseller_id",
+    "api_username",
+    "password_reference",
+    "endpoint",
+    "mode",
+    "authorized_egress_ip"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "config_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "reseller_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "api_username": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "password_reference": {
+      "type": "object",
+      "required": [
+        "store",
+        "key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./:-]{1,256}$"
+        }
+      }
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9_.:/-]{1,256}$"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "sandbox",
+        "live"
+      ]
+    },
+    "authorized_egress_ip": {
+      "type": "string",
+      "pattern": "^([0-9]{1,3}\\.){3}[0-9]{1,3}$"
+    }
+  }
+}
