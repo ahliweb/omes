@@ -1,0 +1,20 @@
+{
+  "apiVersion": "omes.ahliweb.com/v1",
+  "kind": "AgentDeployment",
+  "metadata": {
+    "name": "researcher",
+    "workspace": "ahliweb",
+    "environment": "production"
+  },
+  "spec": {
+    "runtime": "docker-compose",
+    "profile": "researcher",
+    "role": "generic",
+    "backend": "systemd",
+    "serviceMode": "user",
+    "restartPolicy": "always",
+    "resources": { "memory": "1G", "cpu": "1.0", "pids": 128 },
+    "health": { "command": "omes agent health researcher", "timeout": "10s" },
+    "storage": { "memory": "private", "sessions": "isolated", "skills": "managed" }
+  }
+}

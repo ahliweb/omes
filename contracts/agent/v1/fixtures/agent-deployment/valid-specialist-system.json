@@ -1,0 +1,34 @@
+{
+  "apiVersion": "omes.ahliweb.com/v1",
+  "kind": "AgentDeployment",
+  "metadata": {
+    "name": "support-desk",
+    "workspace": "ahliweb",
+    "environment": "staging"
+  },
+  "spec": {
+    "runtime": "hermes",
+    "profile": "support-desk",
+    "role": "specialist",
+    "backend": "systemd",
+    "serviceMode": "system",
+    "restartPolicy": "on-failure",
+    "capabilities": ["ticket-triage"],
+    "deny": ["docker-control", "browser-control"],
+    "resources": {
+      "memory": "512M",
+      "cpu": "0.5",
+      "pids": 64
+    },
+    "health": {
+      "command": "omes agent health support-desk",
+      "timeout": "5s"
+    },
+    "storage": {
+      "memory": "private",
+      "sessions": "isolated",
+      "skills": "managed"
+    },
+    "secrets": []
+  }
+}

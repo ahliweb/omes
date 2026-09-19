@@ -172,6 +172,42 @@
   `omes restore --list` (or `--json`) to see what actually exists; the timestamp must match
   exactly (`YYYYMMDDTHHMMSSZ`, optionally with a `-N` suffix for a same-second collision).
 
+## 9a. Agent deployment (`omes agent`, exit 4/5/6/7)
+
+- **"no manifest found for agent '<name>'" (exit 4):** no file at
+  `$OMES_CONFIG_DIR/agents/<name>.json` (see
+  [docs/configuration.md](configuration.md) for `OMES_CONFIG_DIR`'s
+  root/user resolution). Confirm the manifest exists and the command is
+  run as the same user/scope it was written for.
+- **"declares metadata.name '<x>' but was looked up as '<name>' -
+  refusing a mismatched/duplicate name" (exit 4):** the manifest's
+  filename and its `metadata.name` field disagree - rename the file to
+  `<metadata.name>.json` or fix the field; this is deliberate duplicate-
+  name protection, not a bug.
+- **"serviceMode 'user' must not be applied as root" / "'system'
+  requires root" (exit 5):** `omes agent apply`/`rollback` refuse a
+  privilege mismatch before any mutation. Run `serviceMode: user`
+  manifests as the target (non-root) operator account; `serviceMode:
+  system` requires `sudo`.
+- **`apply` fails after "backed-up" with a `systemctl` error (exit 6):**
+  the unit/drop-in were written but `daemon-reload`/`enable --now`
+  failed - check `journalctl --user -u omes-agent-<name>.service` (or
+  without `--user` for `system` scope) and `systemctl --user status
+  omes-agent-<name>.service`. The agent's state file
+  (`<state-dir>/agents/<name>/state.json`) records `failed` with the
+  triggering detail; re-running `apply` retries the full cycle.
+- **`omes agent health <name>` reports `degraded`/not ready (exit 7):**
+  read the `layers` object in the JSON output - each layer's `proves`
+  field states exactly what a `pass` does and does not establish (the
+  same "green signals can lie" principle as `omes health`, see section
+  6). A `not_applicable` provider/channel layer is normal when no
+  Ollama provider or Telegram token is configured for that agent.
+- **Rollback did not remove `HERMES_HOME`:** this is intentional -
+  `omes agent rollback` removes only the OMES-managed unit and drop-in
+  recorded in the agent's own state, never Hermes's own data. Use
+  `omes agent-backup`/manual cleanup if you also want the data gone.
+- Full reference: [docs/agent-deployment.md](agent-deployment.md).
+
 ## 10. State dir and logs
 
 - **Where:** root scope `/var/lib/omes/`; user scope

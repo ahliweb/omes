@@ -64,6 +64,22 @@ Python logic under `lib/omes/py/<package>/` with tests under
 `tests/py/<package>/test_*.py`; `tests/run.sh` discovers them
 automatically.
 
+`tests/py/agent/` (issue #87) covers the agent deployment lifecycle:
+`test_manifest.py` (schema + semantic validation against every fixture
+under `contracts/agent/v1/fixtures/agent-deployment/`, including duplicate/mismatched
+names, path traversal, and unsupported runtime/backend), `test_plan.py`
+(pure plan/unit-rendering computation, including hardening-directive
+reuse and de-duplication), `test_lifecycle.py` (the state machine, legal
+and illegal transitions, idempotent re-apply), `test_state.py`
+(atomic per-agent state read/write), and `test_cli.py` (end-to-end
+subprocess tests against `tests/shims/systemctl`/`tests/shims/hermes`:
+wrong-privilege refusal, `--dry-run` making no mutation, a full apply ->
+status -> health -> idempotent re-apply -> rollback round trip, a forced
+systemd failure, per-profile isolation, and corrupted-backup detection
+via #82's `hermesbackup`). `tests/integration/agent.bats` covers the
+`lib/omes/cmd/agent.sh` dispatch (usage errors, exit codes, `--json`
+passthrough) through the real `bin/omes` entry point.
+
 ### 2.2 Container regression matrix
 
 ```bash

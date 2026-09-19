@@ -151,8 +151,12 @@ which system emitted the event (`omes`, `hermes`, or `control-center`).
   `*secret*`, `*credential*`, `*api_key*`, `*passphrase*`, `*cookie*`,
   `*authorization*` (case-insensitive) as forbidden to carry a scalar
   value. The only allowed shape is a `secret_ref` object:
-  `{"store": "env"|"file"|"vault"|"os-keyring", "key": "..."}`, or
-  `null`. As defense in depth against a secret placed under a
+  `{"store": "env"|"file"|"vault"|"os-keyring", "key": "..."}`,
+  `null`, or a list of secret *names* (short identifiers such as
+  `["provider-primary"]`, the shape the agent-deployment manifest's
+  `spec.secrets` uses — see [docs/agent-deployment.md](agent-deployment.md));
+  a list containing anything that is not a plain identifier is rejected.
+  As defense in depth against a secret placed under a
   misleadingly generic field name, any string value anywhere in the
   instance that matches a well-known secret-value shape
   (Stripe/GitHub/AWS/Slack/bearer-token prefixes) is rejected too, even
