@@ -247,7 +247,140 @@ after a successful (non-dry-run) install/update, for reproducibility.
 
 ## §3 Workflow (omes graphify run / Hermes skill)
 
-Not implemented yet (tracked in #51).
+Implemented (issue #51): `omes graphify run` (path-validated, mode-gated extraction) and
+`omes graphify skill install`/`uninstall` (a thin Hermes skill wrapper around it).
+
+### 3.1 `omes graphify run`
+
+**Synopsis:** `omes graphify run <path> [--mode code|semantic] [--backend <name>] [--out <dir>] [--yes] [--dry-run] [--json]`
+
+Requires the `graphify` module to already be installed and verified (`omes install --module
+graphify`); refuses with a clear message pointing at that command otherwise.
+
+**Path validation** (no traversal, must exist, must not already be inside a `graphify-out/`
+directory):
+
+1. A path argument is required; a missing/empty path is a usage error (exit 2).
+2. The path must exist (file or directory) — checked with `[[ -e ]]` before anything else runs.
+3. The path is canonicalized (`realpath`, resolving `..` segments and symlinks) before any
+   further check or use, so a traversal-shaped input (`../../etc`) is validated against its
+   real, resolved location, not its literal spelling.
+4. The resolved path is refused (exit 2) if it — or any ancestor directory — is itself named
+   `graphify-out`: re-extracting graphify's own output directory is never useful and OMES
+   refuses it outright rather than letting an operator accidentally recurse into it.
+
+**Mode gating** — default `code`, `semantic` is opt-in and provider-configured, exactly as
+issue #51 requires:
+
+- **`code` (default).** Runs `graphify extract <resolved-path> --code-only` (plus `--out
+  <dir>` if given). 100% local, no provider credential is read, checked, or required.
+- **`semantic`.** Requires `OMES_GRAPHIFY_PROVIDER_ENV` to be set to the **name** of an
+  environment variable that itself holds a real provider credential (e.g.
+  `OMES_GRAPHIFY_PROVIDER_ENV=ANTHROPIC_API_KEY`). `omes graphify run` checks, via indirect
+  parameter expansion, only whether the *named* variable is non-empty — it never reads,
+  echoes, or forwards that variable's *value* anywhere (not to a log line, not to `--json`
+  output, not to the provenance sidecar — only the variable's *name* is ever recorded, see
+  §3.2). Missing either half of this gate (the pointer variable, or the credential it points
+  at) refuses with an actionable message and no `graphify` invocation. When satisfied, runs
+  `graphify extract <resolved-path>` (no `--code-only`), plus `--backend <name>` if `--backend`
+  was given, and requires confirmation (`--yes` or an interactive `y`) before proceeding, since
+  this is the one path that calls an external LLM API.
+
+**What the operator sees**, always printed before `graphify` runs: the resolved input path,
+the selected mode, and the output directory (`--out <dir>` if given, else `<path>/graphify-out`
+for a directory input or `<dirname of path>/graphify-out` for a file input). A one-line
+EXTRACTED/INFERRED explainer is also printed, matching whichever mode ran (§1.6): code mode
+notes that only `EXTRACTED` edges are produced; semantic mode notes that `INFERRED` edges may
+be added alongside them.
+
+**Exit codes:** 0, 1 (graphify itself failed, or a `--mode semantic` invocation was declined
+without `--yes`), 2 (missing/invalid path, path resolves inside a `graphify-out/` directory,
+graphify not installed, invalid `--mode` value, or semantic mode requested without a
+satisfied `OMES_GRAPHIFY_PROVIDER_ENV` gate).
+
+**JSON schema:** `{"command":"graphify","subcommand":"run","ok":true,"mode":"code","path":"/abs/resolved/path","out_dir":"/abs/resolved/path/graphify-out","provenance_file":"/abs/resolved/path/graphify-out/omes-provenance.json","exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify run ~/code/myrepo                                    # code-only, no credentials
+OMES_GRAPHIFY_PROVIDER_ENV=ANTHROPIC_API_KEY \
+  omes graphify run ~/code/myrepo --mode semantic --yes             # opt-in semantic pass
+omes graphify run ~/code/myrepo --out /tmp/myrepo-graph --dry-run   # preview only
+```
+
+### 3.2 Provenance sidecar
+
+After a successful (non-dry-run) `omes graphify run`, OMES writes `omes-provenance.json` into
+the resolved output directory, alongside graphify's own `graph.html`/`GRAPH_REPORT.md`/
+`graph.json` (§1.7). This is OMES's own audit record, layered on top of — never replacing —
+graphify's own `EXTRACTED`/`INFERRED` edge tagging (§1.6):
+
+```json
+{
+  "generated_at": "2026-09-19T12:00:00Z",
+  "mode": "semantic",
+  "path": "/home/op/code/myrepo",
+  "out_dir": "/home/op/code/myrepo/graphify-out",
+  "backend": null,
+  "provider_env_var": "ANTHROPIC_API_KEY",
+  "graphify_version": "0.9.64",
+  "omes_version": "0.1.0",
+  "invoked_by": "op"
+}
+```
+
+`provider_env_var` records only the **name** given via `OMES_GRAPHIFY_PROVIDER_ENV` (`null` in
+`code` mode) — the credential value itself is never read into OMES beyond the single
+presence/non-empty check described in §3.1, and never appears in this file, in log output, or
+in `--json` output.
+
+### 3.3 Hermes skill: `omes graphify skill install` / `omes graphify skill uninstall`
+
+**Synopsis:** `omes graphify skill {install|uninstall} [--yes] [--dry-run] [--json]`
+
+A thin, copy-only wrapper — not a full OMES module lifecycle (there is nothing to
+check/apply/verify beyond "did the two files land correctly") — that installs the bundled
+skill into Hermes's skill directory so `/graphify <path>` becomes available inside a Hermes
+session:
+
+- **Source (bundled in this repo):** `modules/graphify/skill/SKILL.md` and
+  `modules/graphify/skill/run.sh`.
+- **Target:** `${OMES_HERMES_HOME:-$HOME/.hermes}/skills/graphify/` (same `HERMES_HOME`
+  resolution as `modules/hermes/module.sh`).
+- **`install`:** copies both files into the target directory (creating it if needed), makes
+  `run.sh` executable, and registers both target paths via `omes_manage_path` inside an
+  explicit backup session — so a pre-existing `SKILL.md`/`run.sh` at that path (e.g. from a
+  prior `graphify hermes install` run) is backed up before being overwritten, restorable via
+  `omes restore`, exactly like every other OMES-managed path (docs/architecture.md §4.6).
+  `run.sh` itself never contains extraction logic — it is exactly `exec omes graphify run
+  "$@"`, so all path validation, mode gating, and provenance-sidecar behavior in §3.1/§3.2 is
+  reused, never duplicated inside the skill.
+- **`uninstall`:** removes only these two files from the target directory (confirmed unless
+  `--yes`); never touches any other file under `$HERMES_HOME/skills/` or `$HERMES_HOME`
+  itself.
+
+**Exit codes:** 0, 1 (copy/remove failed, or declined confirmation without `--yes`).
+
+**JSON schema:** `{"command":"graphify","subcommand":"skill","action":"install","ok":true,"target_dir":"/home/op/.hermes/skills/graphify","exit_code":0}`,
+`{"command":"graphify","subcommand":"skill","action":"uninstall","ok":true,"target_dir":"...","exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify skill install --yes     # writes SKILL.md + run.sh into $HERMES_HOME/skills/graphify/
+omes graphify skill uninstall --yes   # removes only those two files
+```
+
+### 3.4 Boundary notes specific to this section
+
+- This wrapper never reimplements Hermes's own skill/session runtime (ADR-0014) — it only
+  places two files where Hermes already looks for skills.
+- `graphify hermes install` (upstream's own skill writer, §1) is a separate, independent path
+  an operator may still use directly; `omes graphify skill install` does not call it and does
+  not need to — they simply both write to the same conventional directory, and the
+  OMES-managed one is what this repository documents and tests.
+- Obsidian remains untouched by every command in this section, exactly as §1.2/§1.4 require.
 
 ## §4 MCP integration
 
