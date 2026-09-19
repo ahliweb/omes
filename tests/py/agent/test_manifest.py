@@ -13,6 +13,9 @@ from agent import jsonschema_lite, manifest  # noqa: E402
 
 OMES_ROOT = Path(_pathfix.OMES_ROOT)
 FIXTURES = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures" / "agent-deployment"
+# Schema-valid manifests that only the semantic checks reject (not scanned by
+# scripts/check-contracts.py, which is JSON-Schema-only).
+SEMANTIC_FIXTURES = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures-semantic" / "agent-deployment"
 
 
 def _load_fixture(name: str) -> dict:
@@ -29,7 +32,7 @@ class TestSchemaFixtures(unittest.TestCase):
                 self.assertEqual(errors, [], f"{path.name}: {errors}")
 
     def test_all_invalid_fixtures_fail(self):
-        for path in sorted(FIXTURES.glob("invalid-*.json")):
+        for path in sorted(FIXTURES.glob("invalid-*.json")) + sorted(SEMANTIC_FIXTURES.glob("invalid-*.json")):
             with self.subTest(fixture=path.name):
                 data = json.loads(path.read_text(encoding="utf-8"))
                 errors = manifest.validate(data, OMES_ROOT)

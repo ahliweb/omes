@@ -57,7 +57,7 @@ class ComposeCliTestCase(unittest.TestCase):
         return path
 
     def _fixture(self, name: str) -> dict:
-        fixtures = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures"
+        fixtures = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures" / "agent-deployment"
         return json.loads((fixtures / name).read_text(encoding="utf-8"))
 
     def _run(self, *args, env=None, input_text: str = None):

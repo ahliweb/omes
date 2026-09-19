@@ -27,7 +27,7 @@ setup() {
 
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
-  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/valid-compose-generic.json" \
+  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/agent-deployment/valid-compose-generic.json" \
     "${OMES_CONFIG_DIR}/agents/compose-worker.json"
 
   COMPOSE_FILE="${OMES_STATE_DIR}/agents/compose-worker/compose/compose.yaml"
@@ -134,7 +134,7 @@ teardown() {
 }
 
 @test "omes agent remove is not implemented for the systemd backend" {
-  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/valid-generic-user.json" \
+  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/agent-deployment/valid-generic-user.json" \
     "${OMES_CONFIG_DIR}/agents/researcher.json"
   run "$OMES_BIN" agent remove researcher --yes --json
   [ "$status" -eq 2 ]

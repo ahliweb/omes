@@ -43,7 +43,7 @@ resolution). Its shape mirrors
 field-for-field, and is validated against the versioned schema at
 [`contracts/agent/v1/agent-deployment.schema.json`](../contracts/agent/v1/agent-deployment.schema.json)
 (valid/invalid examples under
-[`contracts/agent/v1/fixtures/agent-deployment/`](../contracts/agent/v1/fixtures/agent-deployment/)):
+[`contracts/agent/v1/fixtures/agent-deployment/`](../contracts/agent/v1/fixtures/agent-deployment/) (schema fixtures, validated by `scripts/check-contracts.py`) and [`contracts/agent/v1/fixtures-semantic/`](../contracts/agent/v1/fixtures-semantic/README.md) (schema-valid manifests that only the semantic checks reject)):
 
 ```json
 {
@@ -382,7 +382,7 @@ compose file's `mem_limit`/`mem_reservation`/`cpus`/`pids_limit`.
 Validation lives in
 [`lib/omes/py/agent/compose.py`](../lib/omes/py/agent/compose.py)`.validate_compose_spec`,
 called from `manifest.py`'s semantic checks; fixtures under
-[`contracts/agent/v1/fixtures/`](../contracts/agent/v1/fixtures/)
+[`contracts/agent/v1/fixtures/agent-deployment/`](../contracts/agent/v1/fixtures/agent-deployment/)
 (`valid-compose-generic.json` and five `invalid-compose-*.json` cases).
 
 ### 9.4 Rendering, backup, and lifecycle
