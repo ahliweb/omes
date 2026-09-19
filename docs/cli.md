@@ -667,6 +667,16 @@ other OMES module (docs/graphify.md §4.2). `omes graphify export` (docs/graphif
 prior extraction into vault-ready Markdown under an operator-supplied Obsidian vault's own
 managed subdirectory only — it never installs or manages Obsidian itself.
 
+## 4.14 `omes agent-backup` (opt-in Hermes data-class backup/restore)
+
+`omes agent-backup create|list|verify|restore` (issue #82,
+`lib/omes/cmd/agent-backup.sh`) is a separate tool from `omes
+backup`/`omes restore` scoped to Hermes's own data under `$HERMES_HOME`
+(config, skills, and opt-in memory/sessions/runtime-state/secrets). See
+[docs/hermes-backup.md](hermes-backup.md) for the class-to-path mapping,
+manifest format, and command reference.
+
+
 ## 5. Worked examples
 
 **First run on a fresh Ubuntu Server 24.04 host:**

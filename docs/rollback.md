@@ -182,6 +182,21 @@ for a separate `omes restore`/`omes uninstall` step. `module_rollback` (invoked 
 `omes uninstall`) removes only this drop-in, never the PATH drop-in or any
 operator-owned unit file.
 
+## 6b. Hermes data-class backup/restore (issue #82; a separate tool)
+
+`omes agent-backup create|list|verify|restore` (see
+[docs/hermes-backup.md](./hermes-backup.md)) is a **separate** tool from
+everything else in this document: it backs up Hermes's own data classes
+under `$HERMES_HOME` (config, skills, and opt-in memory/sessions/
+runtime-state/secrets) into `<state-dir>/backups/hermes/<timestamp>/`,
+not the managed-path sessions `omes backup`/`omes restore` create under
+`<state-dir>/backups/<timestamp>/`. It follows the same retention
+(`OMES_BACKUP_KEEP`), permission (`0700`/`0600`), and offline-restore
+principles as the rest of this document, and its own restore always
+creates a pre-restore backup before overwriting anything - see
+docs/hermes-backup.md §4 and §6 for its specific checksum-validation and
+privacy/retention rules.
+
 ## 7. Restoring with no network
 
 Every step in Sections 3 and 4 above is local file I/O and local state-file reads/writes only

@@ -579,3 +579,16 @@ never silently treated as "nothing exposed." See
 [docs/security.md §3.1](security.md) for the policy and
 [docs/threat-model.md T24](threat-model.md) for the threat this
 mitigates.
+
+## 19. Data-class backup and restore (issue #82)
+
+`omes agent-backup create|list|verify|restore` (`lib/omes/cmd/agent-backup.sh`,
+`lib/omes/py/hermesbackup/`) provides opt-in, class-scoped backup/restore
+for `$HERMES_HOME` data - `config`/`skills` by default, `memory`/`sessions`/
+`runtime-state` on explicit opt-in, and `secrets` never without
+`--include-secrets`/`--restore-secrets`. See
+[docs/hermes-backup.md](hermes-backup.md) for the full class-to-path
+mapping (verified against upstream Hermes documentation), manifest
+format, and privacy/retention guidance. This is a separate tool from
+`omes backup`/`omes restore` (docs/rollback.md), which cover OMES's own
+managed paths, not Hermes's internal data.

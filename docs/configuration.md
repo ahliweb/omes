@@ -228,6 +228,17 @@ This command reads no variable beyond what its host facts already come from
 `versions.py` and not independently configurable at this time); it never reads
 `$HERMES_HOME/.env`.
 
+## 13c. `omes agent-backup` / `lib/omes/py/hermesbackup/` (issue #82)
+
+See [docs/hermes-backup.md](hermes-backup.md) for the full class-to-path
+mapping and command reference.
+
+| Variable | Default | Kind |
+|---|---|---|
+| `HERMES_HOME` / `OMES_HERMES_HOME` | `~/.hermes` | Operator (same resolution as `modules/hermes`) |
+| `OMES_BACKUP_KEEP` | `10` | Operator - same retention knob `lib/omes/backup.sh` uses, applied here too |
+
+
 
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).

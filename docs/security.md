@@ -23,6 +23,7 @@ for as long as it is active (docs/threat-model.md T06).
 | Telegram/API bind address | Upstream Hermes's own gateway binding, not configured by OMES | N/A — OMES does not itself open a network listener | operator-responsibility (upstream Hermes) |
 | sudo | OMES never writes a NOPASSWD sudoers entry for any account | None — out of scope for any automated escape hatch | audited by review + `scripts/check-supply-chain.sh` (CI) |
 | Hermes gateway systemd hardening | Off (`OMES_HERMES_HARDENING=off`); no resource limits or sandboxing beyond the base unit | `OMES_HERMES_HARDENING=conservative` (recommended) or `=strict` (documented compatibility trade-offs); see [`docs/hermes-hardening.md`](./hermes-hardening.md) | `modules/hermes-gateway/hardening.sh` |
+| Hermes data-class backup | `config`/`skills` only; `memory`/`sessions`/`runtime-state` require `--class`; `secrets` never backed up | `--class memory\|sessions\|runtime-state`; `--include-secrets` (create) / `--restore-secrets` (restore), both printing a warning | `lib/omes/py/hermesbackup/` (`omes agent-backup`); see [`docs/hermes-backup.md`](./hermes-backup.md) |
 
 | Compatibility evidence collection (`omes health versions`, issue #83) | Read-only, argv-safe, timeout-bounded probes only; never reads `$HERMES_HOME/.env`; only a fixed non-secret Hermes config key allowlist may be queried; never dumps `os.environ` | None — the allowlist and the `.env` exclusion are hard invariants, not configurable | `lib/omes/py/provenance/versions.py`, `lib/omes/versions.sh` (see `docs/compatibility-evidence.md`) |
 

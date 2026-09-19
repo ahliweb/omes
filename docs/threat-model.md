@@ -76,6 +76,7 @@ controls at the layer it manages (installer, configuration, service wiring).
 | TB15 | Control Center billing ↔ provider operation | Immutable invoice/price snapshot and reconciliation | Payment event replay, provider failure after payment, or false success assumption |
 | TB16 | `.id` document workflow | Encrypted object storage and tenant-scoped access | Registrant PII, expiring upload links, provider review state, and unauthorized download |
 | TB17 | Hermes gateway systemd sandbox | The OMES-managed hardening drop-in (`docs/hermes-hardening.md`), off by default | A compromised or misbehaving gateway process attempting to escalate privileges, exhaust host resources, or reach outside `$HERMES_HOME` |
+| TB18 | Hermes data-class backup (`docs/hermes-backup.md`) | `config`/`skills` classes, `0700`/`0600` permissions, checksum-validated restore | `secrets` (`.env`, `auth.json`) and opt-in `memory`/`sessions`/`runtime-state` classes containing credentials or user-provided content, which must never leave the default backup scope without explicit operator opt-in |
 
 ## 4. Assets
 
