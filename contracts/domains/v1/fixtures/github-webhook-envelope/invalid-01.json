@@ -1,0 +1,9 @@
+{
+  "delivery_id": "delivery-0001",
+  "event": "deployment_status",
+  "installation_id": "install-0001",
+  "signature_algorithm": "sha1",
+  "event_timestamp": "2026-09-19T01:00:00Z",
+  "received_at": "2026-09-19T01:00:02Z",
+  "replay_window_seconds": 300
+}

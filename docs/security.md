@@ -254,6 +254,15 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | No network call by default; a real Coolify call requires `OMES_COOLIFY_LIVE=1` | `lib/omes/py/coolify/client.py`'s `live_enabled()` gate in `_request()`, asserted by `tests/py/coolify/test_client.py` patching `urllib.request.urlopen` |
 | Every delegated operation is audited to an append-only, hash-chained log | `lib/omes/py/coolify/provider.py`'s `_audit()`, `lib/omes/py/coolify/audit.py` (same record shape as `lib/omes/py/jobs/audit.py`) |
 
+### 8.5 GitHub App controls implemented today (issue #101)
+
+| Every webhook delivery's `X-Hub-Signature-256` is verified with a constant-time HMAC-SHA256 comparison before any state update; a malformed or missing header is rejected, never treated as "unsigned but OK" | `lib/omes/py/domains/github.py`'s `verify_signature()` (see docs/threat-model.md T44) |
+| A delivery outside its replay window, or a duplicate `delivery_id`, is rejected/idempotently ignored rather than reprocessed | `lib/omes/py/domains/github.py`'s `ReplayGuard` |
+| A revoked installation rejects every subsequent delivery; access outside the installation's repositories or granted permissions is denied | `lib/omes/py/domains/github.py`'s `FakeGitHubApp.receive_webhook()` (`RevokedInstallationError`/`AccessDeniedError`) |
+| A deployment observation whose ref does not match its environment's configured branch pattern is rejected rather than silently accepted | `lib/omes/py/domains/github.py`'s `BranchMismatchError` |
+| The minimum GitHub App permission set OMES requests is named and reviewable, with excluded permissions and their rationale recorded alongside it | `lib/omes/py/domains/profiles/github.py`'s `MINIMUM_PERMISSIONS`/`EXCLUDED_PERMISSIONS_RATIONALE` |
+
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

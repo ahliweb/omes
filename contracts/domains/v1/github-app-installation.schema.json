@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/github-app-installation.schema.json",
+  "title": "github-app-installation",
+  "type": "object",
+  "required": [
+    "installation_id",
+    "tenant_id",
+    "account_login",
+    "account_type",
+    "repository_selection",
+    "permissions",
+    "suspended",
+    "installed_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "installation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "account_login": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9-]{1,64}$"
+    },
+    "account_type": {
+      "type": "string",
+      "enum": [
+        "organization",
+        "user"
+      ]
+    },
+    "repository_selection": {
+      "type": "string",
+      "enum": [
+        "all",
+        "selected"
+      ]
+    },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "enum": [
+          "read",
+          "write",
+          "none"
+        ]
+      }
+    },
+    "suspended": {
+      "type": "boolean"
+    },
+    "installed_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

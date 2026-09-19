@@ -1,0 +1,11 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0200",
+  "idempotency_key": "idem-disc-01",
+  "actor": {
+    "type": "user",
+    "id": "user-1"
+  },
+  "installation_id": "install-0001",
+  "reason": "customer_requested"
+}

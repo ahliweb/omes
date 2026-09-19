@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/github-catalog-addon.schema.json",
+  "title": "github-catalog-addon",
+  "type": "object",
+  "required": [
+    "addon_id",
+    "name",
+    "scope",
+    "price_snapshot_id"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "addon_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^.{1,128}$"
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "deployment_observation",
+        "release_management",
+        "ci_status_reporting"
+      ]
+    },
+    "price_snapshot_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    }
+  }
+}

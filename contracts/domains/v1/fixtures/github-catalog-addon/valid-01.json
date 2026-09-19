@@ -1,0 +1,6 @@
+{
+  "addon_id": "addon-github-deploy-obs",
+  "name": "GitHub deployment observation",
+  "scope": "deployment_observation",
+  "price_snapshot_id": "price-github-0001"
+}

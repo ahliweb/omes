@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/github-webhook-envelope.schema.json",
+  "title": "github-webhook-envelope",
+  "type": "object",
+  "required": [
+    "delivery_id",
+    "event",
+    "installation_id",
+    "signature_algorithm",
+    "event_timestamp",
+    "received_at",
+    "replay_window_seconds"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "delivery_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "event": {
+      "type": "string",
+      "enum": [
+        "installation",
+        "push",
+        "release",
+        "workflow_run",
+        "deployment",
+        "deployment_status",
+        "repository"
+      ]
+    },
+    "installation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "signature_algorithm": {
+      "type": "string",
+      "const": "sha256"
+    },
+    "event_timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "received_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "replay_window_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 3600
+    }
+  }
+}

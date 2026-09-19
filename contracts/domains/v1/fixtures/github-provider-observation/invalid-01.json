@@ -1,0 +1,8 @@
+{
+  "tenant_id": "tenant-acme",
+  "observation_type": "pull_request",
+  "repository_full_name": "acme-org/storefront",
+  "source_url": "https://github.com/acme-org/storefront/pull/1",
+  "last_synced_at": "2026-09-19T01:05:00Z",
+  "resource": {}
+}

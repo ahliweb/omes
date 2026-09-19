@@ -1,0 +1,16 @@
+{
+  "installation_id": "install-0001",
+  "tenant_id": "tenant-acme",
+  "account_login": "acme-org",
+  "account_type": "organization",
+  "repository_selection": "selected",
+  "permissions": {
+    "contents": "read",
+    "deployments": "write",
+    "actions": "read",
+    "checks": "read",
+    "environments": "read"
+  },
+  "suspended": false,
+  "installed_at": "2026-09-19T00:00:00Z"
+}
