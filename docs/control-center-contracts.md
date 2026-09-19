@@ -391,6 +391,69 @@ default** — an automation policy that skips approval is an explicit,
 reviewable opt-in (`requires_approval_for_destructive_action: false`),
 never the default when the field is absent.
 
+### 2.9 Reporting projection contracts (issue #95)
+
+Issue #95 provides operational and business reports without turning a
+reporting table into a second source of truth. No projection dispatcher,
+report API, or export UI exists in this repository; this section fixes
+the shapes and the pure, fixture-based builder those must use.
+
+| Contract | Schema file |
+|---|---|
+| Projection state (cursor/freshness/rebuild/reconciliation) | `projection-state.schema.json` |
+| Billing report (subscriptions, invoices, MRR, overdue, credits/refunds, entitlements) | `report-billing.schema.json` |
+| Operations report (server/agent/deployment counts, health duration, failed jobs, provisioning duration, backup compliance, resource usage) | `report-operations.schema.json` |
+
+**Never a second source of truth**: every report embeds a `projection`
+block (the same shape as standalone `projection-state.schema.json`) with
+`cursor` (how far it has consumed its source event stream),
+`freshness` (`as_of`, `lag_seconds`, `stale`), `rebuild` (whether it is
+currently being recomputed from scratch), and `reconciliation`
+(`last_reconciled_at`, `discrepancies_found` — always against the
+authoritative source records, never against another projection).
+`lib/omes/py/jobs/projections.py`'s `reconcile_measurement()` enforces
+this: it raises unless the caller supplies a value re-derived directly
+from source records.
+
+**Estimate vs. provider-confirmed**: every `measurements[]` entry on
+both report schemas carries a required `label` of `estimate` or
+`provider_confirmed` — issue #95's "explicitly label estimates versus
+provider-confirmed amounts" is a schema-level requirement, not a
+documentation convention (`fixtures/report-billing/invalid-unlabeled-measurement.json`
+is rejected for exactly this). `build_mrr_report()`/`build_overdue_report()`/
+`build_deployment_counts_report()`/`build_failed_jobs_report()` in
+`lib/omes/py/jobs/projections.py` always emit `provider_confirmed`
+because they read directly from the authoritative subscription/invoice/
+deployment/job shapes this repository already defines (issues #90, #92,
+#93); a resource-usage measurement not metered with provider-grade
+precision would be labeled `estimate` instead (see
+`fixtures/report-operations/valid-01.json`'s `resource_cpu_percent`).
+
+**Tenant/legal-entity scope**: `scope.tenant_id` is `null` only for a
+platform-level aggregate; `additionalProperties: false` on `scope`
+rejects a second, conflicting scope identifier riding alongside it
+(`fixtures/report-operations/invalid-cross-tenant-scope-fields.json`).
+Which roles may request a `tenant_id: null` aggregate is an AWCMS-side
+RBAC/ABAC decision (§1), not something this schema enforces.
+
+**Export redaction**: `lib/omes/py/jobs/projections.py`'s
+`redact_for_export()` replaces `scope.tenant_id`/`scope.legal_entity_id`
+with `"[REDACTED]"` (never removes the field, so the exported shape
+still matches the schema) when the exporting role is not authorized to
+see which tenant a report covers; it never touches `measurements` — a
+redacted report still functions as a report, it just cannot be traced to
+one tenant.
+
+**Retention**: this repository does not implement retention enforcement
+for the underlying job/audit/billing event streams a projection is built
+from. A projection whose source events have been retention-purged before
+`last_reconciled_at` cannot be exactly rebuilt from scratch — only
+incrementally maintained from the point retention began. Any consumer of
+`rebuild.status=rebuilt` must therefore treat a rebuild as authoritative
+only back to the oldest retained source event, a limitation this
+document records rather than resolves (no retention policy or purge job
+exists in this repository yet).
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
