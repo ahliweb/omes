@@ -43,6 +43,27 @@ backup_target_dir() {
   printf '%s\n' "${base}/${latest}"
 }
 
+# _restore_restore_outer_session <saved-value>
+# Restores OMES_CURRENT_BACKUP_DIR to whatever it was when restore_backup
+# captured it, before that function's own internal backup_begin/backup_path/
+# backup_finish calls ran - backup_begin overwrites the variable and
+# backup_finish unsets it, so without this a caller that invoked
+# restore_backup from inside its own still-open backup session (no
+# in-repo caller does this today, but feature branches such as
+# lib/omes/cmd/graphify.sh call restore_backup, and the contract must not
+# assume every future caller stays top-level) would silently lose that
+# session once restore_backup returns. Re-exports the saved value when the
+# caller had a session open, unsets the variable when it did not.
+_restore_restore_outer_session() {
+  local outer="$1"
+  if [[ -n "$outer" ]]; then
+    OMES_CURRENT_BACKUP_DIR="$outer"
+    export OMES_CURRENT_BACKUP_DIR
+  else
+    unset OMES_CURRENT_BACKUP_DIR
+  fi
+}
+
 # backup_manifest_validate <backup-dir>
 # Structural validation only (not hash verification): the MANIFEST must
 # exist and be readable, and every non-blank line must match the
@@ -129,7 +150,15 @@ restore_backup() {
     fi
   fi
 
+  # Preserve the caller's own outer backup session (if any is still
+  # genuinely open at this point - the block above already dropped a
+  # merely stale/finished one) across every internal backup_begin/
+  # backup_finish call this function makes below. Every return path from
+  # here on must restore it first via _restore_restore_outer_session.
+  local outer_session="${OMES_CURRENT_BACKUP_DIR:-}"
+
   if ! backup_manifest_validate "$dir"; then
+    _restore_restore_outer_session "$outer_session"
     return 1
   fi
 
@@ -154,12 +183,14 @@ restore_backup() {
 
     if [[ ! -f "$src" ]]; then
       log_error "restore: backed-up copy missing, aborting: ${src}"
+      _restore_restore_outer_session "$outer_session"
       return 1
     fi
 
     actual="$(sha256sum "$src" | awk '{print $1}')"
     if [[ "$actual" != "$sha" ]]; then
       log_error "restore: checksum mismatch, aborting: ${path} (expected ${sha}, got ${actual})"
+      _restore_restore_outer_session "$outer_session"
       return 1
     fi
 
@@ -186,6 +217,7 @@ restore_backup() {
     mkdir -p "$(dirname "$path")"
     if ! cp -a "$src" "$path"; then
       log_error "restore: failed to write restored file, aborting: ${path}"
+      _restore_restore_outer_session "$outer_session"
       return 1
     fi
 
@@ -194,6 +226,7 @@ restore_backup() {
   done
 
   log_info "restore: restored ${restored} file(s) from $(basename "$dir")"
+  _restore_restore_outer_session "$outer_session"
   return 0
 }
 

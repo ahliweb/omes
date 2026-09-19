@@ -325,6 +325,37 @@ teardown() {
   [ "$(cat "$SRC")" = "original" ]
 }
 
+@test "#129: restore_backup preserves the caller's own already-open outer backup session" {
+  printf 'original\n' > "$SRC"
+
+  backup_begin "demo" "pre-apply" >/dev/null
+  local dir_a="$OMES_CURRENT_BACKUP_DIR"
+  backup_path "$SRC"
+  backup_finish >/dev/null
+  local ts_a
+  ts_a="$(basename "$dir_a")"
+
+  printf 'modified\n' > "$SRC"
+
+  # The caller has its own outer backup session open (genuinely in
+  # progress, not finished) when it calls restore_backup - e.g. a module
+  # that wraps a restore inside its own backup_begin/backup_finish pair
+  # (feature branches such as lib/omes/cmd/graphify.sh call restore_backup
+  # this way). restore_backup's internal pre-restore-backup calls
+  # (backup_begin/backup_path/backup_finish) must not clobber or drop this
+  # outer session.
+  backup_begin "outer" "outer-session" >/dev/null
+  local outer_dir="$OMES_CURRENT_BACKUP_DIR"
+
+  run restore_backup "$ts_a"
+  [ "$status" -eq 0 ]
+  [ "$(cat "$SRC")" = "original" ]
+
+  [ -n "${OMES_CURRENT_BACKUP_DIR:-}" ]
+  [ "$OMES_CURRENT_BACKUP_DIR" = "$outer_dir" ]
+  [ ! -e "${outer_dir}/.finished" ]
+}
+
 # --- module_rollback_managed_paths -------------------------------------------
 
 @test "module_rollback_managed_paths restores a path that pre-existed OMES's first touch" {
