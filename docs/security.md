@@ -77,6 +77,22 @@ same principles but does not assume a server-style exposure.
 
 Implementing issue: #7 (depends on #6).
 
+### 3.1 Exposure audit (`omes audit exposure`, issue #80)
+
+`omes audit exposure` (`lib/omes/py/health/exposure.py`) makes unsafe
+listener exposure **visible** without changing anything: it parses `ss
+-H -tulpn`, classifies each listener as loopback / LAN / wildcard, maps
+it to an owning category (Hermes gateway, browser-control/CDP,
+MCP server, Ollama, other) by port and process name, and cross-references
+`ufw status` to report whether a firewall rule actually covers the port.
+A non-loopback bind is a finding (exit 7) unless explicitly approved via
+`OMES_EXPOSURE_ALLOW="host:port,..."`. It never opens a port, alters
+firewall rules, reads credential values, or calls Telegram — detection
+only; remediation is always an explicit operator action, ideally via
+`hermes config set` rather than hand-editing `config.yaml` (see
+[docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80)).
+Missing `ss` is a distinct, clearly reported exit 4, not a false "ok".
+
 ## 4. Update policy
 
 - **Server profile:** `unattended-upgrades` configured for security updates only. OMES does

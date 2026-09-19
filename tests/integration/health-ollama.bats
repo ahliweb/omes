@@ -6,6 +6,12 @@
 # dispatch, --json passthrough, and exit codes for an unreachable
 # endpoint (a real network dependency is not needed for that case - a
 # closed port fails fast and deterministically).
+#
+# JSON assertions pass $output to python via an env var and a
+# single-quoted -c script (never string-interpolated into a
+# double-quoted "..." argument) - some remediation strings the checker
+# emits contain backticks, which a double-quoted bash string would
+# misinterpret as command substitution before python ever sees them.
 
 setup() {
   load '../test_helper.bash'
@@ -36,13 +42,14 @@ teardown() {
 @test "omes health ollama --json against an unreachable endpoint is valid JSON with ready=false" {
   omes_run_stdout_only "$OMES_BIN" health ollama --json
   [ "$status" -eq 4 ]
-  run python3 -c "
-import json, sys
-d = json.loads('''$output''')
-assert d['ready'] is False
-assert d['service']['status'] == 'fail'
-assert d['provider'] == 'ollama-local'
-"
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["ready"] is False
+assert d["service"]["status"] == "fail"
+assert d["provider"] == "ollama-local"
+'
   [ "$status" -eq 0 ]
 }
 
@@ -53,7 +60,7 @@ assert d['provider'] == 'ollama-local'
   # bin/omes's command name and fail).
   omes_run_stdout_only "$OMES_BIN" health --json ollama
   [ "$status" -eq 4 ]
-  run python3 -c "import json; json.loads('''$output''')"
+  OMES_TEST_JSON="$output" run python3 -c 'import json, os; json.loads(os.environ["OMES_TEST_JSON"])'
   [ "$status" -eq 0 ]
 }
 

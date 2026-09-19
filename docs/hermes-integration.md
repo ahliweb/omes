@@ -534,3 +534,29 @@ argv. `modules/hermes-gateway`/`modules/hermes-gateway-system` also
 expose this as a `module_doctor` hook (advisory — never fails
 `module_verify`), scoped to their own mode. See
 [docs/cli.md](cli.md) for the full flag/exit-code reference.
+
+## 18. Exposure audit (issue #80)
+
+`omes audit exposure` ([`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh),
+[`lib/omes/py/health/exposure.py`](../lib/omes/py/health/exposure.py))
+detects unsafe listener exposure — the Hermes gateway, browser-control/CDP
+ports, MCP servers, and Ollama — without changing anything. It parses `ss
+-H -tulpn`, classifies each listener as `loopback` / `lan` / `wildcard`,
+maps it to an owning category by port and process name, and
+cross-references `ufw status` for firewall coverage. A non-loopback bind
+is a finding (exit 7) unless approved via
+`OMES_EXPOSURE_ALLOW="host:port,..."`.
+
+**Remediation is always an explicit operator action.** If a finding names
+a service you do not want exposed, rebind it via that service's own
+configuration mechanism — for Hermes, use `hermes config set` (see §2's
+"OMES never writes `config.yaml` directly" rule in §4); never hand-edit
+`config.yaml`, and never expect `omes audit exposure` itself to open,
+close, or firewall a port — it is detection-only, matching every other
+`module_check`-style OMES command's read-only contract.
+
+Missing `ss` is reported as a distinct exit 4 ("required tool missing"),
+never silently treated as "nothing exposed." See
+[docs/security.md §3.1](security.md) for the policy and
+[docs/threat-model.md T24](threat-model.md) for the threat this
+mitigates.
