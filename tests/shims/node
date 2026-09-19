@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/node - fake node CLI for bats tests (issue #83).
+#
+#   SHIM_NODE_VERSION   version string printed by `node --version`
+#                       (default "v20.11.1"); unset/empty means the
+#                       binary "is not installed" (shim not on PATH is
+#                       the usual way tests simulate that instead).
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'node %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  --version | -v)
+    printf '%s\n' "${SHIM_NODE_VERSION:-v20.11.1}"
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac

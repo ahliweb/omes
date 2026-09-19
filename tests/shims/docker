@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # tests/shims/docker - fake docker CLI for bats tests
-# (#7, modules/containers).
+# (#7, modules/containers; `--version` added for #83's client-only
+# version probe).
 #
 #   SHIM_DOCKER_VERSION_EXIT     exit code for `docker version` (default 0)
 #   SHIM_DOCKER_VERSION_OUTPUT   stderr text on failure (default a generic
 #                                 "cannot connect to the daemon" message)
+#   SHIM_DOCKER_CLIENT_VERSION_LINE   output for `docker --version`
+#                                     (default "Docker version 27.0.0, build abc123")
 
 set -Eeuo pipefail
 
@@ -14,6 +17,10 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
 fi
 
 case "${1:-}" in
+  --version)
+    printf '%s\n' "${SHIM_DOCKER_CLIENT_VERSION_LINE:-Docker version 27.0.0, build abc123}"
+    exit 0
+    ;;
   version)
     if [[ "${SHIM_DOCKER_VERSION_EXIT:-0}" != "0" ]]; then
       printf '%s\n' "${SHIM_DOCKER_VERSION_OUTPUT:-Cannot connect to the Docker daemon at unix:///var/run/docker.sock. Is the docker daemon running?}" >&2

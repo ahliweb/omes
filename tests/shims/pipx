@@ -1,18 +1,29 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
-# tests/shims/pipx - fake `pipx` CLI for bats tests (modules/graphify, issue #50).
+# tests/shims/pipx - fake `pipx` CLI for bats tests (modules/graphify, issue #50;
+# compatibility evidence / provenance, issues #83, #84).
 #
 # Logs every invocation (space-joined argv) to $SHIM_LOG and returns
-# success by default, with plausible output for the subcommands
-# modules/graphify/module.sh and lib/omes/cmd/graphify.sh actually run:
-# `pipx install/upgrade/uninstall <pkgspec>`.
+# success by default, with plausible output for the subcommands OMES runs:
+# `pipx --version`, `pipx install/upgrade/uninstall <pkgspec>`, `pipx list --json`.
 #
-#   SHIM_PIPX_EXIT   exit code for any subcommand (default 0)
+#   SHIM_PIPX_EXIT        exit code for any subcommand (default 0)
+#   SHIM_PIPX_VERSION     output for `pipx --version` (default "1.4.3")
+#   SHIM_PIPX_LIST_JSON   output for `pipx list --json` (default an empty venvs object)
 
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'pipx %s\n' "$*" >>"$SHIM_LOG"
 fi
+
+case "${1:-}" in
+  --version)
+    printf '%s\n' "${SHIM_PIPX_VERSION:-1.4.3}"
+    ;;
+  list)
+    printf '%s\n' "${SHIM_PIPX_LIST_JSON:-{\"venvs\":{}}}"
+    ;;
+esac
 
 exit "${SHIM_PIPX_EXIT:-0}"

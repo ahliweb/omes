@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/google-chrome - fake google-chrome CLI for bats tests
+# (issue #83). Identical behavior to tests/shims/chromium (a separate
+# file rather than a symlink, so both are picked up by tests/run.sh's
+# `find tests/shims -type f` ShellCheck pass) - versions.py tries
+# "chromium", "chromium-browser", then "google-chrome" in order.
+#
+#   SHIM_CHROMIUM_VERSION   version string (default "Chromium 122.0.6261.94")
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'google-chrome %s\n' "$*" >> "$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  --version)
+    printf '%s\n' "${SHIM_CHROMIUM_VERSION:-Chromium 122.0.6261.94 unofficial}"
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac
