@@ -46,7 +46,7 @@ def now_iso() -> str:
 
 def redact_value(value: Any) -> Any:
     if isinstance(value, str):
-        return _BEARER_RE.sub(r"\1[REDACTED]", _SECRET_VALUE_RE.sub(r"\1[REDACTED]", value))
+        return _SECRET_VALUE_RE.sub(r"\1[REDACTED]", _BEARER_RE.sub(r"\1[REDACTED]", value))
     if isinstance(value, dict):
         return redact_structure(value)
     if isinstance(value, list):
@@ -71,7 +71,7 @@ def redact_text(text: str) -> str:
     """Redacts a plain-text blob (e.g. a client.py error message) the same
     way redact_structure redacts dict values - including a bare
     `Authorization: Bearer <token>` header line."""
-    return _BEARER_RE.sub(r"\1[REDACTED]", _SECRET_VALUE_RE.sub(r"\1[REDACTED]", text))
+    return _SECRET_VALUE_RE.sub(r"\1[REDACTED]", _BEARER_RE.sub(r"\1[REDACTED]", text))
 
 
 MAX_OUTPUT_TAIL_CHARS = 4096
