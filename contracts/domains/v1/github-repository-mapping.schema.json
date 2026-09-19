@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/github-repository-mapping.schema.json",
+  "title": "github-repository-mapping",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "project_id",
+    "installation_id",
+    "repository_full_name",
+    "default_branch",
+    "environment_mappings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "installation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "repository_full_name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._-]{1,100}/[A-Za-z0-9._-]{1,100}$"
+    },
+    "default_branch": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9._/-]{1,244}$"
+    },
+    "environment_mappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "environment_name",
+          "branch_pattern"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "environment_name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,64}$"
+          },
+          "branch_pattern": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._/*-]{1,244}$"
+          }
+        }
+      }
+    }
+  }
+}

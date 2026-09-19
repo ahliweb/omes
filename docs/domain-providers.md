@@ -392,11 +392,112 @@ distinguishing `id`/`co.id`/`or.id` from a naive suffix match (e.g.
 - Confirmed, current PANDI per-zone document requirements (§3.6).
 - Any UI for the document upload flow.
 
-## 4. Related documents
+## 4. GitHub App installation, webhook verification, and provider observations (issue #101)
+
+### 4.1 What this section covers
+
+This section is grouped under `contracts/domains/v1/`/`lib/omes/py/domains/`
+alongside the registrar work above because issue #101 is part of the
+same "Domain and Integration Services" milestone as #98–#100/#102, not
+because GitHub is a registrar. It defines GitHub App installation,
+repository/environment mapping, webhook-envelope verification, and
+provider-observation contracts, plus a stdlib HMAC-SHA256 webhook
+verifier. No live GitHub App, webhook receiver, or API client exists in
+this repository.
+
+### 4.2 Verified provider facts (cited, not invented)
+
+Fetched from GitHub's own documentation on 2026-09-19:
+
+- **Webhook signature verification** —
+  [Validating webhook deliveries](https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries):
+  the `X-Hub-Signature-256` header always starts with `sha256=` followed
+  by an HMAC-SHA256 hex digest of the raw request body, keyed by the
+  webhook secret; GitHub explicitly recommends a constant-time
+  comparison (`crypto.timingSafeEqual`/`secure_compare`-style) to
+  mitigate timing attacks. `lib/omes/py/domains/github.py`'s
+  `verify_signature()` implements exactly this, using Python's
+  `hmac.compare_digest()`.
+- **GitHub Apps are installed per organization/user with their own
+  granted permissions**, independent of any installing user's personal
+  access — [About creating GitHub Apps](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps).
+  This is why `lib/omes/py/domains/profiles/github.py` names an explicit
+  minimum permission set rather than assuming broad access.
+- **Environments gate deployments** —
+  [About deployments](https://docs.github.com/en/actions/deployment/about-deployments)
+  describes environments as a control point for requiring approval,
+  restricting branches, and limiting secret access, which is why this
+  repository's `github-repository-mapping` contract ties an environment
+  name to an expected branch pattern rather than trusting whatever ref a
+  webhook payload claims.
+
+### 4.3 New contracts
+
+| Schema | Purpose |
+|---|---|
+| `github-app-installation` | Installation ID, tenant, account login/type, `repository_selection`, granted permissions (per-resource read/write/none), suspension state |
+| `github-repository-mapping` | Links a tenant/project/installation to a repository and its environment→branch-pattern mappings |
+| `github-webhook-envelope` | Delivery ID, event type, installation ID, `signature_algorithm` (pinned to `sha256`), event timestamp, received-at, and replay window |
+| `github-provider-observation` | The shared shape for repository/commit/release/workflow_run/deployment/environment observations: `observation_type`, `source_url` (must be a `github.com` URL), `last_synced_at`, and a free-form `resource` payload |
+| `github-disconnect.request` | Tenant-scoped revocation/disconnect request with an explicit `reason` enum |
+| `github-catalog-addon` | An optional managed GitHub integration catalog add-on, referencing a price snapshot — never mirroring GitHub's own subscription ledger (AGENTS.md §2) |
+
+### 4.4 Webhook verification and replay protection
+
+`lib/omes/py/domains/github.py`:
+
+- `verify_signature()`/`compute_signature()` implement GitHub's
+  documented `X-Hub-Signature-256` scheme exactly, with a constant-time
+  comparison.
+- `ReplayGuard` tracks seen `delivery_id`s in memory and enforces a
+  configurable replay window against the event timestamp — GitHub's own
+  documentation covers signature validation but not replay protection,
+  so this is this repository's own addition (see docs/threat-model.md
+  T44 and T34, the pre-existing generic "replayed provider webhook"
+  risk this makes concrete for GitHub specifically).
+- `FakeGitHubApp` models installation-scoped access control
+  (`AccessDeniedError` for a repository or permission the installation
+  doesn't have), revocation (`RevokedInstallationError`), and
+  environment/branch-pattern mismatch (`BranchMismatchError`) — all as
+  typed exceptions so tests can assert on the exact rejection reason.
+
+### 4.5 Minimum permissions
+
+`lib/omes/py/domains/profiles/github.py`'s `MINIMUM_PERMISSIONS` requests
+only `metadata:read`, `contents:read`, `actions:read`,
+`deployments:write` (to report OMES-driven deployment status; never to
+push code), `environments:read`, and `checks:read`.
+`EXCLUDED_PERMISSIONS_RATIONALE` records, alongside it, why broader
+permissions (`administration`, `contents:write`, `secrets`, `issues`,
+`pull_requests`) are deliberately not requested.
+
+### 4.6 Fake webhook/API test coverage (issue #101 acceptance criteria)
+
+`tests/py/domains/test_github.py` covers: a valid installation accepting
+a delivery, access denial for a repository outside the installation and
+for a missing permission, duplicate-delivery idempotent handling, a
+revoked installation rejecting every delivery, a branch-mismatch
+rejection, and a deployment-status-change delivery accepted when the
+branch matches — plus direct signature-verification tests (tampered
+payload, wrong secret, malformed header) and replay-window boundary
+tests. All HMAC secrets are generated at runtime via
+`secrets.token_bytes()`, never a secret-shaped literal.
+
+### 4.7 What remains in awcms-one (or a future OMES issue)
+
+- A live GitHub App (registration, private key, installation access
+  token exchange) and any live webhook HTTP receiver.
+- Durable delivery-ID/replay-window storage — `ReplayGuard` is in-memory
+  and process-lifetime only.
+- Any UI for installation, repository selection, or environment mapping.
+- The managed GitHub integration catalog add-on's actual billing
+  integration (contract only here; see issue #102).
+
+## 5. Related documents
 
 - [ADR-0011 — Control Center and external provider boundaries](adr/0011-control-center-and-provider-boundaries.md)
 - [Control Center and integrations](control-center-and-integrations.md)
 - [OMES control jobs](jobs.md) (#90) — the idempotency/correlation/audit conventions this document reuses
-- [Security baseline](security.md) §8.2, §8.3, §8.4
-- [Threat model](threat-model.md) T41, T42, T43
+- [Security baseline](security.md) §8.2, §8.3, §8.4, §8.5
+- [Threat model](threat-model.md) T41, T42, T43, T44
 - [contracts/README.md](../contracts/README.md) — the fixture/versioning convention `contracts/domains/v1/` follows

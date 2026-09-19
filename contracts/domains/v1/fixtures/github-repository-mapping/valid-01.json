@@ -1,0 +1,17 @@
+{
+  "tenant_id": "tenant-acme",
+  "project_id": "project-0001",
+  "installation_id": "install-0001",
+  "repository_full_name": "acme-org/storefront",
+  "default_branch": "main",
+  "environment_mappings": [
+    {
+      "environment_name": "production",
+      "branch_pattern": "main"
+    },
+    {
+      "environment_name": "staging",
+      "branch_pattern": "develop"
+    }
+  ]
+}
