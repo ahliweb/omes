@@ -1,0 +1,10 @@
+{
+  "name": "hermes",
+  "version_command": ["hermes", "--version"],
+  "home_env_var": "HERMES_HOME",
+  "home_default": "$HOME/.hermes",
+  "service_units": {"user": "hermes-gateway", "system": "hermes-gateway"},
+  "health_probe": "omes health agent",
+  "backup_classes": ["config", "state", "secrets-ref"],
+  "provenance_sources": ["hermes --version", "hermes doctor", "hermes gateway status"]
+}

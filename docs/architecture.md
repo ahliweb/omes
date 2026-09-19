@@ -894,6 +894,24 @@ next unused integer and must not repurpose an existing code.
    uses different package names for existing dependencies.
 4. Add the platform to `.github/workflows/compatibility.yml`.
 
+## 12.4 Agent-runtime boundary
+
+`lib/omes/runtime.sh` is a small, runtime-neutral contract layer:
+`runtime_supported <name>`, `runtime_require <name>` (fails closed, exit
+4, for anything but `hermes`), `runtime_describe <name>` (JSON metadata:
+version command, home env var, per-scope service unit names, health
+probe entrypoint, backup classes, provenance sources), `runtime_home
+<name>`, and `runtime_service_unit <name> <user|system>`. Hermes is the
+only implemented runtime today; `modules/hermes*` are unchanged
+Hermes-specific implementations. See
+[docs/agent-runtime-boundary.md](agent-runtime-boundary.md) and
+[ADR-0013](adr/0013-agent-runtime-boundary.md) for the full interface
+table, the Hermes mapping, and the isolation requirements a future
+runtime would have to meet. `lib/omes/runtime.sh` is sourced explicitly
+by the commands/modules that need it, not by `bin/omes` itself (the same
+pattern `modules/hermes-gateway/telegram-allowlist.sh` already uses for
+`lib/omes/core.sh`/`lib/omes/log.sh`).
+
 ## 13. Non-goals and known limitations
 
 **Non-goals:**
