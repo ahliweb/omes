@@ -97,6 +97,21 @@ def job_record_path(job_id: str, root: Path | None = None) -> Path:
     return jobs_dir(root) / f"{job_id}.json"
 
 
+def session_platform_dir(platform: str, root: Path | None = None) -> Path:
+    """A single platform worker's isolated browser profile directory
+    (issue #66). Created at mode 0700 by the worker's own `prepare`/
+    `bootstrap-session` operation, not by the manager - see
+    workers/base.py::ensure_session_dir()."""
+    return sessions_dir(root) / platform
+
+
+def job_evidence_dir(job_id: str, root: Path | None = None) -> Path:
+    """Non-secret evidence a worker is allowed to write for one job
+    (screenshots/manifests referenced by path, never inline bytes, never
+    session/cookie data - issue #66)."""
+    return reports_dir(root) / job_id / "evidence"
+
+
 def ensure_layout(root: Path | None = None) -> Path:
     """Create the full directory layout under `root` (default
     content_root()). sessions/ and state/ are created 0700; everything else

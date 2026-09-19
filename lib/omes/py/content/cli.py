@@ -15,6 +15,7 @@ import sys
 from pathlib import Path
 
 from . import inbox, jobs, paths, reports
+from .workers import registry as worker_registry
 
 
 def _default_approval_ttl_seconds() -> int:
@@ -306,6 +307,203 @@ def cmd_prune(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def _allowed_paths_for(root: Path, job_id: str, platform: str) -> dict[str, str]:
+    """The explicit filesystem permission boundary (issue #66) passed to
+    a worker: at most its job's processing dir, its own platform's
+    session dir, and its job's evidence dir - never sessions/ for any
+    other platform, never another job's processing dir, never state/ or
+    reports/*.json directly."""
+    return {
+        "processing_dir": str(paths.job_processing_dir(job_id, root)),
+        "session_dir": str(paths.session_platform_dir(platform, root)),
+        "evidence_dir": str(paths.job_evidence_dir(job_id, root)),
+    }
+
+
+def cmd_plan(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+        jobs.plan_job(record, actor=args.actor, caption=args.caption, targets=args.target or [])
+        _persist(record, root, args.actor)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json(
+            {"job_id": record["job_id"], "state": record["state"], "targets": record["plan"]["targets"]}
+        )
+    else:
+        targets = ", ".join(record["plan"]["targets"]) or "(none)"
+        print(f"{record['job_id']}: planned -> {record['state']} (targets: {targets})")
+    return EX_OK
+
+
+def cmd_publish(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    targets = record["plan"].get("targets") or []
+    if targets and args.platform not in targets:
+        print(
+            f"error: platform {args.platform!r} is not one of this job's planned targets {targets}",
+            file=sys.stderr,
+        )
+        return EX_ERROR
+
+    if args.worker_executable:
+        worker_executable = args.worker_executable
+    else:
+        try:
+            worker_executable = str(worker_registry.worker_executable_for_platform(args.platform))
+        except worker_registry.UnknownPlatformError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EX_ERROR
+
+    record["platform"] = args.platform
+    allowed_paths = _allowed_paths_for(root, record["job_id"], args.platform)
+
+    prepare_result = jobs.prepare_worker(record, worker_executable, allowed_paths=allowed_paths, root=root)
+    if prepare_result.get("status") != "ok" or not prepare_result.get("ready"):
+        # approved -> publishing -> manual-review: prepare failing is a
+        # publish-phase outcome (docs/content-distribution.md section 5),
+        # there is no direct approved -> manual-review transition.
+        jobs.apply_transition(record, "publishing", actor="system", note="publish started")
+        jobs.apply_transition(
+            record,
+            "manual-review",
+            actor="system",
+            note=f"prepare not ready: {prepare_result.get('note', prepare_result)}",
+        )
+        _persist(record, root, "system")
+        if args.json:
+            _print_json({"job_id": record["job_id"], "state": record["state"], "prepare_result": prepare_result})
+        else:
+            print(f"{record['job_id']}: prepare failed -> manual-review ({prepare_result.get('note', '')})", file=sys.stderr)
+        return EX_ERROR
+
+    try:
+        publish_result = jobs.publish_job(
+            record, worker_executable, worker_version=args.worker_version, allowed_paths=allowed_paths, root=root
+        )
+    except jobs.ApprovalError as exc:
+        _persist(record, root, "system")
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    if record["state"] == "verifying":
+        jobs.verify_job(record, worker_executable, allowed_paths=allowed_paths)
+
+    _persist(record, root, "system")
+
+    if args.json:
+        _print_json(
+            {
+                "job_id": record["job_id"],
+                "state": record["state"],
+                "publish_result": publish_result,
+                "resulting_url": record["publish"].get("resulting_url"),
+            }
+        )
+    else:
+        url = record["publish"].get("resulting_url") or "(none)"
+        print(f"{record['job_id']}: publish -> {record['state']} (url: {url})")
+    return EX_OK if record["state"] not in ("failed", "manual-review", "retryable-failure") else EX_ERROR
+
+
+def cmd_session_login(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        worker_executable = str(worker_registry.worker_executable_for_platform(args.platform))
+    except worker_registry.UnknownPlatformError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    from . import worker as worker_mod
+
+    session_dir = paths.session_platform_dir(args.platform, root)
+    allowed_paths = {"session_dir": str(session_dir)}
+    print(f"[omes] content session login: launching bootstrap-session for platform '{args.platform}'.", file=sys.stderr)
+    print("[omes] content session login: this is a manual login step ONLY - it will not publish anything.", file=sys.stderr)
+    print(f"[omes] content session login: the session profile lives at {session_dir} (mode 0700, never backed up/committed).", file=sys.stderr)
+    payload = {
+        "job_id": f"session-login-{args.platform}",
+        "platform": args.platform,
+        "allowed_paths": allowed_paths,
+        "session_dir": str(session_dir),
+    }
+    result = worker_mod.run_worker(worker_executable, "bootstrap-session", payload)
+    reports.audit_append(
+        root,
+        actor=args.actor,
+        job_id=f"session:{args.platform}",
+        from_state=None,
+        to_state="session-login",
+        platform=args.platform,
+        note=result.get("note", ""),
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        print(f"[omes] content session login: {result.get('status')} - {result.get('note', '')}")
+    return EX_OK if result.get("status") == "ok" else EX_ERROR
+
+
+def cmd_session_revoke(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        worker_executable = str(worker_registry.worker_executable_for_platform(args.platform))
+    except worker_registry.UnknownPlatformError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if not _confirm(args, f"Revoke the '{args.platform}' session (deletes its browser profile)?"):
+        return EX_ERROR
+
+    from . import worker as worker_mod
+    import shutil as _shutil
+
+    session_dir = paths.session_platform_dir(args.platform, root)
+    allowed_paths = {"session_dir": str(session_dir)}
+    payload = {
+        "job_id": f"session-revoke-{args.platform}",
+        "platform": args.platform,
+        "allowed_paths": allowed_paths,
+        "session_dir": str(session_dir),
+    }
+    result = worker_mod.run_worker(worker_executable, "revoke-session", payload)
+    if session_dir.is_dir():
+        for child in session_dir.iterdir():
+            if child.is_dir():
+                _shutil.rmtree(child)
+            else:
+                child.unlink()
+    reports.audit_append(
+        root,
+        actor=args.actor,
+        job_id=f"session:{args.platform}",
+        from_state=None,
+        to_state="session-revoked",
+        platform=args.platform,
+        note=result.get("note", ""),
+    )
+    if args.json:
+        _print_json(result)
+    else:
+        print(f"[omes] content session revoke: {result.get('status')}")
+    return EX_OK if result.get("status") == "ok" else EX_ERROR
+
+
+def cmd_session(args: argparse.Namespace) -> int:
+    return args.session_func(args)
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omes content")
     sub = parser.add_subparsers(dest="subcommand", required=True)
@@ -378,6 +576,40 @@ def build_parser() -> argparse.ArgumentParser:
     p_prune.add_argument("--yes", action="store_true")
     p_prune.add_argument("--json", action="store_true")
     p_prune.set_defaults(func=cmd_prune)
+
+    p_plan = sub.add_parser("plan", help="record a caption/target plan and move to approval-required")
+    p_plan.add_argument("job_id")
+    p_plan.add_argument("--actor", default="system")
+    p_plan.add_argument("--caption", default=None)
+    p_plan.add_argument("--target", action="append", dest="target", help="platform name; repeatable")
+    p_plan.add_argument("--json", action="store_true")
+    p_plan.set_defaults(func=cmd_plan)
+
+    p_publish = sub.add_parser("publish", help="run a platform worker's prepare/publish/verify (issue #66)")
+    p_publish.add_argument("job_id")
+    p_publish.add_argument("--platform", required=True, help="e.g. generic_browser")
+    p_publish.add_argument("--worker-executable", default=None, help="override the registry lookup (mainly for tests)")
+    p_publish.add_argument("--worker-version", default=None)
+    p_publish.add_argument("--json", action="store_true")
+    p_publish.set_defaults(func=cmd_publish)
+
+    p_session = sub.add_parser("session", help="manual login/bootstrap and revocation for a platform's browser session")
+    session_sub = p_session.add_subparsers(dest="session_subcommand", required=True)
+
+    p_session_login = session_sub.add_parser("login", help="run the worker's bootstrap-session op (never publishes)")
+    p_session_login.add_argument("platform")
+    p_session_login.add_argument("--actor", required=True)
+    p_session_login.add_argument("--json", action="store_true")
+    p_session_login.set_defaults(session_func=cmd_session_login)
+
+    p_session_revoke = session_sub.add_parser("revoke", help="run the worker's revoke-session op and clear the local profile")
+    p_session_revoke.add_argument("platform")
+    p_session_revoke.add_argument("--actor", required=True)
+    p_session_revoke.add_argument("--yes", action="store_true")
+    p_session_revoke.add_argument("--json", action="store_true")
+    p_session_revoke.set_defaults(session_func=cmd_session_revoke)
+
+    p_session.set_defaults(func=cmd_session)
 
     return parser
 
