@@ -337,7 +337,7 @@ The Control Center adds a new network-facing trust boundary. It must be added to
 | D2 | SRS-X `.id` and documents | #100 | Not implemented yet |
 | D2 | GitHub App/repository integration | #101 | Not implemented yet |
 | D3 | domain billing and reconciliation | #102 | Not implemented yet |
-| Foundation | Control Center boundary | #89 | Not implemented yet |
+| Foundation | Control Center boundary | #89 | Contracts and threat model delivered: [docs/control-center-contracts.md](control-center-contracts.md), [docs/control-center-threat-model.md](control-center-threat-model.md), [`contracts/control-center/v1/`](../contracts/control-center/v1/). No AWCMS producer/consumer implementation in this repository. |
 | Foundation | idempotent audited jobs | #90 | Not implemented yet |
 | Foundation | AWCMS Control Center | #91 | Not implemented yet |
 | Foundation | service catalog/entitlements | #92 | Not implemented yet |
@@ -362,3 +362,6 @@ The current OMES repository remains a Bash CLI and host toolkit. This document i
 - [ADR-0011](adr/0011-control-center-and-provider-boundaries.md)
 - [Web-panel reference evaluation](web-panel-reference-evaluation.md)
 - [ADR-0016](adr/0016-herman-web-panel-reference.md)
+- [Control Center contracts](control-center-contracts.md) (#89)
+- [Control Center threat model](control-center-threat-model.md) (#89)
+- [`contracts/control-center/v1/`](../contracts/control-center/v1/) — JSON Schema contracts and fixtures (#89)

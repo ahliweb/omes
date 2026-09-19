@@ -146,6 +146,16 @@ run_yamllint() {
   return "$status"
 }
 
+run_contracts() {
+  echo "== scripts/check-contracts.py (Control Center contract fixtures) =="
+  if command -v python3 >/dev/null 2>&1; then
+    python3 "$(repo_root)/scripts/check-contracts.py"
+  else
+    echo "scripts/lint.sh: python3 not available; cannot run scripts/check-contracts.py" >&2
+    return 1
+  fi
+}
+
 cmd_all() {
   local overall=0
   run_shellcheck || overall=1
@@ -153,6 +163,8 @@ cmd_all() {
   run_shfmt || true # advisory: never fails the aggregate run
   echo
   run_yamllint || overall=1
+  echo
+  run_contracts || overall=1
   return "$overall"
 }
 
@@ -163,9 +175,10 @@ main() {
     shellcheck) run_shellcheck ;;
     shfmt) run_shfmt ;;
     yamllint) run_yamllint ;;
+    contracts) run_contracts ;;
     all) cmd_all ;;
     *)
-      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|all]" >&2
+      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|all]" >&2
       return 2
       ;;
   esac
