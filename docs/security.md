@@ -33,6 +33,9 @@ for as long as it is active (docs/threat-model.md T06).
 
 
 
+| Graphify semantic extraction & vault export | `omes graphify run`/`sync` default to local, code-only AST extraction (no network call, no credential read); `omes graphify export` writes only under an OMES-owned vault subdirectory, never `.obsidian/` or unrelated notes; `.graphifyignore`/`.gitignore` safe defaults ship via `omes graphify init-ignore` | `--mode semantic` + `OMES_GRAPHIFY_PROVIDER_ENV=<VAR>` (names, never stores, a provider credential) to opt into a semantic pass — see docs/graphify-privacy.md | `lib/omes/cmd/graphify.sh`, `lib/omes/py/graphify/{obsidian,sync}.py`, `docs/graphify-privacy.md` |
+
+
 ## 2. Telegram policy
 
 Telegram is the primary remote-control surface for Hermes, and it is internet-facing by

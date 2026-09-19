@@ -102,6 +102,9 @@ reference file's graphify footprint. `omes graphify export` (issue #53, docs/gra
 ever writes to), also documented there rather than here. `omes graphify sync`/`status` (issue
 #54, docs/graphify.md §6) introduce no new environment variables beyond their own `--min-interval`/
 `--allow-nested-vault` flags and reusing `OBSIDIAN_VAULT_PATH` for loop avoidance only.
+`omes graphify init-ignore`/`purge` (issue #55, docs/graphify-privacy.md) introduce no new
+environment variables either — `purge` reuses the same `--vault`/`OBSIDIAN_VAULT_PATH` resolution
+as `export`.
 
 `OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
 there rather than duplicated here to minimize this shared reference file's graphify footprint.

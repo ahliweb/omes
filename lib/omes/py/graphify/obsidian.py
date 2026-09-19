@@ -457,6 +457,101 @@ def write_upstream_export(payload: Dict[str, str], target_dir: str) -> Tuple[Lis
     return written, conflicts
 
 
+def plan_purge_export(target_dir: str) -> Tuple[List[str], List[str]]:
+    """Scan an already-exported vault subdirectory (`target_dir`) and
+    classify every file under it into (removable, skipped) relative
+    paths, WITHOUT deleting anything (issue #55, docs/graphify-privacy.md
+    "deletion/re-index procedure"):
+
+    - A `.md` file is removable only when it carries the omes_generated
+      marker (`has_omes_marker`).
+    - Any other file is removable only when it is listed in this
+      directory's own OMES_EXPORT_MANIFEST_NAME bookkeeping file
+      (written by `write_upstream_export`) - i.e. only files OMES itself
+      is known to have written, exactly the same ownership test
+      `plan_upstream_export` already uses for the overwrite-refusal
+      rule, reused here for the deletion-safety rule.
+    - Everything else (a user-authored note, or any file this export
+      never owned) is always skipped, never removed.
+
+    Returns ([], []) when `target_dir` does not exist.
+    """
+    if not os.path.isdir(target_dir):
+        return [], []
+
+    owned_non_md = set(_read_export_manifest_files(target_dir))
+
+    removable: List[str] = []
+    skipped: List[str] = []
+    for dirpath, _dirnames, filenames in os.walk(target_dir):
+        for name in filenames:
+            abs_path = os.path.join(dirpath, name)
+            rel_path = os.path.relpath(abs_path, target_dir)
+
+            if rel_path == OMES_EXPORT_MANIFEST_NAME:
+                # Handled last (after everything it lists), see purge_export.
+                continue
+
+            if rel_path.endswith(".md"):
+                try:
+                    with open(abs_path, "r", encoding="utf-8", errors="replace") as f:
+                        content = f.read()
+                except OSError:
+                    skipped.append(rel_path)
+                    continue
+                if has_omes_marker(content):
+                    removable.append(rel_path)
+                else:
+                    skipped.append(rel_path)
+            elif rel_path in owned_non_md:
+                removable.append(rel_path)
+            else:
+                skipped.append(rel_path)
+
+    return sorted(removable), sorted(skipped)
+
+
+def purge_export(target_dir: str) -> Tuple[List[str], List[str]]:
+    """Delete every OMES-owned file under `target_dir` per
+    `plan_purge_export`'s classification, then remove
+    OMES_EXPORT_MANIFEST_NAME itself and, if `target_dir` is now empty,
+    `target_dir` itself. Never touches a `skipped` path. Returns
+    (removed, skipped) - relative paths (`removed` does not include the
+    directory itself, only files).
+    """
+    removable, skipped = plan_purge_export(target_dir)
+    if not os.path.isdir(target_dir):
+        return [], []
+
+    removed = []
+    for rel_path in removable:
+        abs_path = os.path.join(target_dir, rel_path)
+        try:
+            os.remove(abs_path)
+            removed.append(rel_path)
+        except OSError:
+            skipped.append(rel_path)
+
+    manifest_path = os.path.join(target_dir, OMES_EXPORT_MANIFEST_NAME)
+    if os.path.isfile(manifest_path):
+        try:
+            os.remove(manifest_path)
+            removed.append(OMES_EXPORT_MANIFEST_NAME)
+        except OSError:
+            pass
+
+    # Clean up now-empty directories (deepest first), but never remove a
+    # directory that still contains a skipped (kept) file.
+    for dirpath, dirnames, filenames in list(os.walk(target_dir, topdown=False)):
+        if not dirnames and not filenames:
+            try:
+                os.rmdir(dirpath)
+            except OSError:
+                pass
+
+    return sorted(removed), sorted(set(skipped))
+
+
 def write_notes(notes: Dict[str, str], target_dir: str) -> Tuple[List[str], List[str]]:
     """Write `notes` under `target_dir`, refusing any note whose target
     already exists without the OMES-generated marker. Creates `target_dir`

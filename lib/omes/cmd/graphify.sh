@@ -17,11 +17,15 @@
 #                                     [--allow-nested-vault] [--dry-run]
 #                                     [--yes] [--json]
 #   omes graphify status <path>      [--vault <path>] [--json]
+#   omes graphify init-ignore <path> [--dry-run] [--yes] [--json]
+#   omes graphify purge <path>       [--vault <path>] [--dry-run] [--yes]
+#                                     [--json]
 #
 # Full synopsis/exit-codes/JSON schema for every subcommand: docs/graphify.md
 # §2 (update/uninstall, issue #50), §3 (run/skill, issue #51), §4
-# (mcp health, issue #52), §5 (export/export rollback, issue #53), and §6
-# (sync/status, issue #54). `omes install`/`uninstall --module graphify-mcp`
+# (mcp health, issue #52), §5 (export/export rollback, issue #53), §6
+# (sync/status, issue #54), and docs/graphify-privacy.md (init-ignore/purge,
+# issue #55). `omes install`/`uninstall --module graphify-mcp`
 # (modules/graphify-mcp/module.sh) install/remove the `graphifyy[mcp]`
 # extra itself - `mcp health` here is a read-only status check only, and
 # never touches hermes-gateway or any Hermes runtime state.
@@ -1535,6 +1539,318 @@ _graphify_cmd_sync() {
   exit "$OMES_EX_OK"
 }
 
+# _graphify_cmd_init_ignore <path> [--yes] [--dry-run] [--json]
+# Writes/updates <path>/.graphifyignore from the bundled template
+# (modules/graphify/templates/.graphifyignore) and ensures <path>/.gitignore
+# ignores graphify-out/ and the default vault subdirectory (issue #55,
+# docs/graphify-privacy.md). Idempotent - re-running when both marker
+# blocks are already present is a no-op. Backs up both files before any
+# write, exactly like every other OMES mutation.
+GRAPHIFYIGNORE_MARKER_BEGIN="# BEGIN OMES graphify ignore patterns (omes graphify init-ignore, issue #55)"
+GITIGNORE_MARKER_BEGIN="# BEGIN OMES graphify .gitignore entries (omes graphify init-ignore)"
+GITIGNORE_MARKER_END="# END OMES graphify .gitignore entries"
+
+_graphify_cmd_init_ignore() {
+  local path=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --yes)
+        # shellcheck disable=SC2034  # read by omes_confirm/omes_noninteractive in core.sh
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --dry-run)
+        # shellcheck disable=SC2034  # read by omes_dry_run in core.sh
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      -*)
+        log_error "graphify: unknown flag: $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+      *)
+        if [[ -n "$path" ]]; then
+          log_error "graphify: unexpected extra argument: $1"
+          exit "$OMES_EX_USAGE"
+        fi
+        path="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$path" ]]; then
+    log_error "graphify: usage: omes graphify init-ignore <path> [--dry-run] [--yes] [--json]"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local resolved out_dir
+  {
+    read -r resolved
+    read -r out_dir
+  } < <(_graphify_sync_resolve "$path")
+  _graphify_sync_check_resolve_error "$resolved"
+
+  local ignore_file="${resolved}/.graphifyignore"
+  local gitignore_file="${resolved}/.gitignore"
+  local template="${OMES_ROOT}/modules/graphify/templates/.graphifyignore"
+
+  local need_ignore=1 need_gitignore=1
+  if [[ -f "$ignore_file" ]] && grep -qF "$GRAPHIFYIGNORE_MARKER_BEGIN" "$ignore_file" 2>/dev/null; then
+    need_ignore=0
+  fi
+  if [[ -f "$gitignore_file" ]] && grep -qF "$GITIGNORE_MARKER_BEGIN" "$gitignore_file" 2>/dev/null; then
+    need_gitignore=0
+  fi
+
+  if [[ "$need_ignore" -eq 0 ]] && [[ "$need_gitignore" -eq 0 ]]; then
+    log_info "graphify: init-ignore: already initialized (idempotent no-op): ${ignore_file}, ${gitignore_file}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand init-ignore)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv action none)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] would write/update ${ignore_file}${need_gitignore:+ and ${gitignore_file}}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand init-ignore)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv action would-write)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! omes_confirm "Write/update ${ignore_file} and ensure graphify-out/ + the vault subdir are ignored in ${gitignore_file}?"; then
+    log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand init-ignore)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  backup_begin "graphify-init-ignore" "pre-init-ignore: ${resolved}" >/dev/null
+  [[ -f "$ignore_file" ]] && backup_path "$ignore_file"
+  [[ -f "$gitignore_file" ]] && backup_path "$gitignore_file"
+
+  if [[ "$need_ignore" -eq 1 ]]; then
+    if [[ -f "$ignore_file" ]]; then
+      {
+        printf '\n'
+        cat "$template"
+      } >>"$ignore_file"
+    else
+      cp "$template" "$ignore_file"
+    fi
+    log_info "graphify: init-ignore: wrote ${ignore_file}"
+  fi
+
+  if [[ "$need_gitignore" -eq 1 ]]; then
+    {
+      printf '\n%s\n' "$GITIGNORE_MARKER_BEGIN"
+      printf 'graphify-out/\n'
+      printf 'graphify/\n'
+      printf '%s\n' "$GITIGNORE_MARKER_END"
+    } >>"$gitignore_file"
+    log_info "graphify: init-ignore: ensured graphify-out/ and graphify/ are ignored in ${gitignore_file}"
+  fi
+
+  backup_finish >/dev/null
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand init-ignore)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv action wrote)" \
+      "$(json_kv graphifyignore "$ignore_file")" \
+      "$(json_kv gitignore "$gitignore_file")" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
+# _graphify_cmd_purge <path> [--vault <path>] [--dry-run] [--yes] [--json]
+# Removes ONLY OMES-generated artifacts by marker/ownership (issue #55,
+# docs/graphify-privacy.md "deletion and re-index procedure"): the entire
+# <graphify-out>/ directory (100% machine-generated - never contains
+# user-authored content), plus, when --vault/OBSIDIAN_VAULT_PATH is given,
+# every file under the exported vault subdirectory that carries the
+# omes_generated marker (Markdown) or is listed in that export's own
+# .omes_export_manifest.json bookkeeping file (everything else) - see
+# lib/omes/py/graphify/obsidian.py's plan_purge_export/purge_export.
+# Never removes a user-authored note or any file it does not recognize as
+# its own.
+_graphify_cmd_purge() {
+  local path="" vault=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --vault)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --vault requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        vault="$2"
+        shift 2
+        ;;
+      --yes)
+        # shellcheck disable=SC2034  # read by omes_confirm/omes_noninteractive in core.sh
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --dry-run)
+        # shellcheck disable=SC2034  # read by omes_dry_run in core.sh
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      -*)
+        log_error "graphify: unknown flag: $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+      *)
+        if [[ -n "$path" ]]; then
+          log_error "graphify: unexpected extra argument: $1"
+          exit "$OMES_EX_USAGE"
+        fi
+        path="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$path" ]]; then
+    log_error "graphify: usage: omes graphify purge <path> [--vault <path>] [--dry-run] [--yes] [--json]"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local resolved out_dir
+  {
+    read -r resolved
+    read -r out_dir
+  } < <(_graphify_sync_resolve "$path")
+  _graphify_sync_check_resolve_error "$resolved"
+
+  local project_name
+  project_name="${OMES_GRAPHIFY_PROJECT_NAME:-$(basename "$resolved")}"
+  local vault_arg="${vault:-${OBSIDIAN_VAULT_PATH:-}}"
+  local target_dir=""
+  if [[ -n "$vault_arg" ]] && [[ -e "$vault_arg" ]]; then
+    local resolved_vault
+    if resolved_vault="$(realpath "$vault_arg" 2>/dev/null)"; then
+      target_dir="${resolved_vault}/${OMES_GRAPHIFY_VAULT_SUBDIR:-graphify/${project_name}}"
+    fi
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "graphify: python3 is required for 'omes graphify purge' but was not found"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local export_removable="[]" export_skipped="[]"
+  if [[ -n "$target_dir" ]] && [[ -d "$target_dir" ]]; then
+    local plan_json
+    if plan_json="$(_graphify_export_py purge-plan --target-dir "$target_dir")"; then
+      export_removable="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["removable"]))' "$plan_json" 2>/dev/null || printf '[]')"
+      export_skipped="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["skipped"]))' "$plan_json" 2>/dev/null || printf '[]')"
+    fi
+  fi
+
+  log_info "graphify: purge: graphify-out: ${out_dir} ($([[ -d "$out_dir" ]] && printf 'present' || printf 'absent'))"
+  [[ -n "$target_dir" ]] && log_info "graphify: purge: vault export subdir: ${target_dir}"
+
+  if omes_dry_run; then
+    log_info "[dry-run] would remove ${out_dir} (if present) and, under ${target_dir:-<no vault given>}, only OMES-owned files: ${export_removable}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand purge)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv graphify_out "$out_dir")" \
+        "$(json_kv target_dir "$target_dir")" \
+        "$(json_kv export_removable "$export_removable" --raw)" \
+        "$(json_kv export_skipped "$export_skipped" --raw)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if [[ ! -d "$out_dir" ]] && [[ "$export_removable" == "[]" ]]; then
+    log_info "graphify: purge: nothing to remove"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand purge)" "$(json_kv ok true --raw)" "$(json_kv action none)" "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! omes_confirm "Remove ${out_dir} (if present) and OMES-generated notes under ${target_dir:-<no vault given>}?"; then
+    log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand purge)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  backup_begin "graphify-purge" "pre-purge: ${resolved}" >/dev/null
+  [[ -d "$out_dir" ]] && backup_path "$out_dir"
+  [[ -n "$target_dir" ]] && [[ -d "$target_dir" ]] && backup_path "$target_dir"
+  local backup_dir
+  backup_dir="$(backup_finish)"
+
+  if [[ -d "$out_dir" ]]; then
+    rm -rf "$out_dir"
+    log_warn "graphify: purge: removed ${out_dir}"
+  fi
+
+  local removed_json="[]" skipped_json="[]"
+  if [[ -n "$target_dir" ]] && [[ -d "$target_dir" ]]; then
+    local purge_json
+    if purge_json="$(_graphify_export_py purge --target-dir "$target_dir")"; then
+      removed_json="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["removed"]))' "$purge_json" 2>/dev/null || printf '[]')"
+      skipped_json="$(python3 -c 'import json,sys; print(json.dumps(json.loads(sys.argv[1])["skipped"]))' "$purge_json" 2>/dev/null || printf '[]')"
+      log_warn "graphify: purge: removed OMES-generated files under ${target_dir} (backup: ${backup_dir})"
+      if [[ "$skipped_json" != "[]" ]]; then
+        log_warn "graphify: purge: kept non-OMES-generated file(s) under ${target_dir}: ${skipped_json}"
+      fi
+    fi
+  fi
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand purge)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv backup "$backup_dir")" \
+      "$(json_kv graphify_out_removed "$([[ -d "$out_dir" ]] && printf 'false' || printf 'true')" --raw)" \
+      "$(json_kv export_removed "$removed_json" --raw)" \
+      "$(json_kv export_skipped "$skipped_json" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
 cmd_graphify() {
   local sub="${1:-}"
   if [[ -n "$sub" ]]; then
@@ -1566,8 +1882,14 @@ cmd_graphify() {
     status)
       _graphify_cmd_status "$@"
       ;;
+    init-ignore)
+      _graphify_cmd_init_ignore "$@"
+      ;;
+    purge)
+      _graphify_cmd_purge "$@"
+      ;;
     *)
-      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export|sync|status} [args...]"
+      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export|sync|status|init-ignore|purge} [args...]"
       exit "$OMES_EX_USAGE"
       ;;
   esac
