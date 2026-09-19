@@ -106,7 +106,8 @@ Required design/implementation evidence for a Control Center pilot:
 - SRS-X `.id` document handling has encryption, access audit, expiry, and retention evidence;
 - GitHub webhook signatures and delivery replay protection are tested;
 - no live credentials are needed for default CI tests;
-- provider costs, manual intervention, failure rate, reconciliation drift, and support hours are measured before pricing claims.
+- provider costs, manual intervention, failure rate, reconciliation drift, and support hours are measured before pricing claims;
+- Herman is documented as a reference-only UX input; no source code or runtime dependency is accepted without license/provenance/security review, and no web panel may bypass the #89/#90 contracts.
 
 A domain/billing pilot is **not go** when any operation can silently report provider success, lose tenant scope, expose raw credentials/PII, or automatically destroy a healthy deployment on payment state alone.
 

@@ -272,7 +272,7 @@ Release gates:
 
 Issues: [#89](https://github.com/ahliweb/omes/issues/89), [#90](https://github.com/ahliweb/omes/issues/90), [#91](https://github.com/ahliweb/omes/issues/91), [#92](https://github.com/ahliweb/omes/issues/92)
 
-This is a companion control-plane track, not a replacement for the native CLI or Hermes. It defines the AWCMS/awcms-one boundary, authenticated allowlisted jobs, idempotency, desired/observed deployment state, tenant scope, service catalog, subscription, and entitlement enforcement.
+This is a companion control-plane track, not a replacement for the native CLI or Hermes. It defines the AWCMS/awcms-one boundary, authenticated allowlisted jobs, idempotency, desired/observed deployment state, tenant scope, service catalog, subscription, and entitlement enforcement. Herman is used only as a UX reference for navigation, deployment cards, session/usage views, streamed job output, confirmation and maintenance workflows; it is not imported as a runtime or execution boundary.
 
 Gate:
 
@@ -323,7 +323,8 @@ Gate:
 - unsupported API operations are visible manual tasks;
 - provider actions are idempotent and externally reconciled;
 - PII, domain contacts, and `.id` documents have tenant-scoped encryption/retention controls;
-- no live provider credential is required for default CI tests.
+- no live provider credential is required for default CI tests;
+- Herman-inspired UI passes the adopt/adapt/observe/reject fit matrix and never bypasses the #89/#90 job boundary.
 
 ### Phase 9 — Isolation and multi-server operations
 
@@ -342,6 +343,9 @@ Gate:
 - privileged Docker access is not granted implicitly;
 - Coolify is optional and does not become OMES's source of truth;
 - disposable-host and fake-provider tests cover failure and rollback paths.
+
+- [docs/web-panel-reference-evaluation.md](web-panel-reference-evaluation.md) — Herman reference-only fit matrix and web security adaptations.
+- [ADR-0016](adr/0016-herman-web-panel-reference.md) — Herman UX reference decision.
 
 ## 5. Business research and recommendations
 

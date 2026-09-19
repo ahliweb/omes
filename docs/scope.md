@@ -110,6 +110,7 @@ OMES explicitly does **not**:
    [docs/branding-and-trademarks.md](branding-and-trademarks.md).
 9. Treat a future web Control Center as part of the local CLI runtime. AWCMS/awcms-one may provide a companion business/control plane, but it must not become an arbitrary remote shell, a second Hermes runtime, or the source of truth for host state.
 10. Treat Cloudflare, SRS-X, GitHub, Coolify, Nomad, or Kubernetes as mandatory core dependencies. Provider integrations are staged optional work with explicit capabilities and manual fallback.
+11. Treat external panels such as Herman as UX references only. They do not change the native CLI boundary, Hermes ownership, provider contracts, or the prohibition on arbitrary remote shell execution.
 
 ## 5. Destructive-operation policy
 
@@ -188,6 +189,8 @@ parallel workstream). Summary as of this writing:
 - [docs/architecture.md](architecture.md) — module and CLI architecture.
 - [docs/security.md](security.md) — threat model and security defaults.
 - [docs/branding-and-trademarks.md](branding-and-trademarks.md) — naming and disclaimer rules (Issue #26).
+- [docs/adr/0016-herman-web-panel-reference.md](adr/0016-herman-web-panel-reference.md) — Herman is a UX reference, not an OMES dependency.
+- [docs/web-panel-reference-evaluation.md](web-panel-reference-evaluation.md) — feature fit matrix and security adaptations.
 - [THIRD_PARTY_NOTICES.md](../THIRD_PARTY_NOTICES.md) — licensing of referenced upstream projects (Issue #26).
 
 <!-- OMES-MERMAID: docs/scope.md -->

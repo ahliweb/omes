@@ -163,9 +163,9 @@ The web Control Center and provider adapters are **not implemented in the curren
 - `.id` registrant data and documents receive encryption, tenant-scoped access, access audit, retention, and deletion/legal-hold treatment.
 - External calls occur outside database transactions. Webhook signatures, event IDs, timestamps, and replay protection are mandatory.
 - Registrar state, DNS state, invoice state, entitlement state, and deployment state remain separate and reconcile asynchronously.
-- Paid invoices never directly imply successful registration, DNS, or deployment. Suspension never stops healthy deployments by default.
+- Existing panels such as Herman may inform UX, but their local single-user security model is not an OMES control. Any web-panel feature must pass the fit matrix, tenant/job/audit requirements, and provenance rules in `docs/web-panel-reference-evaluation.md` and ADR-0012.
 
-See [docs/control-center-and-integrations.md](control-center-and-integrations.md) and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md) for the normative boundary.
+See [docs/control-center-and-integrations.md](control-center-and-integrations.md), [docs/web-panel-reference-evaluation.md](web-panel-reference-evaluation.md), and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md) for the normative boundary.
 
 ## 9. What OMES does NOT claim
 
