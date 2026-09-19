@@ -333,7 +333,7 @@ The Control Center adds a new network-facing trust boundary. It must be added to
 | Phase | Deliverable | Issue | Status in current OMES branch |
 |---|---|---:|---|
 | D1 | provider abstraction, capabilities, catalog, price snapshot, fallback | #98 | Contracts and stdlib routing/state-machine/fake-provider delivered: [docs/domain-providers.md](domain-providers.md), [`contracts/domains/v1/`](../contracts/domains/v1/), `lib/omes/py/domains/`. No live Cloudflare/SRS-X adapter in this repository yet (see #99/#100). |
-| D2 | Cloudflare Registrar and DNS | #99 | Not implemented yet |
+| D2 | Cloudflare Registrar and DNS | #99 | Capability profile (as data), preflight, polling/reconciliation, and DNS-drift contracts delivered: [docs/domain-providers.md](domain-providers.md) section 2, `lib/omes/py/domains/profiles/cloudflare.py`. No live Cloudflare client in this repository. |
 | D2 | SRS-X `.id` and documents | #100 | Not implemented yet |
 | D2 | GitHub App/repository integration | #101 | Not implemented yet |
 | D3 | domain billing and reconciliation | #102 | Not implemented yet |

@@ -1,0 +1,9 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0100",
+  "actor": {
+    "type": "service",
+    "id": "svc-preflight"
+  },
+  "provider": "cloudflare"
+}

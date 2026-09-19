@@ -220,6 +220,14 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Capability lookup by provider + extension pattern + account scope + operation, never TLD-suffix-only routing; explicit `manual_fallback` when nothing matches | `lib/omes/py/domains/routing.py`'s `Router.resolve()` (see docs/threat-model.md T41) |
 | Domain-order state machine forbids skipping reconciliation (e.g. `pending` cannot jump directly to `active`); every transition is explicit and rejects illegal edges | `lib/omes/py/domains/states.py`'s `TRANSITIONS` table and `apply_transition()` |
 
+### 8.3 Cloudflare profile controls implemented today (issue #99)
+
+| Control | Implemented in |
+|---|---|
+| A scoped-token credential is preflight-checked (provider match, secret_ref resolvability, required scopes) before any job may reference it, without ever reading the raw token value | `lib/omes/py/domains/preflight.py`'s `run_preflight()` |
+| Renewal/transfer/contact-update are not claimed automated for Cloudflare; the capability profile omits them so routing falls through to `manual_fallback` | `lib/omes/py/domains/profiles/cloudflare.py`'s `REGISTRAR_CAPABILITY["supported_operations"]` (see docs/threat-model.md T42) |
+| A registration poll never reports success on a timed-out or incomplete check | `lib/omes/py/domains/fake_provider.py`'s `poll_registration()`; `contracts/domains/v1/registration-poll.response.schema.json`'s `timed_out` field |
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
