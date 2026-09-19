@@ -59,6 +59,13 @@ class ProviderError(Exception):
     pass
 
 
+class TransportError(ProviderError):
+    """A transient, retryable failure (e.g. a simulated network/API
+    error), as distinct from a structural `ProviderError` (unsupported
+    TLD, malformed request) which is never safe to blindly retry. See
+    `lib/omes/py/domains/retry.py`'s classification table."""
+
+
 class DuplicateRequestError(ProviderError):
     """Raised when a registration/renewal is submitted twice with the
     same idempotency_key - the fake provider returns the ORIGINAL result
@@ -153,10 +160,20 @@ class FakeRegistrar:
         }
 
     # -- registration --------------------------------------------------
-    def register(self, *, domain: str, idempotency_key: str, price_snapshot_id: str, term_years: int = 1) -> dict[str, Any]:
+    def register(
+        self, *, domain: str, idempotency_key: str, price_snapshot_id: str, term_years: int = 1, simulate_api_failure: bool = False
+    ) -> dict[str, Any]:
         if idempotency_key in self._idempotency:
             order_id = self._idempotency[idempotency_key]
             raise DuplicateRequestError(f"idempotency_key {idempotency_key!r} already submitted as {order_id}")
+        if simulate_api_failure:
+            # Models a transient provider-side failure (e.g. SRS-X result
+            # code 1001 without a document-pending explanation, or a
+            # network timeout) - retryable, and crucially does NOT
+            # consume the idempotency key, so a retry with the same key
+            # is expected to actually succeed rather than being rejected
+            # as a duplicate.
+            raise TransportError(f"simulated transient failure registering {domain!r}")
         tld = domain.rsplit(".", 1)[-1]
         if tld not in self.supported_tlds:
             raise ProviderError(f"{self.provider} does not support .{tld} (route to manual_fallback)")
@@ -219,25 +236,35 @@ class FakeRegistrar:
         return dict(record)
 
     # -- documents (SRS-X-like) ----------------------------------------
-    def request_document_upload(self, order_id: str, expires_in_seconds: int = 900) -> dict[str, Any]:
+    def request_document_upload(self, order_id: str, expires_in_ticks: int = 10, now_tick: int = 0) -> dict[str, Any]:
+        """`expires_in_ticks`/`now_tick` model SRS-X's documented "10
+        minutes only" upload-link expiry (kb.srs-x.com/en/api/domain/
+        upload-document-link) as a deterministic integer clock rather
+        than wall-clock time, so tests never depend on real elapsed
+        time."""
         doc = self._documents.get(order_id)
         if doc is None:
             raise ProviderError(f"no document workflow for order {order_id}")
         doc["lifecycle"] = "upload_pending"
         upload_ref = {
             "order_id": order_id,
-            "upload_url_reference": {"store": "object-store", "key": f"domains/{order_id}/upload"},
-            "expires_in_seconds": expires_in_seconds,
+            "upload_reference": {"store": "object-store", "key": f"domains/{order_id}/upload"},
+            "issued_at_tick": now_tick,
+            "expires_at_tick": now_tick + expires_in_ticks,
         }
         doc["urls"].append(upload_ref)
+        doc["_latest_upload"] = upload_ref
         return dict(upload_ref)
 
-    def submit_documents(self, order_id: str) -> dict[str, Any]:
+    def submit_documents(self, order_id: str, now_tick: int = 0) -> dict[str, Any]:
         doc = self._documents.get(order_id)
         if doc is None:
             raise ProviderError(f"no document workflow for order {order_id}")
         if doc["lifecycle"] != "upload_pending":
             raise ProviderError(f"order {order_id} has no pending upload to submit (state={doc['lifecycle']!r})")
+        latest_upload = doc.get("_latest_upload")
+        if latest_upload is not None and now_tick > latest_upload["expires_at_tick"]:
+            raise ProviderError(f"upload link for order {order_id} expired at tick {latest_upload['expires_at_tick']}; request a new one")
         doc["lifecycle"] = "submitted"
         return {"order_id": order_id, "lifecycle": doc["lifecycle"]}
 

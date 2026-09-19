@@ -117,7 +117,7 @@ class TestSrsxLikeDocumentFlow(unittest.TestCase):
         order_id = response["order_id"]
 
         upload_ref = reg.request_document_upload(order_id)
-        self.assertIn("upload_url_reference", upload_ref)
+        self.assertIn("upload_reference", upload_ref)
         self.assertEqual(reg.document_lifecycle(order_id), "upload_pending")
 
         reg.submit_documents(order_id)

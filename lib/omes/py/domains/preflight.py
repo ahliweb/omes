@@ -11,7 +11,10 @@ repository - see docs/domain-providers.md "What remains in awcms-one".
 """
 from __future__ import annotations
 
+import re
 from typing import Any
+
+_IPV4_RE = re.compile(r"^([0-9]{1,3}\.){3}[0-9]{1,3}$")
 
 
 def run_preflight(
@@ -59,6 +62,61 @@ def run_preflight(
         "tenant_id": tenant_id,
         "correlation_id": correlation_id,
         "provider": provider,
+        "ok": ok,
+        "checks": checks,
+        "checked_at": checked_at,
+    }
+
+
+def run_srsx_preflight(
+    tenant_id: str,
+    correlation_id: str,
+    config: dict[str, Any],
+    checked_at: str,
+) -> dict[str, Any]:
+    """SRS-X preflight (issue #100): "IP allowlist/reachability and
+    credential validation without logging request secrets."
+
+    `config` is a `srsx-config` instance
+    (`contracts/domains/v1/srsx-config.schema.json`). This is a
+    STRUCTURAL check only - it never opens a socket or makes a live
+    request (no live provider credentials are used in this repository's
+    default CI, per issue #100's security requirements), and it never
+    reads `config["password_reference"]`'s contents, only that it is
+    shaped like a secret_ref.
+    """
+    from .profiles import srsx  # local import to avoid a hard package cycle
+
+    checks: list[dict[str, Any]] = []
+
+    missing_fields = [f for f in srsx.REQUIRED_CREDENTIAL_FIELDS if not config.get(f)]
+    checks.append(
+        {
+            "name": "config_fields_present",
+            "ok": not missing_fields,
+            "detail": "missing: " + ", ".join(missing_fields) if missing_fields else "all required fields present",
+        }
+    )
+
+    password_reference = config.get("password_reference")
+    password_ref_ok = isinstance(password_reference, dict) and {"store", "key"} <= set(password_reference.keys())
+    checks.append({"name": "password_reference_resolves", "ok": password_ref_ok})
+
+    egress_ip = config.get("authorized_egress_ip", "")
+    ip_shape_ok = bool(_IPV4_RE.match(egress_ip))
+    checks.append(
+        {
+            "name": "authorized_egress_ip_well_formed",
+            "ok": ip_shape_ok,
+            "detail": "structural format check only; this repository never performs a live reachability probe",
+        }
+    )
+
+    ok = all(check["ok"] for check in checks)
+    return {
+        "tenant_id": tenant_id,
+        "correlation_id": correlation_id,
+        "provider": "srsx",
         "ok": ok,
         "checks": checks,
         "checked_at": checked_at,

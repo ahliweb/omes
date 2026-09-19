@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/document-upload-reference.schema.json",
+  "title": "document-upload-reference",
+  "type": "object",
+  "required": [
+    "order_id",
+    "upload_reference",
+    "requested_at",
+    "expires_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "upload_reference": {
+      "type": "object",
+      "required": [
+        "store",
+        "key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "store": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./:-]{1,256}$"
+        }
+      }
+    },
+    "requested_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "expires_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}

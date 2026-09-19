@@ -266,11 +266,137 @@ and secret redaction of credential-shaped evidence fields.
   provider terms before customer confirmation.
 - Persistence of poll results, drift reports, or DNSSEC status.
 
-## 3. Related documents
+## 3. SRS-X `.id` profile and document workflow (issue #100)
+
+### 3.1 What this section covers
+
+This section wires the provider-neutral contracts from section 1 to an
+SRS-X-specific capability profile, expressed as data
+(`lib/omes/py/domains/profiles/srsx.py`), plus the additional contracts a
+real SRS-X adapter (not yet built) will need: a reseller config contract,
+a document-lifecycle contract kept separate from the raw API result
+code, a short-lived document-upload-reference contract, and a
+safe-retry-classification module. No live SRS-X client exists in this
+repository.
+
+### 3.2 Verified provider facts (cited, not invented)
+
+Fetched from SRS-X's knowledge base on 2026-09-19:
+
+- **Available domain operations** —
+  [kb.srs-x.com/en/api/domain](https://kb.srs-x.com/en/api/domain) lists
+  Register/Express Register/Premium Express Register, Renew, Check
+  (availability), Upload Document Link, Transfer + Transfer
+  Lock/Protection, ID protection, nameserver updates, EPP code
+  management, and contact modification.
+- **Registration is conditionally synchronous** —
+  [register-domain](https://kb.srs-x.com/en/api/domain/register-domain):
+  with `autoactive` enabled, the domain activates immediately (result
+  code `1000`); without it, "Domain is still waiting for the complete
+  document" (result code `1001` — which the same page also uses for a
+  hard creation failure; the two are **not** distinguishable by result
+  code alone).
+- **Renewal is synchronous** —
+  [renew-domain](https://kb.srs-x.com/en/api/domain/renew-domain) takes
+  `domain`, `api_id`, `periode` (years); authentication is username plus
+  a SHA256-hashed password; response is `1000`/`<exDate>` or `1001`
+  ("Command Failed"), with no documented pending state.
+- **Document upload links expire in 10 minutes** —
+  [upload-document-link](https://kb.srs-x.com/en/api/domain/upload-document-link):
+  the generated URL is "available for 10 minutes only"; document types
+  are described only as ".ID required prerequisites documents," with no
+  enumerated list on that page.
+- **`.id` is PANDI's ccTLD for Indonesia** —
+  [IANA .id](https://www.iana.org/domains/root/db/.id). PANDI (via
+  resellers such as SRS-X) sets the actual per-second-level-zone
+  (`co.id`, `or.id`, ...) document policy; this repository does **not**
+  encode that policy in detail — see §3.6.
+
+### 3.3 Capability profile as data
+
+`lib/omes/py/domains/profiles/srsx.py` exports `REGISTRAR_CAPABILITY`
+covering `search`, `availability`, `pricing`, `registration`,
+`read_sync`, and `renewal` for `id`, `co.id`, and `or.id` — **not**
+`transfer`, `contact_update`, `dns_records`, or `dnssec`: SRS-X's
+knowledge base documents that these operations exist, but this
+repository has not verified their request/response shape against a live
+or sandbox account, so they are deliberately excluded and fall through
+to `manual_fallback` (docs/threat-model.md T43's sibling risk for
+routing generally is T41/T42; the SRS-X-specific risk of misreading an
+ambiguous result code is T43).
+
+### 3.4 New contracts
+
+| Schema | Purpose |
+|---|---|
+| `srsx-config` | Reseller ID, API username, a password **reference** (never a raw password), endpoint, `sandbox`/`live` mode, authorized egress IP |
+| `document-lifecycle` | The `.id` document-required lifecycle (`documents_required` → `upload_pending` → `submitted` → `under_review` → `rejected`/`active`/`action_required`), tracked **separately** from `api_submission_status` (`auto_provisioned`/`pending_document`/`failed`) — issue #100's explicit requirement |
+| `document-upload-reference` | A short-lived upload capability reference (`{"store","key"}`, never a raw URL) with `requested_at`/`expires_at` |
+
+### 3.5 Preflight, document expiry, and safe-retry classification
+
+- `lib/omes/py/domains/preflight.py`'s `run_srsx_preflight()` checks that
+  a `srsx-config` has all required fields, that `password_reference` is
+  a well-formed secret reference (never inspecting its value), and that
+  `authorized_egress_ip` is a well-formed IPv4 address — a **structural**
+  check only; this repository never opens a socket or performs a live
+  reachability probe.
+- `lib/omes/py/domains/fake_provider.py`'s `request_document_upload()`/
+  `submit_documents()` model the documented 10-minute upload-link expiry
+  with a deterministic integer tick clock (never wall-clock time, so
+  tests are reproducible) and reject a submission after expiry.
+- `lib/omes/py/domains/retry.py`'s `classify_srsx_result_code()` never
+  marks the ambiguous `1001` code retryable, regardless of whether the
+  caller's own `document-lifecycle` tracking believes a document is
+  pending — retrying an ambiguous failure risks a duplicate/duplicate-cost
+  registration. Only a distinct transient failure
+  (`fake_provider.TransportError`, which does not consume the
+  idempotency key) is classified retryable.
+
+### 3.6 PANDI/.id policy assumptions and required operator validation
+
+This repository's `REGISTRAR_TLDS` (`id`, `co.id`, `or.id`) and its
+document-lifecycle contract are illustrative of the *shape* SRS-X's
+document workflow takes, not a complete encoding of PANDI's actual
+per-zone document requirements. Before any production use, an operator
+must:
+
+- confirm current PANDI/SRS-X document requirements per second-level
+  zone (they differ between `id`, `co.id`, `or.id`, and others not
+  listed here);
+- confirm the exact set of accepted document types (SRS-X's own page
+  does not enumerate them);
+- confirm whether `autoactive` is available/appropriate for the
+  reseller's account and which zones require it off by policy;
+- validate the SHA256 password-hashing requirement noted on the
+  renew-domain page against the reseller's actual authentication flow
+  before building a live client.
+
+### 3.7 Fake-provider test coverage (issue #100 acceptance criteria)
+
+`tests/py/domains/test_srsx_profile.py` covers: registration then
+renewal, an API failure that is retryable and does not consume the
+idempotency key, a duplicate request rejection, document URL expiry
+rejecting a late submission, document rejection routing to
+`action_required`, and credential redaction — plus routing tests
+distinguishing `id`/`co.id`/`or.id` from a naive suffix match (e.g.
+`android`).
+
+### 3.8 What remains in awcms-one (or a future OMES issue)
+
+- A live SRS-X API client (HTTP calls, real SHA256-hashed password
+  authentication, real document upload storage).
+- The encrypted object storage, access audit, and retention policy for
+  actual uploaded registrant documents — issue #100 and AGENTS.md §5 are
+  explicit that storage implementation lives in awcms-one, not here.
+- Confirmed, current PANDI per-zone document requirements (§3.6).
+- Any UI for the document upload flow.
+
+## 4. Related documents
 
 - [ADR-0011 — Control Center and external provider boundaries](adr/0011-control-center-and-provider-boundaries.md)
 - [Control Center and integrations](control-center-and-integrations.md)
 - [OMES control jobs](jobs.md) (#90) — the idempotency/correlation/audit conventions this document reuses
-- [Security baseline](security.md) §8.2, §8.3
-- [Threat model](threat-model.md) T41, T42
+- [Security baseline](security.md) §8.2, §8.3, §8.4
+- [Threat model](threat-model.md) T41, T42, T43
 - [contracts/README.md](../contracts/README.md) — the fixture/versioning convention `contracts/domains/v1/` follows

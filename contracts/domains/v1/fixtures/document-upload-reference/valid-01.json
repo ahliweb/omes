@@ -1,0 +1,9 @@
+{
+  "order_id": "order-srsx-0001",
+  "upload_reference": {
+    "store": "object-store",
+    "key": "domains/order-srsx-0001/upload"
+  },
+  "requested_at": "2026-09-19T00:30:00Z",
+  "expires_at": "2026-09-19T00:40:00Z"
+}

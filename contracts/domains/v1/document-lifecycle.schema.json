@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/document-lifecycle.schema.json",
+  "title": "document-lifecycle",
+  "type": "object",
+  "required": [
+    "order_id",
+    "domain",
+    "lifecycle",
+    "api_submission_status",
+    "updated_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9.-]{1,253}$"
+    },
+    "lifecycle": {
+      "type": "string",
+      "enum": [
+        "documents_required",
+        "upload_pending",
+        "submitted",
+        "under_review",
+        "rejected",
+        "active",
+        "action_required"
+      ]
+    },
+    "api_submission_status": {
+      "type": "string",
+      "enum": [
+        "auto_provisioned",
+        "pending_document",
+        "failed"
+      ]
+    },
+    "updated_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    }
+  }
+}
