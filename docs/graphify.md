@@ -129,7 +129,85 @@ but that is a design note for #51 to confirm, not a decision this PR makes.
 
 ## §2 Installation module
 
-Not implemented yet (tracked in #50).
+Implemented (issue #50): `modules/graphify/module.sh` (`MODULE_NAME=graphify`,
+`MODULE_SCOPE=user`, `MODULE_REQUIRES=()`, `MODULE_PROFILES=()`) installs and manages the
+`graphify` CLI (PyPI package `graphifyy`) inside a per-user, isolated Python tool environment.
+It follows the standard OMES module lifecycle (`docs/architecture.md` §4):
+`module_check` (read-only preflight), `module_apply` (idempotent install), `module_verify`
+(proves `graphify --help` exits 0), `module_rollback` (uninstalls the tool-env package only).
+
+**Deliberately not wired into any profile.** Graphify is optional (§1.4); it is reachable via
+`omes install --module graphify`, and `profiles/hermes.profile` carries only a comment
+(`# graphify (optional: omes install --module graphify)`), never an active module entry.
+
+### 2.1 Preflight (`module_check`)
+
+- **Never root.** Like `hermes`, graphify installs entirely within the invoking user's tool
+  environment; `module_check` refuses immediately if run as root.
+- **Python >= 3.10.** `module_check` runs `python3 --version` and fails with an actionable
+  message (`python3 >= 3.10 is required and was not found (or is older than 3.10)`) if python3
+  is absent or older.
+- **Installer detection, `uv` preferred.** `module_check` looks for `uv`, then `pipx`, on
+  `PATH`. If neither is found:
+  - **Default:** fails with `neither uv nor pipx found on PATH - install pipx via 'sudo apt
+    install pipx' (available in Ubuntu noble), or install uv by setting
+    OMES_GRAPHIFY_INSTALLER=uv-bootstrap`. OMES never silently installs either tool.
+  - **Opt-in (`OMES_GRAPHIFY_INSTALLER=uv-bootstrap`):** `module_check` instead verifies
+    network reachability (`detect_network`, reused from the same mechanism `hermes` uses) so a
+    later `module_apply` can bootstrap `uv`.
+- **Network, only when needed.** `module_check` requires network only when `graphify` is not
+  yet installed (mirroring `modules/hermes/module.sh`'s own network-only-if-needed check) —
+  an already-installed host does not need connectivity to pass `check`.
+
+### 2.2 Install (`module_apply`)
+
+- **Idempotent.** If `graphify` is already installed and either no `OMES_GRAPHIFY_VERSION` pin
+  is set, or the installed version already matches the pin, `module_apply` skips the install
+  entirely (no `uv tool install`/`pipx install` call).
+- **PEP 668 compliance.** Install always runs through the detected isolated tool manager:
+  `uv tool install graphifyy` (or `uv tool install "graphifyy==<version>"` when
+  `OMES_GRAPHIFY_VERSION` is set) preferred, `pipx install graphifyy` (or the pinned
+  `pipx install "graphifyy==<version>"`) as fallback. **`pip install` is never invoked, under
+  any code path** — system Python is never touched.
+- **`OMES_GRAPHIFY_INSTALLER=uv-bootstrap`.** When neither `uv` nor `pipx` is present and this
+  opt-in is set, `module_apply` downloads the official `uv` installer
+  (`https://astral.sh/uv/install.sh`) to a temp file (never `curl | bash`, mirroring
+  `modules/hermes/module.sh`'s `_hermes_download_and_install`), optionally verifies it against
+  `OMES_UV_INSTALLER_SHA256` (a mismatch aborts with nothing executed), then runs the
+  downloaded file. If `uv` is still not reachable afterward, `module_apply` fails loudly
+  rather than silently proceeding as if an installer were present.
+- **Records the resolved version.** After a successful (non-dry-run) install, `module_apply`
+  resolves `graphify --version` and records it via
+  `state_set "module.graphify.version_installed" "<version>"`, for reproducibility.
+- **Dry-run.** Under `--dry-run`, `module_apply` prints the planned action and performs no
+  install call and no state write.
+
+### 2.3 Verify (`module_verify`)
+
+Proves the install actually works, not just that a binary exists: `command -v graphify` must
+succeed, and `graphify --help` must exit 0. Either failing fails verification (exit 7 from
+`omes install`).
+
+### 2.4 Rollback (`module_rollback`)
+
+Uninstalls **only** the `graphifyy` tool-env package (`uv tool uninstall graphifyy` or
+`pipx uninstall graphifyy`) and clears `module.graphify.version_installed`. It **never**
+touches a `graphify-out/` directory, vault content, or any other data graphify itself
+produces — exactly the same "OMES only removes what it created" boundary
+`modules/hermes/module.sh` applies to `$HERMES_HOME`. If neither `uv` nor `pipx` is present at
+rollback time, it is a no-op, not a failure.
+
+### 2.5 `omes graphify update` / `omes graphify uninstall`
+
+Outside the normal install/uninstall lifecycle, `lib/omes/cmd/graphify.sh` adds two
+maintenance subcommands — see `docs/cli.md` §4.12 for the full synopsis, exit codes, and JSON
+schema. `omes graphify run` (the Hermes workflow wrapper) is **not implemented yet (tracked in
+#51)** and exits with a usage error if invoked.
+
+### 2.6 Environment variables and state
+
+See `docs/configuration.md` §9 for `OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, and
+`OMES_UV_INSTALLER_SHA256`, and the `module.graphify.version_installed` state key.
 
 ## §3 Workflow (omes graphify run / Hermes skill)
 
