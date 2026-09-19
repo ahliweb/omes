@@ -23,7 +23,7 @@ OMES_ROOT = Path(_pathfix.OMES_ROOT)
 def _load(name: str) -> dict:
     import json
 
-    fixtures = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures"
+    fixtures = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures" / "agent-deployment"
     with open(fixtures / name, "r", encoding="utf-8") as fh:
         return json.load(fh)
 
