@@ -130,3 +130,35 @@ runtime_service_unit() {
       ;;
   esac
 }
+
+# runtime_agent_service_unit <name> <scope>
+# Prints the systemd unit name for a *per-agent* deployment
+# (issue #87's `omes agent` lifecycle, issue #96's compose backend) at
+# <scope> (user or system): "omes-agent-<name>.service". <name> here is
+# the agent's own logical name (manifest `metadata.name`), NOT a runtime
+# name - unlike runtime_service_unit() above, which names the single
+# SHARED gateway unit ("hermes-gateway") for a runtime. A per-agent
+# deployment gets one unit per declared agent, never a unit shared
+# between two agents.
+#
+# This is the one source of truth for that naming shape; both
+# lib/omes/py/agent/ (via lib/omes/py/agent/runtime_bridge.py, the same
+# bridge pattern lib/omes/py/agent/hardening_bridge.py already uses for
+# modules/hermes-gateway/hardening.sh's hardening_render) and any future
+# bash caller read the unit name from here rather than each re-deriving
+# the "omes-agent-<name>.service" shape independently. See
+# docs/agent-runtime-boundary.md section 2 and
+# docs/agent-deployment.md section 7a.
+runtime_agent_service_unit() {
+  local name="${1:-}" scope="${2:-}"
+  if [[ -z "$name" ]]; then
+    omes_die "$OMES_EX_USAGE" "runtime_agent_service_unit: <name> is required"
+  fi
+  case "$scope" in
+    user | system) ;;
+    *)
+      omes_die "$OMES_EX_USAGE" "runtime_agent_service_unit: scope must be 'user' or 'system' (got '${scope}')"
+      ;;
+  esac
+  printf 'omes-agent-%s.service\n' "$name"
+}

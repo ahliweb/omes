@@ -285,5 +285,70 @@ class TestCorruptedBackupIsSurfaced(AgentCliTestCase):
                 os.environ["OMES_STATE_DIR"] = old_state_dir_env
 
 
+class TestDoctor(AgentCliTestCase):
+    """`omes agent doctor` (issue #87/#96 follow-up: "omes doctor
+    integration") - read-only report of every deployed agent's lifecycle
+    state and health summary. `--json` output must always be a single
+    JSON object (never multiple objects/lines), per the repository-wide
+    `--json` contract."""
+
+    def test_json_output_is_a_single_object_with_no_agents_deployed(self):
+        proc = self._run("doctor", "--json")
+        self.assertEqual(proc.returncode, 0)
+        # Exactly one JSON value on stdout - json.loads fails on trailing
+        # data, so this alone proves "a single object", not multiple
+        # concatenated JSON blobs.
+        data = json.loads(proc.stdout)
+        self.assertIsInstance(data, dict)
+        self.assertEqual(data["agents"], [])
+        self.assertTrue(data["ok"])
+
+    def test_reports_a_deployed_agent_with_state_and_health(self):
+        self._write_manifest("researcher", self._fixture("valid-generic-user.json"))
+        apply_proc = self._run("apply", "researcher", "--yes", "--json")
+        self.assertEqual(apply_proc.returncode, 0)
+
+        proc = self._run("doctor", "--json")
+        self.assertEqual(proc.returncode, 0)
+        data = json.loads(proc.stdout)
+        self.assertEqual(len(data["agents"]), 1)
+        entry = data["agents"][0]
+        self.assertEqual(entry["name"], "researcher")
+        self.assertEqual(entry["backend"], "systemd")
+        self.assertIn(entry["state"], ("healthy", "degraded"))
+        self.assertIn("health", entry)
+        self.assertIn("ready", entry)
+        self.assertIn("connected", entry)
+
+    def test_reports_error_for_a_deployed_agent_whose_manifest_became_invalid(self):
+        self._write_manifest("researcher", self._fixture("valid-generic-user.json"))
+        apply_proc = self._run("apply", "researcher", "--yes", "--json")
+        self.assertEqual(apply_proc.returncode, 0)
+
+        # Simulate the manifest being edited into an invalid state after
+        # deployment (e.g. hand-edited, or a future manifest-migration
+        # bug) - doctor must report this agent as an error row, never
+        # crash the whole report.
+        broken = self._fixture("valid-generic-user.json")
+        broken["spec"]["runtime"] = "not-hermes"
+        self._write_manifest("researcher", broken)
+
+        proc = self._run("doctor", "--json")
+        self.assertEqual(proc.returncode, 0)
+        data = json.loads(proc.stdout)
+        self.assertEqual(len(data["agents"]), 1)
+        entry = data["agents"][0]
+        self.assertFalse(entry["ok"])
+        self.assertIn("error", entry)
+        self.assertFalse(data["ok"])
+
+    def test_human_output_lists_every_agent_by_name(self):
+        self._write_manifest("researcher", self._fixture("valid-generic-user.json"))
+        self._run("apply", "researcher", "--yes", "--json")
+        proc = self._run("doctor")
+        self.assertEqual(proc.returncode, 0)
+        self.assertIn("researcher", proc.stdout)
+
+
 if __name__ == "__main__":
     unittest.main()

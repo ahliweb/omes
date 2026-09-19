@@ -167,7 +167,7 @@ User vs. system trade-offs: [docs/hermes-integration.md §11](hermes-integration
 | User-mode gateway | `journalctl --user -u hermes-gateway -f` |
 | System-mode gateway | `journalctl -u hermes-gateway -f` |
 | Per-agent deployment (§17, systemd backend) | `omes agent logs <name> [journalctl-args...]` — a `journalctl` passthrough scoped to that agent's own unit (`docs/agent-deployment.md`) |
-| Per-agent deployment (§17, compose backend) | Not wired into `omes agent logs` yet (planned, tracked as follow-up in `docs/agent-deployment.md` §10) — use `docker compose -p <project> -f <compose-file> logs` directly; the project/file are printed by `omes agent plan`/`status`. |
+| Per-agent deployment (§17, compose backend) | `omes agent logs <name> [--tail N] [--follow]` — `docker compose -p <project> -f <compose-file> logs --no-color --tail <n>` (`--follow` never the default); see `docs/agent-deployment.md` §11.2 |
 | OMES's own actions | `<state-dir>/logs/omes-<timestamp>.log`, or override with `OMES_LOG_FILE` |
 
 **Green signals can lie**: `systemctl [--user] is-active` proves the
@@ -444,16 +444,23 @@ reimplement any part of Hermes itself.
 
 ```bash
 omes agent list                          # every declared/applied agent + state
+omes agent doctor [--json]               # every deployed agent's state + health, read-only
 omes agent check <name>                  # preflight only, no mutation
 omes agent plan <name>                   # computed plan, no mutation
 omes agent apply <name> [--dry-run] [--yes]
 omes agent status <name> [--json]
 omes agent health <name> [--json]
 omes agent restart <name>
-omes agent logs <name>                   # journalctl passthrough (systemd backend only)
+omes agent logs <name>                   # systemd: journalctl passthrough
+omes agent logs <name> [--tail N] [--follow]  # compose: docker compose logs
 omes agent rollback <name> [--yes]
 omes agent remove <name> [--yes]         # compose backend only
 ```
+
+`omes doctor` also reports every deployed agent automatically (one
+`agent:<name>` row per agent, `OK`/`WARN` based on its health) whenever
+at least one has been declared — see
+[docs/agent-deployment.md §11](agent-deployment.md#11-omes-doctor-integration-and-omes-agent-logs-compose).
 
 `omes agent` is an optional extension command
 ([lib/omes/cmd/README.md](../lib/omes/cmd/README.md)); it is never

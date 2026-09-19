@@ -9,10 +9,17 @@
 > [section 2.2](agent-orchestration-roadmap.md). The Coolify phase
 > (section 2.3) is **not implemented**. See
 > [docs/hermes-deployment-guide.md §17](hermes-deployment-guide.md#17-per-agent-deployments-omes-agent)
-> for the condensed runbook version. Ubuntu Server 24.04 VM/CI
-> evidence and a real (non-shimmed) Docker daemon are **not available in
-> this environment** for either backend - see "Left for follow-up" at
-> the end of this document.
+> for the condensed runbook version. This revision (`Part of #87`,
+> `Part of #96`) additionally closes four of the five follow-up gaps the
+> original #87/#96 PRs listed: `omes doctor` integration (section 11),
+> `omes agent logs` for the compose backend (section 11), containerized-
+> Hermes health reuse of `lib/omes/py/health/hermes.py`'s provider/
+> channel layers (section 9.4), and `lib/omes/runtime.sh` unit-name
+> integration (section 7a). Ubuntu Server 24.04 VM/CI evidence and a real
+> (non-shimmed) Docker daemon are still **not available in this
+> environment** for either backend - see "Left for follow-up" (section
+> 10) at the end of this document, which has been trimmed to what
+> actually remains.
 
 ## 1. What this is
 
@@ -267,15 +274,35 @@ see [docs/hermes-backup.md](hermes-backup.md)).
 [`lib/omes/runtime.sh`](../lib/omes/runtime.sh) (issue #85, ADR-0013)
 defines `runtime_supported`/`runtime_require`/`runtime_describe`/
 `runtime_home`/`runtime_service_unit` for the **shared** Hermes gateway
-service (`hermes-gateway`, one per user/system scope). This issue's
-per-agent unit (`omes-agent-<name>.service`, one per declared agent) is a
-different shape than `runtime_service_unit` currently returns (a single
-fixed unit name per scope), so `lib/omes/py/agent/` does not call into
-`lib/omes/runtime.sh` today; it re-derives the runtime==`hermes` and
-`HERMES_HOME` facts directly (`lib/omes/py/agent/manifest.py`,
-`lib/omes/py/agent/paths.py`). Extending `runtime_service_unit` to accept
-a logical agent name (so both call sites share one implementation) is
-left as follow-up rather than done speculatively in this PR.
+service (`hermes-gateway`, one per user/system scope). A per-agent unit
+(`omes-agent-<name>.service`, one per declared agent) is a different
+shape than `runtime_service_unit` returns (a single fixed unit name per
+scope), so `lib/omes/runtime.sh` now defines a second, sibling function
+for it instead of overloading `runtime_service_unit`:
+**`runtime_agent_service_unit <name> <scope>`** prints
+`omes-agent-<name>.service` for a given agent name/scope, and is the one
+source of truth for that naming shape (see
+[docs/agent-runtime-boundary.md](agent-runtime-boundary.md) section 2 and
+[ADR-0013](adr/0013-agent-runtime-boundary.md)'s "Consequences" update).
+
+`lib/omes/py/agent/runtime_bridge.py` reads it via the same
+`bash -c 'source ...; <function> <argv>'` bridge pattern
+`lib/omes/py/agent/hardening_bridge.py` already uses for
+`hardening_render` - fixed script paths, fixed argv, no shell
+interpolation of untrusted data, never a secret. `lib/omes/py/agent/cli.py`'s
+`_build_systemd_plan()` resolves the unit name through this bridge and
+passes it into `lib/omes/py/agent/plan.py`'s `build_plan(manifest,
+unit_name_override=...)`; `plan.py` itself stays a pure, subprocess-free
+function (its own `unit_name()` remains as the literal-identical
+fallback used when the bridge cannot run, e.g. in a unit test that calls
+`build_plan` directly with no override) so `omes agent plan`'s tests
+do not need bash/systemd/PATH plumbing to stay fast and deterministic.
+`runtime_home hermes` and the runtime==`hermes` check are still
+re-derived directly in `lib/omes/py/agent/manifest.py`/`paths.py` rather
+than bridged - those facts do not vary per invocation the way the unit
+name selection does, and bridging every runtime fact through a
+subprocess call would add latency to every `omes agent` invocation for
+no behavioral benefit.
 
 ## 8. Compose backend: rootless Docker Compose isolation (issue #96)
 
@@ -410,16 +437,30 @@ check -> plan -> backup -> mutate -> verify lifecycle as systemd:
    atomically, then `docker compose -p <project> -f <file> up -d`.
    Re-applying an unchanged manifest re-renders byte-identical content
    and re-runs an already-idempotent `up -d` - a true no-op.
-5. **verify**: `docker compose ps --format json` must report the
-   service `running` with no unhealthy healthcheck; the manifest's own
-   `spec.health.command` is additionally run inside the container via
-   `docker compose exec -T <service> sh -c '<command>'` (both read-only
-   checks, mirroring `lib/omes/py/health`'s "green signals can lie"
-   layering, but implemented directly in `compose_health()` rather than
-   loading `lib/omes/py/health/hermes.py`, since that module's provider/
-   channel layers assume a `HERMES_HOME` reachable from the *host*,
-   which does not hold for a containerized Hermes process - left as
-   follow-up, see section 10).
+5. **verify**: [`lib/omes/py/agent/compose_health.py`](../lib/omes/py/agent/compose_health.py)
+   builds a layered result: the container/gateway layer (`docker compose
+   ps --format json` must report `running` with no unhealthy
+   healthcheck), a `runtime` layer (`hermes --version`/`hermes doctor`
+   run *inside* the container via `docker compose exec -T`, since the
+   `hermes` binary lives in the container's filesystem, never the
+   host's), the manifest's own `spec.health.command` (also via `docker
+   compose exec -T <service> sh -c '<command>'`), and - the issue #96
+   follow-up this revision closes - the **provider** and **channel**
+   layers reused from
+   [`lib/omes/py/health/hermes.py`](../lib/omes/py/health/hermes.py):
+   `check_channel` is called completely unmodified (the compose
+   backend's `env_file:` reference is a *host* path, so the existing
+   host-side `.env` lookup already reflects what the container was
+   started with - no container round-trip needed for that layer); the
+   provider (Ollama) layer's *reachability probe* runs *through* `docker
+   compose exec -T <service> sh -c 'curl ...'`, since an isolated
+   compose network does not automatically share the host's loopback
+   interface, so "is Ollama reachable" has to be answered from inside
+   the container's own network namespace. Every check stays read-only; a
+   container that cannot be exec'd into at all (project down, `docker`
+   missing) marks the affected layer `not_applicable` rather than
+   failing the whole health report - see
+   [`tests/py/agent/test_compose_health.py`](../tests/py/agent/test_compose_health.py).
 
 `omes agent rollback` for this backend runs `docker compose down`, then
 restores the most recent `compose-backups/` entry (if one exists) and
@@ -444,47 +485,113 @@ reference **names** only. The rendered compose service references
 values - so a secret value never appears in the compose file, in
 `omes agent plan`'s output, or in any log line.
 
-## 10. Left for follow-up (not satisfied by this PR)
+## 11. `omes doctor` integration and `omes agent logs` (compose)
+
+### 11.1 `omes doctor` integration (issue #87/#96 follow-up)
+
+`omes agent doctor` (`lib/omes/py/agent/cli.py`'s `cmd_doctor`) reports
+**every deployed agent** - every name under the agent state directory,
+`lib/omes/py/agent/paths.py`'s `agents_state_dir()` (`<state-dir>/agents/`)
+- with its current lifecycle state and a health summary, entirely
+read-only and bounded by `OMES_HEALTH_TIMEOUT` (default 10s) per agent.
+It reuses the exact same health implementations `omes agent health`
+uses - `lib/omes/py/agent/health.py` for `backend: "systemd"`,
+`lib/omes/py/agent/compose_health.py` for `backend: "compose"` - rather
+than a third health mechanism. A missing/invalid manifest for a
+still-declared agent is reported as `"ok": false` with an `error` field,
+never a crash of the whole report:
+
+```json
+{"agents": [{"name": "researcher", "state": "healthy", "backend": "systemd", "serviceMode": "user", "ok": true, "ready": true, "connected": true, "health": {"layers": {"...": "..."}}}], "ok": true}
+```
+
+`bin/omes`'s top-level `cmd_doctor` (`docs/cli.md` section 4) calls this
+automatically - via the existing generic extension-command loader
+(`_omes_run_extension_command agent doctor --json`, the same mechanism
+`lib/omes/cmd/README.md` already documents for every `lib/omes/cmd/*.sh`
+file; **no second doctor-hook mechanism was invented** for this) -
+whenever `lib/omes/cmd/agent.sh` is present and at least one agent has
+ever been declared (an install with no agents ever run is entirely
+unaffected: no extra check, no extra line). Each agent becomes one
+`agent:<name>` row (`OK` when the agent reports `ready`, `WARN`
+otherwise, mirroring the existing `module_doctor` convention where a
+degraded dependency is advisory, not a hard `FAIL` that blocks the whole
+platform doctor run) in `omes doctor`'s own check list and JSON `checks`
+array - see `docs/cli.md`'s `omes doctor` and `omes agent doctor`
+sections for the exact schema, and
+[`tests/py/agent/test_cli.py`](../tests/py/agent/test_cli.py) /
+[`tests/integration/agent.bats`](../tests/integration/agent.bats) for the
+tests.
+
+This intentionally does **not** detect "manifest edited since last
+apply" drift - see section 12.
+
+### 11.2 `omes agent logs` for `backend: "compose"` (issue #96 follow-up)
+
+`lib/omes/cmd/agent.sh`'s `logs` subcommand now branches on the agent's
+`spec.backend` (read via a small manifest lookup, mirroring the existing
+`_agent_manifest_service_mode` helper): `backend: "systemd"` is
+unchanged (a plain `journalctl` passthrough scoped to the agent's own
+unit); `backend: "compose"` resolves the agent's `project`/`composeFile`
+via `omes agent plan --json` and runs
+
+```bash
+docker compose -p <project> -f <compose file> logs --no-color --tail <n>
+```
+
+`--tail` defaults to `200`; `--follow` is accepted but **never** the
+default - `omes agent logs <name>` always returns rather than streaming
+forever, matching the same "no unbounded default" posture the rest of
+OMES's CLI already holds (`docs/cli.md` section 1). Any other arguments
+are passed through to `docker compose logs` verbatim.
+`tests/shims/docker` gained `SHIM_DOCKER_COMPOSE_LOGS_EXIT` for testing
+the failure path; see
+[`tests/integration/agent-compose.bats`](../tests/integration/agent-compose.bats).
+
+## 12. Left for follow-up (not satisfied by this PR)
+
+This list is trimmed to what actually remains after this revision
+(`Part of #87`, `Part of #96`); resolved items now live in section 11 and
+section 9.4/7a above rather than here.
 
 - **Ubuntu Server 24.04 / Linux Mint VM evidence**: this environment has
-  no VM to run a real `systemctl`/`hermes` install against; all testing
-  here uses `tests/shims/systemctl` and `tests/shims/hermes`. Real-host
-  verification is tracked as follow-up (see PR body).
-- **`omes doctor` integration**: neither backend yet adds an
-  `omes agent`-aware `module_doctor` hook the way
-  `modules/hermes-gateway-system` does for the shared gateway.
+  no VM to run a real `systemctl`/`hermes` install against, and no
+  rootless Docker daemon to run a real `docker compose up`/`ps`/`exec`
+  against; all testing here uses `tests/shims/systemctl`,
+  `tests/shims/hermes`, and `tests/shims/docker`. There is no evidence
+  yet of a real image pull by digest or real container resource-limit
+  enforcement (`mem_limit`/`cpus`/`pids_limit`) on an actual rootless
+  daemon. Real-host verification for both backends is tracked as
+  follow-up (see the PR body).
 - **Compatibility recording** (#83) and a dedicated **provenance**
   issue (#84) are referenced by `provenance.collect()` but not
   otherwise integrated here.
 - **Coolify backend** remains out of scope by design (see
   docs/agent-orchestration-roadmap.md section 2.3 and issue #87's
   explicit non-goals).
-- **Compose backend (#96) - no real Docker daemon in this environment**:
-  every test here is driven against `tests/shims/docker`; there is no
-  rootless Docker daemon available in this implementation environment to
-  validate against a real `docker compose up`/`ps`/`exec`, a real image
-  pull by digest, or real container resource-limit enforcement
-  (`mem_limit`/`cpus`/`pids_limit`). Tracked as follow-up (see PR body).
-- **Compose backend (#96) - health layer does not reuse
-  `lib/omes/py/health/hermes.py`**: that module's provider/channel
-  layers assume a `HERMES_HOME` reachable from the *host* process
-  environment; a containerized Hermes process does not satisfy that
-  assumption directly (its `HERMES_HOME` lives inside the container's
-  filesystem, not necessarily bind-mounted read-accessibly from the
-  host). `lib/omes/py/agent/cli.py`'s `_compose_health()` currently
-  implements its own container-state + in-container health-command
-  check instead. Extending `lib/omes/py/health/hermes.py`'s
-  provider/channel checks to run *through* `docker compose exec` (so
-  both backends share one health implementation) is left as follow-up
-  rather than done speculatively in this PR.
 - **Compose backend (#96) - named volumes**: only host bind-mounts under
   the agent's own state directory are supported (`spec.compose.volumes`
   has no notion of a Docker-managed named volume). `omes agent remove`
   passes `docker compose down --volumes` defensively for forward
   compatibility, but there is nothing for it to prune today.
-- **Compose backend (#96) - `omes agent logs`**: `lib/omes/cmd/agent.sh`'s
-  `logs` subcommand is a `journalctl` passthrough and is not wired up
-  for the compose backend (`docker compose logs` would be the
-  equivalent); operators can run `docker compose -p <project> -f
-  <compose-file> logs` directly in the meantime (the project/file are
-  printed by `omes agent plan`/`status`).
+- **Compose backend (#96) - `check_provider`'s reachability probe is not
+  the literal `lib/omes/py/health/hermes.py` function**: section 9.4
+  reuses `check_channel` verbatim, but the provider layer's HTTP call is
+  reimplemented as a `docker compose exec -T ... curl` probe (see
+  `lib/omes/py/agent/compose_health.py`) rather than executing
+  `hermes.py`'s own `check_provider` function unmodified inside the
+  container, because that function calls a stdlib `httpjson` import path
+  that assumes a host-reachable Python environment, not a guarantee any
+  agent image makes. The probe reports the same layer_result/status
+  contract, but is a container-adapted equivalent, not a literal call
+  into the same function object - a genuine "run `hermes.py`'s exact
+  Python code inside an arbitrary agent image" would additionally
+  require shipping (or vendoring) `lib/omes/py/health` into every agent
+  image, which this PR does not do.
+- **`omes doctor` integration is per-agent state, not per-manifest
+  drift**: `omes agent doctor`/`omes doctor` report the *current*
+  lifecycle state and live health of every agent under the state
+  directory; they do not detect a manifest that was edited after the
+  last `apply` (i.e. "declared spec no longer matches what is running").
+  Detecting that drift is a natural extension of `omes agent doctor` but
+  is not implemented here.

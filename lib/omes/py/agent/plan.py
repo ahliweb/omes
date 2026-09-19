@@ -28,6 +28,14 @@ def _cpu_quota_percent(cpu: str) -> str:
 
 
 def unit_name(agent_name: str) -> str:
+    """The default/fallback unit-name computation. Kept here (and kept
+    equal to what lib/omes/runtime.sh's `runtime_agent_service_unit`
+    prints) so this module stays pure and independently unit-testable
+    with no subprocess call; `build_plan`'s `unit_name_override` is how a
+    caller that already resolved the name via
+    lib/omes/py/agent/runtime_bridge.py (the source-of-truth path) feeds
+    it in instead of this fallback - see docs/agent-deployment.md
+    section 7a."""
     return f"{UNIT_PREFIX}{agent_name}{UNIT_SUFFIX}"
 
 
@@ -79,10 +87,17 @@ def restart_lines(restart_policy: str) -> list:
     return lines
 
 
-def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
+def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None) -> Dict[str, Any]:
     """Computes the full apply plan. Contains no secret values - only
     secret NAMES (as references, e.g. `EnvironmentFile=` pointing at a
-    path an operator manages, never a value)."""
+    path an operator manages, never a value).
+
+    `unit_name_override`, when given, is used verbatim instead of this
+    module's own `unit_name()` fallback - the caller (cli.py) resolves it
+    via lib/omes/py/agent/runtime_bridge.py against
+    lib/omes/runtime.sh's `runtime_agent_service_unit`, so unit naming has
+    one source of truth in the running system while this function stays a
+    pure, subprocess-free computation for tests that call it directly."""
     metadata = manifest["metadata"]
     spec = manifest["spec"]
     name = metadata["name"]
@@ -91,7 +106,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
     home = paths.base_home(service_mode)
     hermes_home = paths.hermes_home_for_agent(name, service_mode)
     dirs = systemd_dirs(service_mode, home)
-    unit = unit_name(name)
+    unit = unit_name_override or unit_name(name)
     dropin_dir = str(dirs["dropin_dir"]).format(name=name)
 
     # Secret references are surfaced as *names* of an EnvironmentFile the
