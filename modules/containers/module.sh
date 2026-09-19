@@ -299,7 +299,17 @@ module_apply() {
     return 1
   fi
 
+  # Package-manager provenance (issue #84): record dpkg version + apt
+  # origin for each Docker package, plus docker-ce-rootless-extras when
+  # _containers_apply_access_policy installed it. Best-effort, never
+  # fails module_apply - see lib/omes/pkg.sh's pkg_record_provenance.
+  pkg_record_provenance "${CONTAINERS_PACKAGES[@]}"
+
   _containers_apply_access_policy
+
+  if pkg_is_installed docker-ce-rootless-extras; then
+    pkg_record_provenance docker-ce-rootless-extras
+  fi
 
   return 0
 }

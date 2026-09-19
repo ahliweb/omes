@@ -149,6 +149,30 @@ teardown() {
   [ "$output" -eq 1 ]
 }
 
+@test "module_apply records apt package-manager provenance (issue #84) for each Docker package" {
+  export SHIM_DPKG_VERSION="5:27.0.0-1~ubuntu.24.04~noble"
+  run module_apply
+  [ "$status" -eq 0 ]
+
+  local target="${OMES_STATE_DIR}/provenance/docker-ce.json"
+  [ -f "$target" ]
+
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["component"] == "docker-ce"
+assert d["resolved_version"] == "5:27.0.0-1~ubuntu.24.04~noble"
+assert d["checksum"]["status"] == "package_manager_verified"
+assert d["package_manager"]["name"] == "apt"
+'
+  [ "$status" -eq 0 ]
+
+  for pkg in docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin; do
+    [ -f "${OMES_STATE_DIR}/provenance/${pkg}.json" ]
+  done
+}
+
 # --- Access policy ---------------------------------------------------------------
 
 @test "default access: no group change, prints the sudo docker usage note" {

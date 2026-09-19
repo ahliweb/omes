@@ -2,19 +2,27 @@
 # shellcheck shell=bash
 # tests/shims/dpkg-query - fake dpkg-query for bats tests.
 #
-# Understands only the subset apt-base uses: `dpkg-query -W -f='${Status}'
-# <package>`. A package is reported "install ok installed" when it is
+# Understands the subset apt-base/pkg.sh use: `dpkg-query -W
+# -f='${Status}' <package>` (install-state query) and `dpkg-query -W
+# -f='${Version}' <package>` (package-manager provenance, issue #84). A
+# package is reported "install ok installed"/its version when it is
 # listed in $SHIM_INSTALLED_PKGS (space/newline separated) or appears in
 # the file at $SHIM_INSTALLED_PKGS_FILE (one package per line, appended to
 # by the apt-get shim after a simulated install); otherwise dpkg reports
 # it unknown, matching real dpkg-query's behavior for a never-seen package.
+#
+#   SHIM_DPKG_VERSION   version string printed for a '${Version}' query
+#                       (default "1.0.0-1")
 
 set -Eeuo pipefail
 
 pkg=""
+fmt=""
 for arg in "$@"; do
   case "$arg" in
-    -W | -f=* | --showformat=*) continue ;;
+    -W) continue ;;
+    -f=*) fmt="${arg#-f=}" ;;
+    --showformat=*) fmt="${arg#--showformat=}" ;;
     *) pkg="$arg" ;;
   esac
 done
@@ -36,7 +44,11 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
 fi
 
 if is_installed "$pkg"; then
-  printf 'install ok installed'
+  if [[ "$fmt" == *"Version"* ]]; then
+    printf '%s' "${SHIM_DPKG_VERSION:-1.0.0-1}"
+  else
+    printf 'install ok installed'
+  fi
   exit 0
 fi
 

@@ -126,7 +126,9 @@ except ValueError:
 
 print("[omes] audit provenance: ok=%s" % d.get("ok"))
 for c in d.get("components", []):
-    print("[omes]   component=%s version=%s checksum_status=%s" % (c.get("component"), c.get("resolved_version"), c.get("checksum_status")))
+    pkgmgr = c.get("package_manager") or {}
+    pkgmgr_str = (" package_manager=%s:%s" % (pkgmgr.get("name"), pkgmgr.get("package"))) if pkgmgr else ""
+    print("[omes]   component=%s version=%s checksum_status=%s%s" % (c.get("component"), c.get("resolved_version"), c.get("checksum_status"), pkgmgr_str))
 for f in d.get("findings", []):
     print("[omes]   %-4s %s: %s" % (f.get("severity"), f.get("component"), f.get("detail")))
 review = d.get("review", [])

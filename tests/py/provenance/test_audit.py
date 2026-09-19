@@ -61,7 +61,7 @@ class TestEvaluateRecord(unittest.TestCase):
         self.assertEqual(kinds["checksum_unverified"]["severity"], "WARN")
 
     def test_verified_pinned_locally_built_produce_no_checksum_warning(self):
-        for status in ("verified", "pinned", "locally-built"):
+        for status in ("verified", "pinned", "locally-built", "package_manager_verified"):
             data = dict(VALID_RECORD)
             data["checksum"] = {"algorithm": "sha256", "expected": None, "actual": None, "status": status}
             findings = audit.evaluate_record("x", data, None)
@@ -168,6 +168,18 @@ class TestAuditEndToEnd(unittest.TestCase):
             names = [c["component"] for c in result["components"]]
             self.assertIn("a", names)
             self.assertNotIn("b", names)
+
+    def test_package_manager_field_is_surfaced_in_components(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            rec = dict(VALID_RECORD)
+            rec["checksum"] = {"algorithm": None, "expected": None, "actual": None, "status": "package_manager_verified"}
+            rec["package_manager"] = {"name": "apt", "package": "curl", "version": "8.5.0-2", "origin": "http://archive.ubuntu.com/ubuntu"}
+            _write(tmp, "curl", rec)
+            result = audit.audit(tmp, None, None)
+            self.assertTrue(result["ok"])
+            curl = next(c for c in result["components"] if c["component"] == "curl")
+            self.assertEqual(curl["package_manager"]["name"], "apt")
+            self.assertEqual(curl["checksum_status"], "package_manager_verified")
 
     def test_main_exit_code_reflects_findings(self):
         with tempfile.TemporaryDirectory() as tmp:

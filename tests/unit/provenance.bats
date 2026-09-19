@@ -138,6 +138,63 @@ assert d["checksum"]["status"] == "verified", d
   [ "$status" -eq 0 ]
 }
 
+@test "hermes module_apply records uv-tool-managed package provenance (issue #84)" {
+  # shellcheck source=../../lib/omes/backup.sh
+  source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+  # shellcheck source=../../lib/omes/module.sh
+  source "${OMES_TEST_ROOT}/lib/omes/module.sh"
+  export SHIM_HERMES_VERSION="1.0.0"
+  export SHIM_UV_TOOL_LIST="graphifyy v0.3.0"
+  module_load hermes
+  declare -ga OMES_MANAGED_PATHS=()
+
+  run module_apply
+  [ "$status" -eq 0 ]
+
+  local target="${OMES_STATE_DIR}/provenance/uv:graphifyy.json"
+  [ -f "$target" ]
+
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["component"] == "uv:graphifyy"
+assert d["resolved_version"] == "v0.3.0"
+assert d["checksum"]["status"] == "unverified"
+assert d["package_manager"]["name"] == "uv"
+assert d["package_manager"]["package"] == "graphifyy"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "hermes module_apply records pipx-managed package provenance (issue #84)" {
+  # shellcheck source=../../lib/omes/backup.sh
+  source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+  # shellcheck source=../../lib/omes/module.sh
+  source "${OMES_TEST_ROOT}/lib/omes/module.sh"
+  export SHIM_HERMES_VERSION="1.0.0"
+  export SHIM_PIPX_LIST_JSON='{"venvs":{"somepkg":{"metadata":{"main_package":{"package":"somepkg","package_version":"2.1.0"}}}}}'
+  module_load hermes
+  declare -ga OMES_MANAGED_PATHS=()
+
+  run module_apply
+  [ "$status" -eq 0 ]
+
+  local target="${OMES_STATE_DIR}/provenance/pipx:somepkg.json"
+  [ -f "$target" ]
+
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["component"] == "pipx:somepkg"
+assert d["resolved_version"] == "2.1.0"
+assert d["checksum"]["status"] == "unverified"
+assert d["package_manager"]["name"] == "pipx"
+'
+  [ "$status" -eq 0 ]
+}
+
 @test "grep-guard: modules/hermes never pipes curl output into a shell (no curl | bash / curl | sh)" {
   run grep -RnE 'curl[^|]*\|[[:space:]]*(sh|bash)([[:space:]]|$)' "${OMES_TEST_ROOT}/modules"
   [ "$status" -ne 0 ]

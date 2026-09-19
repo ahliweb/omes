@@ -140,9 +140,11 @@ omes install --module hermes --yes              # apply a single user-scope modu
 
 **Synopsis:** `omes status [--json]`
 
-Read-only, fully offline. Platform, the profile most recently installed against this scope's
-state dir, every recorded module's status/`applied_at`/version, backup session count, and the
-most recent log file path.
+Read-only, fully offline (the `evidence` section below only ever runs read-only,
+timeout-bounded local probes - it never requires network access). Platform, the profile most
+recently installed against this scope's state dir, every recorded module's status/`applied_at`/
+version, backup session count, the most recent log file path, and (issue #83) an `evidence`
+snapshot of runtime version/compatibility evidence.
 
 **Exit codes:** 0 only (status never fails on its own).
 
@@ -158,11 +160,24 @@ most recent log file path.
     "applied_at": "2026-09-18T10:00:00Z", "version": "0.1.0"}],
   "backup_count": 3,
   "last_log": "/var/lib/omes/logs/omes-20260918T100000Z.log",
+  "evidence": {"ok": true, "generated_at": "2026-09-19T01:00:00Z",
+    "components": {"...": "..."}, "warnings": []},
   "exit_code": 0
 }
 ```
 
+`evidence` is exactly the same object `omes health versions --json` emits (same top-level keys:
+`ok`, `generated_at`, `components`, `warnings`) - see
+[docs/compatibility-evidence.md](compatibility-evidence.md) for every component it records, and
+§4.12 below for the standalone `omes health versions` command. When the evidence collector
+cannot run at all (python3 missing, or an internal collector error), `evidence` is instead
+`{"ok": false, "error": "..."}` - the surrounding `omes status` JSON object is still exactly one
+valid object either way, and `omes status`'s own `ok`/`exit_code` are unaffected. In human mode,
+a short `status evidence:` summary is printed after the log line, using the same per-component
+`value`/`null (<reason>)` formatting as `omes health versions`' human output.
+
 **Example:** `omes status --json | jq '.modules[] | select(.status=="failed")'`
+**Example:** `omes status --json | jq '.evidence.components.hermes.value'`
 
 ### `omes modules`
 
@@ -431,13 +446,18 @@ OMES_EXPOSURE_ALLOW="0.0.0.0:8642" omes audit exposure
 [`lib/omes/cmd/audit-provenance.sh`](../lib/omes/cmd/audit-provenance.sh)
 and [`lib/omes/py/provenance/audit.py`](../lib/omes/py/provenance/audit.py))
 audits `<state-dir>/provenance/*.json` records written at Hermes install
-time: a recorded checksum mismatch is a `FAIL` (fail-closed), an
+time, at every `apt-base`/`containers` apply (one record per apt-managed
+package, via `lib/omes/pkg.sh`'s `pkg_record_provenance`), and at every
+`hermes` apply for uv-tool-/pipx-managed packages discovered on the host
+(e.g. graphify, once [#50](https://github.com/ahliweb/omes/issues/50)
+lands): a recorded checksum mismatch is a `FAIL` (fail-closed), an
 unverified checksum status or a mutable installer-source URL
-(`main`/`latest`/`HEAD`) is a `WARN`, missing required metadata is a
-`WARN`, and executable files under managed `$HERMES_HOME/{skills,
-plugins,mcp}/**` paths are listed (mode/size/sha256) for review —
-**never executed**. See [docs/provenance.md](provenance.md) ("a
-provenance report is not a security certification"). Exit codes: 0
+(`main`/`latest`/`HEAD`) is a `WARN` (`package_manager_verified` — apt's
+own package verification — is not treated as unverified), missing
+required metadata is a `WARN`, and executable files under managed
+`$HERMES_HOME/{skills,plugins,mcp}/**` paths are listed (mode/size/sha256)
+for review — **never executed**. See [docs/provenance.md](provenance.md)
+("a provenance report is not a security certification"). Exit codes: 0
 clean, 7 findings.
 > Note: `omes health versions` and `omes audit provenance` (issues
 > [#83](https://github.com/ahliweb/omes/issues/83) and

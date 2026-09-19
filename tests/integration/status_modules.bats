@@ -37,3 +37,34 @@ teardown() {
   run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="status"; assert d["modules"]==[]' <<< "$output"
   [ "$status" -eq 0 ]
 }
+
+@test "omes status --json embeds an evidence object with the same keys as 'omes health versions --json' (issue #83)" {
+  run "$OMES_BIN" status --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["command"] == "status"
+evidence = d["evidence"]
+assert evidence["ok"] is True
+assert "generated_at" in evidence
+assert "components" in evidence
+assert "warnings" in evidence
+assert "omes" in evidence["components"]
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes status (human mode) prints an evidence summary and never a secret canary from .env" {
+  local home="${OMES_TEST_TMPDIR}/hermes-home"
+  mkdir -p "$home"
+  printf 'TELEGRAM_BOT_TOKEN=canary-should-never-appear\n' > "${home}/.env"
+  chmod 600 "${home}/.env"
+  export OMES_HERMES_HOME="$home"
+
+  run "$OMES_BIN" status
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"status evidence:"* ]]
+  [[ "$output" != *"canary-should-never-appear"* ]]
+}

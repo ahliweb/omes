@@ -283,34 +283,10 @@ source "${OMES_ROOT}/lib/omes/versions.sh"
 
 # _health_print_versions_human <json>
 # Prints a short human-readable summary of the versions.py evidence
-# report. See _health_print_ollama_human's comment for why the JSON is
-# passed via an env var rather than stdin/argv.
+# report, via the shared printer in lib/omes/versions.sh (also used by
+# `omes status`'s evidence section so the two summaries never drift).
 _health_print_versions_human() {
-  OMES_HEALTH_JSON="$1" python3 -c '
-import json
-import os
-
-try:
-    d = json.loads(os.environ["OMES_HEALTH_JSON"])
-except ValueError:
-    print("[omes] health versions: the checker did not return valid JSON")
-    raise SystemExit(0)
-
-print("[omes] health versions: generated_at=%s" % d.get("generated_at"))
-components = d.get("components", {})
-for name, fact in components.items():
-    if name == "provider_config":
-        continue
-    if isinstance(fact, dict) and "value" in fact:
-        print("[omes]   %-14s %s" % (name + ":", fact.get("value") if fact.get("value") is not None else "null (%s)" % fact.get("reason")))
-    else:
-        for sub_name, sub_fact in fact.items():
-            print("[omes]   %-14s %s" % (f"{name}.{sub_name}:", sub_fact.get("value") if sub_fact.get("value") is not None else "null (%s)" % sub_fact.get("reason")))
-for key, fact in components.get("provider_config", {}).items():
-    print("[omes]   provider_config.%-20s %s" % (key + ":", fact.get("value") if fact.get("value") is not None else "not_available (%s)" % fact.get("reason")))
-for w in d.get("warnings", []):
-    print("[omes]   WARN %s" % w)
-'
+  versions_print_human_summary "$1" "health versions"
 }
 
 # _health_run_versions [--json]

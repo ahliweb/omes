@@ -125,3 +125,47 @@ versions_collect_json() {
   fi
   versions_host_facts_json | python3 "$script"
 }
+
+# versions_print_human_summary <json> [--indent-command <name>]
+# Prints a short human-readable summary of a versions.py evidence report
+# (the same shape versions_collect_json/`omes health versions --json`
+# emits): generated_at, each component's value (or "null (<reason>)"), the
+# non-secret provider_config allowlist, and any warnings. Shared by `omes
+# health versions` (lib/omes/cmd/health.sh) and `omes status`'s evidence
+# section (bin/omes) so the two human summaries never drift apart. Takes
+# the JSON via an env var (not argv/stdin) to avoid any shell-quoting
+# hazard with the report's content.
+versions_print_human_summary() {
+  local json="$1"
+  local label="${2:-health versions}"
+  OMES_VERSIONS_HUMAN_JSON="$json" OMES_VERSIONS_HUMAN_LABEL="$label" python3 -c '
+import json
+import os
+
+label = os.environ["OMES_VERSIONS_HUMAN_LABEL"]
+try:
+    d = json.loads(os.environ["OMES_VERSIONS_HUMAN_JSON"])
+except ValueError:
+    print(f"[omes] {label}: the checker did not return valid JSON")
+    raise SystemExit(0)
+
+if not d.get("ok", True):
+    print(f"[omes] {label}: unavailable (%s)" % d.get("error", "unknown error"))
+    raise SystemExit(0)
+
+print(f"[omes] {label}: generated_at=%s" % d.get("generated_at"))
+components = d.get("components", {})
+for name, fact in components.items():
+    if name == "provider_config":
+        continue
+    if isinstance(fact, dict) and "value" in fact:
+        print("[omes]   %-14s %s" % (name + ":", fact.get("value") if fact.get("value") is not None else "null (%s)" % fact.get("reason")))
+    else:
+        for sub_name, sub_fact in fact.items():
+            print("[omes]   %-14s %s" % (f"{name}.{sub_name}:", sub_fact.get("value") if sub_fact.get("value") is not None else "null (%s)" % sub_fact.get("reason")))
+for key, fact in components.get("provider_config", {}).items():
+    print("[omes]   provider_config.%-20s %s" % (key + ":", fact.get("value") if fact.get("value") is not None else "not_available (%s)" % fact.get("reason")))
+for w in d.get("warnings", []):
+    print("[omes]   WARN %s" % w)
+'
+}
