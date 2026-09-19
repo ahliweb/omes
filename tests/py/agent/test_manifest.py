@@ -12,7 +12,7 @@ from . import _pathfix  # noqa: F401
 from agent import jsonschema_lite, manifest  # noqa: E402
 
 OMES_ROOT = Path(_pathfix.OMES_ROOT)
-FIXTURES = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures"
+FIXTURES = OMES_ROOT / "contracts" / "agent" / "v1" / "fixtures" / "agent-deployment"
 
 
 def _load_fixture(name: str) -> dict:

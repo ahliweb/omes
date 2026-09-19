@@ -10,7 +10,7 @@ from . import _pathfix  # noqa: F401
 from agent import plan as plan_mod  # noqa: E402
 from agent import unitfile  # noqa: E402
 
-FIXTURES = Path(_pathfix.OMES_ROOT) / "contracts" / "agent" / "v1" / "fixtures"
+FIXTURES = Path(_pathfix.OMES_ROOT) / "contracts" / "agent" / "v1" / "fixtures" / "agent-deployment"
 
 
 def _load(name: str) -> dict:

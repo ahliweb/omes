@@ -66,7 +66,7 @@ automatically.
 
 `tests/py/agent/` (issue #87) covers the agent deployment lifecycle:
 `test_manifest.py` (schema + semantic validation against every fixture
-under `contracts/agent/v1/fixtures/`, including duplicate/mismatched
+under `contracts/agent/v1/fixtures/agent-deployment/`, including duplicate/mismatched
 names, path traversal, and unsupported runtime/backend), `test_plan.py`
 (pure plan/unit-rendering computation, including hardening-directive
 reuse and de-duplication), `test_lifecycle.py` (the state machine, legal

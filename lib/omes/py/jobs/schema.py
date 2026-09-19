@@ -42,6 +42,10 @@ _SECRET_NAME_RE = re.compile(
     r"(token|password|secret|credential|api[_-]?key|passphrase|cookie|authorization)", re.IGNORECASE
 )
 
+# Identifier shape allowed as an element of a list under a secret-like key
+# (a secret NAME, never a value): letters/digits/._- only, <= 64 chars.
+_SECRET_NAME_ITEM_RE = re.compile(r"[A-Za-z][A-Za-z0-9_.-]{0,63}")
+
 # Defense in depth beyond the key-name check below: a handful of
 # well-known secret-value shapes (Stripe, GitHub, AWS, Slack, generic
 # bearer tokens) are rejected wherever they appear, even under a field
@@ -93,7 +97,16 @@ def _is_secret_like_scalar(key: str, value: Any) -> bool:
         # Only a well-formed secret_ref indirection is allowed to sit
         # behind a secret-like field name.
         return not (set(value.keys()) <= {"store", "key"} and "store" in value and "key" in value)
-    # Any other JSON type (string, number, bool, list) directly under a
+    if isinstance(value, list):
+        # A list of secret NAMES (references resolved by the runtime, e.g.
+        # the agent-deployment manifest's `spec.secrets: ["provider-primary"]`
+        # from docs/agent-orchestration-roadmap.md) is a reference, not a
+        # value: every element must be a short identifier. Anything else in
+        # the list (a value-shaped string, an object, a number) is rejected.
+        return not all(
+            isinstance(v, str) and _SECRET_NAME_ITEM_RE.fullmatch(v) is not None for v in value
+        )
+    # Any other JSON type (string, number, bool) directly under a
     # secret-like field name is a raw value, which is always rejected.
     return True
 

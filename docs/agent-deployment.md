@@ -39,7 +39,7 @@ resolution). Its shape mirrors
 field-for-field, and is validated against the versioned schema at
 [`contracts/agent/v1/agent-deployment.schema.json`](../contracts/agent/v1/agent-deployment.schema.json)
 (valid/invalid examples under
-[`contracts/agent/v1/fixtures/`](../contracts/agent/v1/fixtures/)):
+[`contracts/agent/v1/fixtures/agent-deployment/`](../contracts/agent/v1/fixtures/agent-deployment/)):
 
 ```json
 {

@@ -22,7 +22,7 @@ setup() {
 
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
-  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/valid-generic-user.json" \
+  cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/agent-deployment/valid-generic-user.json" \
     "${OMES_CONFIG_DIR}/agents/researcher.json"
 }
 

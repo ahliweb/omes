@@ -108,3 +108,21 @@ class TestSecretBan(unittest.TestCase):
         s = {"type": "object"}
         errors = schema.validate({"error": {"debug": {"password": "hunter2"}}}, s)
         self.assertTrue(any("password" in e and "secret pattern" in e for e in errors))
+
+
+class TestSecretNameLists(unittest.TestCase):
+    """A list of secret NAMES under a secret-like key is a reference (agent
+    manifest `spec.secrets`), never a value; anything value-shaped is still
+    rejected."""
+
+    def test_list_of_identifiers_is_allowed(self):
+        s = {"type": "object"}
+        self.assertEqual(schema.validate({"secrets": ["provider-primary", "telegram_bot"]}, s), [])
+        self.assertEqual(schema.validate({"secrets": []}, s), [])
+
+    def test_list_with_value_shaped_item_is_rejected(self):
+        s = {"type": "object"}
+        sample = "sk_live_" + "a" * 20
+        self.assertTrue(schema.validate({"secrets": [sample]}, s))
+        self.assertTrue(schema.validate({"secrets": ["ok", "has space"]}, s))
+        self.assertTrue(schema.validate({"secrets": [{"store": "env", "key": "X"}, 5]}, s))
