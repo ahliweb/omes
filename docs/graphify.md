@@ -681,11 +681,14 @@ inside a `graphify-out/` directory).
    skipped entirely (`"action":"skipped_debounced"`, exit 0) without even walking the source
    tree - a debounced call costs one small JSON file read.
 2. **Change detection**: the source tree is walked (skipping `.git/`, symlinks - never followed,
-   matching #56's "symlinks are refused/skipped" requirement - and a best-effort, top-level-only
-   `.gitignore` match; full `.gitignore`/`.graphifyignore` semantics are #55's concern), hashing
-   every file and comparing against the manifest. A file only counts as modified when its sha256
-   differs - an mtime-only change (e.g. a touch, or a checkout that preserves content) is not a
-   change.
+   matching #56's "symlinks are refused/skipped" requirement - a best-effort, top-level-only match
+   against BOTH `.gitignore` and `.graphifyignore` (docs/graphify-privacy.md §3 - full gitignore
+   syntax support is out of scope here, this is just enough to keep an obviously-ignored tree out
+   of the scan), and any file larger than `OMES_GRAPHIFY_MAX_FILE_MB` megabytes - default 5,
+   issue #56's size cap - silently excluded, exactly like an ignored path, never an error), hashing
+   every remaining file and comparing against the manifest. A file only counts as modified when
+   its sha256 differs - an mtime-only change (e.g. a touch, or a checkout that preserves content)
+   is not a change.
 3. **No changes**: reports `"action":"none"` and exits 0. The manifest's `last_run_at` is still
    refreshed (via a `--write` scan with no extraction) so `--min-interval` correctly throttles
    repeated no-op calls, without ever invoking `graphify`.
@@ -792,8 +795,9 @@ above are illustrative - substitute the operator's own path/cadence. `loginctl e
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
 | `OMES_GRAPHIFY_PROJECT_NAME` | derived from the source path's basename | Operator | Same variable `omes graphify export` (§5) reads; `sync`/`status` do not use it themselves (they have no vault subdirectory naming concern), listed here only to avoid a second definition elsewhere. |
+| `OMES_GRAPHIFY_MAX_FILE_MB` | `5` | Operator | (issue #56) Any source file larger than this, in megabytes, is silently excluded from `sync`/`status`'s change-detection scan — treated exactly like an ignored path, never an error. |
 
-`sync`/`status` introduce no new environment variables of their own beyond the flags already
+`sync`/`status` introduce no other new environment variables beyond the flags already
 listed in their synopses (`--min-interval`, `--allow-nested-vault`) and the same
 `OBSIDIAN_VAULT_PATH` §5 already documents (used here only for the exclude/refuse check, §6.3).
 

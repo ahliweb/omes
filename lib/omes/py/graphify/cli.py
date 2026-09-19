@@ -74,6 +74,7 @@ def _build_args(argv):
         p.add_argument("--path", required=True)
         p.add_argument("--manifest", required=True)
         p.add_argument("--exclude", action="append", default=[])
+        p.add_argument("--max-file-mb", type=float, default=sync.DEFAULT_MAX_FILE_MB)
         if name == "scan":
             p.add_argument("--write", action="store_true")
 
@@ -130,7 +131,7 @@ def _run_scan_or_status(args) -> int:
     old_manifest = _load_sync_manifest(args.manifest)
     old_files = old_manifest["files"] if old_manifest else {}
 
-    new_files = sync.scan_tree(args.path, args.exclude)
+    new_files = sync.scan_tree(args.path, args.exclude, max_file_mb=args.max_file_mb)
     added, removed, modified = sync.diff_snapshot(old_files, new_files)
     changed = sync.has_changes(added, removed, modified)
     first_run = old_manifest is None

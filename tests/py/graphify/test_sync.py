@@ -61,6 +61,52 @@ class TestScanTree(unittest.TestCase):
         self.assertIn("real.py", snapshot)
         self.assertNotIn("link.py", snapshot)
 
+    def test_scan_skips_symlinked_directories(self):
+        self._write("realdir/a.py", "print(1)\n")
+        link_dir = os.path.join(self.tmp, "linkdir")
+        os.symlink(os.path.join(self.tmp, "realdir"), link_dir)
+        snapshot = sync.scan_tree(self.tmp, [])
+        self.assertIn("realdir/a.py", snapshot)
+        self.assertNotIn("linkdir/a.py", snapshot)
+
+    def test_scan_excludes_graphifyignore_patterns(self):
+        self._write(".graphifyignore", "secretdir\n*.key\n")
+        self._write("secretdir/b.py", "print(2)\n")
+        self._write("id.key", "not a real key")
+        self._write("src/a.py", "print(1)\n")
+        snapshot = sync.scan_tree(self.tmp, [])
+        self.assertNotIn("secretdir/b.py", snapshot)
+        self.assertNotIn("id.key", snapshot)
+        self.assertIn("src/a.py", snapshot)
+
+    def test_scan_honors_both_gitignore_and_graphifyignore_simultaneously(self):
+        self._write(".gitignore", "from-gitignore/\n")
+        self._write(".graphifyignore", "from-graphifyignore/\n")
+        self._write("from-gitignore/a.py", "print(1)\n")
+        self._write("from-graphifyignore/b.py", "print(2)\n")
+        self._write("src/c.py", "print(3)\n")
+        snapshot = sync.scan_tree(self.tmp, [])
+        self.assertNotIn("from-gitignore/a.py", snapshot)
+        self.assertNotIn("from-graphifyignore/b.py", snapshot)
+        self.assertIn("src/c.py", snapshot)
+
+    def test_scan_excludes_files_larger_than_the_max_file_mb_cap(self):
+        small_path = os.path.join(self.tmp, "small.py")
+        with open(small_path, "wb") as f:
+            f.write(b"x" * 1024)
+        large_path = os.path.join(self.tmp, "large.bin")
+        with open(large_path, "wb") as f:
+            f.write(b"x" * (2 * 1024 * 1024))
+
+        snapshot = sync.scan_tree(self.tmp, [], max_file_mb=1)
+        self.assertIn("small.py", snapshot)
+        self.assertNotIn("large.bin", snapshot)
+
+    def test_default_max_file_mb_cap_is_generous_enough_for_normal_source_files(self):
+        self._write("normal.py", "print(1)\n" * 100)
+        snapshot = sync.scan_tree(self.tmp, [])
+        self.assertIn("normal.py", snapshot)
+
 
 class TestDiffSnapshot(unittest.TestCase):
     def test_added_removed_modified(self):
