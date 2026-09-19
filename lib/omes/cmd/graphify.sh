@@ -10,10 +10,14 @@
 #   omes graphify skill install      [--yes] [--dry-run] [--json]
 #   omes graphify skill uninstall    [--yes] [--dry-run] [--json]
 #   omes graphify mcp health         [--graph <path>] [--json]
+#   omes graphify export <out-dir>   --vault <path> [--init-vault]
+#                                     [--dry-run] [--yes] [--json]
+#   omes graphify export rollback    [--timestamp <ts>] [--yes] [--json]
 #
 # Full synopsis/exit-codes/JSON schema for every subcommand: docs/graphify.md
-# §2 (update/uninstall, issue #50), §3 (run/skill, issue #51), and §4
-# (mcp health, issue #52). `omes install`/`uninstall --module graphify-mcp`
+# §2 (update/uninstall, issue #50), §3 (run/skill, issue #51), §4
+# (mcp health, issue #52), and §5 (export/export rollback, issue #53).
+# `omes install`/`uninstall --module graphify-mcp`
 # (modules/graphify-mcp/module.sh) install/remove the `graphifyy[mcp]`
 # extra itself - `mcp health` here is a read-only status check only, and
 # never touches hermes-gateway or any Hermes runtime state.
@@ -21,7 +25,9 @@
 # `run` never touches graphify-out/ content beyond writing its own
 # omes-provenance.json sidecar (docs/graphify.md §3.2); `update`/
 # `uninstall` never touch graphify-out/ at all - only the `graphifyy`
-# tool-env install (docs/graphify.md §1.4, §2).
+# tool-env install (docs/graphify.md §1.4, §2). `export` writes ONLY under
+# <vault>/<subdir>/ (docs/graphify.md §5) - it never touches unrelated
+# vault notes or the vault's .obsidian/ directory.
 
 # _graphify_cmd_parse_flags <args...>
 # Extracts --yes/--dry-run/--json from an extension command's own argument
@@ -672,6 +678,399 @@ _graphify_cmd_mcp() {
   esac
 }
 
+# _graphify_export_py <action> <arg...>
+# Invokes lib/omes/py/graphify/cli.py (issue #53) with the given action
+# ("plan"/"write"/"plan-upstream"/"write-upstream") and its own
+# already-built --flag arguments, printing its single-line JSON object on
+# stdout and returning its exit status unchanged.
+_graphify_export_py() {
+  local action="$1"
+  shift
+  local py_root="${OMES_ROOT}/lib/omes/py"
+  (
+    cd "$py_root" || exit 1
+    python3 -m graphify.cli "$action" "$@"
+  )
+}
+
+# _graphify_stage_upstream_export <graph-json> <staging-dir>
+# Runs upstream `graphify export obsidian --graph <graph-json> --dir
+# <staging-dir>` (verified 2026-09-19 against graphify 0.9.64 to produce
+# real vault-ready Markdown with its own YAML front matter, plus a canvas
+# file and its own generated-files manifest - docs/graphify.md §5.2).
+# Writes ONLY into the throwaway <staging-dir>, never the vault, so this
+# runs unconditionally (even under `omes graphify export --dry-run`) -
+# there is nothing to preview here, only a real vault write later is
+# gated by dry-run/confirmation. Returns 1 (with staging-dir left as-is
+# for inspection in logs) when the command fails or leaves no manifest
+# behind - the caller falls back to OMES's own renderer in that case.
+_graphify_stage_upstream_export() {
+  local graph_json="$1" staging_dir="$2"
+  if ! graphify export obsidian --graph "$graph_json" --dir "$staging_dir" >/dev/null 2>&1; then
+    return 1
+  fi
+  [[ -f "${staging_dir}/.graphify_obsidian_manifest.json" ]]
+}
+
+# _graphify_json_field <json> <field>
+# Extracts a single string/number field from a small, trusted JSON object
+# (the graphify.cli output above) without a jq dependency. Only used for
+# already-validated, OMES-produced JSON, never operator input.
+_graphify_json_field() {
+  local json="$1" field="$2"
+  python3 -c 'import json,sys; d=json.loads(sys.argv[1]); v=d.get(sys.argv[2]); print(v if v is not None else "")' "$json" "$field" 2>/dev/null
+}
+
+_graphify_cmd_export_rollback() {
+  local ts=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --timestamp)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --timestamp requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        ts="$2"
+        shift 2
+        ;;
+      --yes)
+        # shellcheck disable=SC2034  # read by omes_confirm/omes_noninteractive in core.sh
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --dry-run)
+        # shellcheck disable=SC2034  # read by omes_dry_run in core.sh
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      *)
+        log_error "graphify: unknown argument to 'export rollback': $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+    esac
+  done
+
+  local base
+  base="$(omes_state_dir)/backups"
+  local target=""
+  if [[ -n "$ts" ]]; then
+    if [[ -d "${base}/${ts}" ]] && grep -qxF "module=graphify-export" "${base}/${ts}/META" 2>/dev/null; then
+      target="$ts"
+    fi
+  else
+    local name
+    while IFS= read -r name; do
+      if grep -qxF "module=graphify-export" "${base}/${name}/META" 2>/dev/null; then
+        target="$name"
+      fi
+    done < <(backup_list)
+  fi
+
+  if [[ -z "$target" ]]; then
+    log_error "graphify: export rollback: no graphify-export backup session found${ts:+ for timestamp ${ts}}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv action rollback)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_BACKUP" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_BACKUP"
+  fi
+
+  if ! omes_dry_run && ! omes_confirm "Restore the graphify Obsidian export backup ${target}? This overwrites current notes under the exported vault subdirectory."; then
+    log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv action rollback)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  if ! restore_backup "$target"; then
+    log_error "graphify: export rollback failed for backup ${target}"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv action rollback)" "$(json_kv ok false --raw)" "$(json_kv backup "$target")" "$(json_kv exit_code "$OMES_EX_BACKUP" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_BACKUP"
+  fi
+
+  log_info "graphify: export rollback: restored backup ${target}"
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv action rollback)" "$(json_kv ok true --raw)" "$(json_kv backup "$target")" "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
+# _graphify_cmd_export <graphify-out-dir> --vault <path> [--init-vault]
+#                       [--dry-run] [--yes] [--json]
+# Renders vault-ready Markdown notes from <graphify-out-dir>/graph.json
+# into <vault>/<subdir>/ ONLY (docs/graphify.md §5). Never touches any
+# other note or the vault's .obsidian/ directory. See lib/omes/py/graphify/
+# obsidian.py for the note-rendering logic and its own overwrite-refusal
+# rule (a target file lacking the omes_generated marker is never
+# overwritten - it is reported as a conflict instead).
+_graphify_cmd_export() {
+  if [[ "${1:-}" == "rollback" ]]; then
+    shift
+    _graphify_cmd_export_rollback "$@"
+    # shellcheck disable=SC2317  # unreachable only because _graphify_cmd_export_rollback always exits
+    return
+  fi
+
+  local out_dir="" vault="" init_vault=0
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --vault)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --vault requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        vault="$2"
+        shift 2
+        ;;
+      --init-vault)
+        init_vault=1
+        shift
+        ;;
+      --yes)
+        # shellcheck disable=SC2034  # read by omes_confirm/omes_noninteractive in core.sh
+        OMES_NONINTERACTIVE=1
+        shift
+        ;;
+      --dry-run)
+        # shellcheck disable=SC2034  # read by omes_dry_run in core.sh
+        OMES_DRY_RUN=1
+        shift
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      -*)
+        log_error "graphify: unknown flag: $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+      *)
+        if [[ -n "$out_dir" ]]; then
+          log_error "graphify: unexpected extra argument: $1"
+          exit "$OMES_EX_USAGE"
+        fi
+        out_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ -z "$out_dir" ]]; then
+    log_error "graphify: usage: omes graphify export <graphify-out-dir> --vault <path> [--init-vault] [--dry-run] [--yes] [--json]"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  vault="${vault:-${OBSIDIAN_VAULT_PATH:-}}"
+  if [[ -z "$vault" ]]; then
+    log_error "graphify: --vault is required (or set OBSIDIAN_VAULT_PATH) - the vault path is never guessed"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  if [[ ! -e "$out_dir" ]]; then
+    log_error "graphify: graphify-out directory does not exist: ${out_dir}"
+    exit "$OMES_EX_USAGE"
+  fi
+  local resolved_out
+  if ! resolved_out="$(realpath "$out_dir" 2>/dev/null)"; then
+    log_error "graphify: failed to resolve path: ${out_dir}"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local graph_json="${resolved_out}/graph.json"
+  if [[ ! -f "$graph_json" ]]; then
+    log_error "graphify: graph.json not found in ${resolved_out} (run 'omes graphify run <path>' first)"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  if [[ ! -e "$vault" ]] && [[ "$init_vault" -ne 1 ]]; then
+    log_error "graphify: vault does not exist: ${vault} (pass --init-vault to create a new vault at this path)"
+    exit "$OMES_EX_USAGE"
+  fi
+
+  local resolved_vault
+  if [[ -e "$vault" ]]; then
+    if ! resolved_vault="$(realpath "$vault" 2>/dev/null)"; then
+      log_error "graphify: failed to resolve vault path: ${vault}"
+      exit "$OMES_EX_USAGE"
+    fi
+    if [[ ! -d "${resolved_vault}/.obsidian" ]] && [[ "$init_vault" -ne 1 ]]; then
+      log_error "graphify: ${resolved_vault} does not look like an Obsidian vault (no .obsidian/ directory) - pass --init-vault to initialize one explicitly"
+      exit "$OMES_EX_USAGE"
+    fi
+  else
+    resolved_vault="$vault"
+  fi
+
+  local project_name="${OMES_GRAPHIFY_PROJECT_NAME:-}"
+  local source_root
+  if [[ "$(basename "$resolved_out")" == "graphify-out" ]]; then
+    source_root="$(dirname "$resolved_out")"
+  else
+    source_root="$resolved_out"
+  fi
+  if [[ -z "$project_name" ]]; then
+    project_name="$(basename "$source_root")"
+  fi
+
+  local subdir="${OMES_GRAPHIFY_VAULT_SUBDIR:-graphify/${project_name}}"
+  local target_dir="${resolved_vault}/${subdir}"
+
+  local graphify_version="unknown" extraction_mode="unknown"
+  local prov_file="${resolved_out}/omes-provenance.json"
+  if [[ -f "$prov_file" ]]; then
+    graphify_version="$(_graphify_json_field "$(cat "$prov_file")" graphify_version)"
+    extraction_mode="$(_graphify_json_field "$(cat "$prov_file")" mode)"
+    [[ -n "$graphify_version" ]] || graphify_version="unknown"
+    [[ -n "$extraction_mode" ]] || extraction_mode="unknown"
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "graphify: python3 is required for 'omes graphify export' but was not found"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  # Render path selection (docs/graphify.md §5.1/§5.2): prefer upstream
+  # `graphify export obsidian` (staged into a throwaway temp dir, never
+  # written directly into the vault) when the graphify CLI is on PATH and
+  # actually produces its own generated-files manifest; otherwise fall
+  # back to OMES's own from-scratch renderer. The staging step itself
+  # never touches the vault, so it runs unconditionally, even under
+  # --dry-run - only the eventual vault write is dry-run/confirmation
+  # gated below.
+  local render_mode="fallback"
+  local staging_dir=""
+  local -a plan_args=() write_args=()
+  if command -v graphify >/dev/null 2>&1; then
+    staging_dir="$(mktemp -d "${TMPDIR:-/tmp}/omes-graphify-export.XXXXXX")"
+    if _graphify_stage_upstream_export "$graph_json" "$staging_dir"; then
+      render_mode="upstream"
+    else
+      log_warn "graphify: export: upstream 'graphify export obsidian' did not produce a usable export; falling back to OMES's own renderer"
+      rm -rf "$staging_dir"
+      staging_dir=""
+    fi
+  fi
+
+  if [[ "$render_mode" == "upstream" ]]; then
+    log_info "graphify: export: rendering via upstream 'graphify export obsidian' (docs/graphify.md §5.2)"
+    plan_args=(--staging-dir "$staging_dir" --target-dir "$target_dir" --graph-json "$graph_json" --graphify-version "$graphify_version" --extraction-mode "$extraction_mode")
+    write_args=("${plan_args[@]}")
+  else
+    log_info "graphify: export: rendering via OMES's own graph.json renderer (docs/graphify.md §5.1)"
+    plan_args=(--graph-json "$graph_json" --target-dir "$target_dir" --project-name "$project_name" --source-root "$source_root" --graphify-version "$graphify_version" --extraction-mode "$extraction_mode")
+    write_args=("${plan_args[@]}")
+  fi
+  local plan_action="plan" write_action="write"
+  if [[ "$render_mode" == "upstream" ]]; then
+    plan_action="plan-upstream"
+    write_action="write-upstream"
+  fi
+
+  local plan_json
+  if ! plan_json="$(_graphify_export_py "$plan_action" "${plan_args[@]}")"; then
+    [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+    log_error "graphify: export: failed to plan the Obsidian export"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  local note_count
+  note_count="$(_graphify_json_field "$plan_json" note_count)"
+  log_info "graphify: export: vault: ${resolved_vault}"
+  log_info "graphify: export: target: ${target_dir} (${note_count:-0} file(s) planned, render: ${render_mode})"
+
+  if omes_dry_run; then
+    log_info "[dry-run] would write generated notes under ${target_dir} (plan: ${plan_json})"
+    [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand export)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv vault "$resolved_vault")" \
+        "$(json_kv target_dir "$target_dir")" \
+        "$(json_kv render_mode "$render_mode")" \
+        "$(json_kv plan "$plan_json" --raw)" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  if ! omes_confirm "Write generated Obsidian notes under ${target_dir}?"; then
+    [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+    log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+
+  if [[ ! -d "$resolved_vault" ]]; then
+    if [[ "$init_vault" -ne 1 ]]; then
+      [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+      log_error "graphify: vault does not exist: ${resolved_vault}"
+      exit "$OMES_EX_USAGE"
+    fi
+    log_info "graphify: --init-vault: creating a new vault at ${resolved_vault} (a minimal .obsidian/ marker directory is created; OMES never installs, starts, or manages Obsidian itself)"
+    mkdir -p "${resolved_vault}/.obsidian"
+  fi
+
+  backup_begin "graphify-export" "pre-export: ${target_dir}" >/dev/null
+  if [[ -e "$target_dir" ]]; then
+    backup_path "$target_dir"
+  fi
+
+  local write_json
+  if ! write_json="$(_graphify_export_py "$write_action" "${write_args[@]}")"; then
+    backup_finish >/dev/null
+    [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+    log_error "graphify: export: failed to write the Obsidian export"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj "$(json_kv command graphify)" "$(json_kv subcommand export)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_ERROR"
+  fi
+  local backup_dir
+  backup_dir="$(backup_finish)"
+  [[ -n "$staging_dir" ]] && rm -rf "$staging_dir"
+
+  local conflicts
+  conflicts="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); print(len(d.get("conflicts") or []))' "$write_json" 2>/dev/null || printf '0')"
+  if [[ "$conflicts" != "0" ]]; then
+    log_warn "graphify: export: ${conflicts} existing note(s) lacked the omes_generated marker (or, for non-Markdown files, were not previously OMES-owned) and were NOT overwritten (see JSON output for paths)"
+  fi
+  log_info "graphify: export: wrote notes under ${target_dir} (backup: ${backup_dir}, render: ${render_mode})"
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand export)" \
+      "$(json_kv ok true --raw)" \
+      "$(json_kv vault "$resolved_vault")" \
+      "$(json_kv target_dir "$target_dir")" \
+      "$(json_kv backup "$backup_dir")" \
+      "$(json_kv render_mode "$render_mode")" \
+      "$(json_kv result "$write_json" --raw)" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+  exit "$OMES_EX_OK"
+}
+
 cmd_graphify() {
   local sub="${1:-}"
   if [[ -n "$sub" ]]; then
@@ -694,8 +1093,11 @@ cmd_graphify() {
     mcp)
       _graphify_cmd_mcp "$@"
       ;;
+    export)
+      _graphify_cmd_export "$@"
+      ;;
     *)
-      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp} [args...]"
+      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export} [args...]"
       exit "$OMES_EX_USAGE"
       ;;
   esac

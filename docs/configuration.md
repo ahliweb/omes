@@ -96,7 +96,10 @@ reference (`OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, `OMES_UV_INSTALLE
 `OMES_GRAPHIFY_PROVIDER_ENV`, `OMES_GRAPHIFY_UV_CMD`/`OMES_GRAPHIFY_PIPX_CMD`, and the
 `module.graphify.version_installed` state key — `graphify-mcp` reuses the same variables,
 introducing none of its own) — kept there rather than duplicated here to minimize this shared
-reference file's graphify footprint.
+reference file's graphify footprint. `omes graphify export` (issue #53, docs/graphify.md §5) adds
+`OBSIDIAN_VAULT_PATH` (the vault path, when `--vault` is omitted — never guessed otherwise) and
+`OMES_GRAPHIFY_VAULT_SUBDIR` (default `graphify/<project-name>`; the ONLY subtree of the vault it
+ever writes to), also documented there rather than here.
 
 `OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
 there rather than duplicated here to minimize this shared reference file's graphify footprint.
