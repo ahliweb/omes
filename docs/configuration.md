@@ -141,6 +141,7 @@ Never referenced by any installer profile — see
 |---|---|---|---|
 | `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
 | `OMES_CONTENT_APPROVAL_TTL_SECONDS` | `3600` | Operator | Default `--ttl-seconds` for `omes content approve` (docs/content-distribution.md section 7). Read by `lib/omes/py/content/cli.py`; an explicit `--ttl-seconds` flag overrides it. |
+| `OMES_CONTENT_BROWSER_DRIVER` | unset (built-in `manual_stub` driver) | Operator | Filesystem path to an operator-installed browser-automation driver module for the `generic_browser` worker (issue #66; docs/content-distribution.md section 13). OMES never bundles a browser — leaving this unset uses the evidence-only `manual_stub` driver, which never launches a real browser. Read by `lib/omes/py/content/workers/generic_browser/worker.py`. |
 
 ## 15. `omes health ollama` / `lib/omes/py/health/ollama.py` (issue #71)
 

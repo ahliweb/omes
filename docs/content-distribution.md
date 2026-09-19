@@ -373,10 +373,11 @@ exist.
 1. Read §6 (worker interface contract). Do not change the manager, job schema, or
    audit log to accommodate a platform quirk — the contract is platform-agnostic by
    design.
-2. Create `lib/omes/py/content/workers/<platform>.py` (or an external executable
-   referenced by config) that implements `prepare`/`publish`/`verify`/
-   `collect-evidence`/`revoke-session` per §6, using its own isolated session
-   directory under `content/sessions/<platform>/`.
+2. Create `lib/omes/py/content/workers/<platform>/worker.py` implementing
+   `prepare`/`bootstrap-session`/`publish`/`verify`/`collect-evidence`/
+   `revoke-session` per §6 and §13, using its own isolated session directory under
+   `content/sessions/<platform>/`. `workers/registry.py` finds it automatically by
+   this directory convention — nothing else needs to know a new platform exists.
 3. Add the platform to per-platform config (retry limits, backoff base/max —
    §5.2) without touching the generic retry engine in `jobs.py`.
 4. Write a contract test using `tests/fixtures/content/fake-worker.py`'s pattern:
@@ -405,3 +406,59 @@ list. Summary of the subcommands this design defines interfaces for:
 | `omes content report <job> [--md\|--json]` | #68 | print/generate a job's report |
 | `omes content export --since DATE --out DIR` | #68 | redacted export of reports/audit |
 | `omes content prune --older-than DAYS [--dry-run] [--yes]` | #68 | delete archived media/reports (never `sessions/`/audit) |
+| `omes content plan <job> [--actor ID] [--caption TEXT] [--target PLATFORM]...` | #66 | record targets/caption, `queued` → `approval-required` |
+| `omes content publish <job> --platform NAME [--worker-executable PATH]` | #66 | run the platform worker's `prepare`/`publish`/`verify` |
+| `omes content session login <platform> --actor ID` | #66 | run `bootstrap-session` (manual login only; never publishes) |
+| `omes content session revoke <platform> --actor ID [--yes]` | #66 | run `revoke-session` and clear the local profile directory |
+
+## 13. Worker isolation implementation (#66)
+
+This section documents the concrete implementation of §6/§8 for the
+`generic_browser` worker, the one platform skeleton shipped in this repository.
+
+- **Path allowlist, enforced, not just documented.** Every request the manager
+  sends a worker includes `allowed_paths` (`processing_dir`, `session_dir`,
+  `evidence_dir` — each an absolute path under this job's/platform's own
+  directory). `lib/omes/py/content/workers/base.py::enforce_path_boundary()`
+  resolves (following symlinks) every path a worker touches and rejects
+  (`PathBoundaryError` → a typed `nonretryable` failure) anything outside those
+  roots. This is checked in the worker process itself, not only trusted to
+  worker authors — see `tests/py/content/test_workers_base.py` and
+  `test_workers_generic_browser.py::test_publish_rejects_source_path_outside_allowed_roots`.
+- **Typed failure states.** A worker result's `status`/`retryable` fields (§6)
+  are unchanged for backward compatibility with #67's `classify_worker_result`,
+  but every failure additionally carries `failure_state`, one of `retryable`,
+  `nonretryable`, `uncertain`, or `needs_login` (`workers/base.py::typed_failure`).
+  `needs_login` maps to `status: "uncertain"` (never auto-retried — the
+  manager moves the job to `manual-review`, matching #66's acceptance criterion).
+- **Session directory, created by the worker.** `content/sessions/<platform>/` is
+  created (mode `0700`) by the worker's own `prepare`/`bootstrap-session`
+  operation (`workers/base.py::ensure_session_dir`), not by the manager, so a
+  platform that is never prepared never gets a session directory.
+- **Manual login separated from publishing.** `omes content session login
+  <platform>` prints an explicit warning that this step only logs in and never
+  publishes, then invokes the worker's `bootstrap-session` operation. The
+  `generic_browser` worker's default driver (`manual_stub`) records only a
+  local marker file — it never launches a browser or stores real cookies. An
+  operator-installed real driver (Playwright/Chromium, or a path into Hermes's
+  own browser automation) would instead open a real browser window here for the
+  operator to log in by hand, and the resulting real cookies would be the only
+  thing ever written under `session_dir`.
+- **`OMES_CONTENT_BROWSER_DRIVER`.** If set, its value is a filesystem path to an
+  operator-installed Python driver module implementing `bootstrap(payload, ctx)`,
+  `publish(payload, ctx)`, `verify(payload, ctx)`; the `generic_browser` worker
+  loads it dynamically. If unset, the built-in `drivers/manual_stub.py` is used.
+  **OMES never bundles, vendors, or depends on an actual browser** — Playwright,
+  Selenium, or Hermes's own browser-automation capability are the intended
+  production drivers, installed and referenced by the operator, outside this
+  repository's dependency surface (ADR-0012, stdlib-only).
+- **Evidence is a path reference, never inline bytes.** A successful `publish`
+  result's `screenshot_ref` is a path under `reports/<job>/evidence/`
+  (`OMES_CONTENT_ROOT`-relative — see `paths.job_evidence_dir()`), never a
+  base64/inline blob. `collect-evidence` lists only files under that job's
+  `evidence_dir` and never touches `sessions/`.
+- **Retry re-invokes the same worker.** `omes content retry <job> --actor ID`
+  (#67) transitions `retryable-failure`/`manual-review` back to `publishing`;
+  a subsequent `omes content publish <job> --platform <p>` call is what actually
+  re-invokes the worker (`jobs.publish_job` accepts a job already in
+  `publishing`, so a retry does not need its own separate transition).

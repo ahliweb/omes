@@ -413,14 +413,67 @@ def plan_job(record: dict[str, Any], actor: str = "system", caption: str | None 
 # ---------------------------------------------------------------------------
 
 
-def publish_job(record: dict[str, Any], worker_executable: str, worker_version: str | None = None) -> dict[str, Any]:
+def _absolute_source_path(record: dict[str, Any], root: Path | None) -> str:
+    """`source.processing_path` is stored relative to the content root
+    (see inbox.py::_atomic_move_into_processing); workers receive an
+    absolute path so their own path-boundary check
+    (workers/base.py::enforce_path_boundary) compares like with like."""
+    processing_path = record["source"]["processing_path"]
+    candidate = Path(processing_path)
+    if candidate.is_absolute():
+        return str(candidate)
+    return str((root or paths.content_root()) / candidate)
+
+
+def prepare_worker(
+    record: dict[str, Any],
+    worker_executable: str,
+    allowed_paths: dict[str, str] | None = None,
+    root: Path | None = None,
+) -> dict[str, Any]:
+    """Runs `worker_executable`'s `prepare` operation (issue #66) ahead of
+    `publish_job`. Never transitions the job itself - the caller decides
+    what to do with a non-ready result (typically: move to
+    `manual-review` without ever calling `publish_job`)."""
+    from . import worker as worker_mod
+
+    payload = {
+        "job_id": record["job_id"],
+        "source_path": _absolute_source_path(record, root),
+        "platform": record.get("platform"),
+        "allowed_paths": allowed_paths or {},
+        "session_dir": (allowed_paths or {}).get("session_dir"),
+    }
+    return worker_mod.run_worker(worker_executable, "prepare", payload)
+
+
+def publish_job(
+    record: dict[str, Any],
+    worker_executable: str,
+    worker_version: str | None = None,
+    allowed_paths: dict[str, str] | None = None,
+    root: Path | None = None,
+) -> dict[str, Any]:
     """Runs `worker_executable`'s `publish` operation for `record`,
     classifies the result, and applies the resulting transition. Refuses
     to run without a current, valid approval (approval-gated by default -
-    docs/content-distribution.md section 8)."""
+    docs/content-distribution.md section 8).
+
+    `allowed_paths` (issue #66) is the explicit filesystem permission
+    boundary passed to the worker: at most `processing_dir` (this job's
+    own processing directory), `session_dir` (this platform's isolated
+    browser profile), and `evidence_dir` (this job's evidence
+    directory) - see workers/base.py::enforce_path_boundary."""
     from . import worker as worker_mod
 
-    if record["state"] != "approved":
+    # `approved` is the normal entry point. `publishing` is also accepted
+    # because `omes content retry` (jobs.retry_job) already transitioned
+    # a `retryable-failure`/`manual-review` job to `publishing` itself
+    # (docs/content-distribution.md section 5) before the CLI calls back
+    # into this function to actually re-invoke the worker; there is no
+    # separate "re-publish" transition to model that as anything other
+    # than "already in publishing, call the worker now."
+    if record["state"] not in ("approved", "publishing"):
         raise InvalidTransitionError(record["state"], "publishing")
 
     valid, reason = is_approval_valid(record)
@@ -428,16 +481,19 @@ def publish_job(record: dict[str, Any], worker_executable: str, worker_version: 
         apply_transition(record, "manual-review", actor="system", note=f"approval invalid: {reason}")
         raise ApprovalError(reason)
 
-    apply_transition(record, "publishing", actor="system", note="publish started")
+    if record["state"] == "approved":
+        apply_transition(record, "publishing", actor="system", note="publish started")
     record["publish"]["worker_version"] = worker_version
     record["publish"]["worker_executable"] = worker_executable
 
     payload = {
         "job_id": record["job_id"],
-        "source_path": record["source"]["processing_path"],
+        "source_path": _absolute_source_path(record, root),
         "caption": record["plan"].get("caption"),
         "targets": record["plan"].get("targets", []),
-        "session_dir": None,
+        "platform": record.get("platform"),
+        "allowed_paths": allowed_paths or {},
+        "session_dir": (allowed_paths or {}).get("session_dir"),
     }
     result = worker_mod.run_worker(worker_executable, "publish", payload)
     record["publish"]["attempts"] += 1
@@ -450,7 +506,11 @@ def publish_job(record: dict[str, Any], worker_executable: str, worker_version: 
     return result
 
 
-def verify_job(record: dict[str, Any], worker_executable: str) -> dict[str, Any]:
+def verify_job(
+    record: dict[str, Any],
+    worker_executable: str,
+    allowed_paths: dict[str, str] | None = None,
+) -> dict[str, Any]:
     """Runs `worker_executable`'s `verify` operation for `record` (must be
     in `verifying`) and applies the resulting transition."""
     from . import worker as worker_mod
@@ -461,7 +521,9 @@ def verify_job(record: dict[str, Any], worker_executable: str) -> dict[str, Any]
     payload = {
         "job_id": record["job_id"],
         "url": record["publish"].get("resulting_url"),
-        "session_dir": None,
+        "platform": record.get("platform"),
+        "allowed_paths": allowed_paths or {},
+        "session_dir": (allowed_paths or {}).get("session_dir"),
     }
     result = worker_mod.run_worker(worker_executable, "verify", payload)
     record["publish"]["last_result"] = result

@@ -387,10 +387,13 @@ built-in commands.
 > Status: `scan`, `rescan`, `list` implemented (#64). `approve`, `reject`,
 > `retry`, `cancel`, `resume`, `reconcile` implemented (#67). `report`,
 > `export`, `prune`, the append-only audit log, and archive-on-terminal-
-> state implemented (#68). `plan`/`publish` as full end-to-end
-> CLI verbs (driving a real platform worker) land with #66; the state
-> machine and orchestration functions they will call
-> (`jobs.plan_job`/`jobs.publish_job`/`jobs.verify_job`) already exist. See
+> state implemented (#68). `plan`, `publish`, and `session login`/
+> `session revoke` implemented (#66), driving the one concrete
+> `generic_browser` worker skeleton (default `manual_stub` driver; no
+> real browser dependency ships in OMES — see
+> [docs/content-distribution.md](content-distribution.md) section 13). A
+> Telegram approval front end lands with #65; platform-aware caption/cover
+> validation lands with #69. See
 > [docs/content-distribution.md](content-distribution.md) for the full
 > design (job schema, state machine, worker contract, security
 > boundaries) and [ADR-0015](adr/0015-content-distribution-workflow.md)
@@ -417,6 +420,10 @@ omes content reconcile [--json]
 omes content report <job-id> [--md|--json]
 omes content export --since YYYY-MM-DD --out DIR [--json]
 omes content prune --older-than DAYS [--dry-run] [--yes] [--json]
+omes content plan <job-id> [--actor ID] [--caption TEXT] [--target PLATFORM]... [--json]
+omes content publish <job-id> --platform NAME [--worker-executable PATH] [--worker-version V] [--json]
+omes content session login <platform> --actor ID [--json]
+omes content session revoke <platform> --actor ID [--yes] [--json]
 ```
 
 - `scan` walks `$OMES_CONTENT_ROOT/inbox` (never following symlinks, never
@@ -492,6 +499,38 @@ omes content prune --older-than DAYS [--dry-run] [--yes] [--json]
   implemented concern). `--dry-run` reports what would be deleted
   without deleting anything; without `--dry-run`, `--yes` (or an
   interactive confirmation) is required.
+- `plan <job-id>` records `--caption` and any number of repeated
+  `--target <platform>` values, then moves the job `queued` →
+  `planning` → `approval-required` (`jobs.plan_job`). `--target` is
+  advisory at plan time; `publish` refuses a platform that is not one of
+  the recorded targets (unless no targets were recorded at all).
+- `publish <job-id> --platform NAME` (issue #66) is the manager side of
+  the worker contract in `docs/content-distribution.md` section 6/13: it
+  resolves `NAME` to a worker executable via
+  `lib/omes/py/content/workers/registry.py` (or uses
+  `--worker-executable PATH` directly, mainly for tests), builds the
+  explicit filesystem allowlist (`processing_dir`/`session_dir`/
+  `evidence_dir`) for that job and platform, runs the worker's `prepare`
+  operation, and — if `prepare` reports `ready: true` — runs `publish`
+  then (if it returned a candidate URL) `verify`, applying whatever state
+  transition the result classifies to (`succeeded`/`manual-review`/
+  `retryable-failure`/`failed`). A job already in `publishing` (i.e. an
+  operator just ran `retry`) is accepted directly — `publish` is also
+  how a retry actually re-invokes the worker. Exits non-zero when the
+  job ends in `manual-review`, `retryable-failure`, or `failed`.
+- `session login <platform>` runs the worker's `bootstrap-session`
+  operation — a manual, one-time login step that **never publishes**.
+  The default `generic_browser` worker's `manual_stub` driver only writes
+  a local marker file (no real browser, no real cookies); an
+  operator-installed real driver (e.g. Playwright, or Hermes's own
+  browser automation, referenced via `OMES_CONTENT_BROWSER_DRIVER`) would
+  instead open a real browser window here for the operator to log in.
+  Creates `content/sessions/<platform>/` at mode `0700` if it does not
+  already exist.
+- `session revoke <platform>` runs the worker's `revoke-session`
+  operation, then clears the local session directory's contents (the
+  directory itself is kept, still at mode `0700`). Requires `--yes` (or
+  an interactive confirmation).
 
 **Exit codes:** 0 (success, including "nothing new to scan"), 1 (error,
 e.g. `scan` while another scan holds the lock, `rescan` finding a hash
