@@ -696,22 +696,27 @@ backup`/`omes restore` scoped to Hermes's own data under `$HERMES_HOME`
 [docs/hermes-backup.md](hermes-backup.md) for the class-to-path mapping,
 manifest format, and command reference.
 
+## 4.15 `omes agent` (native OMES + Hermes agent deployment lifecycle: systemd MVP + rootless Docker Compose)
 
-## 4.15 `omes agent` (native OMES + Hermes + systemd agent deployment lifecycle)
 
-> Status: MVP implemented on this branch (issue #87). Ubuntu Server
-> 24.04 VM evidence is not included - see
-> [docs/agent-deployment.md](agent-deployment.md) section 8. Rootless
-> Docker Compose and Coolify backends from
-> [docs/agent-orchestration-roadmap.md](agent-orchestration-roadmap.md)
-> are not implemented.
+> Status: systemd MVP implemented on `feat/87-agent-lifecycle` (issue
+> #87). The rootless Docker Compose backend (`spec.backend: "compose"`)
+> is implemented on this branch (issue #96,
+> [docs/agent-orchestration-roadmap.md section 2.2](agent-orchestration-roadmap.md)).
+> Ubuntu Server 24.04 VM/real-Docker evidence is not included for either
+> backend - see [docs/agent-deployment.md](agent-deployment.md) "Left
+> for follow-up". The Coolify backend
+> ([section 2.3](agent-orchestration-roadmap.md)) remains unimplemented.
 
-`omes agent list|check|plan|apply|status|health|restart|logs|rollback`
+`omes agent list|check|plan|apply|status|health|restart|logs|rollback|remove`
 (`lib/omes/cmd/agent.sh`, `lib/omes/py/agent/`) declares, plans, applies,
-verifies, and rolls back a Hermes-runtime agent deployment as an
-isolated systemd service, from a versioned JSON manifest at
-`$OMES_CONFIG_DIR/agents/<name>.json`. Full design, manifest schema,
-lifecycle states, isolation model, and secret handling:
+verifies, and rolls back a Hermes-runtime agent deployment, from a
+versioned JSON manifest at `$OMES_CONFIG_DIR/agents/<name>.json`.
+`spec.backend` selects the isolation strategy: `"systemd"` (the MVP - an
+isolated `systemctl` unit) or `"compose"` (issue #96 - a rootless Docker
+Compose project, for agents that need stronger filesystem/dependency/
+network isolation than a systemd service provides). Full design,
+manifest schema, lifecycle states, isolation model, and secret handling:
 [docs/agent-deployment.md](agent-deployment.md).
 
 ## 4.14 `omes job` (Control Center control jobs)
@@ -736,21 +741,39 @@ omes agent apply <name> [--dry-run] [--yes] [--json]
 omes agent status <name> [--json]
 omes agent health <name> [--json]
 omes agent restart <name> [--json]
-omes agent logs <name> [journalctl-args...]
+omes agent logs <name> [journalctl-args...]     # systemd backend only
 omes agent rollback <name> [--yes] [--json]
+omes agent remove <name> [--yes] [--json]        # compose backend only
 ```
 
-**Exit codes:** 0 ok; 2 usage error; 4 preflight failed (missing/invalid
-manifest); 5 privilege error (`serviceMode` vs. current EUID mismatch);
-6 apply/mutation failed; 7 verification/health failed; 9 backup step
-failed; 1 other errors (e.g. an unconfirmed mutating call).
+**Exit codes:** 0 ok; 2 usage error (including `remove` against a
+non-compose backend, which is not implemented); 4 preflight failed
+(missing/invalid manifest, or - for `backend: "compose"` - a rootful
+Docker daemon/socket/docker-group-only access); 5 privilege error
+(`serviceMode` vs. current EUID mismatch); 6 apply/mutation failed; 7
+verification/health failed; 9 backup step failed; 10 rollback/remove
+teardown failed; 1 other errors (e.g. an unconfirmed mutating call).
 
 `apply` is `check -> plan -> backup -> mutate -> verify`, idempotent,
 and bounded: `--dry-run` performs only `check`+`plan` and prints the
-planned unit name, `HERMES_HOME`, secret **reference names** (never
-values), and resource limits, mutating nothing. `rollback` removes only
-the OMES-managed unit and drop-in recorded in the agent's own state -
-never Hermes's own data under `HERMES_HOME`.
+planned unit name (systemd) or image digest/project/network/volumes
+(compose), `HERMES_HOME`, secret **reference names** (never values), and
+resource limits, mutating nothing. `rollback` removes only the
+OMES-managed unit+drop-in (systemd) or tears the compose project down
+and restores the previously-rendered `compose.yaml` if one exists
+(compose) - never Hermes's own data under `HERMES_HOME`. `remove`
+(compose backend only) additionally runs `docker compose down --volumes`
+and deletes the agent's own OMES-managed compose directory.
+
+For `backend: "compose"`, preflight (`check`, and the start of `apply`,
+before any mutation) requires a **rootless** Docker daemon: it refuses
+if `docker context show`/`docker info --format '{{.SecurityOptions}}'`
+does not report `name=rootless`, if the active context's socket is the
+well-known rootful path (`/var/run/docker.sock` or `/run/docker.sock`),
+or if the invoking user's only path to that access is `docker`-group
+membership on a rootful daemon. OMES never adds a user to the `docker`
+group and never runs `sudo` on the agent's behalf; the agent container
+is never given Docker socket access.
 
 omes job submit --file <deployment-request.json> [--json]
 omes job approve <job-id> --actor <id> [--json]

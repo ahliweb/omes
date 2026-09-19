@@ -80,6 +80,34 @@ via #82's `hermesbackup`). `tests/integration/agent.bats` covers the
 `lib/omes/cmd/agent.sh` dispatch (usage errors, exit codes, `--json`
 passthrough) through the real `bin/omes` entry point.
 
+Issue #96 (rootless Docker Compose isolation backend) adds
+`test_compose.py` (`spec.compose` validation: digest-only images,
+non-root `user`, `capDrop` must be exactly `["ALL"]`, host-path
+containment under the agent's own state directory, Docker-socket/
+`":Z"`/path-traversal rejection, `host`/`none` network rejection,
+loopback-only ports, and deterministic `compose.yaml` rendering with no
+secret value ever inlined), `test_compose_preflight.py` (the rootless-
+Docker gate: rootful daemon, rootful socket path even when
+`SecurityOptions` lies, `docker`-group-only access on a rootful daemon),
+and `test_cli_compose.py` (end-to-end subprocess tests against the
+extended `tests/shims/docker`: preflight refusal before any mutation,
+`--dry-run`, apply reaching `healthy`, idempotent re-apply, a forced
+`docker compose up` failure and its rollback-to-previous-version, an
+unhealthy-container health check, resource-limit rendering, and
+`remove`). `tests/integration/agent-compose.bats` covers the same
+scenarios through the real `bin/omes` entry point, plus `remove` being
+refused (exit 2) for the systemd backend. `tests/shims/docker` gained
+`context show`/`context inspect --format`/`info --format` (preflight)
+and `compose up|ps|logs|down|exec` (lifecycle), each with an
+env-controlled failure mode (`SHIM_DOCKER_CONTEXT`,
+`SHIM_DOCKER_ENDPOINT`, `SHIM_DOCKER_SECURITY_OPTIONS`,
+`SHIM_DOCKER_COMPOSE_UP_EXIT`, `SHIM_DOCKER_COMPOSE_PS_OUTPUT`,
+`SHIM_DOCKER_COMPOSE_EXEC_EXIT`) - never a real Docker daemon.
+Real-Docker/VM integration is opt-in-only follow-up (no rootless Docker
+daemon is available in this implementation environment) - see
+[docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)
+"Left for follow-up".
+
 ### 2.2 Container regression matrix
 
 ```bash
