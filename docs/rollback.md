@@ -169,6 +169,19 @@ user to fully uninstall a mixed-scope profile.
 - **Uninstall does not undo data a running service created** (Section 2) — only the files
   OMES itself wrote.
 
+## 6a. Hardening drop-in rollback (issue #81)
+
+The Hermes gateway hardening drop-in (`modules/hermes-gateway/hardening.sh`, see
+[`docs/hermes-hardening.md`](./hermes-hardening.md)) follows the same managed-path
+model as every other file this document describes: it is registered with
+`omes_manage_path`, so it is covered by the standard backup/restore/uninstall flow
+above, plus one additional automatic case — if applying a hardening profile leaves
+the gateway unit failing to (re)start within a bounded timeout, `module_apply`
+itself removes the drop-in and restarts the unit again immediately, without waiting
+for a separate `omes restore`/`omes uninstall` step. `module_rollback` (invoked by
+`omes uninstall`) removes only this drop-in, never the PATH drop-in or any
+operator-owned unit file.
+
 ## 7. Restoring with no network
 
 Every step in Sections 3 and 4 above is local file I/O and local state-file reads/writes only

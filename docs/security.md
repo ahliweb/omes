@@ -22,6 +22,7 @@ for as long as it is active (docs/threat-model.md T06).
 | Backups | `<state-dir>/backups/<timestamp>/`, mode `0700`; files inside preserve source mode (`.env` stays `0600`) | None | `lib/omes/backup.sh` |
 | Telegram/API bind address | Upstream Hermes's own gateway binding, not configured by OMES | N/A — OMES does not itself open a network listener | operator-responsibility (upstream Hermes) |
 | sudo | OMES never writes a NOPASSWD sudoers entry for any account | None — out of scope for any automated escape hatch | audited by review + `scripts/check-supply-chain.sh` (CI) |
+| Hermes gateway systemd hardening | Off (`OMES_HERMES_HARDENING=off`); no resource limits or sandboxing beyond the base unit | `OMES_HERMES_HARDENING=conservative` (recommended) or `=strict` (documented compatibility trade-offs); see [`docs/hermes-hardening.md`](./hermes-hardening.md) | `modules/hermes-gateway/hardening.sh` |
 
 ## 2. Telegram policy
 

@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/systemd-analyze - fake systemd-analyze for bats tests.
+#
+# Used by modules/hermes-gateway/hardening.sh's hardening_check as a
+# best-effort, informational-only validation of the rendered drop-in
+# fragment. Behavior:
+#
+#   SHIM_SYSTEMD_ANALYZE_VERIFY_EXIT   exit code for `verify <file>` (default 0)
+#   SHIM_SYSTEMD_ANALYZE_VERSION       version line for `--version` (default 255)
+#
+# `cat-config` prints a canned line so callers that just want to see
+# "some output happened" are satisfied without needing real systemd
+# config discovery.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'systemd-analyze %s\n' "$*" >>"$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  verify)
+    exit "${SHIM_SYSTEMD_ANALYZE_VERIFY_EXIT:-0}"
+    ;;
+  cat-config)
+    printf '# systemd-analyze cat-config (shim)\n'
+    exit 0
+    ;;
+  --version)
+    printf 'systemd %s (shim)\n' "${SHIM_SYSTEMD_ANALYZE_VERSION:-255}"
+    exit 0
+    ;;
+  *)
+    exit 0
+    ;;
+esac

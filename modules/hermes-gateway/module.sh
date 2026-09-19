@@ -33,6 +33,9 @@ MODULE_PROFILES=(server desktop hermes)
 
 HERMES_GATEWAY_UNIT="hermes-gateway"
 
+# shellcheck source=./hardening.sh
+source "${OMES_ROOT}/modules/hermes-gateway/hardening.sh"
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -166,6 +169,8 @@ module_check() {
     log_info "hermes-gateway: headless/server session detected; lingering may be offered during apply"
   fi
 
+  hardening_check "user" "$(_hgw_hermes_home)"
+
   return 0
 }
 
@@ -223,6 +228,12 @@ module_apply() {
   fi
 
   state_set "module.hermes-gateway.mode" "user"
+
+  if ! hardening_apply "user" "$(_hgw_hermes_home)"; then
+    log_error "hermes-gateway: hardening apply failed and was automatically rolled back (see above)"
+    return 1
+  fi
+
   return 0
 }
 
@@ -254,6 +265,7 @@ module_verify() {
 
   _hgw_doctor_caveat "$status_output"
   _hgw_telegram_allowlist_check
+  hardening_verify "user"
 
   return 0
 }
@@ -262,9 +274,11 @@ module_rollback() {
   log_warn "hermes-gateway: rollback stops/disables the OMES-managed --user service and removes OMES's drop-in; it never removes Hermes itself"
 
   if omes_dry_run; then
-    log_info "[dry-run] would stop/disable ${HERMES_GATEWAY_UNIT} (--user), remove $(_hgw_dropin_file), and disable lingering if OMES enabled it"
+    log_info "[dry-run] would stop/disable ${HERMES_GATEWAY_UNIT} (--user), remove $(_hgw_dropin_file), remove any hardening drop-in, and disable lingering if OMES enabled it"
     return 0
   fi
+
+  hardening_rollback "user"
 
   _hgw_ensure_runtime_path
 
@@ -340,5 +354,10 @@ print("ready=%s connected=%s gateway=%s" % (d.get("ready"), d.get("connected"), 
 ' 2>/dev/null || printf 'health checker output could not be summarized')"
 
   printf 'health: %s\n' "$summary"
-  [[ "$rc" -eq 0 ]]
+  local health_ok=0
+  [[ "$rc" -eq 0 ]] || health_ok=1
+
+  hardening_doctor "user"
+
+  return "$health_ok"
 }
