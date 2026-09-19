@@ -408,6 +408,33 @@ def plan_job(record: dict[str, Any], actor: str = "system", caption: str | None 
     apply_transition(record, "approval-required", actor, note="plan complete")
 
 
+def edit_plan(
+    record: dict[str, Any],
+    actor: str,
+    caption: str | None = None,
+    targets: list[str] | None = None,
+) -> None:
+    """Updates a plan's caption/targets while still `approval-required`
+    (issue #65's Telegram `edit` command; #69 extends this with
+    versioned per-platform caption files). Never changes `record["state"]`
+    - an edit still requires an explicit, fresh `omes content approve`
+    afterwards; it only appends a history note so the change is audited
+    (docs/content-distribution.md section 7)."""
+    if record["state"] != "approval-required":
+        raise ContentJobsError(
+            f"job {record['job_id']} is {record['state']!r}; edit is only allowed while approval-required"
+        )
+    if caption is not None:
+        record["plan"]["caption"] = caption
+        record["plan"]["caption_source"] = "operator"
+    if targets is not None:
+        record["plan"]["targets"] = targets
+    record["history"].append(
+        {"ts": now_iso(), "from": record["state"], "to": record["state"], "actor": actor, "note": "plan edited"}
+    )
+    record["updated_at"] = now_iso()
+
+
 # ---------------------------------------------------------------------------
 # Publish / verify orchestration (issue #67; real workers land in #66)
 # ---------------------------------------------------------------------------

@@ -391,9 +391,13 @@ built-in commands.
 > `session revoke` implemented (#66), driving the one concrete
 > `generic_browser` worker skeleton (default `manual_stub` driver; no
 > real browser dependency ships in OMES — see
-> [docs/content-distribution.md](content-distribution.md) section 13). A
-> Telegram approval front end lands with #65; platform-aware caption/cover
-> validation lands with #69. See
+> [docs/content-distribution.md](content-distribution.md) section 13).
+> `edit`, `notify`, `status`, and `--channel telegram` on `approve`/
+> `reject`/`edit` implemented (#65) — an outbound-only Telegram approval
+> front end (`lib/omes/py/content/telegram.py`); inbound chat commands are
+> mapped to these CLI verbs by a Hermes skill documented at
+> `skills/content/SKILL.md`, never received by OMES directly. Platform-aware
+> caption/cover validation lands with #69. See
 > [docs/content-distribution.md](content-distribution.md) for the full
 > design (job schema, state machine, worker contract, security
 > boundaries) and [ADR-0015](adr/0015-content-distribution-workflow.md)
@@ -411,8 +415,8 @@ docs/content-distribution.md section 9.
 omes content scan [--json] [--settle-seconds N]
 omes content rescan [--json]
 omes content list [--state STATE] [--json]
-omes content approve <job-id> --actor ID [--ttl-seconds N] [--json]
-omes content reject <job-id> --actor ID [--json]
+omes content approve <job-id> --actor ID [--ttl-seconds N] [--channel cli|telegram] [--expected-hash H] [--json]
+omes content reject <job-id> --actor ID [--channel cli|telegram] [--json]
 omes content retry <job-id> --actor ID [--yes] [--force] [--json]
 omes content cancel <job-id> --actor ID [--yes] [--json]
 omes content resume [--json]
@@ -424,6 +428,9 @@ omes content plan <job-id> [--actor ID] [--caption TEXT] [--target PLATFORM]... 
 omes content publish <job-id> --platform NAME [--worker-executable PATH] [--worker-version V] [--json]
 omes content session login <platform> --actor ID [--json]
 omes content session revoke <platform> --actor ID [--yes] [--json]
+omes content edit <job-id> --actor ID [--caption TEXT] [--target PLATFORM]... [--channel cli|telegram] [--json]
+omes content notify <job-id> [--chat-id ID] [--json]
+omes content status <job-id> [--telegram] [--chat-id ID] [--json]
 ```
 
 - `scan` walks `$OMES_CONTENT_ROOT/inbox` (never following symlinks, never
@@ -446,10 +453,28 @@ omes content session revoke <platform> --actor ID [--yes] [--json]
   `manual-review`, `failed`, `cancelled`, `archived`).
 - `approve`/`reject` record an approval decision bound to the job's
   current artifact hash, with a staleness expiry (`--ttl-seconds`,
-  default `OMES_CONTENT_APPROVAL_TTL_SECONDS`/3600s). This is the
-  always-available MVP approval path; #65 adds a Telegram front end that
-  writes the same approval record shape. `reject` moves the job to
-  `cancelled`.
+  default `OMES_CONTENT_APPROVAL_TTL_SECONDS`/3600s). `--channel` defaults
+  to `cli` (the always-available MVP approval path, no authorization list
+  required). `--channel telegram` (#65) additionally requires `--actor` to
+  be a numeric Telegram user id present in both `OMES_CONTENT_APPROVERS`
+  and Hermes's `TELEGRAM_ALLOWED_USERS` (docs/content-distribution.md
+  section 14) — an id in only one is refused. `approve --expected-hash H`
+  refuses if `H` does not match the job's *current* artifact hash (guards
+  against the artifact changing between a Telegram preview and the tap
+  that approves it). `reject` moves the job to `cancelled`.
+- `edit <job-id>` updates `--caption`/`--target` while the job is
+  `approval-required` (issue #65; #69 adds versioned per-platform caption
+  files). It never changes the job's state — a fresh `approve` is still
+  required afterwards. Accepts the same `--channel telegram` gate as
+  `approve`/`reject`.
+- `notify <job-id>` sends the Telegram approval-request preview (caption,
+  target platforms, artifact sha256, and an ffmpeg-generated thumbnail
+  when available) to `--chat-id` or `OMES_CONTENT_TELEGRAM_CHAT_ID`. Never
+  reads `content/sessions/`; the bot token never appears in this command's
+  output or in `state/audit.jsonl` (docs/content-distribution.md section 14).
+- `status <job-id>` prints the job's state/platform/URL/attempts.
+  `--telegram` additionally sends the same summary via `sendMessage` to
+  `--chat-id`/`OMES_CONTENT_TELEGRAM_CHAT_ID`.
 - `retry` moves a `retryable-failure` or `manual-review` job back to
   `publishing`. Requires `--actor`; requires `--yes` (non-interactive) or
   an interactive y/N confirmation. Refuses to run before the computed

@@ -28,6 +28,20 @@ if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'curl %s\n' "$*" >> "$SHIM_LOG"
 fi
 
+# `curl -K <config>` form (lib/omes/py/content/telegram.py's token-handling
+# pattern, mirroring modules/hermes-gateway/telegram-allowlist.sh's
+# `_ta_api_call`): the config file's `url = "..."` line is the only place a
+# secret token would appear. This shim never prints that config file's
+# contents anywhere (including $SHIM_LOG above, which only logs argv - the
+# config *path*, never its contents) and returns a canned JSON response, so
+# bats tests can exercise `omes content notify`/`status --telegram` without
+# a real Telegram bot token or network access.
+if [[ "${1:-}" == "-K" ]] && [[ -n "${2:-}" ]] && [[ -r "${2:-}" ]]; then
+  default_telegram_json='{"ok":true,"result":{"message_id":1}}'
+  printf '%s' "${SHIM_CURL_TELEGRAM_OUTPUT:-$default_telegram_json}"
+  exit "${SHIM_CURL_EXIT:-0}"
+fi
+
 out=""
 args=("$@")
 for ((i = 0; i < ${#args[@]}; i++)); do
