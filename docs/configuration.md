@@ -89,7 +89,14 @@ has no documented, supported effect and is not recommended.
 | `OMES_HERMES_GATEWAY_SYSTEM_USER` | unset | Operator (required) | `hermes-gateway-system` | The existing, non-root account whose Hermes install the system gateway serves. `module_check` fails without it, or if it names `root`, or if the account does not exist. |
 | `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | `/etc/systemd/system` | Test-only | `hermes-gateway-system` | Overrides the system drop-in directory. |
 
-## 9. `desktop-preflight` / `hyprland-session` modules
+## 9. `graphify` module
+
+See [docs/graphify.md](graphify.md) §2/§3 (issues #50/#51) for the full env var/state-key
+reference (`OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, `OMES_UV_INSTALLER_SHA256`,
+`OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
+there rather than duplicated here to minimize this shared reference file's graphify footprint.
+
+## 10. `desktop-preflight` / `hyprland-session` modules
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
@@ -99,23 +106,23 @@ has no documented, supported effect and is not recommended.
 | `OMES_NVIDIA_MODESET_PARAM_FILE` | `/sys/module/nvidia_drm/parameters/modeset` | Test-only | Same purpose, the sysfs fallback path. |
 | `OMES_CINNAMON_SESSION_FILE` | `/usr/share/xsessions/cinnamon.desktop` | Test-only | Overrides the Cinnamon-presence check `dp_check_cinnamon` performs. |
 | `OMES_SESSION_DIR` | `/usr/share/wayland-sessions` | Test-only | Overrides where `hyprland-session` writes the session `.desktop` file. |
-| `OMES_BIN_DIR` | `/usr/local/bin` | Test-only (here) | Overrides where `hyprland-session` writes its wrapper script. **Note:** `install/bootstrap.sh` also reads `OMES_BIN_DIR`, with a different default (`~/.local/bin`) and a real operator-facing purpose — see §11. |
+| `OMES_BIN_DIR` | `/usr/local/bin` | Test-only (here) | Overrides where `hyprland-session` writes its wrapper script. **Note:** `install/bootstrap.sh` also reads `OMES_BIN_DIR`, with a different default (`~/.local/bin`) and a real operator-facing purpose — see §12. |
 
-## 10. `desktop-config` module
+## 11. `desktop-config` module
 
 No module-specific environment variables; behavior (never overwrite a differing file without `--yes`/`OMES_NONINTERACTIVE=1`) is controlled entirely by the global `--yes`/`OMES_NONINTERACTIVE` flag from §1.
 
-## 11. `install/bootstrap.sh` (the curl-able bootstrap script)
+## 12. `install/bootstrap.sh` (the curl-able bootstrap script)
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
 | `OMES_REPO_URL` | `https://github.com/ahliweb/omes.git` | Operator | Where to clone OMES from — set this to point at a fork or mirror. |
 | `OMES_REF` | `main` | Operator | The git ref (branch/tag/commit) to check out. |
 | `OMES_INSTALL_DIR` | `$HOME/.local/share/omes` | Operator | Where the checkout lives. |
-| `OMES_BIN_DIR` | `$HOME/.local/bin` | Operator | Where `omes` is symlinked. See the note in §9 — this is a different default from `hyprland-session`'s test-only override of the same name; they are read in entirely separate processes (the bootstrap script vs. a module). |
+| `OMES_BIN_DIR` | `$HOME/.local/bin` | Operator | Where `omes` is symlinked. See the note in §10 — this is a different default from `hyprland-session`'s test-only override of the same name; they are read in entirely separate processes (the bootstrap script vs. a module). |
 | `OMES_OS_RELEASE_FILE` | `/etc/os-release` | Test-only | Same override as §3, used for the bootstrap script's own early platform check before any checkout exists. |
 
-## 12. `scripts/test-matrix.sh` (contributor/CI tool, not a deployment knob)
+## 13. `scripts/test-matrix.sh` (contributor/CI tool, not a deployment knob)
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
@@ -125,7 +132,7 @@ No module-specific environment variables; behavior (never overwrite a differing 
 
 See [docs/ci.md](ci.md) for how these are used in `.github/workflows/compatibility.yml`.
 
-## 12a. `content` extension command (optional; `lib/omes/cmd/content.sh`, `lib/omes/py/content/`)
+## 14. `content` extension command (optional; `lib/omes/cmd/content.sh`, `lib/omes/py/content/`)
 
 Never referenced by any installer profile — see
 [docs/content-distribution.md](content-distribution.md) section 9.
@@ -135,7 +142,7 @@ Never referenced by any installer profile — see
 | `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
 | `OMES_CONTENT_APPROVAL_TTL_SECONDS` | `3600` | Operator | Default `--ttl-seconds` for `omes content approve` (docs/content-distribution.md section 7). Read by `lib/omes/py/content/cli.py`; an explicit `--ttl-seconds` flag overrides it. |
 
-## 13. Reserved but not read by any code path yet
+## 15. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 

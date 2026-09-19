@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/graphify - fake graphify CLI for bats tests (issue #50).
+#
+# Records every invocation (space-joined argv) to $SHIM_LOG. Behavior is
+# driven entirely by env vars, mirroring tests/shims/hermes:
+#
+#   SHIM_GRAPHIFY_ABSENT      unset/0 (default) => `graphify --version` and
+#                             `graphify --help` behave as if graphify is
+#                             installed; 1 => both fail, simulating "not
+#                             yet installed" even though this shim file is
+#                             always on PATH (command -v graphify always
+#                             succeeds; "installed" is judged purely by
+#                             --version succeeding, exactly like the
+#                             hermes shim).
+#   SHIM_GRAPHIFY_VERSION     version string `graphify --version` prints
+#                             (default: 0.9.64, the version verified
+#                             2026-09-19 - see docs/graphify.md).
+#   SHIM_GRAPHIFY_HELP_EXIT   exit code for `graphify --help` (default 0),
+#                             ignored when SHIM_GRAPHIFY_ABSENT=1.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'graphify %s\n' "$*" >>"$SHIM_LOG"
+fi
+
+case "${1:-}" in
+  --version)
+    if [[ "${SHIM_GRAPHIFY_ABSENT:-0}" == "1" ]]; then
+      exit 1
+    fi
+    printf 'graphify %s\n' "${SHIM_GRAPHIFY_VERSION:-0.9.64}"
+    exit 0
+    ;;
+  --help)
+    if [[ "${SHIM_GRAPHIFY_ABSENT:-0}" == "1" ]]; then
+      exit 127
+    fi
+    exit "${SHIM_GRAPHIFY_HELP_EXIT:-0}"
+    ;;
+  *)
+    exit 0
+    ;;
+esac

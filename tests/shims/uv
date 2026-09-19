@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/uv - fake `uv` CLI for bats tests (modules/graphify, issue #50).
+#
+# Logs every invocation (space-joined argv) to $SHIM_LOG and returns
+# success by default, with plausible output for the subcommands
+# modules/graphify/module.sh and lib/omes/cmd/graphify.sh actually run:
+# `uv tool install/upgrade/uninstall <pkgspec>` and `uv tool list`.
+#
+#   SHIM_UV_EXIT              exit code for any subcommand (default 0)
+#   SHIM_UV_TOOL_LIST_OUTPUT  overrides `uv tool list` output
+#                             (default: "graphifyy v0.9.64")
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'uv %s\n' "$*" >>"$SHIM_LOG"
+fi
+
+if [[ "${1:-}" == "tool" ]] && [[ "${2:-}" == "list" ]]; then
+  printf '%s\n' "${SHIM_UV_TOOL_LIST_OUTPUT:-graphifyy v0.9.64}"
+fi
+
+exit "${SHIM_UV_EXIT:-0}"

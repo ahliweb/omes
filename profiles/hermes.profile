@@ -6,3 +6,4 @@
 apt-base
 hermes
 hermes-gateway
+# graphify (optional: omes install --module graphify)

@@ -445,6 +445,13 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
+### `omes graphify` (update / uninstall / run / skill)
+
+`lib/omes/cmd/graphify.sh` (issues #50/#51). Full synopsis, exit codes, JSON schemas, and
+examples for every `omes graphify <subcommand>` live in
+[docs/graphify.md](graphify.md) §2/§3, not here, to keep this shared reference file's
+graphify footprint minimal — see that document for the authoritative CLI contract.
+
 ## 5. Worked examples
 
 **First run on a fresh Ubuntu Server 24.04 host:**
