@@ -168,8 +168,23 @@ for what each variable affects. `OMES_HEALTH_TIMEOUT` is shared with §13.
 | `OMES_HEALTH_DISK_MIN_MB` / `OMES_HEALTH_MEM_MIN_MB` | `512` / `256` | Operator |
 | `OMES_HERMES_GATEWAY_HEALTH_URL` | unset | Operator (loopback-only) |
 | `OMES_HERMES_GATEWAY_HEALTH_TOKEN_FILE` | unset | Operator (file path, never a value) |
+## 17. `content` Telegram approval front end (optional; issue #65)
 
-## 17. Reserved but not read by any code path yet
+Outbound-only — see [docs/content-distribution.md](content-distribution.md)
+section 14 and `skills/content/SKILL.md`. `TELEGRAM_BOT_TOKEN` and
+`TELEGRAM_ALLOWED_USERS` are **not** OMES variables; they live in
+`$HERMES_HOME/.env` and are read from there, by key only, exactly as
+`modules/hermes-gateway/telegram-allowlist.sh` already does.
+
+| `OMES_CONTENT_APPROVERS` | unset (no Telegram approvers authorized) | Operator | Comma-separated numeric Telegram user ids this OMES install treats as authorized content approvers. Effective authorization is this set **intersected with** `TELEGRAM_ALLOWED_USERS` from `$HERMES_HOME/.env` — an id in only one is never authorized. Read by `lib/omes/py/content/telegram.py::load_approvers()`. Only enforced for `--channel telegram`; the default `--channel cli` approval path ignores it. |
+| `OMES_CONTENT_TELEGRAM_CHAT_ID` | unset | Operator | Default `--chat-id` for `omes content notify`/`omes content status --telegram` when the flag is omitted. Read by `lib/omes/py/content/cli.py`. |
+| `OMES_CONTENT_TELEGRAM_API_BASE` | `https://api.telegram.org` | Test-only | Overrides the Telegram API base URL so `tests/py/content/test_telegram.py` can point at a local stdlib fake HTTP server instead of the real Telegram API. Not intended for operator use. Read by `lib/omes/py/content/telegram.py`. |
+| `HERMES_HOME` | `$HOME/.hermes` | Operator (existing, Hermes-owned) | Where `lib/omes/py/content/telegram.py` reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS` from `.env`, by key only — it never reads or writes any other key in that file. Same variable `hermes`/`hermes-gateway` already use (section 7/8 above). |
+
+## 18. Reserved but not read by any code path yet
+
+
+
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 

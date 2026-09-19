@@ -299,7 +299,19 @@ place:
 - **#65 adds Telegram** as a second channel writing the *same* approval record shape
   (`"channel": "telegram"`), reusing `docs/telegram-security.md`'s allowlist model
   for who is allowed to approve, and must bind to the same artifact hash and TTL
-  rules — it does not get a separate, looser approval schema.
+  rules — it does not get a separate, looser approval schema. Implemented as
+  `omes content approve/reject/edit <job-id> --actor <telegram-user-id>
+  --channel telegram`: `lib/omes/py/content/telegram.py::authorized_approvers()`
+  additionally requires the actor to be in the intersection of
+  `OMES_CONTENT_APPROVERS` (an OMES-side operator config) and Hermes's own
+  `TELEGRAM_ALLOWED_USERS` (read from `$HERMES_HOME/.env`, by key only) — an
+  id in one but not the other is never authorized. `--expected-hash` on
+  `approve` additionally refuses if it does not match the job's *current*
+  `source.sha256` (protects against the content changing between the
+  Telegram preview and the approve tap). See `docs/cli.md` section 4.13 and
+  `skills/content/SKILL.md` for the full command mapping — **OMES never
+  receives inbound Telegram messages itself**; a Hermes skill translates a
+  chat command into an `omes content <verb>` call.
 
 ## 8. Security boundaries
 
@@ -410,6 +422,42 @@ list. Summary of the subcommands this design defines interfaces for:
 | `omes content publish <job> --platform NAME [--worker-executable PATH]` | #66 | run the platform worker's `prepare`/`publish`/`verify` |
 | `omes content session login <platform> --actor ID` | #66 | run `bootstrap-session` (manual login only; never publishes) |
 | `omes content session revoke <platform> --actor ID [--yes]` | #66 | run `revoke-session` and clear the local profile directory |
+| `omes content edit <job> --actor ID [--caption T] [--target P]... [--channel telegram]` | #65 | edit a plan's caption/targets while `approval-required` |
+| `omes content notify <job> [--chat-id ID]` | #65 | send the Telegram approval-request preview |
+| `omes content status <job> [--telegram] [--chat-id ID]` | #65 | print (and optionally send) a job's status |
+
+## 14. Telegram approval front end (#65)
+
+- **Outbound only.** `lib/omes/py/content/telegram.py` never calls Telegram's
+  long-polling read endpoint and never receives inbound messages — Hermes owns
+  Telegram messaging (AGENTS.md section 2). Inbound chat commands are mapped to
+  `omes content <verb>` calls by a Hermes skill, documented (not executed) in
+  this repository at `skills/content/SKILL.md`.
+- **Token handling mirrors `telegram-allowlist.sh` exactly.** `TELEGRAM_BOT_TOKEN`
+  is read from `$HERMES_HOME/.env` in-process; the only place it ever appears is
+  inside a mode-`0600` temporary `curl -K` config file, created immediately
+  before the API call and deleted immediately after — never in argv, never in a
+  printed/logged URL, never in this module's return values (redacted
+  defensively, same `TOKEN|KEY|SECRET|PASSWORD|COOKIE` pattern as #68's audit
+  redaction).
+- **Preview content.** `omes content notify <job> --chat-id <id>` (or the
+  `OMES_CONTENT_TELEGRAM_CHAT_ID` default) sends the caption, planned target
+  platforms, and the artifact's immutable sha256 hash — built entirely from the
+  job record, never from `content/sessions/`. A small ffmpeg-generated
+  thumbnail is attached when `ffmpeg` is installed (`make_thumbnail()`);
+  otherwise the message is text-only. No cookie, token, or session path is ever
+  part of the preview.
+- **Approver authorization.** `approve`/`reject`/`edit --channel telegram`
+  require the acting Telegram user id to be in the intersection of
+  `OMES_CONTENT_APPROVERS` and Hermes's `TELEGRAM_ALLOWED_USERS` — see section 7
+  above. `--channel cli` (the MVP default) is never subject to this check.
+- **Hash and staleness.** `--expected-hash` on `approve` refuses a mismatch
+  against the job's current `source.sha256`; the underlying approval TTL
+  (`OMES_CONTENT_APPROVAL_TTL_SECONDS`, section 7) applies identically
+  regardless of channel — Telegram gets no separate, looser expiry rule.
+- **`omes content status <job> --telegram`** replies with the job's current
+  state, platform, resulting URL, and attempt count via `send_message` — never
+  raw JSON, never a `sessions/` path.
 
 ## 13. Worker isolation implementation (#66)
 

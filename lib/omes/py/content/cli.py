@@ -114,11 +114,50 @@ def _persist(record: dict, root: Path, actor: str) -> None:
     jobs.save_job(record, root)
 
 
+def _authorize_channel_actor(args: argparse.Namespace) -> str | None:
+    """Returns an error string (never raises) if `args.channel` ==
+    "telegram" and `args.actor` is not in the effective authorized-
+    approver set (issue #65: OMES_CONTENT_APPROVERS intersected with
+    Hermes's TELEGRAM_ALLOWED_USERS). `channel` "cli" is never gated
+    here - the always-available MVP approval path stays available
+    without any Telegram configuration."""
+    channel = getattr(args, "channel", "cli")
+    if channel != "telegram":
+        return None
+    from . import telegram as telegram_mod
+
+    if not telegram_mod.is_authorized_approver(args.actor):
+        return (
+            f"actor {args.actor!r} is not an authorized Telegram approver "
+            "(must be numeric, in OMES_CONTENT_APPROVERS, and in TELEGRAM_ALLOWED_USERS)"
+        )
+    return None
+
+
+def _check_expected_hash(args: argparse.Namespace, record: dict) -> str | None:
+    expected = getattr(args, "expected_hash", None)
+    if expected and expected != record["source"]["sha256"]:
+        return (
+            f"expected_hash {expected!r} does not match the job's current artifact hash "
+            f"{record['source']['sha256']!r} (refusing - possible tamper/stale preview)"
+        )
+    return None
+
+
 def cmd_approve(args: argparse.Namespace) -> int:
     root = paths.ensure_layout()
+    channel = getattr(args, "channel", "cli")
     try:
         record = jobs.load_job(args.job_id, root)
-        jobs.approve_job(record, actor=args.actor, ttl_seconds=args.ttl_seconds)
+        auth_error = _authorize_channel_actor(args)
+        if auth_error:
+            print(f"error: {auth_error}", file=sys.stderr)
+            return EX_ERROR
+        hash_error = _check_expected_hash(args, record)
+        if hash_error:
+            print(f"error: {hash_error}", file=sys.stderr)
+            return EX_ERROR
+        jobs.approve_job(record, actor=args.actor, channel=channel, ttl_seconds=args.ttl_seconds)
         _persist(record, root, args.actor)
     except jobs.ContentJobsError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -126,15 +165,20 @@ def cmd_approve(args: argparse.Namespace) -> int:
     if args.json:
         _print_json({"job_id": record["job_id"], "state": record["state"]})
     else:
-        print(f"{record['job_id']}: approved by {args.actor}")
+        print(f"{record['job_id']}: approved by {args.actor} via {channel}")
     return EX_OK
 
 
 def cmd_reject(args: argparse.Namespace) -> int:
     root = paths.ensure_layout()
+    channel = getattr(args, "channel", "cli")
     try:
         record = jobs.load_job(args.job_id, root)
-        jobs.reject_job(record, actor=args.actor)
+        auth_error = _authorize_channel_actor(args)
+        if auth_error:
+            print(f"error: {auth_error}", file=sys.stderr)
+            return EX_ERROR
+        jobs.reject_job(record, actor=args.actor, channel=channel)
         _persist(record, root, args.actor)
     except jobs.ContentJobsError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -142,7 +186,105 @@ def cmd_reject(args: argparse.Namespace) -> int:
     if args.json:
         _print_json({"job_id": record["job_id"], "state": record["state"]})
     else:
-        print(f"{record['job_id']}: rejected by {args.actor}")
+        print(f"{record['job_id']}: rejected by {args.actor} via {channel}")
+    return EX_OK
+
+
+def cmd_edit(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    channel = getattr(args, "channel", "cli")
+    try:
+        record = jobs.load_job(args.job_id, root)
+        auth_error = _authorize_channel_actor(args)
+        if auth_error:
+            print(f"error: {auth_error}", file=sys.stderr)
+            return EX_ERROR
+        jobs.edit_plan(record, actor=args.actor, caption=args.caption, targets=args.target)
+        reports.audit_append_for_job(root, record, actor=args.actor)
+        jobs.save_job(record, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        _print_json(
+            {"job_id": record["job_id"], "state": record["state"], "caption": record["plan"]["caption"], "targets": record["plan"]["targets"]}
+        )
+    else:
+        print(f"{record['job_id']}: plan edited by {args.actor}")
+    return EX_OK
+
+
+def cmd_notify(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    from . import telegram as telegram_mod
+
+    try:
+        record = jobs.load_job(args.job_id, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    chat_id = args.chat_id or os.environ.get("OMES_CONTENT_TELEGRAM_CHAT_ID")
+    if not chat_id:
+        print("error: --chat-id or OMES_CONTENT_TELEGRAM_CHAT_ID is required", file=sys.stderr)
+        return EX_ERROR
+
+    try:
+        result = telegram_mod.notify_job(record, root, chat_id)
+    except telegram_mod.TelegramError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    reports.audit_append(
+        root,
+        actor="system",
+        job_id=record["job_id"],
+        from_state=record["state"],
+        to_state=record["state"],
+        platform=record.get("platform"),
+        artifact_hash=record["source"]["sha256"],
+        note=f"telegram notify sent (thumbnail={result.get('thumbnail_used')})",
+    )
+    if args.json:
+        _print_json({"job_id": record["job_id"], "sent": result.get("sent", False)})
+    else:
+        print(f"{record['job_id']}: notification sent")
+    return EX_OK
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    root = paths.ensure_layout()
+    try:
+        record = jobs.load_job(args.job_id, root)
+    except jobs.ContentJobsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    if args.telegram:
+        from . import telegram as telegram_mod
+
+        chat_id = args.chat_id or os.environ.get("OMES_CONTENT_TELEGRAM_CHAT_ID")
+        if not chat_id:
+            print("error: --chat-id or OMES_CONTENT_TELEGRAM_CHAT_ID is required for --telegram", file=sys.stderr)
+            return EX_ERROR
+        try:
+            telegram_mod.send_message(chat_id, telegram_mod.status_text(record))
+        except telegram_mod.TelegramError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return EX_ERROR
+
+    if args.json:
+        _print_json(
+            {
+                "job_id": record["job_id"],
+                "state": record["state"],
+                "platform": record.get("platform"),
+                "resulting_url": record["publish"].get("resulting_url"),
+                "attempts": record["publish"].get("attempts", 0),
+            }
+        )
+    else:
+        print(f"{record['job_id']}: {record['state']}")
     return EX_OK
 
 
@@ -526,14 +668,39 @@ def build_parser() -> argparse.ArgumentParser:
     p_approve.add_argument("job_id")
     p_approve.add_argument("--actor", required=True)
     p_approve.add_argument("--ttl-seconds", type=int, default=_default_approval_ttl_seconds())
+    p_approve.add_argument("--channel", choices=("cli", "telegram"), default="cli")
+    p_approve.add_argument("--expected-hash", default=None, dest="expected_hash")
     p_approve.add_argument("--json", action="store_true")
     p_approve.set_defaults(func=cmd_approve)
 
     p_reject = sub.add_parser("reject", help="reject a pending approval")
     p_reject.add_argument("job_id")
     p_reject.add_argument("--actor", required=True)
+    p_reject.add_argument("--channel", choices=("cli", "telegram"), default="cli")
     p_reject.add_argument("--json", action="store_true")
     p_reject.set_defaults(func=cmd_reject)
+
+    p_edit = sub.add_parser("edit", help="edit a plan's caption/targets while approval-required")
+    p_edit.add_argument("job_id")
+    p_edit.add_argument("--actor", required=True)
+    p_edit.add_argument("--caption", default=None)
+    p_edit.add_argument("--target", action="append", dest="target")
+    p_edit.add_argument("--channel", choices=("cli", "telegram"), default="cli")
+    p_edit.add_argument("--json", action="store_true")
+    p_edit.set_defaults(func=cmd_edit)
+
+    p_notify = sub.add_parser("notify", help="send the Telegram approval-request preview for a job")
+    p_notify.add_argument("job_id")
+    p_notify.add_argument("--chat-id", default=None, dest="chat_id")
+    p_notify.add_argument("--json", action="store_true")
+    p_notify.set_defaults(func=cmd_notify)
+
+    p_status = sub.add_parser("status", help="print (and optionally send via Telegram) a job's status")
+    p_status.add_argument("job_id")
+    p_status.add_argument("--telegram", action="store_true")
+    p_status.add_argument("--chat-id", default=None, dest="chat_id")
+    p_status.add_argument("--json", action="store_true")
+    p_status.set_defaults(func=cmd_status)
 
     p_retry = sub.add_parser("retry", help="retry a retryable-failure/manual-review job")
     p_retry.add_argument("job_id")
