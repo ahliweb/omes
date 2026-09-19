@@ -210,6 +210,7 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Read-back verification; a timeout is never reported as success | `lib/omes/py/jobs/runner.py`'s `_compare_desired_observed()` |
 | No arbitrary shell: operation → command mapping is a fixed Python literal, unimplemented operations fail typed rather than falling back to a shell | `lib/omes/py/jobs/runner.py`'s `build_argv()` |
 | Control Center screens receive a self-describing, previously-decided permission (`granted`, `policy_id`) on every operation request, and a desired/observed/error-evidence split on every deployment view, instead of a trust-me boolean or a single merged state blob | `contracts/control-center/v1/operation-request.schema.json`, `contracts/control-center/v1/deployment-view.schema.json` (#91) |
+| Entitlement allow/deny is re-derived server-side from `entitlement.limits`/`catalog-resource-policy` on every request; no client-supplied "granted" flag is trusted; suspension never silently stops a healthy existing deployment unless a resource policy explicitly says so | `lib/omes/py/jobs/entitlement.py`'s `evaluate()`, data-driven state transitions in `lib/omes/py/jobs/states.py` + `contracts/control-center/v1/subscription.states.json` (#92) |
 
 ### 8.2 Domain provider abstraction controls implemented today (issue #98)
 

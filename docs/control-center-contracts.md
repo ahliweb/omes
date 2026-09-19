@@ -172,6 +172,74 @@ which is rejected for a bearer-token-shaped string inside the otherwise
 schema-legal `error_evidence.message` field — the pattern-based secret-value
 check, not the key-name check, catches it).
 
+### 2.6 Catalog, subscription, and entitlement contracts (issue #92)
+
+Issue #92 asks OMES to model service plans and enforce explicit
+entitlements. The catalog itself (product/plan/pricing decisions) lives in
+AWCMS; what this repository fixes is the wire shape and the pure
+evaluation logic OMES needs to enforce those entitlements at request/policy
+boundaries "never rely only on UI hiding" (issue #92 acceptance criteria).
+
+| Contract | Schema file |
+|---|---|
+| Product | `catalog-product.schema.json` |
+| Plan | `catalog-plan.schema.json` |
+| Add-on | `catalog-addon.schema.json` |
+| Version (immutable dated revision) | `catalog-version.schema.json` |
+| Price | `catalog-price.schema.json` |
+| Billing cycle | `catalog-billing-cycle.schema.json` |
+| Resource policy (suspension behavior) | `catalog-resource-policy.schema.json` |
+| Backend eligibility | `catalog-backend-eligibility.schema.json` |
+| Subscription | `subscription.schema.json` |
+| Entitlement | `entitlement.schema.json` |
+
+`catalog-plan.limits` and `entitlement.limits` share the same shape:
+`servers, logical_agents, specialist_agents, isolated_workers, storage_gb,
+backup_retention_days`, plus an optional `backends` array. `catalog-addon`
+only ever ADDS to a plan's limits via `limits_delta` (never negative -
+enforced by `minimum: 0` on every field); revoking capacity is a plan
+change, not an add-on.
+
+`subscription.state` / `entitlement.state` are the same closed enum:
+`trialing, active, past_due, grace_period, suspended, cancelled, expired`.
+The allowed transitions between them are encoded as data, not code, in
+[`contracts/control-center/v1/subscription.states.json`](../contracts/control-center/v1/subscription.states.json)
+and interpreted by the generic, reusable `lib/omes/py/jobs/states.py`
+(`StateMachine.is_valid_transition()` / `assert_transition()`) - the same
+module issue #93's invoice state machine reuses rather than
+re-implementing transition checking.
+
+`lib/omes/py/jobs/entitlement.py`'s `evaluate(entitlement, action,
+resource_policy)` is the single pure function anything (OMES or, per
+`docs/control-center-foundation.md`, awcms-one) must call before allowing
+`provision_new`, `upgrade`, `start_optional_worker`, or
+`keep_existing_running`. It never trusts a client-supplied "granted" flag
+(issue #92's "no client-supplied entitlement" security requirement); it
+recomputes allow/deny from `entitlement.limits` and, for a
+non-active/trialing subscription state, from a `catalog-resource-policy`.
+The suspension-policy default is `existing_healthy_deployments_action:
+keep_running` — a suspended/cancelled/expired subscription never stops a
+currently-healthy deployment unless a resource policy explicitly says
+`stop` or `degrade`, matching AGENTS.md §3's "do not silently stop a
+healthy existing deployment". `new_provisioning_action`,
+`upgrade_action`, and `optional_workers_action` are controlled
+independently, so a policy can (for example) block new provisioning while
+still allowing an already-approved upgrade.
+
+`lib/omes/py/jobs/entitlement.py`'s `apply_subscription_event()` applies a
+subscription-lifecycle event to build the next entitlement/subscription
+record, and is idempotent by `event_id`: replaying an already-applied
+event id returns the existing record unchanged rather than re-applying a
+(possibly now-invalid) transition — see
+`tests/py/jobs/test_entitlement.py::TestSubscriptionEventReplay`.
+
+Cross-tenant enforcement: `evaluate()` rejects any action whose
+`tenant_id` does not match the entitlement's own `tenant_id`,
+unconditionally and before any limit/policy logic runs
+(`tests/py/jobs/test_entitlement.py::TestCrossTenant`) — this is a second,
+independent check behind AWCMS's own RLS enforcement (§1), not a
+replacement for it.
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
