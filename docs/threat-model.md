@@ -151,6 +151,9 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 | T40 | The optional content distribution workflow's browser session cookies (A13), approval flow, or audit trail is stolen, spoofed, tampered with, or leaked — see [docs/content-threat-model.md](content-threat-model.md) for the full STRIDE breakdown (session/cookie theft, log/artifact leakage, approval spoofing, stale approval, artifact tampering between approval and publish, duplicate publish on restart, partial platform failure, rate limits/ToS) | Spoofing, Tampering, Repudiation, Information Disclosure, Denial of Service, Elevation of Privilege | A13, A2 | M | H | Isolated per-platform `0700` session directories never read by reports/export/audit/backup code; approval bound to an immutable artifact hash with staleness expiry and channel-specific authorization; hash-chained append-only audit log; resume-after-restart re-verifies only, never re-publishes; each `publish` call is scoped to one platform so a failure never cross-contaminates another target | implemented-in-OMES | #64, #66, #67, #68, #65, #69, #70 |
 
 
+| T40 | A per-agent systemd deployment is applied with the wrong privilege scope (a `serviceMode: user` agent applied as root, or a `system` unit written by a non-root caller), or two agents collide on the same `HERMES_HOME`/unit name, mixing isolation boundaries | Elevation of Privilege, Information Disclosure | A1, A3, A4, A6 | M | H | `omes agent apply`/`rollback` refuse a privilege mismatch (exit 5, no mutation) before touching the filesystem; manifest name validation rejects path traversal/unsafe unit identifiers and a filename/`metadata.name` mismatch (duplicate-name protection); each agent gets its own `HERMES_HOME`, unit, and state file, never shared by default | implemented-in-OMES | #87 |
+
+
 ## 6. Residual risk summary
 
 Even with every mitigation above implemented, the following risks remain and are the

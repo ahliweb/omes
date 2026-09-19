@@ -1,8 +1,16 @@
 # OMES Agent Orchestration Roadmap
 
-> Status: proposed design; MVP implementation is tracked in [issue #87](https://github.com/ahliweb/omes/issues/87).
+> Status: the MVP CLI (section 2.1) is implemented on the
+> `feat/87-agent-lifecycle` branch (issue [#87](https://github.com/ahliweb/omes/issues/87)):
+> `omes agent list|check|plan|apply|status|health|restart|logs|rollback`,
+> the JSON manifest schema, and the native systemd backend. Ubuntu Server
+> 24.04 VM evidence is not included in that PR (no VM available in the
+> implementation environment) - see
+> [docs/agent-deployment.md](agent-deployment.md) for exactly what is and
+> is not covered. Sections 2.2-2.5 below (rootless Docker Compose,
+> Coolify, Nomad/Kubernetes) remain proposed design only, not implemented.
 >
-> This document describes the staged deployment boundary for generic and specialist agents. It does not claim that the commands, manifest format, or backends below are implemented on the current branch.
+> This document describes the staged deployment boundary for generic and specialist agents beyond the implemented MVP. It does not claim that the backends in sections 2.2-2.5 are implemented on the current branch.
 
 ## 1. Decision summary
 
@@ -74,7 +82,11 @@ omes agent logs <name>
 omes agent rollback <name>
 ```
 
-These commands are proposed only. They must not be documented as implemented until issue #87 lands.
+This CLI shape is implemented on `feat/87-agent-lifecycle` (issue #87) -
+see [docs/agent-deployment.md](agent-deployment.md) and
+[docs/cli.md section 4.15](cli.md#415-omes-agent-native-omes--hermes--systemd-agent-deployment-lifecycle)
+for the actual reference, including what is not yet covered (VM
+evidence, `omes doctor` integration).
 
 ### 2.2 Isolation phase: rootless Docker Compose
 

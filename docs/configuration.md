@@ -251,6 +251,20 @@ See [docs/provenance.md](provenance.md) for the full field list and remediation 
 |---|---|---|
 | `OMES_HERMES_INSTALLER_SHA256` | unset | Operator — pins the expected sha256 of the Hermes installer (§7); a mismatch aborts install before execution, and the resulting provenance record's `checksum.status` reflects whether a pin was used. |
 
+## 13d. `omes agent` / `lib/omes/py/agent/` (issue #87)
+
+See [docs/agent-deployment.md](agent-deployment.md) for the full manifest
+format, CLI reference, and lifecycle model.
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_CONFIG_DIR` | `/etc/omes` (root) / `${XDG_CONFIG_HOME:-$HOME/.config}/omes` (user) | Operator | Root of `agents/<name>.json` manifests. New in this issue - the config-dir analog of the pre-existing `OMES_STATE_DIR` (§1), same root/user-scope split. |
+| `OMES_AGENT_HARDENING` | `conservative` | Operator | `off`, `conservative`, or `strict`; any other value falls back to `conservative`. Governs the reused `modules/hermes-gateway/hardening.sh` directives in the per-agent drop-in - a separate variable from `OMES_HERMES_HARDENING` (§8a) because it governs a different (per-agent) unit. |
+| `OMES_AGENT_SYSTEM_HOME_ROOT` | `/var/lib/omes` | Operator | Root under which `system`-mode agents' isolated `HERMES_HOME` trees are created (`<root>/agents/<name>/hermes`). |
+| `OMES_AGENT_SYSTEM_UNIT_DIR` | `/etc/systemd/system` | Test-only | Overrides where `system`-mode agent unit files/drop-ins are written, mirroring `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` (§8). |
+| `OMES_HEALTH_TIMEOUT` | `10` (seconds) | Operator | Shared with §13/§13a - bounds every probe `omes agent health` makes. |
+
+
 
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).

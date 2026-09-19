@@ -913,6 +913,34 @@ by the commands/modules that need it, not by `bin/omes` itself (the same
 pattern `modules/hermes-gateway/telegram-allowlist.sh` already uses for
 `lib/omes/core.sh`/`lib/omes/log.sh`).
 
+## 12.5 Agent deployment lifecycle (issue #87)
+
+`lib/omes/cmd/agent.sh` + `lib/omes/py/agent/` implement the MVP native
+systemd backend from
+[docs/agent-orchestration-roadmap.md](agent-orchestration-roadmap.md):
+a versioned JSON manifest (`contracts/agent/v1/agent-deployment.schema.json`)
+declares a Hermes-runtime agent deployment, which
+`omes agent apply` carries through `check -> plan -> backup -> mutate ->
+verify` to the `declared -> preflighted -> planned -> backed-up ->
+applied -> verified -> ready -> healthy` lifecycle (failure states
+`degraded | failed | rolled-back`). Full design:
+[docs/agent-deployment.md](agent-deployment.md).
+
+Unlike the rest of OMES's state (Section 6, a single `key=value` file per
+scope), each agent's lifecycle state is its own JSON file at
+`<state-dir>/agents/<name>/state.json` (`lib/omes/py/agent/state.py`),
+because it needs structured history and per-agent isolation rather than
+a flat namespace. It records `state`, a bounded `history`,
+`managedPaths` (exactly what `rollback` may remove), and `provenance`
+(`omesVersion`, `gitRef`, `hermesVersion` - never credentials). See
+[docs/agent-deployment.md section 4](agent-deployment.md#4-state-and-provenance).
+
+This reuses, rather than duplicates: #79's health model
+(`lib/omes/py/health/`), #81's `hardening_render` (`modules/hermes-gateway/
+hardening.sh`), and #82's data-class backup engine
+(`lib/omes/py/hermesbackup/`). See section 12.4 for its relationship (and
+current non-integration) with `lib/omes/runtime.sh`.
+
 ## 13. Non-goals and known limitations
 
 **Non-goals:**

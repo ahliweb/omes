@@ -694,6 +694,50 @@ backup`/`omes restore` scoped to Hermes's own data under `$HERMES_HOME`
 manifest format, and command reference.
 
 
+## 4.15 `omes agent` (native OMES + Hermes + systemd agent deployment lifecycle)
+
+> Status: MVP implemented on this branch (issue #87). Ubuntu Server
+> 24.04 VM evidence is not included - see
+> [docs/agent-deployment.md](agent-deployment.md) section 8. Rootless
+> Docker Compose and Coolify backends from
+> [docs/agent-orchestration-roadmap.md](agent-orchestration-roadmap.md)
+> are not implemented.
+
+`omes agent list|check|plan|apply|status|health|restart|logs|rollback`
+(`lib/omes/cmd/agent.sh`, `lib/omes/py/agent/`) declares, plans, applies,
+verifies, and rolls back a Hermes-runtime agent deployment as an
+isolated systemd service, from a versioned JSON manifest at
+`$OMES_CONFIG_DIR/agents/<name>.json`. Full design, manifest schema,
+lifecycle states, isolation model, and secret handling:
+[docs/agent-deployment.md](agent-deployment.md).
+
+**Synopsis:**
+
+```bash
+omes agent list [--json]
+omes agent check <name> [--json]
+omes agent plan <name> [--json]
+omes agent apply <name> [--dry-run] [--yes] [--json]
+omes agent status <name> [--json]
+omes agent health <name> [--json]
+omes agent restart <name> [--json]
+omes agent logs <name> [journalctl-args...]
+omes agent rollback <name> [--yes] [--json]
+```
+
+**Exit codes:** 0 ok; 2 usage error; 4 preflight failed (missing/invalid
+manifest); 5 privilege error (`serviceMode` vs. current EUID mismatch);
+6 apply/mutation failed; 7 verification/health failed; 9 backup step
+failed; 1 other errors (e.g. an unconfirmed mutating call).
+
+`apply` is `check -> plan -> backup -> mutate -> verify`, idempotent,
+and bounded: `--dry-run` performs only `check`+`plan` and prints the
+planned unit name, `HERMES_HOME`, secret **reference names** (never
+values), and resource limits, mutating nothing. `rollback` removes only
+the OMES-managed unit and drop-in recorded in the agent's own state -
+never Hermes's own data under `HERMES_HOME`.
+
+
 ## 5. Worked examples
 
 **First run on a fresh Ubuntu Server 24.04 host:**
