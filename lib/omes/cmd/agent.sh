@@ -53,6 +53,105 @@ except Exception:
 ' "$manifest" 2>/dev/null || printf 'user\n'
 }
 
+# _agent_manifest_backend <name>
+# Prints spec.backend ("systemd" or "compose") from the agent's manifest,
+# so `logs` can route to journalctl or `docker compose logs` without a
+# full agent.cli round trip. Best-effort only, same fallback contract as
+# _agent_manifest_service_mode above (defaults to "systemd").
+_agent_manifest_backend() {
+  local name="$1"
+  local config_dir
+  if [[ -n "${OMES_CONFIG_DIR:-}" ]]; then
+    config_dir="$OMES_CONFIG_DIR"
+  elif omes_is_root; then
+    config_dir="/etc/omes"
+  else
+    config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/omes"
+  fi
+  local manifest="${config_dir}/agents/${name}.json"
+  [[ -r "$manifest" ]] || { printf 'systemd\n'; return 0; }
+  python3 -c '
+import json, sys
+try:
+    with open(sys.argv[1], "r", encoding="utf-8") as fh:
+        data = json.load(fh)
+    print(data.get("spec", {}).get("backend", "systemd"))
+except Exception:
+    print("systemd")
+' "$manifest" 2>/dev/null || printf 'systemd\n'
+}
+
+# _agent_logs_compose <name> [--tail N] [--follow] [-- extra docker-compose-logs args]
+# `omes agent logs <name>` for `backend: "compose"` (issue #96 follow-up):
+# `docker compose -p <project> -f <file> logs --no-color --tail <n>`.
+# `--follow` is accepted but never the default (a bounded, operator-
+# requested opt-in only, per AGENTS.md "no destructive/unbounded defaults"
+# spirit) - a plain `omes agent logs <name>` always returns rather than
+# streaming forever.
+_agent_logs_compose() {
+  local name="$1"
+  shift
+
+  if ! command -v docker >/dev/null 2>&1; then
+    printf '[omes] ERROR: docker not found\n' >&2
+    return 1
+  fi
+
+  local tail="200"
+  local follow=0
+  local -a extra_args=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --tail)
+        [[ $# -ge 2 ]] || { printf '[omes] --tail requires an argument\n' >&2; return 2; }
+        tail="$2"
+        shift 2
+        ;;
+      --follow)
+        follow=1
+        shift
+        ;;
+      *)
+        extra_args+=("$1")
+        shift
+        ;;
+    esac
+  done
+
+  local plan_json
+  plan_json="$(_agent_py plan "$name" --json 2>/dev/null)" || {
+    printf '[omes] ERROR: could not compute the plan for agent "%s" (see: omes agent check %s)\n' "$name" "$name" >&2
+    return 1
+  }
+
+  local project compose_file
+  project="$(printf '%s' "$plan_json" | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin)["project"])
+except Exception:
+    pass
+' 2>/dev/null)"
+  compose_file="$(printf '%s' "$plan_json" | python3 -c '
+import json, sys
+try:
+    print(json.load(sys.stdin)["composeFile"])
+except Exception:
+    pass
+' 2>/dev/null)"
+
+  if [[ -z "$project" || -z "$compose_file" ]]; then
+    printf '[omes] ERROR: could not resolve the compose project/file for agent "%s"\n' "$name" >&2
+    return 1
+  fi
+
+  local -a docker_args=(compose -p "$project" -f "$compose_file" logs --no-color --tail "$tail")
+  if [[ "$follow" -eq 1 ]]; then
+    docker_args+=(--follow)
+  fi
+  docker "${docker_args[@]}" "${extra_args[@]}"
+}
+
 cmd_agent() {
   if ! command -v python3 >/dev/null 2>&1; then
     printf '[omes] ERROR: python3 is required for "omes agent" but was not found\n' >&2
@@ -60,7 +159,7 @@ cmd_agent() {
   fi
 
   if [[ "$#" -eq 0 ]]; then
-    printf '[omes] usage: omes agent <list|check|plan|apply|status|health|restart|logs|rollback|remove> [name] [args...]\n' >&2
+    printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|restart|logs|rollback|remove> [name] [args...]\n' >&2
     printf '[omes]   see docs/agent-deployment.md\n' >&2
     return 2
   fi
@@ -77,10 +176,16 @@ cmd_agent() {
     logs)
       local name="${1:-}"
       if [[ -z "$name" ]]; then
-        printf '[omes] usage: omes agent logs <name>\n' >&2
+        printf '[omes] usage: omes agent logs <name> [--tail N] [--follow]\n' >&2
         return 2
       fi
       shift
+      local backend
+      backend="$(_agent_manifest_backend "$name")"
+      if [[ "$backend" == "compose" ]]; then
+        _agent_logs_compose "$name" "$@"
+        return $?
+      fi
       if ! command -v journalctl >/dev/null 2>&1; then
         printf '[omes] ERROR: journalctl not found\n' >&2
         return 1
@@ -112,13 +217,13 @@ cmd_agent() {
       _agent_py "$subcommand" "${extra_args[@]}" "$@"
       return $?
       ;;
-    list | check | plan | status | health | restart)
+    list | doctor | check | plan | status | health | restart)
       _agent_py "$subcommand" "${extra_args[@]}" "$@"
       return $?
       ;;
     *)
       printf '[omes] unknown "omes agent" subcommand: %s\n' "$subcommand" >&2
-      printf '[omes] usage: omes agent <list|check|plan|apply|status|health|restart|logs|rollback|remove> [name] [args...]\n' >&2
+      printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|restart|logs|rollback|remove> [name] [args...]\n' >&2
       return 2
       ;;
   esac

@@ -20,10 +20,11 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from . import compose as compose_mod
+from . import compose_health
 from . import compose_preflight
 from . import health as health_mod
 from . import manifest as manifest_mod
-from . import paths, plan as plan_mod, provenance, state as state_mod, unitfile
+from . import paths, plan as plan_mod, provenance, runtime_bridge, state as state_mod, unitfile
 import hashlib
 import time
 
@@ -95,6 +96,20 @@ def _sha256_file(path: Path) -> Optional[str]:
     return h.hexdigest()
 
 
+def _build_systemd_plan(manifest: Dict[str, Any], omes_root: Path) -> Dict[str, Any]:
+    """Builds the systemd-backend plan with its unit name resolved
+    through lib/omes/py/agent/runtime_bridge.py -> lib/omes/runtime.sh's
+    `runtime_agent_service_unit` (the one source of truth for
+    "omes-agent-<name>.service" naming - issue #85/#87/#96 follow-up).
+    Falls back to plan.py's own `unit_name()` (same literal shape) if the
+    bridge cannot run, so a missing/unreadable runtime.sh never blocks
+    `omes agent` - see docs/agent-deployment.md section 7a."""
+    name = manifest["metadata"]["name"]
+    scope = manifest["spec"]["serviceMode"]
+    unit_override = runtime_bridge.agent_service_unit(name, scope, omes_root)
+    return plan_mod.build_plan(manifest, unit_name_override=unit_override)
+
+
 def _run_docker(args_list: list, timeout: float = 30.0):
     cmd = ["docker"] + args_list
     try:
@@ -151,65 +166,13 @@ def _latest_compose_backup(name: str) -> Optional[Path]:
 
 
 def _compose_health(plan: Dict[str, Any], timeout: float) -> Dict[str, Any]:
-    """Container-state health (docker compose ps --format json) plus the
-    manifest's own health command run inside the container via
-    `docker compose exec -T`, both read-only (issue #96's health
-    aggregation requirement)."""
-    ps_proc = _run_docker(
-        ["compose", "-p", plan["project"], "-f", plan["composeFile"], "ps", "--format", "json"], timeout
-    )
-    container_ok = False
-    container_detail = ""
-    if ps_proc.returncode == 0 and ps_proc.stdout.strip():
-        container_detail = ps_proc.stdout.strip()
-        try:
-            for line in ps_proc.stdout.strip().splitlines():
-                entry = json.loads(line)
-                state = str(entry.get("State", "")).lower()
-                health = str(entry.get("Health", "")).lower()
-                if state == "running" and health in ("", "healthy"):
-                    container_ok = True
-        except json.JSONDecodeError:
-            container_detail = ps_proc.stdout.strip()
-
-    exec_ok: Optional[bool] = None
-    exec_detail = ""
-    health_command = plan["health"]["command"]
-    if container_ok:
-        exec_proc = _run_docker(
-            [
-                "compose",
-                "-p",
-                plan["project"],
-                "-f",
-                plan["composeFile"],
-                "exec",
-                "-T",
-                plan["serviceName"],
-                "sh",
-                "-c",
-                health_command,
-            ],
-            timeout,
-        )
-        exec_ok = exec_proc.returncode == 0
-        exec_detail = (exec_proc.stdout or exec_proc.stderr or "").strip()
-
-    ready = container_ok and (exec_ok is not False)
-    return {
-        "ready": ready,
-        "connected": ready,
-        "layers": {
-            "container": {
-                "status": "pass" if container_ok else "fail",
-                "detail": container_detail,
-            },
-            "healthCommand": {
-                "status": "pass" if exec_ok else ("not_applicable" if exec_ok is None else "fail"),
-                "detail": exec_detail,
-            },
-        },
-    }
+    """Delegates to lib/omes/py/agent/compose_health.py (issue #96
+    follow-up: reuse lib/omes/py/health/hermes.py's provider/channel
+    layers, executed through `docker compose exec -T` where they need
+    the container's own view, instead of this module's own ad hoc
+    container+health-command-only check). Kept as a thin wrapper here so
+    every existing call site (`apply`, `health`) is unaffected."""
+    return compose_health.run(plan, timeout)
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -242,6 +205,86 @@ def cmd_list(args: argparse.Namespace) -> int:
             print("no agents declared")
         for r in results:
             print(f"{r['name']}: state={r['state']} manifest={'ok' if r.get('manifestPresent') and not r.get('manifestError') else 'missing/invalid'}")
+    return EX_OK
+
+
+def _doctor_timeout() -> float:
+    raw = os.environ.get("OMES_HEALTH_TIMEOUT", "").strip()
+    try:
+        return float(raw) if raw else 10.0
+    except ValueError:
+        return 10.0
+
+
+def _doctor_one(name: str, omes_root: Path, timeout: float) -> Dict[str, Any]:
+    """Read-only, bounded-timeout report for a single deployed agent:
+    its lifecycle state (from the agent state dir) plus a health summary,
+    reusing lib/omes/py/agent/health.py (systemd) or
+    lib/omes/py/agent/compose_health.py (compose) - never a second health
+    implementation (issue #87 follow-up: "omes doctor integration")."""
+    st = state_mod.load(name)
+    entry: Dict[str, Any] = {"name": name, "state": st.get("state", "declared")}
+
+    manifest_path = paths.manifest_path(name)
+    if not manifest_path.exists():
+        entry["ok"] = False
+        entry["error"] = f"no manifest found at {manifest_path}"
+        return entry
+
+    try:
+        manifest = manifest_mod.load_and_validate(manifest_path, omes_root, expected_name=name)
+    except manifest_mod.ManifestError as exc:
+        entry["ok"] = False
+        entry["error"] = str(exc)
+        return entry
+
+    backend = _backend(manifest)
+    entry["backend"] = backend
+    entry["serviceMode"] = manifest["spec"]["serviceMode"]
+
+    try:
+        if backend == "compose":
+            plan = compose_mod.build_plan(manifest)
+            health_result = compose_health.run(plan, timeout)
+        else:
+            plan = _build_systemd_plan(manifest, omes_root)
+            health_result = health_mod.run(plan["unit"]["name"], plan["serviceMode"], plan["hermesHome"], timeout)
+    except Exception as exc:  # pragma: no cover - defensive: doctor must never crash the whole report  # nosec B110 - reported below, not silently swallowed
+        entry["ok"] = False
+        entry["error"] = f"health check failed: {exc}"
+        return entry
+
+    entry["health"] = health_result
+    entry["ready"] = bool(health_result.get("ready"))
+    entry["connected"] = bool(health_result.get("connected"))
+    entry["ok"] = entry["ready"]
+    return entry
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """`omes agent doctor` - reports every deployed agent (from the agent
+    state dir, `lib/omes/py/agent/paths.py`'s `agents_state_dir()`) with
+    its lifecycle state and a read-only, bounded-timeout health summary.
+    Never mutates anything. Meant to be invoked from `bin/omes`'s
+    `cmd_doctor` (issue #87/#96 follow-up) - not a second doctor
+    mechanism; `lib/omes/cmd/agent.sh` exposes it as
+    `omes agent doctor` for direct/manual use too."""
+    omes_root = _omes_root()
+    timeout = _doctor_timeout()
+    names = sorted(state_mod.list_agents())
+
+    results = [_doctor_one(name, omes_root, timeout) for name in names]
+
+    overall_ok = all(r.get("ok") for r in results) if results else True
+    if args.json:
+        _print({"agents": results, "ok": overall_ok}, True)
+    else:
+        if not results:
+            print("no deployed agents found")
+        for r in results:
+            status = "OK" if r.get("ok") else ("WARN" if "error" not in r else "FAIL")
+            detail = r.get("error") or f"state={r.get('state')} ready={r.get('ready')} connected={r.get('connected')}"
+            print(f"{r['name']}: {status} {detail}")
     return EX_OK
 
 
@@ -300,7 +343,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
         _print(compose_mod.plan_summary(plan), args.json)
         return EX_OK
 
-    plan = plan_mod.build_plan(manifest)
+    plan = _build_systemd_plan(manifest, omes_root)
     _print(plan, args.json)
     return EX_OK
 
@@ -486,7 +529,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print("error: systemctl not found on PATH", file=sys.stderr)
         return EX_PREFLIGHT
 
-    plan = plan_mod.build_plan(manifest)
+    plan = _build_systemd_plan(manifest, omes_root)
 
     if args.dry_run:
         _print(
@@ -591,7 +634,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             result["project"] = plan["project"]
             result["backend"] = "compose"
         else:
-            plan = plan_mod.build_plan(manifest)
+            plan = _build_systemd_plan(manifest, omes_root)
             proc = _run_systemctl(plan["serviceMode"], ["is-active", plan["unit"]["name"]])
             result["unitActive"] = proc.returncode == 0
             result["unit"] = plan["unit"]["name"]
@@ -617,7 +660,7 @@ def cmd_health(args: argparse.Namespace) -> int:
         _print(result, args.json)
         return EX_OK if result.get("ready") else EX_VERIFY
 
-    plan = plan_mod.build_plan(manifest)
+    plan = _build_systemd_plan(manifest, omes_root)
     result = health_mod.run(plan["unit"]["name"], plan["serviceMode"], plan["hermesHome"])
     _print(result, args.json)
     return EX_OK if result.get("ready") else EX_VERIFY
@@ -645,7 +688,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
         _print({"ok": True, "project": plan["project"]}, args.json) if args.json else print(f"{args.name}: restarted")
         return EX_OK
 
-    plan = plan_mod.build_plan(manifest)
+    plan = _build_systemd_plan(manifest, omes_root)
     proc = _run_systemctl(plan["serviceMode"], ["restart", plan["unit"]["name"]])
     if proc.returncode != 0:
         print(f"error: restart failed: {proc.stderr}", file=sys.stderr)
@@ -714,7 +757,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     if _backend(manifest) == "compose":
         return _rollback_compose(args.name, manifest, args)
 
-    plan = plan_mod.build_plan(manifest)
+    plan = _build_systemd_plan(manifest, omes_root)
     mode = plan["serviceMode"]
     st = state_mod.load(args.name)
     managed_paths = st.get("managedPaths", [])
@@ -823,6 +866,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_list = sub.add_parser("list")
     p_list.add_argument("--json", action="store_true")
     p_list.set_defaults(func=cmd_list)
+
+    p_doctor = sub.add_parser("doctor")
+    p_doctor.add_argument("--json", action="store_true")
+    p_doctor.set_defaults(func=cmd_doctor)
 
     for name, func in (("check", cmd_check), ("plan", cmd_plan), ("status", cmd_status), ("health", cmd_health), ("restart", cmd_restart)):
         p = sub.add_parser(name)

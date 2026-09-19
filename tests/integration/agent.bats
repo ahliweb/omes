@@ -24,6 +24,23 @@ setup() {
 
   cp "${OMES_TEST_ROOT}/contracts/agent/v1/fixtures/agent-deployment/valid-generic-user.json" \
     "${OMES_CONFIG_DIR}/agents/researcher.json"
+
+  # A supported-platform fixture, so the top-level `omes doctor` tests
+  # below assert on the agent-integration checks specifically rather
+  # than an unrelated platform-tier FAIL from running under whatever
+  # /etc/os-release the test host/container actually has (same pattern
+  # tests/integration/hermes-backup.bats already uses).
+  OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
+PRETTY_NAME="Ubuntu 24.04 LTS"
+NAME="Ubuntu"
+VERSION_ID="24.04"
+VERSION_CODENAME=noble
+ID=ubuntu
+ID_LIKE=debian
+UBUNTU_CODENAME=noble
+EOF
+  export OMES_OS_RELEASE_FILE
 }
 
 teardown() {
@@ -113,4 +130,35 @@ JSON
 @test "omes agent logs without a name is a usage error" {
   run "$OMES_BIN" agent logs
   [ "$status" -eq 2 ]
+}
+
+@test "omes agent doctor --json is a single JSON object with no agents deployed" {
+  run "$OMES_BIN" agent doctor --json
+  [ "$status" -eq 0 ]
+  local doctor_output="$output"
+  run python3 -m json.tool <<< "$doctor_output"
+  [ "$status" -eq 0 ]
+  [[ "$doctor_output" == *'"agents": []'* ]]
+  [[ "$doctor_output" == *'"ok": true'* ]]
+}
+
+@test "omes agent doctor reports a deployed agent's state and health" {
+  "$OMES_BIN" agent apply researcher --yes --json >/dev/null
+  run "$OMES_BIN" agent doctor --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"name": "researcher"'* ]]
+  [[ "$output" == *'"backend": "systemd"'* ]]
+}
+
+@test "omes doctor (top-level) includes an agent row once an agent is deployed" {
+  "$OMES_BIN" agent apply researcher --yes --json >/dev/null
+  run "$OMES_BIN" doctor --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"name":"agent:researcher"'* ]]
+}
+
+@test "omes doctor (top-level) does not mention any agent when none is deployed" {
+  run "$OMES_BIN" doctor --json
+  [ "$status" -eq 0 ]
+  [[ "$output" != *'agent:researcher'* ]]
 }

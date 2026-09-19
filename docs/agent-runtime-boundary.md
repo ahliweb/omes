@@ -32,7 +32,8 @@ implementation by name. The only implemented name is `hermes`.
 | Fail closed on an unsupported runtime | `runtime_require <name>` | n/a (dies, exit 4) |
 | Runtime metadata | `runtime_describe <name>` | `{"name", "version_command", "home_env_var", "home_default", "service_units": {"user","system"}, "health_probe", "backup_classes": [...], "provenance_sources": [...]}` |
 | Runtime home directory | `runtime_home <name>` | n/a (prints a path) |
-| Service unit name per scope | `runtime_service_unit <name> <user\|system>` | n/a (prints a unit name) |
+| Service unit name per scope (shared gateway) | `runtime_service_unit <name> <user\|system>` | n/a (prints a unit name) |
+| Service unit name per **declared agent** (issue #87/#96) | `runtime_agent_service_unit <agent-name> <user\|system>` | n/a (prints `omes-agent-<agent-name>.service`) |
 | Install | `modules/<runtime>/module.sh`'s `module_apply` | n/a (module contract, docs/architecture.md §4) |
 | Preflight | `modules/<runtime>/module.sh`'s `module_check` | n/a |
 | Verify | `modules/<runtime>/module.sh`'s `module_verify` | n/a |

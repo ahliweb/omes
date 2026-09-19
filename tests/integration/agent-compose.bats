@@ -139,3 +139,32 @@ teardown() {
   run "$OMES_BIN" agent remove researcher --yes --json
   [ "$status" -eq 2 ]
 }
+
+@test "omes agent logs routes to docker compose logs --no-color --tail 200 by default" {
+  "$OMES_BIN" agent apply compose-worker --yes --json >/dev/null
+  run "$OMES_BIN" agent logs compose-worker
+  [ "$status" -eq 0 ]
+  grep -q -- '--no-color --tail 200' "$SHIM_LOG"
+}
+
+@test "omes agent logs honors --tail and never defaults to --follow" {
+  "$OMES_BIN" agent apply compose-worker --yes --json >/dev/null
+  run "$OMES_BIN" agent logs compose-worker --tail 50
+  [ "$status" -eq 0 ]
+  grep -q -- '--tail 50' "$SHIM_LOG"
+  ! grep -q -- '--follow' "$SHIM_LOG"
+}
+
+@test "omes agent logs --follow is bounded (accepted but never hangs the test)" {
+  "$OMES_BIN" agent apply compose-worker --yes --json >/dev/null
+  run "$OMES_BIN" agent logs compose-worker --follow
+  [ "$status" -eq 0 ]
+  grep -q -- '--follow' "$SHIM_LOG"
+}
+
+@test "omes agent logs surfaces a docker compose logs failure" {
+  "$OMES_BIN" agent apply compose-worker --yes --json >/dev/null
+  export SHIM_DOCKER_COMPOSE_LOGS_EXIT=1
+  run "$OMES_BIN" agent logs compose-worker
+  [ "$status" -ne 0 ]
+}

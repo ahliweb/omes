@@ -25,6 +25,13 @@
 #   SHIM_DOCKER_COMPOSE_EXEC_EXIT   exit code for `exec` (default 0)
 #   SHIM_DOCKER_COMPOSE_EXEC_OUTPUT stdout text for `exec` (default "ok")
 #   SHIM_DOCKER_COMPOSE_LOGS_OUTPUT stdout text for `logs` (default a fixed line)
+#   SHIM_DOCKER_COMPOSE_LOGS_EXIT   exit code for `logs` (default 0)
+#
+# `logs` never actually streams/blocks here regardless of `--follow` being
+# passed (it always prints once and exits) - the shim only needs to prove
+# the CLI *asked* for `--no-color --tail <n>` (and `--follow`, when given),
+# which the full invocation logged to $SHIM_LOG above already captures;
+# the CLI itself is responsible for never defaulting to `--follow`.
 
 set -Eeuo pipefail
 
@@ -89,7 +96,7 @@ case "${1:-}" in
         ;;
       logs)
         printf '%s\n' "${SHIM_DOCKER_COMPOSE_LOGS_OUTPUT:-shim log line}"
-        exit 0
+        exit "${SHIM_DOCKER_COMPOSE_LOGS_EXIT:-0}"
         ;;
       exec)
         printf '%s\n' "${SHIM_DOCKER_COMPOSE_EXEC_OUTPUT:-ok}"

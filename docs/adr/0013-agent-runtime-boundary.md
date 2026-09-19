@@ -161,6 +161,18 @@ one actually exists.
   is unchanged in substance; it gains a pointer to
   docs/agent-runtime-boundary.md for readers who want the runtime-neutral
   framing.
+- **Update (issue #87/#96 follow-up, "`lib/omes/runtime.sh` integration"):**
+  `lib/omes/runtime.sh` now also defines
+  `runtime_agent_service_unit <name> <scope>`, the one source of truth
+  for the *per-agent* unit name (`omes-agent-<name>.service`) `omes
+  agent` (issue #87) and its compose backend (issue #96) use -
+  distinct from `runtime_service_unit`, which names the single *shared*
+  gateway unit. `lib/omes/py/agent/runtime_bridge.py` reads it via the
+  same `bash -c 'source ...; <function> <argv>'` bridge pattern
+  `lib/omes/py/agent/hardening_bridge.py` already uses for
+  `hardening_render`, so unit naming has one source of truth across the
+  bash and Python sides. See docs/agent-deployment.md section 7a and
+  docs/agent-runtime-boundary.md section 2.
 
 <!-- OMES-MERMAID: docs/adr/0013-agent-runtime-boundary.md -->
 

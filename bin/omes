@@ -1081,6 +1081,52 @@ cmd_doctor() {
     fi
   done
 
+  # 4a. Deployed agents (issue #87/#96 follow-up: "omes doctor
+  # integration"). Reuses `omes agent doctor`
+  # (lib/omes/py/agent/cli.py's cmd_doctor, which itself reuses
+  # lib/omes/py/agent/health.py / compose_health.py - never a second
+  # health mechanism) rather than inventing a bash-side agent health
+  # check here. Read-only; bounded per-agent by OMES_HEALTH_TIMEOUT.
+  # Entirely skipped (no WARN) when no agent has ever been declared, so a
+  # plain server/desktop install without `omes agent` is unaffected.
+  if [[ -r "${OMES_ROOT}/lib/omes/cmd/agent.sh" ]] && command -v python3 >/dev/null 2>&1; then
+    local agents_state_root
+    agents_state_root="$(omes_state_dir)/agents"
+    if [[ -d "$agents_state_root" ]] && [[ -n "$(ls -A "$agents_state_root" 2>/dev/null)" ]]; then
+      local agent_doctor_json="" agent_doctor_rc=0
+      agent_doctor_json="$(_omes_run_extension_command agent doctor --json 2>/dev/null)" || agent_doctor_rc=$?
+      if [[ "$agent_doctor_rc" -ne 0 || -z "$agent_doctor_json" ]]; then
+        _doctor_check agents WARN "omes agent doctor did not produce output (exit ${agent_doctor_rc})"
+      else
+        local agent_rows=""
+        agent_rows="$(printf '%s' "$agent_doctor_json" | python3 -c '
+import json, sys
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+for a in data.get("agents", []):
+    name = a.get("name", "?")
+    ok = bool(a.get("ok"))
+    state = a.get("state", "?")
+    ready = a.get("ready")
+    connected = a.get("connected")
+    error = a.get("error")
+    level = "OK" if ok else "WARN"
+    detail = error or "state={} ready={} connected={}".format(state, ready, connected)
+    print("{}\t{}\t{}".format(level, name, detail))
+' 2>/dev/null)"
+        if [[ -n "$agent_rows" ]]; then
+          local level name detail
+          while IFS=$'\t' read -r level name detail; do
+            [[ -n "$name" ]] || continue
+            _doctor_check "agent:${name}" "$level" "$detail"
+          done <<< "$agent_rows"
+        fi
+      fi
+    fi
+  fi
+
   # 5. Backup availability.
   local -a backups=()
   mapfile -t backups < <(backup_list)

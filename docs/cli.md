@@ -198,8 +198,10 @@ Health checks, read-only and offline: platform tier, required commands (`bash`, 
 (`0700`/`0600`), every `applied` module's `module_verify` (skipped with `WARN` if the current
 privilege can't run it, or if the module was removed from disk), an optional per-module
 `module_doctor` hook (any module MAY define this function for deeper self-diagnosis — additive
-to the module contract in `docs/architecture.md` Section 4; not required), backup session
-availability, and log directory writability. Each check reports `OK`, `WARN`, or `FAIL`.
+to the module contract in `docs/architecture.md` Section 4; not required), every **deployed**
+`omes agent` (issue #87/#96 follow-up — see section 4.17 `omes agent doctor` below; skipped
+entirely, not a `WARN`, when no agent has ever been declared), backup session availability, and
+log directory writability. Each check reports `OK`, `WARN`, or `FAIL`.
 
 **Exit codes:** 0 when no check is `FAIL` (a `WARN` alone does not fail the run); 1 when at
 least one check is `FAIL`.
@@ -742,12 +744,15 @@ manifest format, and command reference.
 > #87). The rootless Docker Compose backend (`spec.backend: "compose"`)
 > is implemented on this branch (issue #96,
 > [docs/agent-orchestration-roadmap.md section 2.2](agent-orchestration-roadmap.md)).
-> Ubuntu Server 24.04 VM/real-Docker evidence is not included for either
-> backend - see [docs/agent-deployment.md](agent-deployment.md) "Left
-> for follow-up". The Coolify backend
+> `omes doctor` integration, `omes agent logs` for the compose backend,
+> containerized-Hermes health reuse, and `lib/omes/runtime.sh` unit-name
+> integration are implemented as `Part of #87`/`Part of #96` follow-up
+> work - see [docs/agent-deployment.md](agent-deployment.md) section 11.
+> Ubuntu Server 24.04 VM/real-Docker evidence is still not included for
+> either backend. The Coolify backend
 > ([section 2.3](agent-orchestration-roadmap.md)) remains unimplemented.
 
-`omes agent list|check|plan|apply|status|health|restart|logs|rollback|remove`
+`omes agent list|doctor|check|plan|apply|status|health|restart|logs|rollback|remove`
 (`lib/omes/cmd/agent.sh`, `lib/omes/py/agent/`) declares, plans, applies,
 verifies, and rolls back a Hermes-runtime agent deployment, from a
 versioned JSON manifest at `$OMES_CONFIG_DIR/agents/<name>.json`.
@@ -774,13 +779,15 @@ manifest schema, lifecycle states, isolation model, and secret handling:
 
 ```bash
 omes agent list [--json]
+omes agent doctor [--json]                       # every deployed agent's state + health, read-only
 omes agent check <name> [--json]
 omes agent plan <name> [--json]
 omes agent apply <name> [--dry-run] [--yes] [--json]
 omes agent status <name> [--json]
 omes agent health <name> [--json]
 omes agent restart <name> [--json]
-omes agent logs <name> [journalctl-args...]     # systemd backend only
+omes agent logs <name> [journalctl-args...]      # systemd backend
+omes agent logs <name> [--tail N] [--follow]     # compose backend (docker compose logs)
 omes agent rollback <name> [--yes] [--json]
 omes agent remove <name> [--yes] [--json]        # compose backend only
 ```
@@ -792,6 +799,42 @@ Docker daemon/socket/docker-group-only access); 5 privilege error
 (`serviceMode` vs. current EUID mismatch); 6 apply/mutation failed; 7
 verification/health failed; 9 backup step failed; 10 rollback/remove
 teardown failed; 1 other errors (e.g. an unconfirmed mutating call).
+`doctor` always exits 0 (it is a read-only report; per-agent failure is
+surfaced in its `ok`/`error` fields, not the process exit code - see
+`omes doctor`'s own integration below).
+
+### `omes agent doctor`
+
+Reports every **deployed** agent (i.e. every name under the agent state
+directory, `<state-dir>/agents/<name>/`) with its current lifecycle state
+and a health summary, reusing `lib/omes/py/agent/health.py` (systemd
+backend) or `lib/omes/py/agent/compose_health.py` (compose backend) -
+never a second, ad hoc health check. Every check is read-only and bounded
+by `OMES_HEALTH_TIMEOUT` (default 10s) per agent; a missing/invalid
+manifest is reported as `"ok": false` with an `error` field rather than
+crashing the whole report. `--json` shape:
+
+```json
+{"agents": [{"name": "researcher", "state": "healthy", "backend": "systemd", "serviceMode": "user", "ok": true, "ready": true, "connected": true, "health": {"layers": {"...": "..."}}}], "ok": true}
+```
+
+`omes doctor` (the top-level platform doctor, section 4.10) calls this
+automatically whenever `lib/omes/cmd/agent.sh` is present and at least
+one agent has been declared, adding one `agent:<name>` row per agent
+(`OK` when the agent's health reports ready, `WARN` otherwise) to its own
+check list - it never fails the overall `omes doctor` exit code by
+itself (a degraded agent is a `WARN`, matching the existing
+`module_doctor` convention), so a broken agent deployment cannot block
+routine host `omes doctor` runs from reporting everything else.
+
+### `omes agent logs` for `backend: "compose"`
+
+Runs `docker compose -p <project> -f <compose file> logs --no-color
+--tail <n>` (default `--tail 200`); `--follow` is accepted but **never**
+the default - a plain `omes agent logs <name>` always returns rather than
+streaming forever. Any other arguments are passed through to `docker
+compose logs` verbatim. The systemd backend is unchanged: a plain
+`journalctl` passthrough scoped to the agent's own unit.
 
 `apply` is `check -> plan -> backup -> mutate -> verify`, idempotent,
 and bounded: `--dry-run` performs only `check`+`plan` and prints the
