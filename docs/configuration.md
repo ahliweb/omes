@@ -184,7 +184,7 @@ Never referenced by any installer profile — see
 ## 16. `omes health agent|gateway` / `lib/omes/py/health/hermes.py` (issue #79)
 
 See [docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79)
-for what each variable affects. `OMES_HEALTH_TIMEOUT` is shared with §13.
+for what each variable affects. `OMES_HEALTH_TIMEOUT` is shared with §22.
 
 | Variable | Default | Kind |
 |---|---|---|
@@ -205,9 +205,7 @@ section 14 and `skills/content/SKILL.md`. `TELEGRAM_BOT_TOKEN` and
 | `OMES_CONTENT_TELEGRAM_API_BASE` | `https://api.telegram.org` | Test-only | Overrides the Telegram API base URL so `tests/py/content/test_telegram.py` can point at a local stdlib fake HTTP server instead of the real Telegram API. Not intended for operator use. Read by `lib/omes/py/content/telegram.py`. |
 | `HERMES_HOME` | `$HOME/.hermes` | Operator (existing, Hermes-owned) | Where `lib/omes/py/content/telegram.py` reads `TELEGRAM_BOT_TOKEN` and `TELEGRAM_ALLOWED_USERS` from `.env`, by key only — it never reads or writes any other key in that file. Same variable `hermes`/`hermes-gateway` already use (section 7/8 above). |
 
-## 18. Reserved but not read by any code path yet
-
-## 13b. `omes audit exposure` / `lib/omes/py/health/exposure.py` (issue #80)
+## 18. `omes audit exposure` / `lib/omes/py/health/exposure.py` (issue #80)
 
 See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80).
 
@@ -216,7 +214,7 @@ See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-is
 | `OMES_EXPOSURE_ALLOW` | unset | Operator (`"host:port,host:port"`) |
 | `OMES_SS_BIN` / `OMES_UFW_BIN` | `ss` / `ufw` | Test-only |
 
-## 13c. `omes health versions` / `lib/omes/py/provenance/versions.py` (issue #83)
+## 19. `omes health versions` / `lib/omes/py/provenance/versions.py` (issue #83)
 
 See [docs/compatibility-evidence.md](compatibility-evidence.md) for the full field list.
 This command reads no variable beyond what its host facts already come from
@@ -224,7 +222,7 @@ This command reads no variable beyond what its host facts already come from
 `versions.py` and not independently configurable at this time); it never reads
 `$HERMES_HOME/.env`.
 
-## 13c. `omes agent-backup` / `lib/omes/py/hermesbackup/` (issue #82)
+## 20. `omes agent-backup` / `lib/omes/py/hermesbackup/` (issue #82)
 
 See [docs/hermes-backup.md](hermes-backup.md) for the full class-to-path
 mapping and command reference.
@@ -234,7 +232,7 @@ mapping and command reference.
 | `HERMES_HOME` / `OMES_HERMES_HOME` | `~/.hermes` | Operator (same resolution as `modules/hermes`) |
 | `OMES_BACKUP_KEEP` | `10` | Operator - same retention knob `lib/omes/backup.sh` uses, applied here too |
 
-## 13d. `omes audit provenance` / `lib/omes/py/provenance/audit.py` (issue #84)
+## 21. `omes audit provenance` / `lib/omes/py/provenance/audit.py` (issue #84)
 
 See [docs/provenance.md](provenance.md) for the full field list and remediation guidance.
 
@@ -242,7 +240,7 @@ See [docs/provenance.md](provenance.md) for the full field list and remediation 
 |---|---|---|
 | `OMES_HERMES_INSTALLER_SHA256` | unset | Operator — pins the expected sha256 of the Hermes installer (§7); a mismatch aborts install before execution, and the resulting provenance record's `checksum.status` reflects whether a pin was used. |
 
-## 13d. `omes agent` / `lib/omes/py/agent/` (issue #87)
+## 22. `omes agent` / `lib/omes/py/agent/` (issue #87)
 
 See [docs/agent-deployment.md](agent-deployment.md) for the full manifest
 format, CLI reference, and lifecycle model.
@@ -253,12 +251,21 @@ format, CLI reference, and lifecycle model.
 | `OMES_AGENT_HARDENING` | `conservative` | Operator | `off`, `conservative`, or `strict`; any other value falls back to `conservative`. Governs the reused `modules/hermes-gateway/hardening.sh` directives in the per-agent drop-in - a separate variable from `OMES_HERMES_HARDENING` (§8a) because it governs a different (per-agent) unit. |
 | `OMES_AGENT_SYSTEM_HOME_ROOT` | `/var/lib/omes` | Operator | Root under which `system`-mode agents' isolated `HERMES_HOME` trees are created (`<root>/agents/<name>/hermes`). |
 | `OMES_AGENT_SYSTEM_UNIT_DIR` | `/etc/systemd/system` | Test-only | Overrides where `system`-mode agent unit files/drop-ins are written, mirroring `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` (§8). |
-| `OMES_HEALTH_TIMEOUT` | `10` (seconds) | Operator | Shared with §13/§13a - bounds every probe `omes agent health` makes. |
+| `OMES_HEALTH_TIMEOUT` | `10` (seconds) | Operator | Shared with §16 - bounds every probe `omes agent health` makes. |
 
+`spec.backend: "compose"` (issue #96, rootless Docker Compose isolation
+backend) reuses `OMES_CONFIG_DIR`, `OMES_STATE_DIR`, and
+`OMES_HEALTH_TIMEOUT` above unchanged and introduces no new environment
+variables of its own - the compose project name, network, and rendered
+file path are all derived from the manifest and `OMES_STATE_DIR`/
+`OMES_CONFIG_DIR`, never from a separate override. See
+[docs/agent-deployment.md section 8](agent-deployment.md) for the
+manifest's own `spec.compose` fields (image, project, network, user,
+capDrop, readOnlyRootfs, volumes, ports) and
+[docs/testing.md](testing.md) for `tests/shims/docker`'s
+`SHIM_DOCKER_*` test-only knobs.
 
-
-
-## 12b. `job` extension command (issue #90; `lib/omes/cmd/job.sh`, `lib/omes/py/jobs/`)
+## 23. `job` extension command (issue #90; `lib/omes/cmd/job.sh`, `lib/omes/py/jobs/`)
 
 The OMES-side control job runner used by a future Control Center (issue
 #89). Never referenced by any installer profile. See
@@ -274,23 +281,9 @@ The OMES-side control job runner used by a future Control Center (issue
 | `OMES_JOBS_TEST_MODE` | unset | Test-only | Must be `1` for `OMES_JOBS_TEST_ARGV_OVERRIDE` to have any effect; a stray override env var alone never redirects real execution. |
 | `OMES_JOBS_TEST_ARGV_OVERRIDE` | unset | Test-only | A JSON array replacing the argv `omes job run` would otherwise execute, used by `tests/py/jobs/test_runner.py` to exercise the timeout path deterministically. Never set in a production deployment. |
 
-
-
-
+## 24. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
-
-`spec.backend: "compose"` (issue #96, rootless Docker Compose isolation
-backend) reuses `OMES_CONFIG_DIR`, `OMES_STATE_DIR`, and
-`OMES_HEALTH_TIMEOUT` above unchanged and introduces no new environment
-variables of its own - the compose project name, network, and rendered
-file path are all derived from the manifest and `OMES_STATE_DIR`/
-`OMES_CONFIG_DIR`, never from a separate override. See
-[docs/agent-deployment.md section 8](agent-deployment.md) for the
-manifest's own `spec.compose` fields (image, project, network, user,
-capDrop, readOnlyRootfs, volumes, ports) and
-[docs/testing.md](testing.md) for `tests/shims/docker`'s
-`SHIM_DOCKER_*` test-only knobs.
 
 <!-- OMES-MERMAID: docs/configuration.md -->
 

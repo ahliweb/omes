@@ -88,7 +88,7 @@ omes agent rollback <name>
 
 This CLI shape is implemented on `feat/87-agent-lifecycle` (issue #87) -
 see [docs/agent-deployment.md](agent-deployment.md) and
-[docs/cli.md section 4.17](cli.md#417-omes-agent-native-omes--hermes-agent-deployment-lifecycle-systemd-mvp--rootless-docker-compose)
+[docs/cli.md section 4.18](cli.md#418-omes-agent-native-omes--hermes-agent-deployment-lifecycle-systemd-mvp--rootless-docker-compose)
 for the actual reference, including what is not yet covered (VM
 evidence, `omes doctor` integration).
 

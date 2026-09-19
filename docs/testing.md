@@ -123,10 +123,10 @@ Requires Docker. Runs, per image in `OMES_MATRIX_IMAGES` (default: `ubuntu:24.04
 | Scenario | What it proves |
 |---|---|
 | `fresh` | `omes check --json` exits 0/3 per tier; a root, sudo-less `omes install --profile server --dry-run --yes`; then a **real** `omes install --module apt-base --yes`. |
-| `rerun` | A second real install makes no *substantive* change (no `apt-get install` call) - see [4. Known gaps](#4-known-gaps) for the one non-blocking caveat. |
+| `rerun` | A second real install makes no *substantive* change (no `apt-get install` call) - see [6. Known gaps](#6-known-gaps) for the one non-blocking caveat. |
 | `offline` | `OMES_ASSUME_OFFLINE=1`: `status`/`restore --list`/`uninstall --dry-run` still work; `install` fails deterministically (exit 4) and mutates nothing. |
 | `partial-failure` | A forced `apt-get install` failure (via `tests/matrix/shims/apt-get`, mounted ahead on `PATH`) surfaces as exit 6, naming the module. |
-| `reboot` | A container stop/start proxy for a real reboot - see [4. Known gaps](#4-known-gaps). |
+| `reboot` | A container stop/start proxy for a real reboot - see [6. Known gaps](#6-known-gaps). |
 | `rollback` | `omes backup` → modify → `omes restore` → checksum equality; a plain `omes uninstall` leaves packages installed. |
 
 The repository is bind-mounted **read-only** at `/omes` in every container; only a per-scenario
@@ -181,7 +181,7 @@ fast and never depends on PyPI availability. Run it by hand with `tests/graphify
 ### 2.5 Manual desktop checklist
 
 Follow [`tests/vm/checklist.md`](../tests/vm/checklist.md) by hand against a real (or virtualized)
-Linux Mint 22.x install. Not automated - see [4. Known gaps](#4-known-gaps) for why.
+Linux Mint 22.x install. Not automated - see [6. Known gaps](#6-known-gaps) for why.
 
 ### 2.5 Python stdlib unit tests
 
@@ -207,7 +207,7 @@ technical gates:
 |---|---|
 | Installation success on the Tier-1 matrix | `scripts/test-matrix.sh`'s `fresh` scenario, both Tier-1 images |
 | Re-run idempotency | `scripts/test-matrix.sh`'s `rerun` scenario |
-| Reboot survival | `scripts/test-matrix.sh`'s `reboot` scenario (container proxy) **and** `tests/vm/run.sh` (real reboot) - see [4. Known gaps](#4-known-gaps) for why both matter |
+| Reboot survival | `scripts/test-matrix.sh`'s `reboot` scenario (container proxy) **and** `tests/vm/run.sh` (real reboot) - see [6. Known gaps](#6-known-gaps) for why both matter |
 | Docs walkthrough by a second operator | `tests/vm/checklist.md`'s procedure, run by someone other than the primary author |
 
 A specific run's evidence is **not** committed to the repository (`tests/matrix/results/`,

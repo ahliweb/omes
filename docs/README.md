@@ -12,6 +12,7 @@ Grouped index of every document in this repository. See the top-level
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix, organized by exit code and by component. |
 | [configuration.md](configuration.md) | Every environment variable OMES reads, grouped by component, with defaults. |
 | [cli.md](cli.md) | Full `bin/omes` command reference: flags, exit codes, JSON schemas, worked examples. |
+| [compatibility-evidence.md](compatibility-evidence.md) | `omes health versions`/`omes status` compatibility evidence: field list, evidence-is-not-a-guarantee scope note. |
 
 ## Operate
 
@@ -27,7 +28,11 @@ Grouped index of every document in this repository. See the top-level
 | [telegram-security.md](telegram-security.md) | The Telegram allowlist model, safe chat-id discovery, token rotation, operator checklist. |
 | [ollama.md](ollama.md) | The optional local Ollama runtime: health checks, capability profiles, exposure policy. |
 | [content-distribution.md](content-distribution.md) | The optional content distribution workflow (inbox, jobs, approvals, worker contract). |
+| [content-threat-model.md](content-threat-model.md) | Threat model for the content distribution workflow, cross-referenced with its design and test docs. |
 | [graphify.md](graphify.md) | The Graphify/Obsidian integration boundary: what OMES owns vs. what Graphify owns. |
+| [graphify-privacy.md](graphify-privacy.md) | Graphify privacy, provenance, and deletion: `.graphifyignore`/`.gitignore` defaults, `init-ignore`/`purge`. |
+| [jobs.md](jobs.md) | `omes job`: the OMES-side control job runner (state machine, approval policy, operation table, retry/reconciliation). |
+| [provenance.md](provenance.md) | Supply-chain provenance: `omes audit provenance`, recorded package/installer checksums and metadata. |
 | [rollback.md](rollback.md) | Backup layout, `omes backup`/`omes restore`/`omes uninstall`, what is and isn't reversible. |
 | [disaster-recovery.md](disaster-recovery.md) | Scenario-driven recovery walkthroughs exercised by the integration test suite. |
 | [testing.md](testing.md) | The test pyramid (unit/integration bats, container matrix, VM matrix, manual checklist) and how to run each layer. |
@@ -49,6 +54,11 @@ Grouped index of every document in this repository. See the top-level
 | [research-and-implementation-plan.md](research-and-implementation-plan.md) | The original research baseline and phased implementation plan. |
 | [agent-orchestration-roadmap.md](agent-orchestration-roadmap.md) | Staged agent deployment roadmap: native systemd MVP, rootless Compose isolation, optional Coolify backend, and evidence-gated Nomad/Kubernetes evaluation. |
 | [control-center-and-integrations.md](control-center-and-integrations.md) | Proposed AWCMS-based Control Center boundary, idempotent jobs, billing, Cloudflare, SRS-X, GitHub, DNS, and provider reconciliation. |
+| [control-center-contracts.md](control-center-contracts.md) | Versioned wire contract between an AWCMS/awcms-one-based Control Center, OMES, and Hermes. |
+| [control-center-foundation.md](control-center-foundation.md) | OMES-side contract deliverable for the Control Center foundation issue; the web GUI/tenant/RBAC layers stay in AWCMS/awcms-one. |
+| [control-center-threat-model.md](control-center-threat-model.md) | Design-stage threat model for the Control Center boundary, ahead of a running implementation. |
+| [coolify-adapter.md](coolify-adapter.md) | The optional Coolify deployment adapter: fake-provider contracts, what is and isn't wired up yet. |
+| [domain-providers.md](domain-providers.md) | Domain registrar/DNS provider abstraction, capabilities, and provider profiles (issues #98-#102). |
 | [web-panel-reference-evaluation.md](web-panel-reference-evaluation.md) | Herman web-panel evaluation: adopted UX patterns, rejected boundaries, fit matrix, security adaptations, and implementation mapping. |
 
 ## Business
@@ -58,6 +68,7 @@ Grouped index of every document in this repository. See the top-level
 | [business/README.md](business/README.md) | Index of the business/go-to-market documents. |
 | [business/business-model.md](business/business-model.md) | Business model. |
 | [business/competitive-landscape.md](business/competitive-landscape.md) | Competitive landscape. |
+| [business/graphify-use-cases.md](business/graphify-use-cases.md) | Graphify/Obsidian use cases, value-vs-novelty separation, measurement plan, and packaging recommendation. |
 | [business/icp-and-customer-discovery.md](business/icp-and-customer-discovery.md) | Ideal customer profile and discovery notes. |
 | [business/pilot-program.md](business/pilot-program.md) | Pilot program design. |
 | [business/positioning.md](business/positioning.md) | Product positioning. |

@@ -169,7 +169,7 @@ snapshot of runtime version/compatibility evidence.
 `evidence` is exactly the same object `omes health versions --json` emits (same top-level keys:
 `ok`, `generated_at`, `components`, `warnings`) - see
 [docs/compatibility-evidence.md](compatibility-evidence.md) for every component it records, and
-§4.12 below for the standalone `omes health versions` command. When the evidence collector
+§4.13 below for the standalone `omes health versions` command. When the evidence collector
 cannot run at all (python3 missing, or an internal collector error), `evidence` is instead
 `{"ok": false, "error": "..."}` - the surrounding `omes status` JSON object is still exactly one
 valid object either way, and `omes status`'s own `ok`/`exit_code` are unaffected. In human mode,
@@ -199,7 +199,7 @@ Health checks, read-only and offline: platform tier, required commands (`bash`, 
 privilege can't run it, or if the module was removed from disk), an optional per-module
 `module_doctor` hook (any module MAY define this function for deeper self-diagnosis — additive
 to the module contract in `docs/architecture.md` Section 4; not required), every **deployed**
-`omes agent` (issue #87/#96 follow-up — see section 4.17 `omes agent doctor` below; skipped
+`omes agent` (issue #87/#96 follow-up — see section 4.18 `omes agent doctor` below; skipped
 entirely, not a `WARN`, when no agent has ever been declared), backup session availability, and
 log directory writability. Each check reports `OK`, `WARN`, or `FAIL`.
 
@@ -470,9 +470,6 @@ clean, 7 findings.
 > See [docs/hermes-deployment-guide.md §13](hermes-deployment-guide.md#13-compatibility-records-and-provenance).
 
 
-## 4.12 Extension commands
-
-
 ## 4.15 `omes content` (optional content distribution workflow)
 
 > Status: `scan`, `rescan`, `list` implemented (#64). `approve`, `reject`,
@@ -708,7 +705,7 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
-### `omes graphify` (update / uninstall / run / skill / mcp health / export / sync / status / init-ignore / purge)
+## 4.16 `omes graphify` (update / uninstall / run / skill / mcp health / export / sync / status / init-ignore / purge)
 
 `lib/omes/cmd/graphify.sh` (issues #50/#51/#52/#53/#54/#55). Full synopsis, exit codes, JSON
 schemas, and examples for every `omes graphify <subcommand>` live in
@@ -724,11 +721,8 @@ manifest, not an upstream flag — see docs/graphify.md §6.1 for the corrected 
 `update`/`watch` facts). `omes graphify init-ignore`/`purge` (docs/graphify-privacy.md) ship safe
 `.graphifyignore`/`.gitignore` defaults and remove only marker/manifest-owned OMES artifacts,
 never user-authored content.
-## 4.16 `omes agent-backup` (opt-in Hermes data-class backup/restore)
 
-
-## 4.14 `omes agent-backup` (opt-in Hermes data-class backup/restore)
-
+## 4.17 `omes agent-backup` (opt-in Hermes data-class backup/restore)
 
 `omes agent-backup create|list|verify|restore` (issue #82,
 `lib/omes/cmd/agent-backup.sh`) is a separate tool from `omes
@@ -737,8 +731,7 @@ backup`/`omes restore` scoped to Hermes's own data under `$HERMES_HOME`
 [docs/hermes-backup.md](hermes-backup.md) for the class-to-path mapping,
 manifest format, and command reference.
 
-## 4.17 `omes agent` (native OMES + Hermes agent deployment lifecycle: systemd MVP + rootless Docker Compose)
-
+## 4.18 `omes agent` (native OMES + Hermes agent deployment lifecycle: systemd MVP + rootless Docker Compose)
 
 > Status: systemd MVP implemented on `feat/87-agent-lifecycle` (issue
 > #87). The rootless Docker Compose backend (`spec.backend: "compose"`)
@@ -762,18 +755,6 @@ Compose project, for agents that need stronger filesystem/dependency/
 network isolation than a systemd service provides). Full design,
 manifest schema, lifecycle states, isolation model, and secret handling:
 [docs/agent-deployment.md](agent-deployment.md).
-
-## 4.14 `omes job` (Control Center control jobs)
-
-> Status: implemented (#90). `lib/omes/cmd/job.sh` (a thin wrapper, per
-> the extension-command contract in section 4.12) and
-> `lib/omes/py/jobs/` (stdlib-only Python, ADR-0012). Never referenced by
-> any installer profile. See [docs/jobs.md](jobs.md) for the full design
-> (state machine, approval policy, operation→command table, retry and
-> reconciliation semantics) and
-> [docs/control-center-contracts.md](control-center-contracts.md) (#89)
-> for the wire contract a submitted request must satisfy.
-
 
 **Synopsis:**
 
@@ -857,6 +838,20 @@ membership on a rootful daemon. OMES never adds a user to the `docker`
 group and never runs `sudo` on the agent's behalf; the agent container
 is never given Docker socket access.
 
+## 4.19 `omes job` (Control Center control jobs)
+
+> Status: implemented (#90). `lib/omes/cmd/job.sh` (a thin wrapper, per
+> the extension-command contract in section 4.12) and
+> `lib/omes/py/jobs/` (stdlib-only Python, ADR-0012). Never referenced by
+> any installer profile. See [docs/jobs.md](jobs.md) for the full design
+> (state machine, approval policy, operation→command table, retry and
+> reconciliation semantics) and
+> [docs/control-center-contracts.md](control-center-contracts.md) (#89)
+> for the wire contract a submitted request must satisfy.
+
+**Synopsis:**
+
+```bash
 omes job submit --file <deployment-request.json> [--json]
 omes job approve <job-id> --actor <id> [--json]
 omes job run <job-id> [--actor <id>] [--json]
@@ -864,6 +859,7 @@ omes job status <job-id> [--json]
 omes job list [--state STATE] [--json]
 omes job cancel <job-id> --actor <id> [--json]
 omes job expire [--json]
+```
 
 - `submit` validates `<file>` against
   `contracts/control-center/v1/deployment.request.schema.json` (rejecting,
