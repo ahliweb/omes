@@ -9,9 +9,14 @@
 #                                     [--out <dir>] [--yes] [--dry-run] [--json]
 #   omes graphify skill install      [--yes] [--dry-run] [--json]
 #   omes graphify skill uninstall    [--yes] [--dry-run] [--json]
+#   omes graphify mcp health         [--graph <path>] [--json]
 #
 # Full synopsis/exit-codes/JSON schema for every subcommand: docs/graphify.md
-# §2 (update/uninstall, issue #50) and §3 (run/skill, issue #51).
+# §2 (update/uninstall, issue #50), §3 (run/skill, issue #51), and §4
+# (mcp health, issue #52). `omes install`/`uninstall --module graphify-mcp`
+# (modules/graphify-mcp/module.sh) install/remove the `graphifyy[mcp]`
+# extra itself - `mcp health` here is a read-only status check only, and
+# never touches hermes-gateway or any Hermes runtime state.
 #
 # `run` never touches graphify-out/ content beyond writing its own
 # omes-provenance.json sidecar (docs/graphify.md §3.2); `update`/
@@ -566,6 +571,107 @@ _graphify_cmd_skill() {
   esac
 }
 
+# _graphify_cmd_mcp_health
+# Read-only health check for the optional graphify-mcp entry point
+# (modules/graphify-mcp/module.sh, issue #52). Never installs, uninstalls,
+# or spawns a running MCP session; never touches hermes-gateway or any
+# Hermes runtime state - a broken or absent graphify-mcp can only ever
+# affect an MCP client's ability to reach Graphify's tools, never normal
+# Hermes operation (docs/graphify.md §4).
+_graphify_cmd_mcp_health() {
+  local graph=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --graph)
+        [[ $# -ge 2 ]] || {
+          log_error "graphify: --graph requires an argument"; exit "$OMES_EX_USAGE"
+        }
+        graph="$2"
+        shift 2
+        ;;
+      --json)
+        OMES_JSON=1
+        shift
+        ;;
+      *)
+        log_error "graphify: unknown argument to 'mcp health': $1"
+        exit "$OMES_EX_USAGE"
+        ;;
+    esac
+  done
+
+  local status="ok"
+  local detail=""
+  local resolved_graph=""
+
+  if ! command -v graphify-mcp >/dev/null 2>&1; then
+    status="not_applicable"
+    detail="graphify-mcp is not installed - run 'omes install --module graphify-mcp' to enable it; 'graphify query'/'omes graphify run' remain available regardless"
+  elif ! graphify-mcp --help >/dev/null 2>&1; then
+    status="unhealthy"
+    detail="'graphify-mcp --help' failed"
+  else
+    resolved_graph="${graph:-graphify-out/graph.json}"
+    if [[ ! -f "$resolved_graph" ]]; then
+      status="unhealthy"
+      detail="graph file not found: ${resolved_graph} (run 'omes graphify run <path>' first, or pass --graph)"
+    fi
+  fi
+
+  case "$status" in
+    ok)
+      log_info "graphify: mcp health: ok (graphify-mcp is installed and responsive; graph: ${resolved_graph})"
+      ;;
+    not_applicable)
+      log_info "graphify: mcp health: not_applicable - ${detail}"
+      ;;
+    unhealthy)
+      log_error "graphify: mcp health: unhealthy - ${detail}"
+      ;;
+  esac
+
+  if [[ "$OMES_JSON" == "1" ]]; then
+    local ok_bool="true"
+    [[ "$status" == "unhealthy" ]] && ok_bool="false"
+    json_obj \
+      "$(json_kv command graphify)" \
+      "$(json_kv subcommand mcp)" \
+      "$(json_kv action health)" \
+      "$(json_kv ok "$ok_bool" --raw)" \
+      "$(json_kv status "$status")" \
+      "$(json_kv detail "$detail")" \
+      "$(json_kv graph "$resolved_graph")" \
+      "$(json_kv exit_code 0 --raw)"
+    printf '\n'
+  fi
+
+  # not_applicable is an expected default state (MCP is opt-in and
+  # disabled by default, issue #52 criterion 3), not a failure - only a
+  # genuinely broken install (installed but non-functional, or an
+  # explicitly requested graph missing) exits non-zero.
+  if [[ "$status" == "unhealthy" ]]; then
+    exit "$OMES_EX_ERROR"
+  fi
+  exit "$OMES_EX_OK"
+}
+
+_graphify_cmd_mcp() {
+  local action="${1:-}"
+  if [[ -n "$action" ]]; then
+    shift
+  fi
+
+  case "$action" in
+    health)
+      _graphify_cmd_mcp_health "$@"
+      ;;
+    *)
+      log_error "graphify: usage: omes graphify mcp health [--graph <path>] [--json]"
+      exit "$OMES_EX_USAGE"
+      ;;
+  esac
+}
+
 cmd_graphify() {
   local sub="${1:-}"
   if [[ -n "$sub" ]]; then
@@ -585,8 +691,11 @@ cmd_graphify() {
     skill)
       _graphify_cmd_skill "$@"
       ;;
+    mcp)
+      _graphify_cmd_mcp "$@"
+      ;;
     *)
-      log_error "graphify: usage: omes graphify {update|uninstall|run|skill} [args...]"
+      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp} [args...]"
       exit "$OMES_EX_USAGE"
       ;;
   esac

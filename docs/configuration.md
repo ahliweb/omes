@@ -89,12 +89,14 @@ has no documented, supported effect and is not recommended.
 | `OMES_HERMES_GATEWAY_SYSTEM_USER` | unset | Operator (required) | `hermes-gateway-system` | The existing, non-root account whose Hermes install the system gateway serves. `module_check` fails without it, or if it names `root`, or if the account does not exist. |
 | `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | `/etc/systemd/system` | Test-only | `hermes-gateway-system` | Overrides the system drop-in directory. |
 
-## 9. `graphify` module
+## 9. `graphify` / `graphify-mcp` modules
 
-See [docs/graphify.md](graphify.md) §2/§3 (issues #50/#51) for the full env var/state-key
+See [docs/graphify.md](graphify.md) §2/§3/§4 (issues #50/#51/#52) for the full env var/state-key
 reference (`OMES_GRAPHIFY_VERSION`, `OMES_GRAPHIFY_INSTALLER`, `OMES_UV_INSTALLER_SHA256`,
-`OMES_GRAPHIFY_PROVIDER_ENV`, and the `module.graphify.version_installed` state key) — kept
-there rather than duplicated here to minimize this shared reference file's graphify footprint.
+`OMES_GRAPHIFY_PROVIDER_ENV`, `OMES_GRAPHIFY_UV_CMD`/`OMES_GRAPHIFY_PIPX_CMD`, and the
+`module.graphify.version_installed` state key — `graphify-mcp` reuses the same variables,
+introducing none of its own) — kept there rather than duplicated here to minimize this shared
+reference file's graphify footprint.
 
 ## 10. `desktop-preflight` / `hyprland-session` modules
 

@@ -384,4 +384,96 @@ omes graphify skill uninstall --yes   # removes only those two files
 
 ## §4 MCP integration
 
-Not implemented yet (tracked in #52).
+Implemented (issue #52). Upstream `graphifyy[mcp]` (an optional PyPI extra, §1) provides a
+real, invocable console script — verified empirically 2026-09-19 against graphify 0.9.64
+(`pip install "graphifyy[mcp]"` inside `python:3.12-slim`):
+
+```
+$ graphify-mcp --help
+usage: python -m graphify.serve [-h] [--graph PATH] [--transport {stdio,http}]
+                                [--host HOST] [--port PORT]
+                                [--api-key API_KEY] [--path PATH]
+                                [--json-response] [--stateless]
+                                [--session-timeout SESSION_TIMEOUT]
+                                [graph_path]
+
+Serve a graphify knowledge graph over MCP (stdio or Streamable HTTP).
+```
+
+### 4.1 Command, working directory, graph path, lifecycle
+
+- **Command:** `graphify-mcp` (equivalently `python -m graphify.serve`).
+- **Graph path:** the positional `graph_path` argument, or `--graph PATH`; both default to
+  `graphify-out/graph.json` **resolved relative to the process's current working directory** —
+  there is no separate install directory, and OMES does not introduce one.
+- **Transport/lifecycle:** default `--transport stdio`. This is a local process an MCP client
+  (Hermes) spawns per session and talks to over stdin/stdout — **not** a persistent daemon.
+  OMES never enables `--transport http` and never starts, enables, or supervises a running
+  `graphify-mcp` process itself (ADR-0014, "MCP as a local process boundary first; remote graph
+  servers are outside MVP" — the issue #52 brief's own framing). Wiring an actual Hermes MCP
+  client configuration to spawn `graphify-mcp` is an operator action outside this repository's
+  scope, exactly like configuring any other MCP server Hermes talks to.
+
+### 4.2 `graphify-mcp` module (issue #52 criterion 1, 3)
+
+`modules/graphify-mcp/module.sh` (`MODULE_SCOPE=user`, `MODULE_REQUIRES=(graphify)`,
+`MODULE_PROFILES=()` — **disabled by default**, exactly like `graphify` itself, reachable only
+via `omes install --module graphify-mcp`):
+
+- `module_check`: requires the `graphify` CLI to already be installed (points at
+  `omes install --module graphify` otherwise); detects `uv`/`pipx` the same way
+  `modules/graphify/module.sh` does (honoring the same `OMES_GRAPHIFY_UV_CMD`/
+  `OMES_GRAPHIFY_PIPX_CMD` test-only overrides); requires network only when not yet installed.
+- `module_apply`: idempotent; installs `graphifyy[mcp]` via `uv tool install "graphifyy[mcp]"`
+  (or the pinned `graphifyy[mcp]==<version>` when `OMES_GRAPHIFY_VERSION` is set, or the pipx
+  equivalent) — the same PEP 668-safe, no-`pip-install` posture as the base module.
+- `module_verify`: `command -v graphify-mcp` and `graphify-mcp --help` (which exits immediately
+  — it never starts the actual server) must both succeed.
+- `module_rollback`: reinstalls plain `graphifyy` **without** the `[mcp]` extra
+  (`uv tool install --reinstall graphifyy` / `pipx install --force graphifyy`), dropping the
+  `graphify-mcp` entry point; never touches `graphify-out/` directories, other graphify-produced
+  data, or hermes-gateway.
+
+### 4.3 `omes graphify mcp health` (issue #52 criterion 2)
+
+**Synopsis:** `omes graphify mcp health [--graph <path>] [--json]`
+
+A read-only status check, never a lifecycle command (installing/removing the extra goes through
+`omes install`/`uninstall --module graphify-mcp` above, like every other OMES module) and never
+a fallback trigger by itself — it only reports, so an operator or Hermes can decide:
+
+- **`ok`** — `graphify-mcp` is installed, `--help` responds, and the graph file (given or
+  default `graphify-out/graph.json`) exists.
+- **`not_applicable`** — `graphify-mcp` is not installed. This is the **expected default
+  state** (MCP is opt-in), not an error: exits 0, and the message points at
+  `omes install --module graphify-mcp` while noting that `graphify query`/`omes graphify run`
+  remain fully available regardless (the "clear CLI fallback" issue #52 criterion 2 asks for).
+- **`unhealthy`** — installed but broken (`--help` fails) or the graph file is missing: exits 1.
+
+**Exit codes:** 0 (`ok` or `not_applicable`), 1 (`unhealthy`), 2 (usage error).
+
+**JSON schema:** `{"command":"graphify","subcommand":"mcp","action":"health","ok":true,"status":"not_applicable","detail":"...","graph":"","exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify mcp health                                    # default graphify-out/graph.json
+omes graphify mcp health --graph ~/code/myrepo/graphify-out/graph.json --json
+```
+
+### 4.4 Failure isolation (issue #52 criterion 4)
+
+Neither `modules/graphify-mcp/module.sh` nor `omes graphify mcp health` ever invokes
+`systemctl`, references `hermes-gateway`, or touches any Hermes runtime state — verified by
+`tests/integration/graphify.bats`'s dedicated isolation tests (asserting `systemctl` never
+appears in the invocation log across install/uninstall/health). A missing, broken, or
+uninstalled `graphify-mcp` can only ever affect an MCP client's ability to reach Graphify's
+tools over MCP; it structurally cannot affect Hermes messaging, other skills, or the
+`hermes-gateway` service, because nothing in this integration touches them.
+
+### 4.5 Non-goals (unchanged from §1.4)
+
+No OMES-managed running MCP server process, no `--transport http` default, no networked graph
+database push as part of MCP (that remains the separate, opt-in `export neo4j`/`export
+falkordb` path, §1.4), and no duplication of graphify's own MCP tool implementation
+(`graphify/serve.py` upstream) inside OMES.
