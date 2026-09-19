@@ -27,6 +27,7 @@ architecture and state model."
 | [0013](0013-agent-runtime-boundary.md) | Agent-runtime abstraction boundary, with Hermes as the only implementation | Accepted |
 | [0014](0014-graphify-integration-boundary.md) | Graphify integration boundary | Accepted as design boundary |
 | [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Accepted as design boundary |
+| [0016](0016-herman-web-panel-reference.md) | Herman is a UX reference, not an OMES dependency | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an

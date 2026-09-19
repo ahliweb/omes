@@ -72,7 +72,10 @@ The implementation sequence is tracked in GitHub milestones:
 
 The web Control Center, billing service, registrar adapters, DNS integration,
 GitHub adapter, and multi-server backends are **not part of the current Bash
-CLI implementation unless their linked issues have landed**. See the canonical
+CLI implementation unless their linked issues have landed**. Herman is a
+reference-only UX input for the staged Control Center; it is not a runtime,
+executor, dependency, or source of truth. See the [Herman reference evaluation](docs/web-panel-reference-evaluation.md)
+and [ADR-0016](docs/adr/0016-herman-web-panel-reference.md). See the canonical
 [Control Center and integrations design](docs/control-center-and-integrations.md)
 and [ADR-0011](docs/adr/0011-control-center-and-provider-boundaries.md).
 
@@ -246,6 +249,8 @@ for the security baseline and threat model this project maintains.
   research baseline and phased implementation plan
 - [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md) —
   proposed web control plane, billing, domain, DNS, Cloudflare, SRS-X, and GitHub boundaries
+- [docs/web-panel-reference-evaluation.md](docs/web-panel-reference-evaluation.md) —
+  Herman web-panel reference decision, fit matrix, security adaptations, and issue mapping
 - [docs/adr/](docs/adr/) — architecture decision records
 - [CONTRIBUTING.md](CONTRIBUTING.md) and
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)

@@ -35,6 +35,7 @@
 12. [Extension points](#12-extension-points)
 13. [Non-goals and known limitations](#13-non-goals-and-known-limitations)
 14. [Control Center and provider boundary](#14-control-center-and-provider-boundary)
+15. [Web-panel reference boundary](#15-web-panel-reference-boundary)
 
 ---
 
@@ -987,6 +988,14 @@ Provider adapters are staged and not implemented in this CLI branch:
 Registrar and DNS remain separate contracts. Provider state, invoice state, entitlement state, DNS state, and deployment state must never be collapsed into one boolean `active` field. External calls happen outside database transactions and are reconciled asynchronously. Unsupported provider capability becomes an explicit manual task rather than an implicit retry or provider substitution.
 
 The Control Center and provider boundary is a design-only capability until the linked issues land; this section must not be read as evidence that a web GUI or provider adapter exists.
+
+## 15. Web-panel reference boundary
+
+Herman is an external local-panel reference, not an OMES dependency. The accepted fit matrix and security adaptations are documented in [docs/web-panel-reference-evaluation.md](web-panel-reference-evaluation.md) and [ADR-0016](adr/0016-herman-web-panel-reference.md).
+
+The following patterns are suitable for reimplementation in a future Control Center or optional local operator console: board-based navigation, deployment/project cards, runtime/session status, usage and insight summaries, streamed job output, maintenance/backup workflows, explicit confirmation, and degraded/offline states. They must be implemented through the existing tenant, job, audit, provider, and source-of-truth contracts in issues #89–#102.
+
+The following are not transferable without redesign: local token-only authentication, direct subprocess or filesystem execution, raw SSH/API/git credential handling, arbitrary endpoint probing, coupling to Hermes internal databases, and local single-user assumptions. The web surface must never become an arbitrary shell or privileged listener. This section is a design boundary only; it does not mean Herman or an OMES web GUI is implemented.
 
 <!-- OMES-MERMAID: docs/architecture.md -->
 

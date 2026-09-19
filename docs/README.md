@@ -40,6 +40,7 @@ Grouped index of every document in this repository. See the top-level
 | [research-and-implementation-plan.md](research-and-implementation-plan.md) | The original research baseline and phased implementation plan. |
 | [agent-orchestration-roadmap.md](agent-orchestration-roadmap.md) | Staged agent deployment roadmap: native systemd MVP, rootless Compose isolation, optional Coolify backend, and evidence-gated Nomad/Kubernetes evaluation. |
 | [control-center-and-integrations.md](control-center-and-integrations.md) | Proposed AWCMS-based Control Center boundary, idempotent jobs, billing, Cloudflare, SRS-X, GitHub, DNS, and provider reconciliation. |
+| [web-panel-reference-evaluation.md](web-panel-reference-evaluation.md) | Herman web-panel evaluation: adopted UX patterns, rejected boundaries, fit matrix, security adaptations, and implementation mapping. |
 
 ## Business
 

@@ -8,7 +8,7 @@ This file is the operating contract for coding agents, documentation agents, and
 2. Read [CONTRIBUTING.md](CONTRIBUTING.md) for branch, PR, change-fragment, and verification rules.
 3. Read [docs/scope.md](docs/scope.md) and [docs/architecture.md](docs/architecture.md) before changing runtime behavior.
 4. Read [docs/security.md](docs/security.md) and [docs/threat-model.md](docs/threat-model.md) before changing privileges, network behavior, secrets, installers, backups, or provider integrations.
-5. For Control Center, billing, domain, DNS, GitHub, and multi-server work, read [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md) and [ADR-0011](docs/adr/0011-control-center-and-provider-boundaries.md).
+5. For Control Center, billing, domain, DNS, GitHub, multi-server, or web-panel reference work, read [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md), [docs/web-panel-reference-evaluation.md](docs/web-panel-reference-evaluation.md), and the relevant ADRs.
 6. Identify the GitHub issue and milestone before making a substantial change. Do not invent a parallel issue when an existing issue owns the contract.
 
 If the repository state, issue, or documentation disagrees, stop and resolve the discrepancy explicitly. Do not silently choose the most convenient interpretation.
@@ -121,7 +121,8 @@ Backlog ownership:
 - #96–#97: rootless Compose and optional Coolify.
 - #98–#102: provider abstraction, Cloudflare, SRS-X, GitHub, and domain reconciliation.
 
-When changing a contract, update its canonical document, related ADR/security material, and issue cross-references in the same PR.
+- When changing a contract, update its canonical document, related ADR/security material, and issue cross-references in the same PR.
+- Existing panels such as Herman may inform UX, but must be classified adopt/adapt/observe/reject; never import local single-user authentication, raw credential handling, direct subprocess/filesystem execution, or internal Hermes database coupling into a web or multi-tenant boundary.
 
 ## 8. Agent behavior
 

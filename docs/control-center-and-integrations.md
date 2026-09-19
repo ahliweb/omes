@@ -360,3 +360,5 @@ The current OMES repository remains a Bash CLI and host toolkit. This document i
 - [Business model](business/business-model.md)
 - [Release gates](business/release-gates.md)
 - [ADR-0011](adr/0011-control-center-and-provider-boundaries.md)
+- [Web-panel reference evaluation](web-panel-reference-evaluation.md)
+- [ADR-0016](adr/0016-herman-web-panel-reference.md)
