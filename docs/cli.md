@@ -656,14 +656,16 @@ WantedBy=timers.target
 Enable with `systemctl --user enable --now omes-content-scan.timer`.
 OMES does not create, enable, or reference this timer itself.
 
-### `omes graphify` (update / uninstall / run / skill / mcp health)
+### `omes graphify` (update / uninstall / run / skill / mcp health / export)
 
-`lib/omes/cmd/graphify.sh` (issues #50/#51/#52). Full synopsis, exit codes, JSON schemas, and
+`lib/omes/cmd/graphify.sh` (issues #50/#51/#52/#53). Full synopsis, exit codes, JSON schemas, and
 examples for every `omes graphify <subcommand>` live in
-[docs/graphify.md](graphify.md) §2/§3/§4, not here, to keep this shared reference file's
+[docs/graphify.md](graphify.md) §2/§3/§4/§5, not here, to keep this shared reference file's
 graphify footprint minimal — see that document for the authoritative CLI contract. The optional
 `graphify-mcp` server itself is installed via `omes install --module graphify-mcp`, like any
-other OMES module (docs/graphify.md §4.2).
+other OMES module (docs/graphify.md §4.2). `omes graphify export` (docs/graphify.md §5) renders a
+prior extraction into vault-ready Markdown under an operator-supplied Obsidian vault's own
+managed subdirectory only — it never installs or manages Obsidian itself.
 
 ## 5. Worked examples
 

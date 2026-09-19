@@ -18,6 +18,19 @@
 #                             2026-09-19 - see docs/graphify.md).
 #   SHIM_GRAPHIFY_HELP_EXIT   exit code for `graphify --help` (default 0),
 #                             ignored when SHIM_GRAPHIFY_ABSENT=1.
+#   SHIM_GRAPHIFY_EXPORT_OBSIDIAN_FAIL
+#                             1 => `graphify export obsidian` exits 1 and
+#                             writes nothing, simulating an upstream
+#                             failure so callers exercise the OMES-own
+#                             renderer fallback (issue #53,
+#                             docs/graphify.md §5.1/§5.2). Default: 0
+#                             (succeeds, producing a small, realistic
+#                             vault-ready export - one Markdown note with
+#                             upstream's own YAML front matter, a canvas
+#                             file, a nested .obsidian/graph.json, and
+#                             upstream's own .graphify_obsidian_manifest.json
+#                             - verified 2026-09-19 against graphify
+#                             0.9.64's real `export obsidian` output shape).
 
 set -Eeuo pipefail
 
@@ -38,6 +51,57 @@ case "${1:-}" in
       exit 127
     fi
     exit "${SHIM_GRAPHIFY_HELP_EXIT:-0}"
+    ;;
+  export)
+    if [[ "${2:-}" == "obsidian" ]]; then
+      shift 2
+      dir=""
+      while [[ $# -gt 0 ]]; do
+        case "$1" in
+          --dir)
+            dir="$2"
+            shift 2
+            ;;
+          *)
+            shift
+            ;;
+        esac
+      done
+
+      if [[ "${SHIM_GRAPHIFY_EXPORT_OBSIDIAN_FAIL:-0}" == "1" ]]; then
+        exit 1
+      fi
+
+      dir="${dir:-vault-export}"
+      mkdir -p "${dir}/.obsidian"
+      cat > "${dir}/app.py.md" <<'NOTEEOF'
+---
+source_file: "src/app.py"
+type: "code"
+community: "Community 0"
+location: "L1"
+tags:
+  - graphify/code
+  - graphify/EXTRACTED
+  - community/Community_0
+---
+
+# app.py
+
+## Connections
+- [[greet()]] - `contains` [EXTRACTED]
+- [[main()]] - `contains` [EXTRACTED]
+
+#graphify/code #graphify/EXTRACTED #community/Community_0
+NOTEEOF
+      printf '{"nodes":[],"edges":[]}\n' > "${dir}/graph.canvas"
+      printf '{}\n' > "${dir}/.obsidian/graph.json"
+      printf '{"files": [".obsidian/graph.json", "app.py.md", "graph.canvas"]}\n' \
+        > "${dir}/.graphify_obsidian_manifest.json"
+      printf 'Obsidian vault: 1 notes in %s/\n' "$dir"
+      exit 0
+    fi
+    exit 0
     ;;
   *)
     exit 0

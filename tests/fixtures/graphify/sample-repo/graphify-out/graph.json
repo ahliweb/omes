@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    {"id": "file:src/app.py", "type": "file", "path": "src/app.py"},
+    {"id": "file:src/util.py", "type": "file", "path": "src/util.py"},
+    {"id": "fn:main", "type": "function", "name": "main", "file": "src/app.py"},
+    {"id": "fn:greet", "type": "function", "name": "greet", "file": "src/app.py"},
+    {"id": "fn:shout", "type": "function", "name": "shout", "file": "src/util.py"}
+  ],
+  "edges": [
+    {"source": "file:src/app.py", "target": "file:src/util.py", "type": "EXTRACTED"}
+  ]
+}

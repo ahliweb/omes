@@ -1,10 +1,11 @@
 # Graphify integration
 
-> Status: describes the planned integration boundary only. No graphify code,
-> module, or command exists in this repository yet. §1 below is accepted as
-> the design boundary for issue
-> [#49](https://github.com/ahliweb/omes/issues/49); §2–§4 are placeholders
-> for later, stacked issues and must not be read as implemented.
+> Status: §1 is the accepted design boundary (issue
+> [#49](https://github.com/ahliweb/omes/issues/49)). §2 (install module, #50),
+> §3 (workflow/skill, #51), §4 (MCP integration, #52), and §5 (safe Obsidian
+> export, #53) are all implemented, as described. Later sections (§6+) remain
+> placeholders for their own stacked issues and must not be read as
+> implemented until their own issue lands.
 >
 > Upstream facts in this document were verified 2026-09-19 against
 > `graphify` version `0.9.64` (see
@@ -477,3 +478,140 @@ No OMES-managed running MCP server process, no `--transport http` default, no ne
 database push as part of MCP (that remains the separate, opt-in `export neo4j`/`export
 falkordb` path, §1.4), and no duplication of graphify's own MCP tool implementation
 (`graphify/serve.py` upstream) inside OMES.
+
+## §5 Safe Obsidian export (`omes graphify export`)
+
+Implemented (issue #53). `omes graphify export <graphify-out-dir> --vault <path>
+[--init-vault] [--dry-run] [--yes] [--json]` renders the graph a prior `omes graphify run`
+(or a manual `graphify extract`) already produced into vault-ready Markdown notes, writing
+**only** under `<vault>/<subdir>/` (default subdir: `graphify/<project-name>`, overridable via
+`OMES_GRAPHIFY_VAULT_SUBDIR`) — it never touches any other note in the vault, and never touches
+the vault's own top-level `.obsidian/` directory. Per §1.2/§1.4, OMES still never installs,
+starts, or talks to a running Obsidian process; this command only writes files a human may later
+open in Obsidian.
+
+**Synopsis:** `omes graphify export <graphify-out-dir> --vault <path> [--init-vault] [--dry-run]
+[--yes] [--json]` and `omes graphify export rollback [--timestamp <ts>] [--yes] [--json]`.
+
+**Vault resolution — never guessed:** `--vault <path>`, or the `OBSIDIAN_VAULT_PATH` environment
+variable when `--vault` is omitted. Missing both is a usage error (exit 2) — the vault path is
+always operator-supplied, explicitly. The resolved vault must already exist and contain a
+`.obsidian/` directory (Obsidian's own vault marker), **or** the operator passes `--init-vault`
+explicitly, in which case a new vault directory (and a minimal `.obsidian/` marker directory —
+just enough for Obsidian to recognize it as a vault on next open; OMES writes no Obsidian
+preference/plugin content into it) is created. A vault that exists but lacks `.obsidian/` is
+refused without `--init-vault` — OMES never assumes an arbitrary directory is meant to be a
+vault.
+
+### 5.1 Two render paths — upstream preferred, OMES's own renderer as fallback
+
+Verified 2026-09-19 against graphify 0.9.64 (`docker run --rm python:3.12-slim bash -c 'pip
+install -q graphifyy && graphify extract /work --code-only && graphify export obsidian --graph
+/work/graphify-out/graph.json --dir /work/vault-export'`): upstream's `export obsidian` is real
+and DOES produce genuinely vault-ready Markdown — one note per code symbol/file with its own YAML
+front matter (`source_file`, `type`, `community`, `location`, `tags:` including
+`graphify/EXTRACTED`), a `## Connections` section with `[[wikilinks]]` between notes, a
+`graph.canvas` (Obsidian Canvas JSON), a nested `.obsidian/graph.json` (Obsidian's own graph-view
+config — written inside upstream's own output directory, never the vault's top-level
+`.obsidian/`; harmless when that output directory is itself an OMES-owned subdirectory, since
+Obsidian only reads `.obsidian/` at the vault root), and its own generated-files manifest,
+`.graphify_obsidian_manifest.json`.
+
+Because upstream's own output satisfies "vault-ready Markdown," `omes graphify export` **prefers
+it**: it stages `graphify export obsidian --graph <graph.json> --dir <throwaway-temp-dir>` (never
+writing directly into the vault), then post-processes every file upstream's own manifest lists
+(`lib/omes/py/graphify/obsidian.py`'s `postprocess_upstream_export`) by injecting OMES's required
+front-matter fields (§5.3) into every `.md` file **without disturbing upstream's own fields or
+nested YAML lists** (`inject_front_matter_fields` edits the front-matter block textually, it does
+not parse/re-serialize the whole block — ADR-0012 forbids a third-party YAML parser). Non-Markdown
+files (the canvas, the nested `.obsidian/graph.json`, upstream's own manifest) are copied through
+unmodified and tracked via OMES's own `.omes_export_manifest.json` bookkeeping file instead (§5.4).
+
+**Fallback.** When the `graphify` CLI is not on `PATH`, or `graphify export obsidian` fails, or
+it leaves no `.graphify_obsidian_manifest.json` behind, `omes graphify export` falls back to
+rendering directly from `graph.json` using its own renderer
+(`lib/omes/py/graphify/obsidian.py`'s `build_notes`) — one note per file-type node (with a
+`## Symbols` list and a `## Links` section of `[[wikilinks]]` tagged `EXTRACTED`/`INFERRED`, per
+§1.6), plus a generated `_index.md` and `_provenance.md`. This path never shells out to
+`graphify` at all; it only reads `graph.json`. A warning is logged when the fallback triggers so
+the operator knows which render path actually ran (also reported as `"render_mode"` in `--json`
+output: `"upstream"` or `"fallback"`).
+
+### 5.2 What `omes graphify export` never does
+
+- Never writes anywhere outside `<vault>/<subdir>/` (plus, for `--init-vault`, the new vault's
+  own top-level `.obsidian/` marker directory it just created).
+- Never touches a pre-existing vault's top-level `.obsidian/` directory or any note outside the
+  managed subdirectory, in either render path.
+- Never installs, starts, or talks to a running Obsidian process.
+- Never re-extracts anything — it only ever reads an already-produced `graphify-out/graph.json`.
+
+### 5.3 Generated-note front matter and provenance
+
+Every Markdown note this command writes or updates carries, at minimum:
+
+```yaml
+omes_generated: true
+graphify_version: "0.9.64"
+extraction_mode: "code"
+generated_at: "2026-09-19T12:00:00Z"
+graph_sha256: "<sha256 of the source graph.json>"
+```
+
+plus a `source` field (OMES's own renderer) or upstream's own `source_file` field (upstream
+render path) naming the original source file the note describes. `omes_generated: true` is the
+load-bearing marker: **a target path that already exists but does not carry this marker in its
+front matter is never overwritten** — it is refused and reported (in `--json` output's
+`conflicts` list, and as a `log_warn` line) instead, so an operator's own hand-authored note is
+never silently clobbered by a re-export. OMES's own renderer additionally writes `_index.md`
+(one entry per generated file note, plus a link to `_provenance.md`) and `_provenance.md` (the
+source path, graphify version, extraction mode, generated-at timestamp, `graph.json` sha256, and
+node/edge counts) — the audit record for that export, layered on top of, never replacing,
+graphify's own `EXTRACTED`/`INFERRED` edge provenance (§1.6).
+
+### 5.4 Non-Markdown output ownership (upstream render path only)
+
+A YAML front-matter marker cannot be embedded in a canvas (`.canvas`, JSON) or a nested
+`.obsidian/graph.json` file without risking breaking Obsidian's own schema for them, so those are
+tracked instead via `.omes_export_manifest.json` — a small JSON bookkeeping file
+(`{"omes_generated": true, "files": [...]}`) OMES writes into the managed subdirectory after
+every successful write, recording every non-Markdown path it owns there. A future export
+recognizes a previously-owned non-Markdown path (safe to overwrite) versus an unrecognized
+pre-existing one at that same path (refused as a conflict, exactly like the Markdown marker
+rule). `.omes_export_manifest.json` itself is always OMES-owned by construction.
+
+### 5.5 Preview, backup, and rollback
+
+- **`--dry-run`** plans the export (both render paths only ever *read* to build a plan; nothing
+  is written to the vault) and reports, in human output and `--json`, the full list of planned
+  writes (`"create"`/`"update"` per path) and any conflicts, without writing a single file.
+- **Backup before write.** Before any real write, `omes graphify export` opens a
+  graphify-export-scoped backup session (`backup_begin "graphify-export" ...` /
+  `backup_path`/`backup_finish`, reusing `lib/omes/backup.sh` exactly like every other OMES
+  mutation) covering the entire target subdirectory as it existed before this run — even on a
+  first-ever export of an empty subdirectory (nothing to back up yet, an empty/no-op session is
+  still recorded for consistency).
+- **`omes graphify export rollback [--timestamp <ts>] [--yes] [--json]`** restores the most
+  recent (or a named) `graphify-export` backup session via the same `restore_backup` (
+  `lib/omes/restore.sh`) every other OMES restore path uses — scoped to sessions whose `META`
+  records `module=graphify-export`, so it can never accidentally restore an unrelated backup.
+  Requires confirmation (`--yes` or an interactive `y`), exactly like a real export write.
+
+**Exit codes:** 0, 1 (python3/graphify.cli invocation failed, confirmation declined without
+`--yes`, or `export rollback` found no matching backup session — exit `OMES_EX_BACKUP`=9 for
+that last case specifically), 2 (usage error: missing `<graphify-out-dir>`, missing/invalid
+`--vault`/`OBSIDIAN_VAULT_PATH`, `graphify-out-dir` or its `graph.json` missing, or vault exists
+without `.obsidian/` and `--init-vault` was not given).
+
+**JSON schema (write):**
+`{"command":"graphify","subcommand":"export","ok":true,"vault":"/abs/vault","target_dir":"/abs/vault/graphify/myrepo","backup":"/state/backups/<ts>","render_mode":"upstream","result":{"ok":true,"written":[...],"conflicts":[...],"note_count":N},"exit_code":0}`.
+
+**Examples:**
+
+```bash
+omes graphify export ~/code/myrepo/graphify-out --vault ~/Documents/MyVault --dry-run
+omes graphify export ~/code/myrepo/graphify-out --vault ~/Documents/MyVault --yes
+OBSIDIAN_VAULT_PATH=~/Documents/MyVault omes graphify export ~/code/myrepo/graphify-out --yes
+omes graphify export ~/code/myrepo/graphify-out --vault ~/Documents/NewVault --init-vault --yes
+omes graphify export rollback --yes                          # undo the last export
+```
