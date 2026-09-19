@@ -1,0 +1,13 @@
+{
+  "snapshot_id": "price-0001",
+  "provider": "cloudflare",
+  "tld": "com",
+  "operation": "registration",
+  "term_years": 1,
+  "provider_cost_minor": 899,
+  "customer_price_minor": 1499,
+  "currency": "usd",
+  "tax_class": "standard",
+  "premium": false,
+  "captured_at": "2026-09-19T00:00:00Z"
+}

@@ -1,0 +1,17 @@
+{
+  "capability_id": "cap-cloudflare-intl-01",
+  "provider": "cloudflare",
+  "extension_pattern": "^(com|net|org|dev|io)$",
+  "account_scope": "acct-cf-main",
+  "supported_operations": [
+    "search",
+    "availability",
+    "pricing",
+    "registration",
+    "read_sync",
+    "dns_records",
+    "dnssec"
+  ],
+  "manual_fallback": false,
+  "effective_from": "2026-09-19T00:00:00Z"
+}

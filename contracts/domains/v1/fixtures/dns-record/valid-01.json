@@ -1,0 +1,9 @@
+{
+  "zone_id": "zone-0001",
+  "record_id": "rec-0001",
+  "type": "A",
+  "name": "example-shop.com",
+  "content": "203.0.113.10",
+  "ttl": 3600,
+  "managed_by": "omes"
+}

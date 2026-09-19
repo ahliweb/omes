@@ -1,0 +1,10 @@
+{
+  "capability_id": "cap-cloudflare-intl-01",
+  "provider": "godaddy",
+  "extension_pattern": "^(com)$",
+  "account_scope": "acct-cf-main",
+  "supported_operations": [
+    "search"
+  ],
+  "manual_fallback": false
+}

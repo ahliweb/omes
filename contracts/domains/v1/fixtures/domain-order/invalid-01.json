@@ -1,0 +1,15 @@
+{
+  "order_id": "order-0001",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0003",
+  "idempotency_key": "idem-register-0001",
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "operation": "registration",
+  "state": "in_progress",
+  "actor": {
+    "type": "user",
+    "id": "user-1"
+  },
+  "transitioned_at": "2026-09-19T00:00:02Z"
+}

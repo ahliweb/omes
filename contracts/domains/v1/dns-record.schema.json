@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/dns-record.schema.json",
+  "title": "dns-record",
+  "type": "object",
+  "required": [
+    "zone_id",
+    "record_id",
+    "type",
+    "name",
+    "content",
+    "ttl",
+    "managed_by"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "zone_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "record_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "A",
+        "AAAA",
+        "CNAME",
+        "TXT",
+        "MX",
+        "NS",
+        "SRV",
+        "CAA"
+      ]
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.*-]{1,253}$"
+    },
+    "content": {
+      "type": "string"
+    },
+    "ttl": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 86400
+    },
+    "managed_by": {
+      "type": "string",
+      "enum": [
+        "omes",
+        "external"
+      ]
+    }
+  }
+}

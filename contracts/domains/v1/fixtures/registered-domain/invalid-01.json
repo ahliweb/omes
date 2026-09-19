@@ -1,0 +1,11 @@
+{
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "provider_domain_id": "cf-domain-0001",
+  "status": "renewed",
+  "expires_at": "2027-09-19T00:00:00Z",
+  "locked": true,
+  "auto_renew": true,
+  "privacy_enabled": true,
+  "last_synced_at": "2026-09-19T00:05:00Z"
+}

@@ -1,0 +1,6 @@
+{
+  "reference_id": "cred-cf-scoped-01",
+  "provider": "cloudflare",
+  "kind": "api_token",
+  "reference": "raw-value-not-a-secret-ref-object"
+}

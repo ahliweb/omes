@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/domain-search.response.schema.json",
+  "title": "domain-search.response",
+  "type": "object",
+  "required": [
+    "tenant_id",
+    "correlation_id",
+    "provider",
+    "discovery_only",
+    "results"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "cloudflare",
+        "srsx",
+        "manual"
+      ]
+    },
+    "discovery_only": {
+      "type": "boolean",
+      "const": true
+    },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "domain",
+          "tld",
+          "likely_available",
+          "premium"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "domain": {
+            "type": "string",
+            "pattern": "^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+          },
+          "tld": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]{1,63}$"
+          },
+          "likely_available": {
+            "type": "boolean"
+          },
+          "premium": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

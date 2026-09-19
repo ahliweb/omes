@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/registrar-capability.schema.json",
+  "title": "registrar-capability",
+  "type": "object",
+  "required": [
+    "capability_id",
+    "provider",
+    "extension_pattern",
+    "account_scope",
+    "supported_operations",
+    "manual_fallback"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "capability_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "cloudflare",
+        "srsx",
+        "manual"
+      ]
+    },
+    "extension_pattern": {
+      "type": "string",
+      "pattern": "^\\^.*\\$$"
+    },
+    "account_scope": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "supported_operations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "search",
+          "availability",
+          "pricing",
+          "registration",
+          "read_sync",
+          "renewal",
+          "transfer",
+          "contact_update",
+          "dns_records",
+          "dnssec",
+          "provider_action_required"
+        ]
+      }
+    },
+    "manual_fallback": {
+      "type": "boolean"
+    },
+    "effective_from": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "notes": {
+      "type": "string"
+    }
+  }
+}

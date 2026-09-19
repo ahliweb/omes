@@ -211,6 +211,14 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | No arbitrary shell: operation → command mapping is a fixed Python literal, unimplemented operations fail typed rather than falling back to a shell | `lib/omes/py/jobs/runner.py`'s `build_argv()` |
 | Control Center screens receive a self-describing, previously-decided permission (`granted`, `policy_id`) on every operation request, and a desired/observed/error-evidence split on every deployment view, instead of a trust-me boolean or a single merged state blob | `contracts/control-center/v1/operation-request.schema.json`, `contracts/control-center/v1/deployment-view.schema.json` (#91) |
 
+### 8.2 Domain provider abstraction controls implemented today (issue #98)
+
+| Control | Implemented in |
+|---|---|
+| No raw provider credential value may exist behind a secret-like field name anywhere in a domain contract instance; only a `{"store","key"}` reference or `null` is accepted | `lib/omes/py/jobs/schema.py`'s existing key/pattern secret ban, applied to `contracts/domains/v1/credential-reference.schema.json`, `domain-transfer.request.schema.json`'s `auth_code_reference`, and every other domains contract |
+| Capability lookup by provider + extension pattern + account scope + operation, never TLD-suffix-only routing; explicit `manual_fallback` when nothing matches | `lib/omes/py/domains/routing.py`'s `Router.resolve()` (see docs/threat-model.md T41) |
+| Domain-order state machine forbids skipping reconciliation (e.g. `pending` cannot jump directly to `active`); every transition is explicit and rejects illegal edges | `lib/omes/py/domains/states.py`'s `TRANSITIONS` table and `apply_transition()` |
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

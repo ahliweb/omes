@@ -1,0 +1,13 @@
+{
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-0006",
+  "idempotency_key": "idem-contact-0001",
+  "actor": {
+    "type": "user",
+    "id": "user-1"
+  },
+  "domain": "example-shop.com",
+  "provider": "cloudflare",
+  "contact_role": "owner",
+  "contact_ref": "contact-profile-0002"
+}

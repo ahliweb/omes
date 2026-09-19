@@ -1,0 +1,136 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/domains/v1/domain-order.schema.json",
+  "title": "domain-order",
+  "type": "object",
+  "required": [
+    "order_id",
+    "tenant_id",
+    "correlation_id",
+    "idempotency_key",
+    "domain",
+    "provider",
+    "operation",
+    "state",
+    "actor",
+    "transitioned_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{8,256}$"
+    },
+    "domain": {
+      "type": "string",
+      "pattern": "^(?=.{1,253}$)[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$"
+    },
+    "provider": {
+      "type": "string",
+      "enum": [
+        "cloudflare",
+        "srsx",
+        "manual"
+      ]
+    },
+    "operation": {
+      "type": "string",
+      "enum": [
+        "registration",
+        "renewal",
+        "transfer",
+        "contact_update"
+      ]
+    },
+    "state": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "action_required",
+        "failed",
+        "succeeded",
+        "active",
+        "expired",
+        "renewal_due",
+        "cancelled"
+      ]
+    },
+    "previous_state": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "pending",
+            "action_required",
+            "failed",
+            "succeeded",
+            "active",
+            "expired",
+            "renewal_due",
+            "cancelled"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "actor": {
+      "type": "object",
+      "required": [
+        "type",
+        "id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "user",
+            "service"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "transitioned_at": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "last_checked_at",
+        "matches_desired"
+      ],
+      "properties": {
+        "last_checked_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "provider_status": {
+          "type": "string"
+        },
+        "matches_desired": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}
