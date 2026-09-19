@@ -142,7 +142,23 @@ Never referenced by any installer profile — see
 | `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
 | `OMES_CONTENT_APPROVAL_TTL_SECONDS` | `3600` | Operator | Default `--ttl-seconds` for `omes content approve` (docs/content-distribution.md section 7). Read by `lib/omes/py/content/cli.py`; an explicit `--ttl-seconds` flag overrides it. |
 
-## 15. Reserved but not read by any code path yet
+## 15. `omes health ollama` / `lib/omes/py/health/ollama.py` (issue #71)
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OLLAMA_HOST` | `127.0.0.1:11434` | Operator | The Ollama endpoint the health checker (and Ollama itself) uses. A scheme (`http://`) is optional. |
+| `OMES_OLLAMA_MODEL` | unset | Operator | The model id to check. Required (or pass `--model`); its absence is a `fail`, exit 7. |
+| `OMES_OLLAMA_PROFILE` | `text` | Operator | Named capability profile: `text`, `structured`, `tools`, `embeddings`, `vision`, or `full`. Determines which capabilities beyond baseline `chat` are required (a required capability's failure fails the whole check). |
+| `OMES_OLLAMA_PROFILE_FILE` | unset | Operator | Path to a JSON file `{"name": "...", "capabilities": ["structured_output", ...]}`; overrides `OMES_OLLAMA_PROFILE` when set. |
+| `OMES_OLLAMA_ALLOW_REMOTE` | `0` | Operator | `1` explicitly accepts a non-loopback `OLLAMA_HOST`; otherwise a non-loopback endpoint is a `fail` on the service layer's bind-policy check. |
+| `OMES_OLLAMA_EXPECT_PLACEMENT` | `any` | Operator | Expected runtime placement (`gpu`, `cpu`, or `any`), compared against `/api/ps`'s reported processor string. `any` skips the comparison. |
+| `OMES_HEALTH_TIMEOUT` | `10` (seconds) | Operator | Per-probe bounded timeout for every HTTP call the checker makes (except the model load, see next row). |
+| `OMES_OLLAMA_LOAD_TIMEOUT` | `30` (seconds) | Operator | Bounded timeout for the model-load smoke test specifically, since a cold model load can legitimately take longer than a simple API call. |
+| `OMES_OLLAMA_ENABLED` | `0` | Operator | `1` makes `modules/hermes`'s `module_doctor` hook run this check unconditionally during `omes doctor`. Without it, the hook still runs automatically whenever the `ollama` binary is present *and* `OMES_OLLAMA_MODEL` is set. |
+
+
+
+## 16. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 

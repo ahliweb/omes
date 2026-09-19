@@ -3,6 +3,8 @@
 .bats-tmp/
 **/backups/
 .claude/
+__pycache__/
+*.pyc
 
 # tests/matrix/ results and logs are per-run evidence (scripts/test-matrix.sh,
 # issue #15) - never committed, except the directory's own README.md.

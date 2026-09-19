@@ -350,3 +350,62 @@ module_rollback() {
   log_warn "hermes: to fully remove Hermes yourself, run: rm -rf '${home}' \"\$HOME/.local/bin/hermes\""
   return 0
 }
+
+# _hermes_ollama_configured
+# True when Ollama looks like it is meant to be checked for this install:
+# either explicitly opted in (OMES_OLLAMA_ENABLED=1), or the `ollama`
+# binary is present AND a model has been configured
+# (OMES_OLLAMA_MODEL) - matching the detection rule in issue #71/#79.
+_hermes_ollama_configured() {
+  if [[ "${OMES_OLLAMA_ENABLED:-0}" == "1" ]]; then
+    return 0
+  fi
+  command -v ollama >/dev/null 2>&1 && [[ -n "${OMES_OLLAMA_MODEL:-}" ]]
+}
+
+# module_doctor
+# Additive, optional `omes doctor` hook (see bin/omes's cmd_doctor):
+# when Ollama looks configured for this install, runs the layered Ollama
+# health check (lib/omes/py/health/ollama.py, issue #71) and reports a
+# one-line summary. Advisory only - a non-zero return here surfaces as a
+# WARN in `omes doctor`, it never fails `module_verify` itself, and it is
+# a complete no-op (prints nothing, returns 0) when Ollama is not
+# configured for this install at all.
+module_doctor() {
+  if ! _hermes_ollama_configured; then
+    printf 'ollama: not configured for this install (set OMES_OLLAMA_ENABLED=1, or install the ollama binary and set OMES_OLLAMA_MODEL)\n'
+    return 0
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf 'ollama: python3 not found; cannot run the layered Ollama health check (see docs/ollama.md)\n'
+    return 1
+  fi
+
+  local script="${OMES_ROOT}/lib/omes/py/health/ollama.py"
+  if [[ ! -r "$script" ]]; then
+    printf 'ollama: health checker not found at %s\n' "$script"
+    return 1
+  fi
+
+  local out rc=0
+  out="$(python3 "$script" 2>/dev/null)" || rc=$?
+  if [[ -z "$out" ]]; then
+    printf 'ollama: health checker produced no output (exit %s)\n' "$rc"
+    return 1
+  fi
+
+  local summary
+  summary="$(printf '%s' "$out" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    print("health checker returned invalid JSON")
+    sys.exit(0)
+print("ready=%s service=%s model=%s" % (d.get("ready"), d.get("service", {}).get("status"), d.get("model", {}).get("status")))
+' 2>/dev/null || printf 'health checker output could not be summarized')"
+
+  printf 'ollama: %s\n' "$summary"
+  [[ "$rc" -eq 0 ]]
+}
