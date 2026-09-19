@@ -22,6 +22,7 @@ This directory holds OMES's business-validation track: customer discovery, posit
 | [pilot-program.md](pilot-program.md) | Internal/external pilot design and rollout (authored in a parallel workstream) | see plan section 6 |
 | [support-tiers.md](support-tiers.md) | Support-tier definitions feeding the business model (authored in a parallel workstream) | related to [#22](https://github.com/ahliweb/omes/issues/22) |
 | [release-gates.md](release-gates.md) | Go/no-go release criteria (authored in a parallel workstream) | see plan section 7 |
+| [graphify-use-cases.md](graphify-use-cases.md) | Graphify/Obsidian use cases (onboarding, architecture discovery, project memory, research, runbooks), value-vs-novelty separation, measurement plan, privacy objections and willingness-to-pay interview questions, packaging recommendation | [#57](https://github.com/ahliweb/omes/issues/57) |
 
 The last four documents are written by parallel agents working the same milestone; if a link above is not yet live, that document has not landed on `main` yet. Add new business documents to this table when they are created.
 
