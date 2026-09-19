@@ -74,7 +74,7 @@ case "${1:-}" in
 
       dir="${dir:-vault-export}"
       mkdir -p "${dir}/.obsidian"
-      cat > "${dir}/app.py.md" <<'NOTEEOF'
+      cat >"${dir}/app.py.md" <<'NOTEEOF'
 ---
 source_file: "src/app.py"
 type: "code"
@@ -94,10 +94,10 @@ tags:
 
 #graphify/code #graphify/EXTRACTED #community/Community_0
 NOTEEOF
-      printf '{"nodes":[],"edges":[]}\n' > "${dir}/graph.canvas"
-      printf '{}\n' > "${dir}/.obsidian/graph.json"
+      printf '{"nodes":[],"edges":[]}\n' >"${dir}/graph.canvas"
+      printf '{}\n' >"${dir}/.obsidian/graph.json"
       printf '{"files": [".obsidian/graph.json", "app.py.md", "graph.canvas"]}\n' \
-        > "${dir}/.graphify_obsidian_manifest.json"
+        >"${dir}/.graphify_obsidian_manifest.json"
       printf 'Obsidian vault: 1 notes in %s/\n' "$dir"
       exit 0
     fi
