@@ -464,12 +464,15 @@ in [`docs/telegram-security.md`](./telegram-security.md) (issue #13),
 which explicitly avoid the prohibited long-polling read endpoint (see
 `docs/security.md` §2).
 
-There is no separate `module_doctor` function in the module contract
-(`docs/architecture.md` §4.2 defines exactly four: `check`/`apply`/
-`verify`/`rollback`); the doctor-style adapter-connectivity check
-described here lives inside `module_verify` itself rather than as a fifth
-function, so it runs on every `omes install` without requiring a future
-`omes doctor` command (tracked separately in issue #14) to exist first.
+The adapter-connectivity caveat above lives inside `module_verify` itself,
+so it runs on every `omes install`, not only when `omes doctor` (issue
+#14, implemented) is invoked separately. `module_doctor` (an additive,
+optional fifth function `omes doctor` also calls when present — see
+`bin/omes`'s `cmd_doctor`) now exists on `hermes-gateway`/
+`hermes-gateway-system` too, but only as a deeper, on-demand
+self-diagnosis hook (issue #79 — see §17 below); it does not replace the
+`module_verify` check above, which is the one that gates `omes install`
+itself.
 
 ## 15. Environment variables this part reads
 
@@ -492,3 +495,42 @@ Not implemented / manual by design:
 - Automatic discovery of Node/ffmpeg/etc. install locations for
   `OMES_HERMES_GATEWAY_EXTRA_PATH` — this is a manual, documented operator
   step (§12.1), not automated.
+
+## 17. Health and readiness (issue #79)
+
+`omes health agent` and `omes health gateway` (via
+[`lib/omes/cmd/health.sh`](../lib/omes/cmd/health.sh) and
+[`lib/omes/py/health/hermes.py`](../lib/omes/py/health/hermes.py), Python
+3 stdlib only per [ADR-0012](adr/0012-python-stdlib-for-workflow-engines.md))
+distinguish five layers, each reporting `pass`/`fail`/`not_applicable`
+plus explicit `enabled`/`active`/`reachable`/`ready`/`connected` signals,
+a `proves` sentence, and a `remediation` string. `agent` evaluates all
+five layers; `gateway` evaluates only gateway/provider/channel (skips
+host/runtime).
+
+| Layer | What a `pass` proves | What it does NOT prove |
+|---|---|---|
+| `host` | systemd is present and disk/memory are above threshold | Hermes is installed or running at all |
+| `runtime` | the `hermes` binary runs and `hermes doctor` passed | the gateway service or any channel is connected |
+| `gateway` | the gateway systemd unit is enabled/active and `hermes gateway status` succeeded (plus an optional loopback API health endpoint) | a messaging channel is connected — see §14's "green signals can lie" |
+| `provider` | the configured Ollama provider (via `omes health ollama`, issue #71) is healthy | anything, when no provider is configured (`not_applicable`) |
+| `channel` | the Telegram bot token is valid and the Telegram API is reachable (`getMe`/`getWebhookInfo` only — never `getUpdates`, reusing `modules/hermes-gateway/telegram-allowlist.sh`'s existing `curl -K` pattern via its new `health` subcommand) | a running polling gateway is actually processing updates |
+
+The top-level result is `{"layers": {...}, "ready": bool, "connected":
+bool}`: `ready` requires host, runtime, and gateway to each `pass`, and
+the provider layer to `pass` or be `not_applicable`; `connected` reflects
+the channel layer alone (`not_applicable` counts as connected — nothing
+to be disconnected from). A deployment can be `ready` with `connected:
+false` (host/runtime/gateway/provider healthy, Telegram unreachable) —
+these are reported as two distinct booleans on purpose, never collapsed
+into one.
+
+Every probe uses a bounded timeout (`OMES_HEALTH_TIMEOUT`, default 10s).
+An optional gateway API health endpoint is only ever called on
+`127.0.0.1`/`localhost` (`OMES_HERMES_GATEWAY_HEALTH_URL`); a bearer
+token, if configured, is read from a file path
+(`OMES_HERMES_GATEWAY_HEALTH_TOKEN_FILE`) — never accepted as a value on
+argv. `modules/hermes-gateway`/`modules/hermes-gateway-system` also
+expose this as a `module_doctor` hook (advisory — never fails
+`module_verify`), scoped to their own mode. See
+[docs/cli.md](cli.md) for the full flag/exit-code reference.

@@ -22,12 +22,6 @@ teardown() {
   omes_test_teardown
 }
 
-@test "omes health with no target prints usage and exits 0" {
-  run "$OMES_BIN" health
-  [ "$status" -eq 0 ]
-  [[ "$output" == *"Usage: omes health"* ]]
-}
-
 @test "omes health with an unknown target exits 2" {
   run "$OMES_BIN" health nosuchtarget
   [ "$status" -eq 2 ]

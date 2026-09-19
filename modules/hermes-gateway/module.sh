@@ -297,3 +297,48 @@ module_rollback() {
   log_warn "hermes-gateway: Hermes itself and \$HERMES_HOME are untouched; to fully remove the gateway's own state, see 'hermes gateway --help'"
   return 0
 }
+
+# module_doctor
+# Additive, optional `omes doctor` hook (see bin/omes's cmd_doctor and
+# modules/hermes/module.sh's own module_doctor for the Ollama
+# equivalent): runs the layered gateway/provider/channel health model
+# (lib/omes/py/health/hermes.py, issue #79) scoped to this module's user
+# mode, and reports a one-line summary. Advisory only - never fails
+# `module_verify` itself; a failure here is a WARN in `omes doctor`.
+module_doctor() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    printf 'health: python3 not found; cannot run the layered health model (see docs/hermes-integration.md)\n'
+    return 1
+  fi
+
+  local script="${OMES_ROOT}/lib/omes/py/health/hermes.py"
+  if [[ ! -r "$script" ]]; then
+    printf 'health: checker not found at %s\n' "$script"
+    return 1
+  fi
+
+  local home
+  home="$(_hgw_hermes_home)"
+
+  local out rc=0
+  out="$(printf '{}' | python3 "$script" --target gateway --mode user --hermes-home "$home" 2>/dev/null)" || rc=$?
+  if [[ -z "$out" ]]; then
+    printf 'health: checker produced no output (exit %s)\n' "$rc"
+    return 1
+  fi
+
+  local summary
+  summary="$(printf '%s' "$out" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except ValueError:
+    print("checker returned invalid JSON")
+    sys.exit(0)
+gw = d.get("layers", {}).get("gateway", {}).get("status")
+print("ready=%s connected=%s gateway=%s" % (d.get("ready"), d.get("connected"), gw))
+' 2>/dev/null || printf 'health checker output could not be summarized')"
+
+  printf 'health: %s\n' "$summary"
+  [[ "$rc" -eq 0 ]]
+}

@@ -316,7 +316,19 @@ help`), 2 (no command given at all).
 
 ### `omes health` (extension command)
 
-**Synopsis:** `omes health ollama [--json] [--profile <name>] [--model <id>]`
+**Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
+`omes health ollama [--json] [--profile <name>] [--model <id>]`
+
+`omes health` (or `omes health agent`) and `omes health gateway` run the
+layered host/runtime/gateway/provider/channel readiness model for the
+Hermes deployment (issue [#79](https://github.com/ahliweb/omes/issues/79),
+via [`lib/omes/py/health/hermes.py`](../lib/omes/py/health/hermes.py)) and
+print `{"layers": {...}, "ready": bool, "connected": bool}`. See
+[docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79)
+for what each layer proves and its remediation. Exit codes: 0 ready, 7 not
+ready.
+
+`omes health ollama` is documented below.
 
 Implemented by [`lib/omes/cmd/health.sh`](../lib/omes/cmd/health.sh)
 (issue [#71](https://github.com/ahliweb/omes/issues/71)), which delegates

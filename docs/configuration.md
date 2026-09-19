@@ -156,9 +156,19 @@ Never referenced by any installer profile — see
 | `OMES_OLLAMA_LOAD_TIMEOUT` | `30` (seconds) | Operator | Bounded timeout for the model-load smoke test specifically, since a cold model load can legitimately take longer than a simple API call. |
 | `OMES_OLLAMA_ENABLED` | `0` | Operator | `1` makes `modules/hermes`'s `module_doctor` hook run this check unconditionally during `omes doctor`. Without it, the hook still runs automatically whenever the `ollama` binary is present *and* `OMES_OLLAMA_MODEL` is set. |
 
+## 16. `omes health agent|gateway` / `lib/omes/py/health/hermes.py` (issue #79)
 
+See [docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79)
+for what each variable affects. `OMES_HEALTH_TIMEOUT` is shared with §13.
 
-## 16. Reserved but not read by any code path yet
+| Variable | Default | Kind |
+|---|---|---|
+| `OMES_GATEWAY_MODE` | `user` | Operator |
+| `OMES_HEALTH_DISK_MIN_MB` / `OMES_HEALTH_MEM_MIN_MB` | `512` / `256` | Operator |
+| `OMES_HERMES_GATEWAY_HEALTH_URL` | unset | Operator (loopback-only) |
+| `OMES_HERMES_GATEWAY_HEALTH_TOKEN_FILE` | unset | Operator (file path, never a value) |
+
+## 17. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
