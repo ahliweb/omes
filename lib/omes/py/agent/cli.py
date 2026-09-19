@@ -19,9 +19,13 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from . import compose as compose_mod
+from . import compose_preflight
 from . import health as health_mod
 from . import manifest as manifest_mod
 from . import paths, plan as plan_mod, provenance, state as state_mod, unitfile
+import hashlib
+import time
 
 EX_OK = 0
 EX_ERROR = 1
@@ -77,6 +81,137 @@ def _check_privilege(service_mode: str) -> Optional[str]:
     return None
 
 
+def _backend(manifest: dict) -> str:
+    return manifest["spec"].get("backend", "systemd")
+
+
+def _sha256_file(path: Path) -> Optional[str]:
+    if not path.is_file():
+        return None
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _run_docker(args_list: list, timeout: float = 30.0):
+    cmd = ["docker"] + args_list
+    try:
+        return subprocess.run(  # nosec B603 - fixed argv, no shell
+            cmd, capture_output=True, text=True, timeout=timeout, check=False
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+
+        class _Fake:
+            returncode = -1
+            stdout = ""
+            stderr = str(exc)
+
+        return _Fake()
+
+
+def _compose_backups_dir(name: str) -> Path:
+    return paths.agent_state_dir(name) / "compose-backups"
+
+
+def _backup_previous_compose_file(name: str, compose_file: Path) -> Optional[Dict[str, Any]]:
+    """Copies the currently-rendered compose file aside before it is
+    overwritten (backup-before-mutate). Returns None if there is no
+    prior file (first apply)."""
+    if not compose_file.is_file():
+        return None
+    backups_dir = _compose_backups_dir(name)
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    os.chmod(backups_dir, 0o700)
+    ts = time.strftime("%Y%m%dT%H%M%SZ", time.gmtime())
+    session_dir = backups_dir / ts
+    suffix = 1
+    while session_dir.exists():
+        session_dir = backups_dir / f"{ts}-{suffix}"
+        suffix += 1
+    session_dir.mkdir(parents=True)
+    os.chmod(session_dir, 0o700)
+    dest = session_dir / "compose.yaml"
+    dest.write_bytes(compose_file.read_bytes())
+    os.chmod(dest, 0o600)
+    return {"path": str(dest), "sha256": _sha256_file(dest)}
+
+
+def _latest_compose_backup(name: str) -> Optional[Path]:
+    backups_dir = _compose_backups_dir(name)
+    if not backups_dir.is_dir():
+        return None
+    sessions = sorted((p for p in backups_dir.iterdir() if p.is_dir()), reverse=True)
+    for session in sessions:
+        candidate = session / "compose.yaml"
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _compose_health(plan: Dict[str, Any], timeout: float) -> Dict[str, Any]:
+    """Container-state health (docker compose ps --format json) plus the
+    manifest's own health command run inside the container via
+    `docker compose exec -T`, both read-only (issue #96's health
+    aggregation requirement)."""
+    ps_proc = _run_docker(
+        ["compose", "-p", plan["project"], "-f", plan["composeFile"], "ps", "--format", "json"], timeout
+    )
+    container_ok = False
+    container_detail = ""
+    if ps_proc.returncode == 0 and ps_proc.stdout.strip():
+        container_detail = ps_proc.stdout.strip()
+        try:
+            for line in ps_proc.stdout.strip().splitlines():
+                entry = json.loads(line)
+                state = str(entry.get("State", "")).lower()
+                health = str(entry.get("Health", "")).lower()
+                if state == "running" and health in ("", "healthy"):
+                    container_ok = True
+        except json.JSONDecodeError:
+            container_detail = ps_proc.stdout.strip()
+
+    exec_ok: Optional[bool] = None
+    exec_detail = ""
+    health_command = plan["health"]["command"]
+    if container_ok:
+        exec_proc = _run_docker(
+            [
+                "compose",
+                "-p",
+                plan["project"],
+                "-f",
+                plan["composeFile"],
+                "exec",
+                "-T",
+                plan["serviceName"],
+                "sh",
+                "-c",
+                health_command,
+            ],
+            timeout,
+        )
+        exec_ok = exec_proc.returncode == 0
+        exec_detail = (exec_proc.stdout or exec_proc.stderr or "").strip()
+
+    ready = container_ok and (exec_ok is not False)
+    return {
+        "ready": ready,
+        "connected": ready,
+        "layers": {
+            "container": {
+                "status": "pass" if container_ok else "fail",
+                "detail": container_detail,
+            },
+            "healthCommand": {
+                "status": "pass" if exec_ok else ("not_applicable" if exec_ok is None else "fail"),
+                "detail": exec_detail,
+            },
+        },
+    }
+
+
 def cmd_list(args: argparse.Namespace) -> int:
     omes_root = _omes_root()
     manifests_dir = paths.agents_config_dir()
@@ -127,13 +262,23 @@ def cmd_check(args: argparse.Namespace) -> int:
         )
         return EX_PRIVILEGE
 
-    if not shutil.which("systemctl"):
+    backend = _backend(manifest)
+    if backend == "compose":
+        preflight = compose_preflight.check()
+        if not preflight["ok"]:
+            _print({"ok": False, "errors": preflight["errors"]}, args.json) if args.json else print(
+                f"error: {'; '.join(preflight['errors'])}", file=sys.stderr
+            )
+            return EX_PREFLIGHT
+    elif not shutil.which("systemctl"):
         msg = "systemctl not found on PATH"
         _print({"ok": False, "errors": [msg]}, args.json) if args.json else print(f"error: {msg}", file=sys.stderr)
         return EX_PREFLIGHT
 
-    result = {"ok": True, "name": args.name, "serviceMode": manifest["spec"]["serviceMode"]}
-    _print(result, args.json) if args.json else print(f"{args.name}: check ok (serviceMode={manifest['spec']['serviceMode']})")
+    result = {"ok": True, "name": args.name, "serviceMode": manifest["spec"]["serviceMode"], "backend": backend}
+    _print(result, args.json) if args.json else print(
+        f"{args.name}: check ok (serviceMode={manifest['spec']['serviceMode']}, backend={backend})"
+    )
     return EX_OK
 
 
@@ -149,6 +294,11 @@ def cmd_plan(args: argparse.Namespace) -> int:
     if priv_error:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
+
+    if _backend(manifest) == "compose":
+        plan = compose_mod.build_plan(manifest)
+        _print(compose_mod.plan_summary(plan), args.json)
+        return EX_OK
 
     plan = plan_mod.build_plan(manifest)
     _print(plan, args.json)
@@ -209,6 +359,107 @@ def _write_atomic(path: Path, content: str, mode: int = 0o644) -> None:
     os.replace(tmp, path)
 
 
+def _apply_compose(name: str, manifest: Dict[str, Any], args: argparse.Namespace) -> int:
+    """`omes agent apply` for `spec.backend: "compose"` (issue #96):
+    check -> plan -> backup -> mutate -> verify, using
+    `docker compose -p <project> -f <rendered file> up -d` for the
+    mutate step. Never grants the container Docker socket access; refuses
+    (before any mutation) if the daemon is not rootless."""
+    omes_root = _omes_root()
+    preflight = compose_preflight.check()
+    if not preflight["ok"]:
+        _print({"ok": False, "stage": "preflight", "errors": preflight["errors"]}, args.json) if args.json else print(
+            f"error: {'; '.join(preflight['errors'])}", file=sys.stderr
+        )
+        return EX_PREFLIGHT
+
+    if shutil.which("docker") is None:
+        print("error: docker not found on PATH", file=sys.stderr)
+        return EX_PREFLIGHT
+
+    plan = compose_mod.build_plan(manifest)
+
+    if args.dry_run:
+        _print({"dryRun": True, **compose_mod.plan_summary(plan)}, args.json)
+        return EX_OK
+
+    if not args.yes and not os.environ.get("OMES_NONINTERACTIVE") == "1":
+        if sys.stdin.isatty():
+            answer = input(f"Apply compose agent deployment '{name}' (project={plan['project']})? [y/N] ").strip().lower()
+            if answer not in ("y", "yes"):
+                print("aborted (not confirmed)", file=sys.stderr)
+                return EX_ERROR
+        else:
+            print("error: this is a mutating operation; pass --yes to confirm", file=sys.stderr)
+            return EX_ERROR
+
+    state_mod.advance(name, "preflighted", "rootless docker preflight ok; manifest validated")
+    state_mod.advance(name, "planned", "compose plan computed")
+
+    try:
+        backup_result = _maybe_backup(Path(plan["hermesHome"]), dry_run=False)
+    except RuntimeError as exc:
+        state_mod.advance(name, "failed", f"backup step failed: {exc}")
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_BACKUP
+
+    compose_file = Path(plan["composeFile"])
+    compose_file_backup = _backup_previous_compose_file(name, compose_file)
+    state_mod.advance(
+        name,
+        "backed-up",
+        json.dumps({"hermesHome": backup_result, "composeFileBackup": compose_file_backup})[:300],
+    )
+
+    rendered = compose_mod.render_compose_yaml(plan)
+    unchanged = compose_file.is_file() and compose_file.read_text(encoding="utf-8") == rendered
+
+    try:
+        for volume in plan["volumes"]:
+            Path(volume["hostPath"]).mkdir(parents=True, exist_ok=True)
+        Path(plan["hermesHome"]).mkdir(parents=True, exist_ok=True)
+        _write_atomic(compose_file, rendered)
+    except OSError as exc:
+        state_mod.advance(name, "failed", f"failed to write compose file: {exc}")
+        print(f"error: failed to write compose file: {exc}", file=sys.stderr)
+        return EX_APPLY
+
+    managed_paths = [str(compose_file)]
+
+    up_proc = _run_docker(["compose", "-p", plan["project"], "-f", str(compose_file), "up", "-d"], timeout=120.0)
+    if up_proc.returncode != 0:
+        state_mod.advance(name, "failed", "docker compose up failed", managed_paths=managed_paths)
+        print(f"error: docker compose up failed: {up_proc.stderr}", file=sys.stderr)
+        return EX_APPLY
+
+    prov = provenance.collect(omes_root)
+    prov["composeImageDigest"] = plan["image"]
+    prov["composeFileSha256"] = _sha256_file(compose_file)
+    prov["composeReapplyUnchanged"] = unchanged
+    state_mod.advance(name, "applied", "docker compose up -d succeeded", managed_paths=managed_paths, provenance=prov)
+
+    health_result = _compose_health(plan, timeout=30.0)
+    if not health_result.get("ready"):
+        state_mod.advance(name, "failed", "container did not report running/healthy after apply", managed_paths=managed_paths)
+        print("error: container did not become healthy after apply", file=sys.stderr)
+        return EX_VERIFY
+
+    state_mod.advance(name, "verified", "container running and healthy")
+    state_mod.advance(name, "ready", "verification passed")
+    final_state = state_mod.advance(name, "healthy", "post-apply health check passed")
+
+    result = {
+        "ok": True,
+        "name": name,
+        "state": final_state["state"],
+        "project": plan["project"],
+        "composeFile": str(compose_file),
+        "health": health_result,
+    }
+    _print(result, args.json) if args.json else print(f"{name}: applied (compose), state={final_state['state']}")
+    return EX_OK
+
+
 def cmd_apply(args: argparse.Namespace) -> int:
     omes_root = _omes_root()
     name = args.name
@@ -227,6 +478,9 @@ def cmd_apply(args: argparse.Namespace) -> int:
             f"error: {priv_error}", file=sys.stderr
         )
         return EX_PRIVILEGE
+
+    if _backend(manifest) == "compose":
+        return _apply_compose(name, manifest, args)
 
     if not shutil.which("systemctl"):
         print("error: systemctl not found on PATH", file=sys.stderr)
@@ -330,10 +584,18 @@ def cmd_status(args: argparse.Namespace) -> int:
     result: Dict[str, Any] = dict(st)
     try:
         manifest = _load_manifest(args.name, omes_root)
-        plan = plan_mod.build_plan(manifest)
-        proc = _run_systemctl(plan["serviceMode"], ["is-active", plan["unit"]["name"]])
-        result["unitActive"] = proc.returncode == 0
-        result["unit"] = plan["unit"]["name"]
+        if _backend(manifest) == "compose":
+            plan = compose_mod.build_plan(manifest)
+            proc = _run_docker(["compose", "-p", plan["project"], "-f", plan["composeFile"], "ps", "--format", "json"])
+            result["containerRunning"] = proc.returncode == 0 and "running" in proc.stdout.lower()
+            result["project"] = plan["project"]
+            result["backend"] = "compose"
+        else:
+            plan = plan_mod.build_plan(manifest)
+            proc = _run_systemctl(plan["serviceMode"], ["is-active", plan["unit"]["name"]])
+            result["unitActive"] = proc.returncode == 0
+            result["unit"] = plan["unit"]["name"]
+            result["backend"] = "systemd"
     except manifest_mod.ManifestError as exc:
         result["manifestError"] = str(exc)
 
@@ -348,6 +610,12 @@ def cmd_health(args: argparse.Namespace) -> int:
     except manifest_mod.ManifestError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return EX_PREFLIGHT
+
+    if _backend(manifest) == "compose":
+        plan = compose_mod.build_plan(manifest)
+        result = _compose_health(plan, timeout=30.0)
+        _print(result, args.json)
+        return EX_OK if result.get("ready") else EX_VERIFY
 
     plan = plan_mod.build_plan(manifest)
     result = health_mod.run(plan["unit"]["name"], plan["serviceMode"], plan["hermesHome"])
@@ -368,12 +636,55 @@ def cmd_restart(args: argparse.Namespace) -> int:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
 
+    if _backend(manifest) == "compose":
+        plan = compose_mod.build_plan(manifest)
+        proc = _run_docker(["compose", "-p", plan["project"], "-f", plan["composeFile"], "restart"], timeout=60.0)
+        if proc.returncode != 0:
+            print(f"error: restart failed: {proc.stderr}", file=sys.stderr)
+            return EX_APPLY
+        _print({"ok": True, "project": plan["project"]}, args.json) if args.json else print(f"{args.name}: restarted")
+        return EX_OK
+
     plan = plan_mod.build_plan(manifest)
     proc = _run_systemctl(plan["serviceMode"], ["restart", plan["unit"]["name"]])
     if proc.returncode != 0:
         print(f"error: restart failed: {proc.stderr}", file=sys.stderr)
         return EX_APPLY
     _print({"ok": True, "unit": plan["unit"]["name"]}, args.json) if args.json else print(f"{args.name}: restarted")
+    return EX_OK
+
+
+def _rollback_compose(name: str, manifest: Dict[str, Any], args: argparse.Namespace) -> int:
+    plan = compose_mod.build_plan(manifest)
+    compose_file = Path(plan["composeFile"])
+
+    down_proc = _run_docker(["compose", "-p", plan["project"], "-f", str(compose_file), "down"], timeout=60.0)
+    if down_proc.returncode != 0:
+        state_mod.advance(name, "failed", "docker compose down failed during rollback")
+        print(f"error: docker compose down failed: {down_proc.stderr}", file=sys.stderr)
+        return EX_ROLLBACK
+
+    previous = _latest_compose_backup(name)
+    restored = False
+    if previous is not None:
+        try:
+            _write_atomic(compose_file, previous.read_text(encoding="utf-8"))
+        except OSError as exc:
+            state_mod.advance(name, "failed", f"failed to restore previous compose file: {exc}")
+            print(f"error: failed to restore previous compose file: {exc}", file=sys.stderr)
+            return EX_ROLLBACK
+        up_proc = _run_docker(["compose", "-p", plan["project"], "-f", str(compose_file), "up", "-d"], timeout=120.0)
+        if up_proc.returncode != 0:
+            state_mod.advance(name, "failed", "docker compose up failed while restoring previous version")
+            print(f"error: docker compose up (restore) failed: {up_proc.stderr}", file=sys.stderr)
+            return EX_ROLLBACK
+        restored = True
+
+    final_state = state_mod.advance(
+        name, "rolled-back", "compose down; previous file restored" if restored else "compose down; no previous file", managed_paths=[]
+    )
+    result = {"ok": True, "name": name, "state": final_state["state"], "restoredPreviousVersion": restored}
+    _print(result, args.json) if args.json else print(f"{name}: rolled back (compose)")
     return EX_OK
 
 
@@ -399,6 +710,9 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         else:
             print("error: this is a mutating operation; pass --yes to confirm", file=sys.stderr)
             return EX_ERROR
+
+    if _backend(manifest) == "compose":
+        return _rollback_compose(args.name, manifest, args)
 
     plan = plan_mod.build_plan(manifest)
     mode = plan["serviceMode"]
@@ -432,6 +746,76 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def cmd_remove(args: argparse.Namespace) -> int:
+    """`omes agent remove <name>` - compose backend only (issue #96).
+    `docker compose down --volumes`, scoped to this agent's own project,
+    then removes only the OMES-managed compose dir and state directory -
+    never HERMES_HOME, never another agent's resources. Not implemented
+    for the systemd backend (it has no removable named volumes and no
+    equivalent request in issue #87 - `rollback` already covers unit/
+    drop-in teardown there)."""
+    omes_root = _omes_root()
+    try:
+        manifest = _load_manifest(args.name, omes_root)
+    except manifest_mod.ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_PREFLIGHT
+
+    if _backend(manifest) != "compose":
+        print("error: 'omes agent remove' is only implemented for backend=compose (see docs/agent-deployment.md)", file=sys.stderr)
+        return EX_USAGE
+
+    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    if priv_error:
+        print(f"error: {priv_error}", file=sys.stderr)
+        return EX_PRIVILEGE
+
+    if not args.yes and not os.environ.get("OMES_NONINTERACTIVE") == "1":
+        if sys.stdin.isatty():
+            answer = input(f"Remove compose agent deployment '{args.name}'? This tears down its containers and OMES-managed volumes (never HERMES_HOME). [y/N] ").strip().lower()
+            if answer not in ("y", "yes"):
+                print("aborted (not confirmed)", file=sys.stderr)
+                return EX_ERROR
+        else:
+            print("error: this is a mutating operation; pass --yes to confirm", file=sys.stderr)
+            return EX_ERROR
+
+    plan = compose_mod.build_plan(manifest)
+    compose_file = Path(plan["composeFile"])
+
+    if compose_file.is_file():
+        down_proc = _run_docker(
+            ["compose", "-p", plan["project"], "-f", str(compose_file), "down", "--volumes"], timeout=60.0
+        )
+        if down_proc.returncode != 0:
+            state_mod.advance(args.name, "failed", "docker compose down --volumes failed during remove")
+            print(f"error: docker compose down --volumes failed: {down_proc.stderr}", file=sys.stderr)
+            return EX_ROLLBACK
+
+    removed = []
+    compose_dir = Path(plan["composeDir"])
+    if compose_dir.is_dir():
+        for child in sorted(compose_dir.glob("**/*"), reverse=True):
+            try:
+                if child.is_file() or child.is_symlink():
+                    child.unlink()
+                else:
+                    child.rmdir()
+            except OSError:
+                pass
+        try:
+            compose_dir.rmdir()
+            removed.append(str(compose_dir))
+        except OSError:
+            pass
+
+    final_state = state_mod.advance(args.name, "rolled-back", "removed (compose down --volumes; OMES-managed paths deleted)", managed_paths=[])
+    state_mod.remove(args.name)
+    result = {"ok": True, "name": args.name, "state": final_state["state"], "removed": removed}
+    _print(result, args.json) if args.json else print(f"{args.name}: removed")
+    return EX_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omes agent")
     sub = parser.add_subparsers(dest="subcommand")
@@ -458,6 +842,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_rollback.add_argument("--yes", action="store_true")
     p_rollback.add_argument("--json", action="store_true")
     p_rollback.set_defaults(func=cmd_rollback)
+
+    p_remove = sub.add_parser("remove")
+    p_remove.add_argument("agent_name", metavar="name")
+    p_remove.add_argument("--yes", action="store_true")
+    p_remove.add_argument("--json", action="store_true")
+    p_remove.set_defaults(func=cmd_remove)
 
     return parser
 

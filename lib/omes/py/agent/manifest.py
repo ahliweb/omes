@@ -25,13 +25,14 @@ import re
 from pathlib import Path
 from typing import Any, List
 
+from . import compose as compose_mod
 from . import jsonschema_lite
 
 SCHEMA_RELATIVE_PATH = Path("contracts") / "agent" / "v1" / "agent-deployment.schema.json"
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 SUPPORTED_RUNTIMES = ("hermes",)
-SUPPORTED_BACKENDS = ("systemd",)
+SUPPORTED_BACKENDS = ("systemd", "compose")
 SUPPORTED_SERVICE_MODES = ("user", "system")
 
 # Reserved unit-name components that must never appear in a derived
@@ -96,6 +97,15 @@ def _semantic_errors(data: dict) -> List[str]:
         for fragment in _UNSAFE_NAME_FRAGMENTS:
             if fragment in profile:
                 errors.append(f"spec.profile: contains unsafe fragment {fragment!r}")
+
+    compose_spec = spec.get("compose")
+    if backend == "compose":
+        if not isinstance(compose_spec, dict):
+            errors.append("spec.compose: required when spec.backend is 'compose'")
+        elif isinstance(name, str) and NAME_RE.match(name):
+            errors.extend(compose_mod.validate_compose_spec(compose_spec, name))
+    elif compose_spec is not None:
+        errors.append("spec.compose: must not be set unless spec.backend is 'compose'")
 
     return errors
 

@@ -118,11 +118,7 @@ there rather than duplicated here to minimize this shared reference file's graph
 | `OMES_HERMES_RW_PATHS` | unset | Operator | Colon-separated extra `ReadWritePaths=` for strict mode, alongside `$HERMES_HOME`. |
 | `OMES_HERMES_HARDENING_TIMEOUT` | `15` | Operator | Seconds to wait for the unit to become active after a hardening-triggered restart before auto-rolling back the drop-in. |
 
-
 ## 10. `desktop-preflight` / `hyprland-session` modules
-
-
-
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
@@ -209,9 +205,6 @@ section 14 and `skills/content/SKILL.md`. `TELEGRAM_BOT_TOKEN` and
 
 ## 18. Reserved but not read by any code path yet
 
-
-
-
 ## 13b. `omes audit exposure` / `lib/omes/py/health/exposure.py` (issue #80)
 
 See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80).
@@ -220,10 +213,6 @@ See [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-is
 |---|---|---|
 | `OMES_EXPOSURE_ALLOW` | unset | Operator (`"host:port,host:port"`) |
 | `OMES_SS_BIN` / `OMES_UFW_BIN` | `ss` / `ufw` | Test-only |
-
-
-
-
 
 ## 13c. `omes health versions` / `lib/omes/py/provenance/versions.py` (issue #83)
 
@@ -242,9 +231,6 @@ mapping and command reference.
 |---|---|---|
 | `HERMES_HOME` / `OMES_HERMES_HOME` | `~/.hermes` | Operator (same resolution as `modules/hermes`) |
 | `OMES_BACKUP_KEEP` | `10` | Operator - same retention knob `lib/omes/backup.sh` uses, applied here too |
-
-
-
 
 ## 13d. `omes audit provenance` / `lib/omes/py/provenance/audit.py` (issue #84)
 
@@ -288,7 +274,21 @@ The OMES-side control job runner used by a future Control Center (issue
 
 
 
+
+
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
+
+`spec.backend: "compose"` (issue #96, rootless Docker Compose isolation
+backend) reuses `OMES_CONFIG_DIR`, `OMES_STATE_DIR`, and
+`OMES_HEALTH_TIMEOUT` above unchanged and introduces no new environment
+variables of its own - the compose project name, network, and rendered
+file path are all derived from the manifest and `OMES_STATE_DIR`/
+`OMES_CONFIG_DIR`, never from a separate override. See
+[docs/agent-deployment.md section 8](agent-deployment.md) for the
+manifest's own `spec.compose` fields (image, project, network, user,
+capDrop, readOnlyRootfs, volumes, ports) and
+[docs/testing.md](testing.md) for `tests/shims/docker`'s
+`SHIM_DOCKER_*` test-only knobs.
 
 <!-- OMES-MERMAID: docs/configuration.md -->
 
