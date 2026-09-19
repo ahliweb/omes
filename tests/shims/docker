@@ -2,13 +2,29 @@
 # shellcheck shell=bash
 # tests/shims/docker - fake docker CLI for bats tests
 # (#7, modules/containers; `--version` added for #83's client-only
-# version probe).
+# version probe; extended for #96's rootless Docker Compose backend
+# preflight + lifecycle).
 #
-#   SHIM_DOCKER_VERSION_EXIT     exit code for `docker version` (default 0)
-#   SHIM_DOCKER_VERSION_OUTPUT   stderr text on failure (default a generic
-#                                 "cannot connect to the daemon" message)
 #   SHIM_DOCKER_CLIENT_VERSION_LINE   output for `docker --version`
 #                                     (default "Docker version 27.0.0, build abc123")
+#
+# Preflight knobs:
+#   SHIM_DOCKER_VERSION_EXIT       exit code for `docker version` (default 0)
+#   SHIM_DOCKER_VERSION_OUTPUT     stderr text on failure
+#   SHIM_DOCKER_CONTEXT            `docker context show` output (default "rootless")
+#   SHIM_DOCKER_ENDPOINT           `docker context inspect --format {{.Endpoints.docker.Host}}`
+#                                  output (default "unix:///run/user/1000/docker.sock")
+#   SHIM_DOCKER_SECURITY_OPTIONS   `docker info --format {{.SecurityOptions}}` output
+#                                  (default "[name=seccomp,profile=default name=rootless]")
+#
+# Compose lifecycle knobs (all apply to `docker compose ...`):
+#   SHIM_DOCKER_COMPOSE_UP_EXIT     exit code for `up` (default 0)
+#   SHIM_DOCKER_COMPOSE_DOWN_EXIT   exit code for `down` (default 0)
+#   SHIM_DOCKER_COMPOSE_PS_OUTPUT   JSON lines for `ps --format json`
+#                                   (default: one running+healthy container)
+#   SHIM_DOCKER_COMPOSE_EXEC_EXIT   exit code for `exec` (default 0)
+#   SHIM_DOCKER_COMPOSE_EXEC_OUTPUT stdout text for `exec` (default "ok")
+#   SHIM_DOCKER_COMPOSE_LOGS_OUTPUT stdout text for `logs` (default a fixed line)
 
 set -Eeuo pipefail
 
@@ -29,6 +45,63 @@ case "${1:-}" in
     printf 'Client: Docker Engine - Community\n Version: 27.0.0\n'
     printf 'Server: Docker Engine - Community\n Version: 27.0.0\n'
     exit 0
+    ;;
+  context)
+    case "${2:-}" in
+      show)
+        printf '%s\n' "${SHIM_DOCKER_CONTEXT:-rootless}"
+        exit 0
+        ;;
+      inspect)
+        printf '%s\n' "${SHIM_DOCKER_ENDPOINT:-unix:///run/user/1000/docker.sock}"
+        exit 0
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
+    ;;
+  info)
+    printf '%s\n' "${SHIM_DOCKER_SECURITY_OPTIONS:-[name=seccomp,profile=default name=rootless]}"
+    exit 0
+    ;;
+  compose)
+    shift
+    subcommand=""
+    for arg in "$@"; do
+      case "$arg" in
+        up|ps|down|logs|exec|config)
+          subcommand="$arg"
+          break
+          ;;
+      esac
+    done
+    case "$subcommand" in
+      up)
+        exit "${SHIM_DOCKER_COMPOSE_UP_EXIT:-0}"
+        ;;
+      down)
+        exit "${SHIM_DOCKER_COMPOSE_DOWN_EXIT:-0}"
+        ;;
+      ps)
+        printf '%s\n' "${SHIM_DOCKER_COMPOSE_PS_OUTPUT:-{\"Name\":\"shim-container\",\"State\":\"running\",\"Health\":\"healthy\"}}"
+        exit 0
+        ;;
+      logs)
+        printf '%s\n' "${SHIM_DOCKER_COMPOSE_LOGS_OUTPUT:-shim log line}"
+        exit 0
+        ;;
+      exec)
+        printf '%s\n' "${SHIM_DOCKER_COMPOSE_EXEC_OUTPUT:-ok}"
+        exit "${SHIM_DOCKER_COMPOSE_EXEC_EXIT:-0}"
+        ;;
+      config)
+        exit 0
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
     ;;
   *)
     exit 0

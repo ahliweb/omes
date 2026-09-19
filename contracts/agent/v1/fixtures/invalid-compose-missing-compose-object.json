@@ -1,0 +1,20 @@
+{
+  "apiVersion": "omes.ahliweb.com/v1",
+  "kind": "AgentDeployment",
+  "metadata": {
+    "name": "compose-worker",
+    "workspace": "ahliweb",
+    "environment": "staging"
+  },
+  "spec": {
+    "runtime": "hermes",
+    "profile": "compose-worker",
+    "role": "generic",
+    "backend": "compose",
+    "serviceMode": "user",
+    "restartPolicy": "on-failure",
+    "resources": { "memory": "512M", "cpu": "0.5", "pids": 64 },
+    "health": { "command": "omes agent health compose-worker", "timeout": "10s" },
+    "storage": { "memory": "private", "sessions": "isolated", "skills": "managed" }
+  }
+}
