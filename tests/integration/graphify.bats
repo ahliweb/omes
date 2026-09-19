@@ -140,13 +140,6 @@ teardown() {
   [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
 }
 
-@test "omes graphify run is not implemented yet and exits with a usage error" {
-  run "$OMES_BIN" graphify run /some/path
-  [ "$status" -eq 2 ]
-  [[ "$output" == *"not implemented yet"* ]]
-  [[ "$output" == *"#51"* ]]
-}
-
 @test "omes graphify with no subcommand is a usage error" {
   run "$OMES_BIN" graphify
   [ "$status" -eq 2 ]
@@ -161,4 +154,245 @@ teardown() {
   run grep -c '^uv tool uninstall graphifyy$' "$SHIM_LOG"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
+}
+
+# ---------------------------------------------------------------------------
+# omes graphify run (issue #51): path validation, mode gating, provenance
+# ---------------------------------------------------------------------------
+
+@test "omes graphify run without a path is a usage error" {
+  run "$OMES_BIN" graphify run
+  [ "$status" -eq 2 ]
+}
+
+@test "omes graphify run refuses a nonexistent path" {
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/does-not-exist"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"does not exist"* ]]
+}
+
+@test "omes graphify run refuses a path that is itself a graphify-out directory" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project/graphify-out"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project/graphify-out"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"graphify-out"* ]]
+}
+
+@test "omes graphify run refuses a path nested inside a graphify-out directory" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project/graphify-out/nested"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project/graphify-out/nested"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"graphify-out"* ]]
+}
+
+@test "omes graphify run refuses an invalid --mode value" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode bogus
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"invalid --mode"* ]]
+}
+
+@test "omes graphify run refuses when graphify is not installed" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  export SHIM_GRAPHIFY_ABSENT=1
+  # The static shim always exists on PATH (command -v graphify succeeds
+  # regardless of SHIM_GRAPHIFY_ABSENT), so "not installed" for `run`'s
+  # own check is simulated the same way tests/unit/graphify.bats does for
+  # module_verify: hide the shim entirely.
+  local stripped="" dir
+  IFS=':' read -ra parts <<<"$PATH"
+  for dir in "${parts[@]}"; do
+    [[ -x "${dir}/graphify" ]] && continue
+    stripped="${stripped:+${stripped}:}${dir}"
+  done
+  PATH="$stripped" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not installed"* ]]
+}
+
+@test "omes graphify run defaults to code-only extraction with no provider credential needed" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project"
+  [ "$status" -eq 0 ]
+  run grep -c -- '--code-only' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+  [ -f "${OMES_TEST_TMPDIR}/project/graphify-out/omes-provenance.json" ]
+}
+
+@test "omes graphify run --out threads through to graphify and the provenance sidecar location" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project" "${OMES_TEST_TMPDIR}/custom-out"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --out "${OMES_TEST_TMPDIR}/custom-out"
+  [ "$status" -eq 0 ]
+  run grep -c -- "--out ${OMES_TEST_TMPDIR}/custom-out" "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+  [ -f "${OMES_TEST_TMPDIR}/custom-out/omes-provenance.json" ]
+  [ ! -e "${OMES_TEST_TMPDIR}/project/graphify-out" ]
+}
+
+@test "omes graphify run --mode semantic without OMES_GRAPHIFY_PROVIDER_ENV is refused" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode semantic --yes
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"OMES_GRAPHIFY_PROVIDER_ENV"* ]]
+  run grep -c '^graphify extract' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "omes graphify run --mode semantic with an empty named credential variable is refused" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  export OMES_GRAPHIFY_PROVIDER_ENV="MY_FAKE_PROVIDER_KEY"
+  unset MY_FAKE_PROVIDER_KEY || true
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode semantic --yes
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"MY_FAKE_PROVIDER_KEY"* ]]
+  run grep -c '^graphify extract' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "omes graphify run --mode semantic with a satisfied provider gate runs without --code-only" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  export OMES_GRAPHIFY_PROVIDER_ENV="MY_FAKE_PROVIDER_KEY"
+  export MY_FAKE_PROVIDER_KEY="super-secret-value-do-not-leak"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode semantic --backend ollama --yes
+  [ "$status" -eq 0 ]
+  run grep -c '^graphify extract .*--code-only' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  run grep -c -- '--backend ollama' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+}
+
+@test "omes graphify run --mode semantic without --yes and no tty is refused, no extraction runs" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  export OMES_GRAPHIFY_PROVIDER_ENV="MY_FAKE_PROVIDER_KEY"
+  export MY_FAKE_PROVIDER_KEY="super-secret-value-do-not-leak"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode semantic
+  [ "$status" -ne 0 ]
+  run grep -c '^graphify extract' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "omes graphify run --dry-run performs no extraction and writes no provenance file" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --dry-run --json
+  [ "$status" -eq 0 ]
+  run grep -c '^graphify extract' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  [ ! -e "${OMES_TEST_TMPDIR}/project/graphify-out/omes-provenance.json" ]
+}
+
+@test "omes graphify run --json emits a valid provenance-describing envelope" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  omes_run_stdout_only "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --json
+  [ "$status" -eq 0 ]
+  run python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert d['command']=='graphify'; assert d['subcommand']=='run'; assert d['ok'] is True; assert d['mode']=='code'; assert d['provenance_file'].endswith('omes-provenance.json')" "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "omes graphify run's provenance sidecar records the provider env var NAME, never its value" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  export OMES_GRAPHIFY_PROVIDER_ENV="MY_FAKE_PROVIDER_KEY"
+  export MY_FAKE_PROVIDER_KEY="super-secret-value-do-not-leak"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project" --mode semantic --yes
+  [ "$status" -eq 0 ]
+  local sidecar="${OMES_TEST_TMPDIR}/project/graphify-out/omes-provenance.json"
+  [ -f "$sidecar" ]
+  run grep -c "MY_FAKE_PROVIDER_KEY" "$sidecar"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+  run grep -c "super-secret-value-do-not-leak" "$sidecar"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+  # ...nor does it ever appear in the log OMES itself produced.
+  run grep -c "super-secret-value-do-not-leak" "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "omes graphify run's provenance sidecar is valid JSON with the expected fields" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project"
+  run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project"
+  [ "$status" -eq 0 ]
+  run python3 -c "
+import json
+with open('${OMES_TEST_TMPDIR}/project/graphify-out/omes-provenance.json') as f:
+    d = json.load(f)
+assert d['mode'] == 'code'
+assert d['provider_env_var'] is None
+assert d['backend'] is None
+assert d['graphify_version']
+assert d['omes_version']
+assert d['path'].endswith('/project')
+"
+  [ "$status" -eq 0 ]
+}
+
+# ---------------------------------------------------------------------------
+# omes graphify skill install / uninstall (issue #51)
+# ---------------------------------------------------------------------------
+
+@test "omes graphify skill install copies SKILL.md and run.sh into HERMES_HOME/skills/graphify" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  [ -f "${OMES_HERMES_HOME}/skills/graphify/SKILL.md" ]
+  [ -f "${OMES_HERMES_HOME}/skills/graphify/run.sh" ]
+  [ -x "${OMES_HERMES_HOME}/skills/graphify/run.sh" ]
+  run grep -c 'omes graphify run' "${OMES_HERMES_HOME}/skills/graphify/run.sh"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+}
+
+@test "omes graphify skill install --json reports the target directory" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  omes_run_stdout_only "$OMES_BIN" graphify skill install --yes --json
+  [ "$status" -eq 0 ]
+  run python3 -c "import json,sys; d=json.loads(sys.argv[1]); assert d['command']=='graphify'; assert d['subcommand']=='skill'; assert d['action']=='install'; assert d['ok'] is True; assert d['target_dir'].endswith('skills/graphify')" "$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "omes graphify skill install --dry-run writes nothing" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  run "$OMES_BIN" graphify skill install --dry-run
+  [ "$status" -eq 0 ]
+  [ ! -e "${OMES_HERMES_HOME}/skills/graphify" ]
+}
+
+@test "omes graphify skill install backs up a pre-existing SKILL.md before overwriting it" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  mkdir -p "${OMES_HERMES_HOME}/skills/graphify"
+  printf 'pre-existing, foreign skill content\n' > "${OMES_HERMES_HOME}/skills/graphify/SKILL.md"
+  run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  run grep -rl 'pre-existing, foreign skill content' "${OMES_STATE_DIR}/backups"
+  [ "$status" -eq 0 ]
+  [ -n "$output" ]
+}
+
+@test "omes graphify skill uninstall removes only SKILL.md and run.sh, nothing else under skills/" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  mkdir -p "${OMES_HERMES_HOME}/skills/other-skill"
+  : > "${OMES_HERMES_HOME}/skills/other-skill/SKILL.md"
+
+  run "$OMES_BIN" graphify skill uninstall --yes
+  [ "$status" -eq 0 ]
+  [ ! -e "${OMES_HERMES_HOME}/skills/graphify/SKILL.md" ]
+  [ ! -e "${OMES_HERMES_HOME}/skills/graphify/run.sh" ]
+  [ -f "${OMES_HERMES_HOME}/skills/other-skill/SKILL.md" ]
+}
+
+@test "omes graphify skill uninstall without --yes and no tty is refused" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  run "$OMES_BIN" graphify skill uninstall
+  [ "$status" -ne 0 ]
+  [ -f "${OMES_HERMES_HOME}/skills/graphify/SKILL.md" ]
+}
+
+@test "omes graphify skill with no action is a usage error" {
+  run "$OMES_BIN" graphify skill
+  [ "$status" -eq 2 ]
 }
