@@ -112,19 +112,32 @@ run_bats "tests/unit"
 run_bats "tests/integration"
 
 # ---------------------------------------------------------------------------
-# Python (stdlib-only) unit tests, ADR-0012
+# Python (lib/omes/py) - stdlib-only (ADR-0012): py_compile + unittest
 # ---------------------------------------------------------------------------
 
-if [[ -d tests/py ]]; then
-  log "running python3 -m unittest discover -s tests/py -t ."
-  if command -v python3 >/dev/null 2>&1; then
+if ! command -v python3 >/dev/null 2>&1; then
+  if [[ -d "${OMES_ROOT}/lib/omes/py" ]] || [[ -d "${OMES_ROOT}/tests/py" ]]; then
+    err "python3 not available; cannot run lib/omes/py checks"
+    FAILED=1
+  fi
+else
+  if [[ -d "${OMES_ROOT}/lib/omes/py" ]]; then
+    mapfile -t PY_FILES < <(find "${OMES_ROOT}/lib/omes/py" -type f -name '*.py' | sort)
+    if [[ "${#PY_FILES[@]}" -gt 0 ]]; then
+      log "running python3 -m py_compile on ${#PY_FILES[@]} file(s) under lib/omes/py"
+      if ! python3 -m py_compile "${PY_FILES[@]}"; then
+        err "python3 -m py_compile reported issues under lib/omes/py"
+        FAILED=1
+      fi
+    fi
+  fi
+
+  if [[ -d "${OMES_ROOT}/tests/py" ]]; then
+    log "running python3 -m unittest discover -s tests/py -t ."
     if ! python3 -m unittest discover -s tests/py -t .; then
-      err "python3 unittest suite failed"
+      err "python3 -m unittest reported failures under tests/py"
       FAILED=1
     fi
-  else
-    err "python3 not available; cannot run tests/py"
-    FAILED=1
   fi
 fi
 

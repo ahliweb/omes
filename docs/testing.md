@@ -46,6 +46,24 @@ Uses a locally installed `bats`/`shellcheck` when present, falling back to Docke
 layered on for the JSON-validity assertions and the `omes update` git tests - see
 [ADR-0009](adr/0009-testing-with-bats-in-containers.md)) otherwise.
 
+### 2.1a Python (`lib/omes/py/**`, stdlib-only per ADR-0012)
+
+`./tests/run.sh` also runs, on the host (not inside a container):
+
+```bash
+python3 -m py_compile $(find lib/omes/py -name '*.py')
+python3 -m unittest discover -s tests/py -t .
+```
+
+`tests/py/health/test_ollama.py` (issue #71) is the first suite here; it
+exercises `lib/omes/py/health/ollama.py` against a stdlib
+`http.server`-based fake Ollama endpoint - no real network, no real
+Ollama, and no third-party test dependency (ADR-0012 forbids anything
+outside the standard library, including test-only packages). Add new
+Python logic under `lib/omes/py/<package>/` with tests under
+`tests/py/<package>/test_*.py`; `tests/run.sh` discovers them
+automatically.
+
 ### 2.2 Container regression matrix
 
 ```bash

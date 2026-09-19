@@ -167,6 +167,21 @@ This means `omes install --profile hermes` failing with exit 7 always means
 "look at the `hermes doctor` output printed above it," not an opaque
 failure.
 
+### 6.1 Ollama, when configured
+
+`modules/hermes/module.sh` also defines an additive, advisory
+`module_doctor` hook (read by `omes doctor`, see `bin/omes`'s
+`cmd_doctor`): when Ollama looks configured for this install
+(`OMES_OLLAMA_ENABLED=1`, or the `ollama` binary is present *and*
+`OMES_OLLAMA_MODEL` is set), it runs the layered Ollama health check
+(`omes health ollama`, issue [#71](https://github.com/ahliweb/omes/issues/71))
+and reports a one-line `ready=.../service=.../model=...` summary. This
+never fails `module_verify` itself — an unhealthy Ollama surfaces as a
+`WARN` in `omes doctor`'s output, not a `FAIL`, since Ollama is optional
+and orthogonal to whether Hermes itself installed correctly. See
+[docs/ollama.md](ollama.md) for the full layered contract, profiles, and
+remediation guidance.
+
 ## 7. Idempotency
 
 Re-running `omes install --profile hermes` (or `--module hermes`) against an

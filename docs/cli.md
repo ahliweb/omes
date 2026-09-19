@@ -314,6 +314,44 @@ Prints the full usage text (commands, global flags, exit codes). **Exit codes:**
 help`), 2 (no command given at all).
 **JSON schema:** `{"command":"help","ok":true,"usage":"<the same text as human mode>","exit_code":0}`
 
+### `omes health` (extension command)
+
+**Synopsis:** `omes health ollama [--json] [--profile <name>] [--model <id>]`
+
+Implemented by [`lib/omes/cmd/health.sh`](../lib/omes/cmd/health.sh)
+(issue [#71](https://github.com/ahliweb/omes/issues/71)), which delegates
+to the stdlib-only [`lib/omes/py/health/ollama.py`](../lib/omes/py/health/ollama.py)
+checker (ADR-0012). Runs a layered health check for the optional Ollama
+local AI runtime: **service** (binary present, endpoint reachable,
+`/api/version`, loopback bind-address policy), **model** (present in
+`/api/tags`, loads within a bounded timeout, minimal chat smoke test,
+CPU/GPU placement from `/api/ps`), and **capability** (`chat`,
+`structured_output`, `tool_calling`, `embeddings`, `vision` — each
+`pass`/`fail`/`not_applicable`, gated by `OMES_OLLAMA_PROFILE`). Read-only
+and side-effect free; never sends real prompts or documents, only
+synthetic fixtures. See [docs/ollama.md](ollama.md) for the full policy,
+profiles, and remediation guidance.
+
+`omes doctor` also runs this check (advisory, via `modules/hermes`'s
+`module_doctor` hook) whenever Ollama looks configured for the install
+(`OMES_OLLAMA_ENABLED=1`, or the `ollama` binary is present and
+`OMES_OLLAMA_MODEL` is set) — a failure there is reported as a WARN, it
+never fails `omes doctor` outright.
+
+**Exit codes:** 0 ready, 7 not ready, 4 service missing (binary/endpoint
+entirely unreachable — nothing further could be checked), 2 (usage
+error, e.g. an unknown target or missing flag value).
+
+**JSON schema:** `{"provider":"ollama-local","profile":"text","service":{"status":"pass"},"model":{"id":"...","status":"pass","processor":"..."},"capabilities":{"chat":"pass","structured_output":"not_applicable","tool_calling":"not_applicable","embeddings":"not_applicable","vision":"not_applicable"},"checks":[{"name":"...","status":"...","detail":"...","remediation":null}],"ready":true}`
+
+**Examples:**
+
+```bash
+omes health ollama --json | jq -e '.ready'
+omes health ollama --profile structured --model llama3.1
+OMES_OLLAMA_MODEL=llama3.1 omes health ollama
+```
+
 ## 4.12 Extension commands
 
 Additional top-level commands are loaded from `lib/omes/cmd/<name>.sh`
