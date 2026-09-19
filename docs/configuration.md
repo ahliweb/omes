@@ -142,9 +142,7 @@ Never referenced by any installer profile — see
 | `OMES_CONTENT_ROOT` | `${XDG_DATA_HOME:-$HOME/.local/share}/omes/content` | Operator | Root of the `inbox/ processing/ uploaded/ failed/ review/ reports/ sessions/ state/` layout. `sessions/` and `state/` are created mode `0700`. Read by `lib/omes/py/content/paths.py`. |
 | `OMES_CONTENT_APPROVAL_TTL_SECONDS` | `3600` | Operator | Default `--ttl-seconds` for `omes content approve` (docs/content-distribution.md section 7). Read by `lib/omes/py/content/cli.py`; an explicit `--ttl-seconds` flag overrides it. |
 
-## 15. Reserved but not read by any code path yet
-
-## 16. `omes health ollama` / `lib/omes/py/health/ollama.py` (issue #71)
+## 15. `omes health ollama` / `lib/omes/py/health/ollama.py` (issue #71)
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
@@ -159,6 +157,8 @@ Never referenced by any installer profile — see
 | `OMES_OLLAMA_ENABLED` | `0` | Operator | `1` makes `modules/hermes`'s `module_doctor` hook run this check unconditionally during `omes doctor`. Without it, the hook still runs automatically whenever the `ollama` binary is present *and* `OMES_OLLAMA_MODEL` is set. |
 
 
+
+## 16. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 
