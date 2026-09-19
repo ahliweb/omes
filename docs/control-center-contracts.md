@@ -240,6 +240,82 @@ unconditionally and before any limit/policy logic runs
 independent check behind AWCMS's own RLS enforcement (§1), not a
 replacement for it.
 
+### 2.7 Manual invoicing and billing ledger contracts (issue #93)
+
+Issue #93 adds a minimal, auditable manual-billing foundation before any
+live payment gateway integration (issue #94). It never sends email or
+renders a downloadable document itself — both are AWCMS's provider-neutral
+email boundary and document rendering, respectively.
+
+| Contract | Schema file |
+|---|---|
+| Billing profile | `billing-profile.schema.json` |
+| Invoice | `invoice.schema.json` |
+| Invoice line | `invoice-line.schema.json` |
+| Credit | `credit.schema.json` |
+| Adjustment | `adjustment.schema.json` |
+| Payment record | `payment-record.schema.json` |
+| Refund record | `refund-record.schema.json` |
+| Tax metadata | `tax-metadata.schema.json` |
+| Currency | `currency.schema.json` |
+
+**Money precision rule**: every amount anywhere in this contract set is
+`amount_minor`/`unit_amount_minor` — an **integer** count of the
+currency's smallest unit (cents for USD/EUR, no minor unit for JPY, ...).
+No schema in this set has a `number` (float) money field; `currency` is
+an ISO 4217 alphabetic code (`^[A-Z]{3}$`). Mixing currencies within one
+invoice's lines/credits/adjustments/payments is always an error —
+`lib/omes/py/jobs/ledger.py` raises `CurrencyMismatchError` rather than
+converting.
+
+**Immutable price snapshots**: `invoice.lines[].price_snapshot` (same
+shape as `invoice-line.price_snapshot`) copies `price_id`,
+`catalog_version_id`, `currency`, and `unit_amount_minor` at generation
+time. A later catalog price or plan change never rewrites an
+already-issued invoice's lines — this is what "generate manual invoices
+from subscription/catalog snapshots without changing historical prices
+when a plan changes" (issue #93 acceptance criteria) means concretely.
+
+**`invoice.state`** is `draft, issued, partially_paid, paid, overdue,
+void, refunded, disputed`, with allowed transitions encoded as data in
+[`contracts/control-center/v1/invoice.states.json`](../contracts/control-center/v1/invoice.states.json)
+and checked by the SAME `lib/omes/py/jobs/states.py` module issue #92's
+subscription state machine uses — no second transition-checking
+implementation. `void` and `refunded` are terminal.
+
+**`lib/omes/py/jobs/ledger.py`** is the stdlib reconciliation helper:
+
+- `compute_totals()` — recomputes `subtotal_minor`/`tax_minor`/
+  `credit_minor`/`adjustment_minor`/`total_minor`/`paid_minor` from
+  `lines`/`credits`/`adjustments`/`payments` in pure integer arithmetic.
+  Tax is computed per line as `floor(line_subtotal * rate_bps / 10000)`
+  and summed (deterministic; no accumulated rounding drift across lines).
+  `total_minor` is clamped at 0 (an over-credited/over-adjusted invoice
+  never reports a negative total).
+- `record_payment()` / `record_refund()` — append-only; both reject a
+  currency mismatch against the invoice/payment, and both reject a
+  **duplicate confirmation** by `idempotency_key` (issue #93: "reject
+  duplicate confirmations") rather than double-counting. `record_refund()`
+  additionally rejects refunding more than a payment's own amount.
+- `state_after_payment()` — recommends `paid`/`partially_paid`/unchanged
+  from a recomputed `paid_minor`; it does NOT itself apply the
+  transition — the caller must still validate the recommendation against
+  `states.py` before applying it, so a `void`/`refunded`/`disputed`
+  invoice is never silently overwritten by a stale payment recomputation
+  (`tests/py/jobs/test_ledger.py::test_caller_must_still_validate_the_recommended_transition`).
+
+**Relationship to entitlement (issue #92) and payment gateways (issue
+#94)**: this contract set does not mutate OMES deployment state or
+entitlement records directly. AWCMS is expected to read an invoice's
+`state` (e.g. `paid`) and independently decide whether to emit a
+`subscription`-lifecycle event (issue #92's `apply_subscription_event()`)
+— the two are linked by cross-reference (`invoice.subscription_id`), not
+by one writing the other. Issue #94 will add the live payment-gateway
+webhook contract that would eventually produce a `payment-record`/
+`refund-record` automatically instead of manually; this issue's records
+carry a `manual confirmation` shape (`actor`, `evidence_ref`) precisely
+because no gateway integration exists yet.
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
