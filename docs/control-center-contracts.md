@@ -316,6 +316,81 @@ webhook contract that would eventually produce a `payment-record`/
 carry a `manual confirmation` shape (`actor`, `evidence_ref`) precisely
 because no gateway integration exists yet.
 
+### 2.8 Payment gateway, webhook, and proration contracts (issue #94)
+
+Issue #94 extends the manual billing foundation (issue #93) with
+provider-backed automation contracts. No live provider integration, no
+webhook HTTP endpoint, and no automated dunning/suspension pipeline exists
+in this repository — this section fixes the shapes and the pure
+verification/calculation logic such a pipeline must use.
+
+| Contract | Schema file |
+|---|---|
+| Payment gateway adapter | `payment-gateway-adapter.schema.json` |
+| Webhook envelope | `webhook-envelope.schema.json` |
+| Proration | `proration.schema.json` |
+| Suspension automation policy | `suspension-automation-policy.schema.json` |
+| Outbox event | `outbox-event.schema.json` |
+
+**Provider neutrality**: `payment-gateway-adapter.provider_id` is an
+opaque, operator-assigned identifier, never a specific commercial
+provider name; `capabilities` is a closed enum
+(`charge, refund, recurring, webhook, dispute_handling, proration`) an
+adapter declares rather than the contract assuming every provider
+supports everything.
+
+**Webhook verification order (issue #94: "verify webhook signatures,
+timestamps, event IDs, and replay/idempotency before applying state
+changes")**: `lib/omes/py/jobs/payments.py`'s `verify_webhook()` runs, in
+this fixed order, for every inbound event: (1) `assert_valid_signature()`
+— HMAC-SHA256, constant-time comparison (`hmac.compare_digest`), so an
+unverifiable event is rejected before any of its other fields are even
+trusted enough to read; (2) `check_freshness()` — rejects a timestamp
+outside `replay_window_seconds` of receipt, in either direction; (3)
+`check_not_replayed()` — rejects a previously-seen `event_id`. Fixture
+tests never use a literal secret string; `tests/py/jobs/test_payments.py`
+generates a throwaway HMAC key with `secrets.token_bytes()` at test run
+time.
+
+**Event types**: `payment.succeeded, payment.failed, invoice.recurring,
+dunning.retry, refund.completed, dispute.opened, cancellation.requested`
+— the same closed enum on both `webhook-envelope.event_type` and
+`outbox-event.event_type`.
+
+**Deterministic rounding rule**: proration uses **HALF-UP** rounding in
+integer minor units (`proration.rounding_rule` is the fixed const
+`half_up_minor_unit`), not banker's rounding (round-half-to-even).
+Banker's rounding exists to cancel bias across a very large number of
+automated transactions; a subscription proration is a single, often
+support-reviewed, human-facing number, where HALF-UP is the rounding
+behavior most people already expect (the same intuition as cash
+rounding). `lib/omes/py/jobs/payments.py`'s `round_half_up()` is pure
+integer division with a manual remainder check — it never uses
+`float`/`Decimal`.
+
+**Outbox pattern (issue #94: "no network payment call occurs inside a
+database transaction")**: a webhook handler's own transaction only
+verifies the envelope and writes one `outbox-event` row; every downstream
+effect (an entitlement update, a deployment action, a notification) is a
+separate, retryable dispatch of that row. This repository does not
+implement a dispatcher; `outbox-event.schema.json` fixes the row shape
+(`status: pending|dispatched|failed`, `attempts`, `next_attempt_at`) a
+dispatcher must use.
+
+**Suspension automation gating (issue #94: "Require approval or explicit
+documented automation policy before destructive deployment actions
+caused by non-payment")**: `suspension-automation-policy.schema.json`
+references a `catalog-resource-policy` (issue #92, "what happens") and
+adds `requires_approval_for_destructive_action` ("whether it may happen
+unattended"). `lib/omes/py/jobs/payments.py`'s `decide_automation()` is
+the pure function that reads this: a non-destructive event type
+(`payment.succeeded`, `invoice.recurring`) never requires approval; a
+destructive event type (`payment.failed`, `dunning.retry`,
+`dispute.opened`, `cancellation.requested`) requires approval **by
+default** — an automation policy that skips approval is an explicit,
+reviewable opt-in (`requires_approval_for_destructive_action: false`),
+never the default when the field is absent.
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
