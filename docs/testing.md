@@ -183,6 +183,21 @@ fast and never depends on PyPI availability. Run it by hand with `tests/graphify
 Follow [`tests/vm/checklist.md`](../tests/vm/checklist.md) by hand against a real (or virtualized)
 Linux Mint 22.x install. Not automated - see [4. Known gaps](#4-known-gaps) for why.
 
+### 2.5 Python stdlib unit tests
+
+```bash
+python3 -m unittest discover -s tests/py -t .
+```
+
+Also run by `tests/run.sh` whenever `tests/py/` exists. Covers `lib/omes/py/<pkg>/` (ADR-0012:
+stdlib-only Python for workflow/state-machine/schema-validation logic; bash stays the CLI/module
+glue). `tests/py/coolify/` (issue #97) is the fake-provider contract suite for the optional
+Coolify adapter: `apply`/`status`/`health`/`redeploy`/`rollback` idempotency, fail-closed
+mapping/rollback validation, reconciliation's inability to overwrite an OMES logical field, and
+`client.py`'s network-never-called-by-default and token-redaction guarantees (via mocked
+`urllib`, never a real Coolify instance - see [`docs/coolify-adapter.md`](coolify-adapter.md)
+section 7 for the opt-in `OMES_COOLIFY_LIVE=1` real-integration gap this leaves).
+
 ## 3. Evidence and release gates
 
 `docs/business/release-gates.md` cites this test suite as the proof for several of its

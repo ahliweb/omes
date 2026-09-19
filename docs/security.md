@@ -240,6 +240,20 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | A document upload reference expires and a late submission is rejected rather than silently accepted | `lib/omes/py/domains/fake_provider.py`'s `request_document_upload()`/`submit_documents()` tick-based expiry |
 | Transfer, contact update, and DNS/DNSSEC are not claimed automated for SRS-X until verified against a live/sandbox account | `lib/omes/py/domains/profiles/srsx.py`'s `REGISTRAR_CAPABILITY["supported_operations"]` |
 
+### 8.2 Coolify adapter controls implemented today (issue #97)
+
+| Control | Implemented in |
+|---|---|
+| Fail closed on a missing or ambiguous instance/project/environment/resource mapping | `contracts/coolify/v1/mapping.schema.json`'s single-string (not array) fields, `lib/omes/py/coolify/provider.py`'s `require_mapping_fields()` |
+| Credential reference only — never a raw Coolify API token in a contract, state file, or log | `contracts/coolify/v1/instance-registration.request.schema.json`'s `credential_ref`, enforced generically by `lib/omes/py/jobs/schema.py`'s secret-value ban (reused across every `contracts/<area>/v1/` directory) |
+| Idempotent apply/redeploy/rollback; a replayed `idempotency_key` never triggers a second deploy | `lib/omes/py/coolify/fake.py`'s `FakeCoolifyProvider` |
+| Rollback fails closed on an unobserved `rollback_ref` | `lib/omes/py/coolify/provider.py`'s `RollbackReferenceUnknownError`, enforced in `fake.py`'s `rollback()` |
+| Observed state is metadata only — no schema field exists for a raw log body | `contracts/coolify/v1/observed-state.schema.json`'s `logs_metadata` (`additionalProperties: false`) |
+| Reconciliation cannot overwrite an OMES logical/policy/entitlement field | `contracts/coolify/v1/reconciliation.request.schema.json`'s closed `observation_patch` key set, enforced again at runtime by `lib/omes/py/coolify/reconcile.py`'s `validate_patch()` |
+| Token never touches argv, is read only from the environment variable a credential reference names, and is redacted from every error message | `lib/omes/py/coolify/client.py`'s `_token()`/`_request()`, `lib/omes/py/coolify/audit.py`'s `redact_text()` |
+| No network call by default; a real Coolify call requires `OMES_COOLIFY_LIVE=1` | `lib/omes/py/coolify/client.py`'s `live_enabled()` gate in `_request()`, asserted by `tests/py/coolify/test_client.py` patching `urllib.request.urlopen` |
+| Every delegated operation is audited to an append-only, hash-chained log | `lib/omes/py/coolify/provider.py`'s `_audit()`, `lib/omes/py/coolify/audit.py` (same record shape as `lib/omes/py/jobs/audit.py`) |
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

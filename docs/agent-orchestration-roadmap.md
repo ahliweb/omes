@@ -153,6 +153,8 @@ Coolify remains the source of truth for the delegated resource's:
 
 The adapter must be idempotent, least-privilege, and explicit about rollback boundaries. It must not embed the Coolify Laravel/PostgreSQL/Redis/realtime control-plane stack in OMES.
 
+Implementation status: contracts (`contracts/coolify/v1/`) and a fake-provider adapter (`lib/omes/py/coolify/`) are implemented; see [docs/coolify-adapter.md](coolify-adapter.md) for the source-of-truth split, verified Coolify API endpoints, and what remains (no live HTTP integration, no `omes job`/manifest wiring yet).
+
 ### 2.4 Control Center, billing, and external providers
 
 The web Control Center is a staged companion control plane, not part of the native systemd MVP. It may use the AWCMS/awcms-one foundation for tenant, identity, catalog, subscription, invoice, entitlement, approval, audit, support, and reporting surfaces. It requests host operations through the versioned OMES job boundary defined in [#89](https://github.com/ahliweb/omes/issues/89) and [#90](https://github.com/ahliweb/omes/issues/90); it never exposes arbitrary shell execution.

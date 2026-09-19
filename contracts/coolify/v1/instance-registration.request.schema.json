@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/instance-registration.request.schema.json",
+  "title": "instance-registration.request",
+  "description": "Registers a Coolify instance OMES may delegate to (issue #97). OMES never stores the Coolify API token itself: `credential_ref` names where the token lives (an env var, by convention the OMES_COOLIFY_TOKEN_<instance_id> shape documented in docs/coolify-adapter.md) and the generic secret-reference rule in lib/omes/py/jobs/schema.py rejects any raw scalar under a field whose name matches token/password/secret/credential/... . `base_url` must be an explicit https URL to the self-hosted or cloud Coolify API root (e.g. https://coolify.example.com/api/v1) - see https://coolify.io/docs/api/overview.",
+  "type": "object",
+  "required": [
+    "instance_id",
+    "base_url",
+    "credential_ref"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "instance_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "base_url": {
+      "type": "string",
+      "pattern": "^https://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9/_.-]*)?$"
+    },
+    "credential_ref": {
+      "type": "object",
+      "required": [
+        "store",
+        "key"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "store": {
+          "type": "string",
+          "enum": [
+            "env",
+            "file",
+            "vault",
+            "os-keyring"
+          ]
+        },
+        "key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_./-]{1,256}$"
+        }
+      }
+    },
+    "description": {
+      "type": "string"
+    }
+  }
+}

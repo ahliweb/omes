@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/coolify/v1/reconciliation.request.schema.json",
+  "title": "reconciliation.request",
+  "description": "Merges a fresh Coolify observed-state read into the mapping's stored observation fields (lib/omes/py/coolify/reconcile.py, issue #97). `observation_patch` is restricted, by additionalProperties=false, to exactly the observed-state.schema.json key set - the same closed list AGENTS.md 2 draws around what Coolify may be a source of truth for. Any OMES logical field (role/capability policy, secret_ref, entitlement, backup policy, desired mapping identity) is structurally impossible to place in this patch: the schema itself has no property for it, so a reconciliation request that tries to carry one is rejected before lib/omes/py/coolify/reconcile.py's own runtime check ever runs (defense in depth, matching contracts/README.md's secret-reference rule pattern).",
+  "type": "object",
+  "required": [
+    "correlation_id",
+    "mapping",
+    "observation_patch"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "mapping": {
+      "type": "object",
+      "required": [
+        "instance_id",
+        "project",
+        "environment",
+        "resource"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "instance_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "environment": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "resource": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        }
+      }
+    },
+    "observation_patch": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "external_resource_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+        },
+        "target_server": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "server_uuid": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            "hostname": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$"
+            }
+          }
+        },
+        "deployment_status": {
+          "type": "string",
+          "enum": [
+            "queued",
+            "in_progress",
+            "finished",
+            "failed",
+            "cancelled-by-user",
+            "unknown"
+          ]
+        },
+        "build_history_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "deployment_uuid": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            },
+            "commit": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+            }
+          }
+        },
+        "proxy_domain_config": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proxy_type": {
+              "type": "string",
+              "enum": [
+                "traefik",
+                "caddy",
+                "none"
+              ]
+            },
+            "domains": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9.-]{0,253}$"
+              }
+            }
+          }
+        },
+        "logs_metadata": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "ref": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$"
+            },
+            "last_line_at": {
+              "type": "string",
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+            },
+            "byte_count": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  }
+}

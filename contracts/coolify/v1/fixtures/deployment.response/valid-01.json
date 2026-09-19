@@ -1,0 +1,11 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "idempotency_key": "apply-researcher-worker-2026-09-19T00-00-00Z",
+  "operation": "apply",
+  "result": "accepted",
+  "external": {
+    "resource_uuid": "researcher-worker",
+    "deployment_uuid": "cm37r6cqj000008jm0veg5tkm"
+  },
+  "message": "Coolify queued the deployment"
+}

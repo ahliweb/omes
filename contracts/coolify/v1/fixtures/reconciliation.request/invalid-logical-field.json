@@ -1,0 +1,13 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "mapping": {
+    "instance_id": "coolify-production",
+    "project": "agent-platform",
+    "environment": "production",
+    "resource": "researcher-worker"
+  },
+  "observation_patch": {
+    "deployment_status": "finished",
+    "entitlement_tier": "pro"
+  }
+}

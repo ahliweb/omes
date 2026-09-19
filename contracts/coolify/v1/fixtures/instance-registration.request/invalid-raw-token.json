@@ -1,0 +1,5 @@
+{
+  "instance_id": "coolify-production",
+  "base_url": "https://coolify.example.com/api/v1",
+  "credential_ref": "not-a-real-secret-just-a-fixture-value"
+}

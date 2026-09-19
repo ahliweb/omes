@@ -1,0 +1,13 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "observed_at": "2026-09-19T00:05:00Z",
+  "external_resource_id": "researcher-worker",
+  "target_server": {
+    "server_uuid": "og888os"
+  },
+  "deployment_status": "finished",
+  "logs_metadata": {
+    "available": true,
+    "body": "2026-09-19T00:04:59Z build succeeded\n2026-09-19T00:04:58Z pulling image..."
+  }
+}

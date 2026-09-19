@@ -1,0 +1,9 @@
+{
+  "instance_id": "coolify-production",
+  "base_url": "https://coolify.example.com/api/v1",
+  "credential_ref": {
+    "store": "env",
+    "key": "OMES_COOLIFY_TOKEN_COOLIFY_PRODUCTION"
+  },
+  "description": "Primary multi-server Coolify instance"
+}

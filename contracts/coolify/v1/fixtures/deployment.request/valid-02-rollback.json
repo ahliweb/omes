@@ -1,0 +1,16 @@
+{
+  "correlation_id": "corr-agent-platform-worker-001",
+  "idempotency_key": "rollback-researcher-worker-2026-09-19T01-00-00Z",
+  "actor": {
+    "type": "user",
+    "id": "operator-jane"
+  },
+  "operation": "rollback",
+  "mapping": {
+    "instance_id": "coolify-production",
+    "project": "agent-platform",
+    "environment": "production",
+    "resource": "researcher-worker"
+  },
+  "rollback_ref": "cm37r6cqj000008jm0veg5tkm"
+}
