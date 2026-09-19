@@ -4,6 +4,9 @@
 > repository today. `docs/architecture.md` Sections 3, 8, and 9 are the authoritative execution
 > model / logging / exit-code contracts; this document is the operator-facing reference built on
 > top of them, with a synopsis, flags, JSON schema, and worked examples per command.
+>
+> For an end-to-end Hermes deployment runbook rather than a per-command
+> reference, see [docs/hermes-deployment-guide.md](hermes-deployment-guide.md).
 
 ## 1. Global flags and environment variables
 
@@ -318,7 +321,25 @@ Prints the full usage text (commands, global flags, exit codes). **Exit codes:**
 help`), 2 (no command given at all).
 **JSON schema:** `{"command":"help","ok":true,"usage":"<the same text as human mode>","exit_code":0}`
 
-### `omes health` (extension command)
+## 4.12 Extension commands
+
+Additional top-level commands are loaded from `lib/omes/cmd/<name>.sh`
+(see [lib/omes/cmd/README.md](../lib/omes/cmd/README.md)). `omes help`
+lists them under "Extension commands". For an extension command,
+`bin/omes` parses global flags only up to the first token it does not
+recognize; everything from that token on (subcommands, names,
+command-specific flags) is passed to the extension verbatim. Put global
+flags directly after the command word:
+
+```bash
+omes <extension> --json <subcommand> <args...>   # --json parsed by bin/omes
+omes <extension> <subcommand> --json             # --json passed to the extension
+```
+
+Extension commands follow the same exit-code and JSON contract as the
+built-in commands.
+
+## 4.13 `omes health` (layered health/readiness checks)
 
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]`
@@ -329,6 +350,7 @@ Hermes deployment (issue [#79](https://github.com/ahliweb/omes/issues/79),
 via [`lib/omes/py/health/hermes.py`](../lib/omes/py/health/hermes.py)) and
 print `{"layers": {...}, "ready": bool, "connected": bool}`. See
 [docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79)
+and [docs/hermes-deployment-guide.md §9](hermes-deployment-guide.md#9-health-and-readiness)
 for what each layer proves and its remediation. Exit codes: 0 ready, 7 not
 ready.
 
@@ -380,7 +402,7 @@ omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 ```
 
-### `omes audit` (extension command)
+## 4.14 `omes audit` (security audits)
 
 **Synopsis:** `omes audit exposure [--json]` / `omes audit provenance [--profile <name>] [--json]`
 
@@ -392,6 +414,7 @@ Ollama listener exposure (loopback vs. LAN vs. wildcard, cross-referenced
 with `ufw`) without ever opening a port, altering firewall rules, or
 reading credentials. See
 [docs/hermes-integration.md §18](hermes-integration.md#18-exposure-audit-issue-80)
+and [docs/hermes-deployment-guide.md §10](hermes-deployment-guide.md#10-exposure-audit)
 for remediation guidance.
 
 **Exit codes:** 0 ok, 7 findings, 4 a required tool (`ss`) is missing.
@@ -416,26 +439,19 @@ plugins,mcp}/**` paths are listed (mode/size/sha256) for review —
 **never executed**. See [docs/provenance.md](provenance.md) ("a
 provenance report is not a security certification"). Exit codes: 0
 clean, 7 findings.
+> Note: `omes health versions` and `omes audit provenance` (issues
+> [#83](https://github.com/ahliweb/omes/issues/83) and
+> [#84](https://github.com/ahliweb/omes/issues/84)) are implemented on
+> the sibling branch `origin/feat/84-provenance-audit` and are **not
+> present in this tree**; merging that work into this stack is tracked
+> in PR [#122](https://github.com/ahliweb/omes/pull/122)/[#126](https://github.com/ahliweb/omes/pull/126).
+> See [docs/hermes-deployment-guide.md §13](hermes-deployment-guide.md#13-compatibility-records-and-provenance).
+
 
 ## 4.12 Extension commands
 
-Additional top-level commands are loaded from `lib/omes/cmd/<name>.sh`
-(see [lib/omes/cmd/README.md](../lib/omes/cmd/README.md)). `omes help`
-lists them under "Extension commands". For an extension command,
-`bin/omes` parses global flags only up to the first token it does not
-recognize; everything from that token on (subcommands, names,
-command-specific flags) is passed to the extension verbatim. Put global
-flags directly after the command word:
 
-```bash
-omes <extension> --json <subcommand> <args...>   # --json parsed by bin/omes
-omes <extension> <subcommand> --json             # --json passed to the extension
-```
-
-Extension commands follow the same exit-code and JSON contract as the
-built-in commands.
-
-## 4.13 `omes content` (optional content distribution workflow)
+## 4.15 `omes content` (optional content distribution workflow)
 
 > Status: `scan`, `rescan`, `list` implemented (#64). `approve`, `reject`,
 > `retry`, `cancel`, `resume`, `reconcile` implemented (#67). `report`,
@@ -686,8 +702,11 @@ manifest, not an upstream flag — see docs/graphify.md §6.1 for the corrected 
 `update`/`watch` facts). `omes graphify init-ignore`/`purge` (docs/graphify-privacy.md) ship safe
 `.graphifyignore`/`.gitignore` defaults and remove only marker/manifest-owned OMES artifacts,
 never user-authored content.
+## 4.16 `omes agent-backup` (opt-in Hermes data-class backup/restore)
+
 
 ## 4.14 `omes agent-backup` (opt-in Hermes data-class backup/restore)
+
 
 `omes agent-backup create|list|verify|restore` (issue #82,
 `lib/omes/cmd/agent-backup.sh`) is a separate tool from `omes
@@ -696,7 +715,7 @@ backup`/`omes restore` scoped to Hermes's own data under `$HERMES_HOME`
 [docs/hermes-backup.md](hermes-backup.md) for the class-to-path mapping,
 manifest format, and command reference.
 
-## 4.15 `omes agent` (native OMES + Hermes agent deployment lifecycle: systemd MVP + rootless Docker Compose)
+## 4.17 `omes agent` (native OMES + Hermes agent deployment lifecycle: systemd MVP + rootless Docker Compose)
 
 
 > Status: systemd MVP implemented on `feat/87-agent-lifecycle` (issue

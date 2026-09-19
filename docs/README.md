@@ -7,6 +7,7 @@ Grouped index of every document in this repository. See the top-level
 
 | Document | What it covers |
 |---|---|
+| [hermes-deployment-guide.md](hermes-deployment-guide.md) | Authoritative, end-to-end Hermes runtime deployment runbook: prerequisites, paths, permissions, service persistence, logs, Telegram allowlists, health, exposure audit, hardening, backups, upgrades, rollback, and removal boundaries. |
 | [installation.md](installation.md) | Complete operator walkthrough for a clean machine, both profiles, every privileged command explained, supported vs. unsupported configurations. |
 | [troubleshooting.md](troubleshooting.md) | Symptom → cause → fix, organized by exit code and by component. |
 | [configuration.md](configuration.md) | Every environment variable OMES reads, grouped by component, with defaults. |
@@ -18,9 +19,17 @@ Grouped index of every document in this repository. See the top-level
 |---|---|
 | [ubuntu-server.md](ubuntu-server.md) | The `server` profile end to end: modules, firewall/SSH, update policy, Docker, troubleshooting. |
 | [linux-mint.md](linux-mint.md) | The `desktop` profile end to end: package availability, the Cinnamon-fallback guarantee, recovery. |
-| [hermes-integration.md](hermes-integration.md) | The `hermes`/`hermes-gateway`/`hermes-gateway-system` modules: install model, secrets boundary, user-vs-system gateway. |
+| [hermes-integration.md](hermes-integration.md) | The `hermes`/`hermes-gateway`/`hermes-gateway-system` modules: install model, secrets boundary, user-vs-system gateway, health, exposure audit, backup. |
+| [agent-deployment.md](agent-deployment.md) | `omes agent`: per-agent manifest schema, lifecycle, systemd MVP, and the rootless Docker Compose isolation backend. |
+| [agent-runtime-boundary.md](agent-runtime-boundary.md) | The runtime-neutral contract OMES needs from any agent runtime, and how Hermes fulfils it today. |
+| [hermes-hardening.md](hermes-hardening.md) | Opt-in systemd hardening profiles (`off`/`conservative`/`strict`) for the Hermes gateway unit. |
+| [hermes-backup.md](hermes-backup.md) | `omes agent-backup`: Hermes data-class backup/restore, class-to-path mapping, secret exclusion. |
 | [telegram-security.md](telegram-security.md) | The Telegram allowlist model, safe chat-id discovery, token rotation, operator checklist. |
+| [ollama.md](ollama.md) | The optional local Ollama runtime: health checks, capability profiles, exposure policy. |
+| [content-distribution.md](content-distribution.md) | The optional content distribution workflow (inbox, jobs, approvals, worker contract). |
+| [graphify.md](graphify.md) | The Graphify/Obsidian integration boundary: what OMES owns vs. what Graphify owns. |
 | [rollback.md](rollback.md) | Backup layout, `omes backup`/`omes restore`/`omes uninstall`, what is and isn't reversible. |
+| [disaster-recovery.md](disaster-recovery.md) | Scenario-driven recovery walkthroughs exercised by the integration test suite. |
 | [testing.md](testing.md) | The test pyramid (unit/integration bats, container matrix, VM matrix, manual checklist) and how to run each layer. |
 | [ci.md](ci.md) | What runs in GitHub Actions, what blocks a PR vs. is advisory, how to run every check locally. |
 | [packages.md](packages.md) | `lib/omes/pkg.sh`: package-name mapping, repository validation, the no-PPA-unless-allowlisted policy. |
