@@ -19,6 +19,21 @@ OMES_BACKUP_SH_LOADED=1
 backup_begin() {
   local module="$1"
   local reason="$2"
+
+  # Defensive cleanup: OMES_CURRENT_BACKUP_DIR can still be set here even
+  # though its session was already closed, when backup_finish was invoked
+  # via `$(...)` (ts="$(backup_finish)") - the `unset` inside that call
+  # only ran in the command-substitution subshell and never reached this
+  # shell. backup_finish always writes a ".finished" marker into the
+  # session directory before it unsets the variable, and that marker is a
+  # file - it survives the subshell. When the stale value points at such a
+  # finished session, drop it now so nothing below (or in a caller that
+  # checks OMES_CURRENT_BACKUP_DIR before calling us) mistakes a finished
+  # session for one that is still open. See docs/rollback.md and #129.
+  if [[ -n "${OMES_CURRENT_BACKUP_DIR:-}" && -e "${OMES_CURRENT_BACKUP_DIR}/.finished" ]]; then
+    unset OMES_CURRENT_BACKUP_DIR
+  fi
+
   local backups_dir
   backups_dir="$(omes_state_dir)/backups"
   mkdir -p "$backups_dir"
@@ -102,12 +117,35 @@ backup_path() {
 # backup_finish
 # Closes out the active backup session (records finished_at in META) and
 # prints its directory. No-op if no session is active.
+#
+# Contract (docs/rollback.md "Session identity"): the session id is
+# ALWAYS printed on stdout (unchanged), is ALSO exported as
+# OMES_LAST_BACKUP_ID (the session's basename, i.e. what backup_list
+# prints) for callers that do not want to capture stdout, and a
+# ".finished" marker file is written into the session directory before
+# OMES_CURRENT_BACKUP_DIR is unset. The marker exists because neither the
+# unset nor the OMES_LAST_BACKUP_ID export can be relied on to reach the
+# calling shell when this function is invoked via `$(...)` - a
+# command-substitution subshell's variable changes never propagate to its
+# parent no matter what this function does. Only a file written to disk
+# survives that boundary, which is what backup_begin and restore_backup
+# use to detect a stale OMES_CURRENT_BACKUP_DIR left over from exactly
+# that pattern. Callers should still prefer calling backup_finish as a
+# plain statement (every callsite in this repository does) and reading
+# OMES_CURRENT_BACKUP_DIR/OMES_LAST_BACKUP_ID afterward.
 backup_finish() {
   if [[ -z "${OMES_CURRENT_BACKUP_DIR:-}" ]]; then
     return 0
   fi
-  printf 'finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${OMES_CURRENT_BACKUP_DIR}/META"
   local dir="$OMES_CURRENT_BACKUP_DIR"
+  printf 'finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${dir}/META"
+
+  : > "${dir}/.finished"
+  chmod 600 "${dir}/.finished"
+
+  OMES_LAST_BACKUP_ID="$(basename "$dir")"
+  export OMES_LAST_BACKUP_ID
+
   unset OMES_CURRENT_BACKUP_DIR
   printf '%s\n' "$dir"
 }

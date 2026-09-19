@@ -102,15 +102,50 @@ restore_backup() {
     return 1
   fi
 
+  # Guard against restoring from a session this shell still believes is
+  # "current" (#129). This is exactly the state left behind when a caller
+  # captured backup_finish via `$(...)` (ts="$(backup_finish)") - its
+  # `unset OMES_CURRENT_BACKUP_DIR` only ran in that command-substitution
+  # subshell, so the parent shell's OMES_CURRENT_BACKUP_DIR still points
+  # at $dir. Two cases:
+  #   - The session was genuinely finished (backup_finish's ".finished"
+  #     marker is present): the stale variable is harmless but must not
+  #     be treated as an in-progress session below, so drop it and
+  #     proceed with the restore.
+  #   - The session is still genuinely open (no marker - backup_finish
+  #     was never called, e.g. mid-apply): restoring from a backup that
+  #     is not closed out yet is refused outright, since its MANIFEST may
+  #     still be gaining entries.
+  if [[ -n "${OMES_CURRENT_BACKUP_DIR:-}" ]]; then
+    local current_real dir_real
+    current_real="$(realpath -m "$OMES_CURRENT_BACKUP_DIR" 2>/dev/null || printf '%s' "$OMES_CURRENT_BACKUP_DIR")"
+    dir_real="$(realpath -m "$dir" 2>/dev/null || printf '%s' "$dir")"
+
+    if [[ -e "${OMES_CURRENT_BACKUP_DIR}/.finished" ]]; then
+      unset OMES_CURRENT_BACKUP_DIR
+    elif [[ "$current_real" == "$dir_real" ]]; then
+      log_error "restore: refusing to restore from the still-open current backup session: ${dir} (call backup_finish first)"
+      return 1
+    fi
+  fi
+
   if ! backup_manifest_validate "$dir"; then
     return 1
   fi
 
   local manifest="${dir}/MANIFEST"
   local restored=0
+  local -a manifest_lines=()
+  # Read the whole MANIFEST up front rather than iterating a live file
+  # handle: this function's own pre-restore-backup step below always opens
+  # a brand-new session now (never OMES_CURRENT_BACKUP_DIR), so it can no
+  # longer append into the very manifest being restored from - but
+  # snapshotting first removes any dependency on that invariant holding
+  # for every current and future caller (#129).
+  mapfile -t manifest_lines < "$manifest"
   local line sha rel path src actual
 
-  while IFS= read -r line || [[ -n "$line" ]]; do
+  for line in "${manifest_lines[@]}"; do
     [[ -z "$line" ]] && continue
     sha="${line%%  *}"
     rel="${line#*  }"
@@ -136,16 +171,16 @@ restore_backup() {
 
     if [[ -e "$path" ]]; then
       # Never destroy the pre-restore state without a recovery path of its
-      # own. Reuse the caller's active backup session if one exists
-      # (nested call, e.g. from module_rollback_managed_paths), otherwise
-      # open a short-lived one just for this file.
-      if [[ -n "${OMES_CURRENT_BACKUP_DIR:-}" ]]; then
-        backup_path "$path"
-      else
-        backup_begin "restore" "pre-restore-backup" >/dev/null
-        backup_path "$path"
-        backup_finish >/dev/null
-      fi
+      # own. Always open a fresh, short-lived session for this file - do
+      # NOT reuse OMES_CURRENT_BACKUP_DIR here even if one is set: that is
+      # precisely the bug in #129, where a stale/leftover "current"
+      # session pointed at the backup this function is restoring FROM,
+      # so backup_path would have appended pre-restore-backup entries
+      # into the very MANIFEST this function is reading, growing the
+      # loop it can never finish.
+      backup_begin "restore" "pre-restore-backup" >/dev/null
+      backup_path "$path"
+      backup_finish >/dev/null
     fi
 
     mkdir -p "$(dirname "$path")"
@@ -156,7 +191,7 @@ restore_backup() {
 
     restored=$((restored + 1))
     log_info "restore: restored ${path}"
-  done < "$manifest"
+  done
 
   log_info "restore: restored ${restored} file(s) from $(basename "$dir")"
   return 0
