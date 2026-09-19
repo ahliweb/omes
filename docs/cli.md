@@ -332,6 +332,86 @@ omes <extension> <subcommand> --json             # --json passed to the extensio
 Extension commands follow the same exit-code and JSON contract as the
 built-in commands.
 
+## 4.13 `omes content` (optional content distribution workflow)
+
+> Status: `scan`, `rescan`, `list` implemented (#64). `resume`, `reconcile`,
+> `retry`, `cancel`, `approve` are tracked in #67; `report`, `export`,
+> `prune` are tracked in #68. See
+> [docs/content-distribution.md](content-distribution.md) for the full
+> design (job schema, state machine, worker contract, security
+> boundaries) and [ADR-0015](adr/0015-content-distribution-workflow.md)
+> for why this workflow exists as an OMES-owned Python orchestrator.
+
+`omes content` is defined by `lib/omes/cmd/content.sh` (a thin wrapper,
+per the extension-command contract in section 4.12) and
+`lib/omes/py/content/cli.py` (stdlib-only Python, ADR-0012). **It is not
+referenced by any installer profile** — see
+docs/content-distribution.md section 9.
+
+**Synopsis:**
+
+```bash
+omes content scan [--json] [--settle-seconds N]
+omes content rescan [--json]
+omes content list [--state STATE] [--json]
+```
+
+- `scan` walks `$OMES_CONTENT_ROOT/inbox` (never following symlinks, never
+  descending into `reports/`, `processing/`, `state/`, `sessions/`, or
+  dotfiles), hashes (sha256) every file whose size/mtime have been stable
+  for `--settle-seconds` (default 5) or across two consecutive scans,
+  creates a job record under `state/jobs/<job-id>.json`, and moves the
+  settled file to `processing/<job-id>/source.<ext>`. A file whose hash
+  matches an existing job is recorded with `duplicate_of` set to that
+  job's id instead of becoming a new active job. A lock file
+  (`state/scan.lock`) prevents two scans from running concurrently; a
+  lock held by a process that is no longer running is reclaimed
+  automatically.
+- `rescan` re-hashes every job's `processing/` copy and reports any job
+  whose file no longer matches its recorded sha256 (corruption/tamper
+  detection) — it does not touch `inbox/`.
+- `list` prints job ids and states, optionally filtered by `--state`
+  (one of `queued`, `planning`, `approval-required`, `approved`,
+  `publishing`, `verifying`, `succeeded`, `retryable-failure`,
+  `manual-review`, `failed`, `cancelled`, `archived`).
+
+**Exit codes:** 0 (success, including "nothing new to scan"), 1 (error,
+e.g. `scan` while another scan holds the lock, or `rescan` finding a
+hash mismatch), 2 (usage error).
+
+**JSON schema (`scan`):**
+`{"created": ["<job-id>", ...], "duplicates": ["<job-id>", ...], "pending": ["<path>", ...]}`
+
+**Optional systemd timer template** (not installed by OMES; an operator
+copies these unit files by hand if they want scheduled scanning instead
+of running `omes content scan` manually):
+
+```ini
+# ~/.config/systemd/user/omes-content-scan.service
+[Unit]
+Description=omes content scan (one-shot)
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/bin/omes content scan --json
+```
+
+```ini
+# ~/.config/systemd/user/omes-content-scan.timer
+[Unit]
+Description=Run omes content scan periodically
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
+```
+
+Enable with `systemctl --user enable --now omes-content-scan.timer`.
+OMES does not create, enable, or reference this timer itself.
+
 ## 5. Worked examples
 
 **First run on a fresh Ubuntu Server 24.04 host:**

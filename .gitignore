@@ -12,3 +12,11 @@ tests/matrix/logs/
 
 # tests/vm/ evidence bundles (tests/vm/run.sh, issue #15) - never committed.
 tests/vm/evidence/
+
+# content distribution workflow runtime tree (issue #64) - lives outside the
+# repo by default (OMES_CONTENT_ROOT), but never let a test/dev override
+# placed inside the repo (media, sessions/cookies, job state) get committed.
+/content/
+
+# Python bytecode caches (issue #64 tests/py)
+__pycache__/
