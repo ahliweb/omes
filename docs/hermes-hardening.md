@@ -6,7 +6,9 @@
 > `modules/hermes-gateway/module.sh` (user mode) and
 > `modules/hermes-gateway-system/module.sh` (system mode). It complements
 > [docs/hermes-integration.md](hermes-integration.md), which covers the
-> gateway modules' non-hardening behavior.
+> gateway modules' non-hardening behavior. See
+> [docs/hermes-deployment-guide.md §11](hermes-deployment-guide.md#11-hardening-profiles)
+> for the condensed runbook version.
 
 ## 1. Summary
 

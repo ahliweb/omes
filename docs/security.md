@@ -5,6 +5,10 @@
 > `modules/*/module.sh` unless marked **operator-responsibility** (OMES documents/warns
 > but cannot enforce it) or **out-of-scope** (see §8). Each row/section names the file
 > that implements it so a claim here can be checked directly against code.
+>
+> For the operator-facing deployment runbook these controls apply to
+> (paths, permissions, Telegram allowlists, hardening profiles, exposure
+> audit, backups), see [docs/hermes-deployment-guide.md](hermes-deployment-guide.md).
 
 ## 1. Least-privilege defaults
 

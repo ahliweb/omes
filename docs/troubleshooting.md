@@ -5,7 +5,9 @@
 > command/flag/JSON reference, [docs/configuration.md](configuration.md) for
 > every environment variable, and [docs/rollback.md](rollback.md) /
 > [docs/disaster-recovery.md](disaster-recovery.md) for backup/restore recovery
-> procedures in depth.
+> procedures in depth. For Hermes-specific deployment troubleshooting
+> (service persistence, logs, Telegram, health), see
+> [docs/hermes-deployment-guide.md](hermes-deployment-guide.md).
 
 ## 1. By exit code
 

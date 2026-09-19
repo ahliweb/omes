@@ -6,7 +6,8 @@
 > worked examples, in [docs/cli.md](cli.md) — this page is the single place that
 > lists every environment variable OMES reads, grouped by the component that reads
 > it, with its default and whether it is an operator-facing knob or a test-only
-> override.
+> override. See [docs/hermes-deployment-guide.md §3](hermes-deployment-guide.md#3-profile-safe-paths)
+> for the subset of these variables that resolve Hermes's profile-safe paths.
 
 Legend: **Operator** — a real deployment knob, safe to set on a target host.
 **Test-only** — exists so `tests/unit/*.bats`/`tests/integration/*.bats` can exercise
