@@ -262,11 +262,12 @@ exact list so the client and its documentation cannot silently drift apart.
   GUI, tenant scope, and any UI for registering a Coolify instance or
   viewing its mappings/drift reports; this repository owns only the
   contracts, the OMES-side adapter, and the fake-provider tests.
-- **Instance registry persistence beyond a single JSON file.**
-  `lib/omes/py/coolify/paths.py`'s `instances_path()` is defined, but no
-  code in this PR reads or writes it yet (no `register-instance` CLI
-  command). Only the contract
-  (`instance-registration.request.schema.json`) and the path layout exist.
+- **Instance registry persistence beyond the local registry file.**
+  `lib/omes/py/coolify/registry.py` now validates, atomically persists, lists,
+  replays, and removes instance registrations at `instances_path()`. It stores
+  only the HTTPS base URL and credential reference, uses mode-0700/0600 state
+  permissions, and emits hash-chained audit events. AWCMS-one still owns the
+  web GUI and tenant authorization for registering instances.
 
 ## 8. Related documents
 
