@@ -35,16 +35,17 @@ for Ubuntu 24.04 Desktop below).
 
 | OS | Version | Arch | Tier | Notes |
 |---|---|---|---|---|
-| Ubuntu Server | 24.04 LTS ("noble") | amd64 | **Tier 1** | Initial server target (issue #3 acceptance criteria). Standard support until **April 2029** ([Ubuntu release cycle](https://ubuntu.com/about/release-cycle)). |
+| Ubuntu Server | 26.04 LTS / 26.04.1 LTS ("resolute") | amd64 | **Tier 1** | Primary server target. Standard support until **April 2031** ([Ubuntu release cycle](https://ubuntu.com/about/release-cycle)). |
+| Ubuntu Server | 24.04 LTS ("noble") | amd64 | **Tier 1** | Standard support until **April 2029** ([Ubuntu release cycle](https://ubuntu.com/about/release-cycle)). |
 | Ubuntu Server | 22.04 LTS ("jammy") | amd64 | **Tier 2** | Retained for migration/compatibility. Standard support until **April 2027**. |
-| Ubuntu Server | 24.04 LTS / 22.04 LTS | arm64 | **Tier 3** | See [2.3 Architecture](#23-architecture). |
+| Ubuntu Server | 26.04 LTS / 24.04 LTS / 22.04 LTS | arm64 | **Tier 3** | See [2.3 Architecture](#23-architecture). |
 
 ### 2.2 Desktop profile
 
 | OS | Version | Arch | Tier | Notes |
 |---|---|---|---|---|
 | Linux Mint | 22, 22.1, 22.2, 22.3 ("wilma"/"xia"/"zara"/"zena"/…, based on Ubuntu 24.04 "noble") | amd64 | **Tier 1 (desktop)** | Initial desktop target (issue #3 acceptance criteria). Mint 22.x is supported into **2029**, in line with its Ubuntu 24.04 base. |
-| Ubuntu Desktop | 24.04 LTS ("noble") | amd64 | **Tier 2** | The desktop *profile* (Hyprland session, config templates) is not targeted at stock Ubuntu Desktop — GNOME/Wayland stack differs from Mint's Cinnamon/LightDM baseline. Base OS support dates match Ubuntu Server 24.04 (April 2029). |
+| Ubuntu Desktop | 26.04 LTS ("resolute") / 24.04 LTS ("noble") | amd64 | **Tier 2** | The desktop *profile* (Hyprland session, config templates) is not targeted at stock Ubuntu Desktop — GNOME/Wayland stack differs from Mint's Cinnamon/LightDM baseline. Base OS support dates match Ubuntu Server 26.04 (April 2031) and 24.04 (April 2029). |
 | Linux Mint | 21.x ("vera"/"vanessa"/"victoria"/"virginia", based on Ubuntu 22.04) | amd64 | **Unsupported** | Predates the 22.x baseline OMES targets; not tested, exits with code 3. |
 | LMDE (Linux Mint Debian Edition) | any | amd64 | **Unsupported** | Debian base, not an Ubuntu derivative — package repos, `UBUNTU_CODENAME`, and kernel/Mesa cadence do not match the Ubuntu-derived assumptions OMES makes. See fixture [`lmde-6`](../tests/fixtures/os-release/lmde-6). |
 | Ubuntu Desktop / Server | any supported version | arm64 | **Tier 3** | Community/unsupported; see [2.3 Architecture](#23-architecture). |
@@ -124,8 +125,9 @@ tier, which resolves to an exit/behavior:
 
 | `ID` | `ID_LIKE` | `VERSION_ID` | `UBUNTU_CODENAME` | Tier | Exit behavior |
 |---|---|---|---|---|---|
-| `ubuntu` | — | `24.04` | `noble` | Tier 1 (server) / Tier 2 (desktop profile) | proceed |
-| `ubuntu` | — | `22.04` | `jammy` | Tier 2 | proceed, informational note |
+| `ubuntu` | — | `26.04`, `26.04.1` | `resolute` | Tier 1 (server) / Tier 2 (desktop profile) | proceed |
+| `ubuntu` | — | `24.04`, `24.04.x` | `noble` | Tier 1 (server) / Tier 2 (desktop profile) | proceed |
+| `ubuntu` | — | `22.04`, `22.04.x` | `jammy` | Tier 2 | proceed, informational note |
 | `linuxmint` | `ubuntu debian` | `22`, `22.1`, `22.2`, `22.3` | `noble` | Tier 1 (desktop) | proceed |
 | `linuxmint` | `ubuntu debian` | `21.x` | `jammy` | Unsupported | exit 3, no mutation |
 | `linuxmint` | `debian` (no `ubuntu`) | any (LMDE) | absent | Unsupported | exit 3, no mutation |
@@ -268,6 +270,7 @@ Current fixtures:
 
 | File | Represents | Expected tier |
 |---|---|---|
+| [`ubuntu-26.04`](../tests/fixtures/os-release/ubuntu-26.04) | Ubuntu Server/Desktop 26.04.1 LTS ("resolute") | Tier 1 (server) / Tier 2 (desktop) |
 | [`ubuntu-24.04`](../tests/fixtures/os-release/ubuntu-24.04) | Ubuntu Server/Desktop 24.04 LTS ("noble") | Tier 1 (server) / Tier 2 (desktop) |
 | [`ubuntu-22.04`](../tests/fixtures/os-release/ubuntu-22.04) | Ubuntu 22.04 LTS ("jammy") | Tier 2 |
 | [`linuxmint-22`](../tests/fixtures/os-release/linuxmint-22) | Linux Mint 22 ("wilma", noble base) | Tier 1 (desktop) |
@@ -283,7 +286,7 @@ Current fixtures:
 This matrix is re-evaluated (and this document updated in the same PR as any resulting code
 change) on each of the following triggers, whichever comes first:
 
-- **each Ubuntu LTS point release** (e.g. 24.04.1 → 24.04.2, or a new 22.04.x) — confirm
+- **each Ubuntu LTS point release** (e.g. 26.04.1, 24.04.1 → 24.04.2, or a new 22.04.x) — confirm
   `VERSION_ID`/`UBUNTU_CODENAME` parsing still matches and re-run the Tier 1 VM test;
 - **each Linux Mint point release** (e.g. 22 → 22.1 → 22.2 → 22.3) — add a fixture, confirm the
   `UBUNTU_CODENAME` base is still `noble`, and re-run the Tier 1 desktop VM test;

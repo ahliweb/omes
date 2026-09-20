@@ -29,7 +29,7 @@ to arrange a private channel.
 Please include, as available:
 
 - affected version (`VERSION` file / release tag) or commit SHA;
-- the platform (Ubuntu Server 24.04, Ubuntu 22.04, Linux Mint 22.x, other) and profile
+- the platform (Ubuntu Server 26.04/24.04, Ubuntu 22.04, Linux Mint 22.x, other) and profile
   (server, desktop, hermes) involved;
 - reproduction steps or a minimal example;
 - the potential impact (e.g., secret exposure, privilege escalation, remote code execution

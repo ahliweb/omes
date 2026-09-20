@@ -241,9 +241,13 @@ def build_warnings(components: dict) -> list:
     os_id = _value_of(components["os"]["id"])
     os_version = _value_of(components["os"]["version_id"])
     if os_id and os_version:
-        supported = (os_id == "ubuntu" and os_version in ("24.04", "22.04")) or (
-            os_id == "linuxmint" and os_version.startswith("22")
-        )
+        supported = (
+            os_id == "ubuntu"
+            and (
+                os_version in ("26.04", "24.04", "22.04")
+                or os_version.startswith(("26.04.", "24.04.", "22.04."))
+            )
+        ) or (os_id == "linuxmint" and os_version.startswith("22"))
         if not supported:
             warnings.append(f"unsupported OS/version combination for OMES: {os_id} {os_version} (see docs/compatibility-evidence.md)")
 
