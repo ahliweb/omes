@@ -1,6 +1,6 @@
 ---
 issue: 66
-type: feature
+type: added
 ---
 Add the isolated browser-session worker contract for the content
 distribution workflow: `lib/omes/py/content/workers/base.py` (shared

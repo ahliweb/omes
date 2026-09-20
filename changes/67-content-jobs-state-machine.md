@@ -1,6 +1,6 @@
 ---
 issue: 67
-type: feature
+type: added
 ---
 Add the content job state machine (`lib/omes/py/content/jobs.py`): a
 validated transition table, bounded exponential backoff, uncertain-vs-

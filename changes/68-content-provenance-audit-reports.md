@@ -1,6 +1,6 @@
 ---
 issue: 68
-type: feature
+type: added
 ---
 Add `lib/omes/py/content/reports.py`: an append-only, hash-chained audit
 log (`state/audit.jsonl`, redacted of `TOKEN|KEY|SECRET|PASSWORD|COOKIE`

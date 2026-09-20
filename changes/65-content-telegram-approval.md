@@ -1,6 +1,6 @@
 ---
 issue: 65
-type: feature
+type: added
 ---
 Add an outbound-only Telegram approval front end for the content
 distribution workflow: `lib/omes/py/content/telegram.py` sends the

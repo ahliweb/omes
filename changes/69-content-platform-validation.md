@@ -1,6 +1,6 @@
 ---
 issue: 69
-type: feature
+type: added
 ---
 Add platform-aware caption/cover/policy validation:
 `lib/omes/py/content/validation.py` plus per-platform constraint files

@@ -1,6 +1,6 @@
 ---
 issue: 64
-type: feature
+type: added
 ---
 Add `omes content scan|rescan|list` (`lib/omes/cmd/content.sh` +
 `lib/omes/py/content/`): detects new inbox files by sha256 + size/mtime
