@@ -1,6 +1,6 @@
 # Omarchy compatibility inventory
 
-> Status: accepted baseline (Phase 0 — Foundation and design decisions)
+> Status: accepted baseline (Phase 0 — Foundation and design decisions; updated for upstream Omarchy v4.0.4)
 > Related: [docs/scope.md](scope.md), [docs/research-and-implementation-plan.md](research-and-implementation-plan.md), [Issue #2](https://github.com/ahliweb/omes/issues/2)
 
 ## 1. Purpose
@@ -8,6 +8,7 @@
 This document maps every upstream Omarchy capability area to one of four
 decision categories, so that OMES only reproduces what makes sense on an
 apt/systemd host and never silently inherits Arch-specific assumptions.
+Evaluated against upstream Omarchy through release **v4.0.4** (2026-09-15).
 Per-item rationale, package-availability notes, and sources are recorded so
 the decision can be revisited as Ubuntu/Mint package availability changes.
 
@@ -59,6 +60,7 @@ OMES profile(s) it applies to, and a source link.
 | Keyboard-first bindings | ADAPT | The keyboard-first philosophy is reusable, but bindings are re-templated for Hyprland's config syntax rather than assuming Arch defaults; shell-level bindings (fzf, zoxide, etc.) already apply on the server profile as part of shell tooling above | N/A — templated config, not a package | desktop (window-manager bindings); both (shell-level bindings, covered under shell tooling) | [Omarchy Manual](https://omarchy.org/manual/) |
 | Web apps (site-as-app launchers) | DEFER | A desktop-only convenience feature (launching web services as app-like windows); not required for MVP | N/A — depends on browser-integration tooling, not yet evaluated | desktop | [Omarchy Manual](https://omarchy.org/manual/) |
 | Installer / ISO | REJECT | OMES installs onto an existing Ubuntu Server or Linux Mint host; it does not, and will not, produce or maintain a bootable ISO or full-disk installer — this is the clearest boundary between OMES and official Omarchy | N/A | N/A | [Omarchy Getting Started](https://omarchy.org/manual/getting-started/), [docs/scope.md non-goals](scope.md) |
+| Bespoke kernel (`linux-omarchy`) | REJECT (preserve host distribution kernel) | Omarchy v4.0.4 ships a custom tuned Arch kernel (`linux-omarchy`) as the default boot option; OMES installs onto an existing Ubuntu Server or Linux Mint host and relies exclusively on the official Canonical / Ubuntu (e.g. 24.04/26.04 LTS) and Mint kernels to preserve distribution stability, hardware enablement (HWE), and unattended security patches without altering bootloader or kernel packaging | N/A — out of scope; relies on host OS kernel | both | [Omarchy v4.0.4 Release](https://github.com/omacom/omarchy/releases/tag/v4.0.4), [docs/scope.md non-goals](scope.md) |
 
 ## 3. What the server profile inherits vs. desktop-only
 

@@ -80,13 +80,16 @@ shell (`curl | bash`). `module_apply`:
    with `curl -fsSL <url> -o <tmpfile>`.
 2. If `OMES_HERMES_INSTALLER_SHA256` is set, verifies the downloaded file's
    sha256 against it; a mismatch aborts with **no execution** and
-   `module_apply` fails (exit 6 from `omes install`).
+   `module_apply` fails (exit 6 from `omes install`). For Hermes release
+   **v2026.9.14** (v0.21.3), the verified installer SHA-256 is
+   `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
 3. If `OMES_HERMES_INSTALLER_SHA256` is **not** set, logs a `WARN` and
-   proceeds anyway — pinning is optional (upstream does not currently
-   publish a stable release hash to pin against) but its absence is always
-   visible in the log, never silent. See `docs/security.md` §6.
+   proceeds anyway — pinning is optional (upstream installer is verified
+   periodically per release) but its absence is always visible in the log,
+   never silent. See `docs/security.md` §6.
 4. Runs the verified temp file with an explicit `HERMES_HOME=<resolved
-   home>` environment variable, then deletes the temp file.
+   home>` environment variable (and `--branch "$OMES_HERMES_VERSION"` when
+   `OMES_HERMES_VERSION` is set), then deletes the temp file.
 
 This satisfies ADR-0006 and the "no `curl | bash` inside a module"
 invariant in `docs/architecture.md` §10.
@@ -248,8 +251,8 @@ fully remove Hermes themselves:
 | Variable | Purpose | Default |
 |---|---|---|
 | `OMES_HERMES_HOME` | Overrides `HERMES_HOME` for this install | `~/.hermes` |
-| `OMES_HERMES_VERSION` | Pins the installed version; a mismatch triggers re-install | unset (accept whatever the installer provides) |
-| `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it | unset (proceeds with a `WARN`) |
+| `OMES_HERMES_VERSION` | Pins the installed version (passes `--branch <version>` to the upstream installer); a mismatch triggers re-install | unset (accept whatever the installer provides; recommends `v2026.9.14`) |
+| `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it | unset (proceeds with a `WARN`; verified `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for `v2026.9.14`) |
 | `OMES_HERMES_INSTALLER_URL` | Overrides the installer URL | `https://hermes-agent.nousresearch.com/install.sh` (testing only; not a documented operator knob) |
 
 ## 10. Status (part 1 / `hermes` module)

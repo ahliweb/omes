@@ -175,6 +175,10 @@ past a failed comparison. When unset, the installer runs with a logged
 `unverified`, which `omes audit provenance` surfaces as a `WARN`
 finding, never silently.
 
+For upstream Hermes release **v2026.9.14** (Hermes Agent v0.21.3), the
+verified installer SHA-256 is:
+`00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
+
 ## 4. Remediation
 
 - **Checksum mismatch (FAIL):** do not re-run the install with the same
@@ -182,9 +186,10 @@ finding, never silently.
   installer over a connection you trust and recompute
   `OMES_HERMES_INSTALLER_SHA256` yourself before retrying.
 - **Unverified checksum (WARN):** set `OMES_HERMES_INSTALLER_SHA256` once
-  you have a trusted hash to pin against; upstream Hermes does not
-  currently publish a stable release hash (`docs/hermes-integration.md`
-  §2).
+  you have a trusted hash to pin against (for v2026.9.14, use
+  `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`);
+  upstream Hermes installer script is verified periodically per release
+  (`docs/hermes-integration.md` §2).
 - **Mutable URL (WARN):** prefer an immutable release asset or pinned
   commit SHA where the upstream project offers one.
 - **Executable review list:** inspect the listed files (mode/size/sha256)
