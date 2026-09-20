@@ -79,6 +79,12 @@ teardown() {
   [ "$(pkg_map fd)" = "fd-find" ]
 }
 
+@test "pkg_map resolves the same divergences on Linux Mint 22.3" {
+  OMES_OS_RELEASE_FILE="${OMES_TEST_ROOT}/tests/fixtures/os-release/linuxmint-22.3" detect_os >/dev/null
+  [ "$(pkg_map bat)" = "bat" ]
+  [ "$(pkg_map fd)" = "fd-find" ]
+}
+
 @test "pkg_map resolves the same divergences on Ubuntu 22.04" {
   OMES_OS_RELEASE_FILE="${OMES_TEST_ROOT}/tests/fixtures/os-release/ubuntu-22.04" detect_os >/dev/null
   [ "$(pkg_map bat)" = "bat" ]

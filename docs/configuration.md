@@ -43,7 +43,7 @@ has no documented, supported effect and is not recommended.
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `OMES_OS_RELEASE_FILE` | `/etc/os-release` | Test-only | Points `detect_os` at a fixture, e.g. `tests/fixtures/os-release/linuxmint-22.1`. |
+| `OMES_OS_RELEASE_FILE` | `/etc/os-release` | Test-only | Points `detect_os` at a fixture, e.g. `tests/fixtures/os-release/linuxmint-22.3`. |
 
 ## 4. Test/simulation hooks (`lib/omes/core.sh` and friends)
 

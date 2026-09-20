@@ -27,7 +27,7 @@ Full detail lives in [docs/compatibility-matrix.md](compatibility-matrix.md)
 
 | Platform | Tier |
 |---|---|
-| Linux Mint 22.x, amd64 | 1 (the validated desktop-profile target) |
+| Linux Mint 22.x (22, 22.1, 22.2, 22.3), amd64 | 1 (the validated desktop-profile target) |
 | Ubuntu 24.04/22.04 desktop, amd64 | 2 for the desktop profile (Mint is Tier 1) |
 | arm64 (either) | 3, best-effort |
 | Anything else | Unsupported — `omes check` exits 3 before any mutation |
