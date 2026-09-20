@@ -16,7 +16,7 @@ teardown() {
 }
 
 _assert_valid_json() {
-  python3 -c 'import json,sys; json.loads(sys.stdin.read())' <<< "$1"
+  python3 -c 'import json,sys; json.loads(sys.stdin.read())' <<<"$1"
 }
 
 @test "json_escape escapes backslashes and quotes" {
@@ -74,13 +74,14 @@ _assert_valid_json() {
 
 @test "a nested check-array document round-trips through python json.loads" {
   local checks doc
-  checks="$(json_array \
-    "$(json_obj "$(json_kv name os)" "$(json_kv ok true --raw)" "$(json_kv detail "ubuntu 24.04")")" \
-    "$(json_obj "$(json_kv name arch)" "$(json_kv ok false --raw)" "$(json_kv detail "unsupported")")" \
+  checks="$(
+    json_array \
+      "$(json_obj "$(json_kv name os)" "$(json_kv ok true --raw)" "$(json_kv detail "ubuntu 24.04")")" \
+      "$(json_obj "$(json_kv name arch)" "$(json_kv ok false --raw)" "$(json_kv detail "unsupported")")"
   )"
   doc="$(json_obj "$(json_kv command check)" "$(json_kv ok false --raw)" "$(json_kv checks "$checks" --raw)" "$(json_kv exit_code 3 --raw)")"
   _assert_valid_json "$doc"
-  run python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(len(d['checks'])); print(d['checks'][1]['ok'])" <<< "$doc"
+  run python3 -c "import json,sys; d=json.loads(sys.stdin.read()); print(len(d['checks'])); print(d['checks'][1]['ok'])" <<<"$doc"
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "2" ]
   [ "${lines[1]}" = "False" ]

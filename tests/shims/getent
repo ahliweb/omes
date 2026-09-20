@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'getent %s\n' "$*" >> "$SHIM_LOG"
+  printf 'getent %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 db="${1:-}"

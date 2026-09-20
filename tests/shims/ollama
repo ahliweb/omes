@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'ollama %s\n' "$*" >> "$SHIM_LOG"
+  printf 'ollama %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 case "${1:-}" in

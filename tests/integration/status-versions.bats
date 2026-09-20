@@ -40,7 +40,7 @@ assert "warnings" in d
 @test "omes health versions (human mode) prints a summary line and no secret canary" {
   local home="${OMES_TEST_TMPDIR}/hermes-home"
   mkdir -p "$home"
-  printf 'TELEGRAM_BOT_TOKEN=canary-should-never-appear\n' > "${home}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=canary-should-never-appear\n' >"${home}/.env"
   chmod 600 "${home}/.env"
   export OMES_HERMES_HOME="$home"
 

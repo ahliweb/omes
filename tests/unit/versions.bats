@@ -70,7 +70,7 @@ for name in ("omes", "os", "arch", "hermes", "gateway_mode", "python3", "node", 
 @test "versions_collect_json never reads or echoes .env content" {
   local home="${OMES_TEST_TMPDIR}/hermes-home"
   mkdir -p "$home"
-  printf 'TELEGRAM_BOT_TOKEN=canary-secret-value-should-never-appear\n' > "${home}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=canary-secret-value-should-never-appear\n' >"${home}/.env"
   chmod 600 "${home}/.env"
   export OMES_HERMES_HOME="$home"
 

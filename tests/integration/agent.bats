@@ -76,7 +76,7 @@ teardown() {
 }
 
 @test "omes agent check fails preflight for an invalid manifest" {
-  cat > "${OMES_CONFIG_DIR}/agents/bad.json" <<'JSON'
+  cat >"${OMES_CONFIG_DIR}/agents/bad.json" <<'JSON'
 {"apiVersion":"omes.ahliweb.com/v1","kind":"AgentDeployment","metadata":{"name":"bad","workspace":"w","environment":"production"},"spec":{"runtime":"docker-compose","profile":"bad","role":"generic","backend":"systemd","serviceMode":"user","restartPolicy":"always","resources":{"memory":"1G","cpu":"1.0","pids":128},"health":{"command":"x","timeout":"10s"},"storage":{"memory":"private","sessions":"isolated","skills":"managed"}}}
 JSON
   run "$OMES_BIN" agent check bad --json
@@ -136,7 +136,7 @@ JSON
   run "$OMES_BIN" agent doctor --json
   [ "$status" -eq 0 ]
   local doctor_output="$output"
-  run python3 -m json.tool <<< "$doctor_output"
+  run python3 -m json.tool <<<"$doctor_output"
   [ "$status" -eq 0 ]
   [[ "$doctor_output" == *'"agents": []'* ]]
   [[ "$doctor_output" == *'"ok": true'* ]]

@@ -24,7 +24,7 @@ setup() {
   # like tests/unit/graphify.bats.
   FAKE_PYTHON_DIR="${OMES_TEST_TMPDIR}/fake-python"
   mkdir -p "$FAKE_PYTHON_DIR"
-  cat > "${FAKE_PYTHON_DIR}/python3" <<'EOF'
+  cat >"${FAKE_PYTHON_DIR}/python3" <<'EOF'
 #!/usr/bin/env bash
 printf 'Python 3.12.0\n'
 exit 0
@@ -132,7 +132,7 @@ teardown() {
 
 @test "omes graphify uninstall never touches graphify-out or pip" {
   mkdir -p "${OMES_TEST_TMPDIR}/project/graphify-out"
-  : > "${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
+  : >"${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
   run "$OMES_BIN" graphify uninstall --yes
   [ "$status" -eq 0 ]
   [ -f "${OMES_TEST_TMPDIR}/project/graphify-out/graph.json" ]
@@ -148,7 +148,7 @@ teardown() {
 @test "uninstall --module graphify removes the tool-env install" {
   run "$OMES_BIN" install --module graphify --yes
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run "$OMES_BIN" uninstall --module graphify --yes
   [ "$status" -eq 0 ]
   run grep -c '^uv tool uninstall graphifyy$' "$SHIM_LOG"
@@ -361,7 +361,7 @@ assert d['path'].endswith('/project')
 @test "omes graphify skill install backs up a pre-existing SKILL.md before overwriting it" {
   export OMES_HERMES_HOME="${HOME}/.hermes"
   mkdir -p "${OMES_HERMES_HOME}/skills/graphify"
-  printf 'pre-existing, foreign skill content\n' > "${OMES_HERMES_HOME}/skills/graphify/SKILL.md"
+  printf 'pre-existing, foreign skill content\n' >"${OMES_HERMES_HOME}/skills/graphify/SKILL.md"
   run "$OMES_BIN" graphify skill install --yes
   [ "$status" -eq 0 ]
   run grep -rl 'pre-existing, foreign skill content' "${OMES_STATE_DIR}/backups"
@@ -374,7 +374,7 @@ assert d['path'].endswith('/project')
   run "$OMES_BIN" graphify skill install --yes
   [ "$status" -eq 0 ]
   mkdir -p "${OMES_HERMES_HOME}/skills/other-skill"
-  : > "${OMES_HERMES_HOME}/skills/other-skill/SKILL.md"
+  : >"${OMES_HERMES_HOME}/skills/other-skill/SKILL.md"
 
   run "$OMES_BIN" graphify skill uninstall --yes
   [ "$status" -eq 0 ]
@@ -429,7 +429,7 @@ assert d['path'].endswith('/project')
 @test "uninstall --module graphify-mcp reinstalls graphifyy without the extra" {
   run "$OMES_BIN" install --module graphify-mcp --yes
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run "$OMES_BIN" uninstall --module graphify-mcp --yes
   [ "$status" -eq 0 ]
   run grep -c '^uv tool install --reinstall graphifyy$' "$SHIM_LOG"
@@ -482,7 +482,7 @@ assert d['path'].endswith('/project')
 
 @test "omes graphify mcp health reports ok when graphify-mcp is present and the graph file exists" {
   mkdir -p "${OMES_TEST_TMPDIR}/project"
-  printf '{"nodes":[],"links":[]}\n' > "${OMES_TEST_TMPDIR}/project/graph.json"
+  printf '{"nodes":[],"links":[]}\n' >"${OMES_TEST_TMPDIR}/project/graph.json"
   run "$OMES_BIN" graphify mcp health --graph "${OMES_TEST_TMPDIR}/project/graph.json"
   [ "$status" -eq 0 ]
   [[ "$output" == *"ok"* ]]
@@ -490,7 +490,7 @@ assert d['path'].endswith('/project')
 
 @test "omes graphify mcp health never invokes systemctl or the graphify-mcp server itself" {
   mkdir -p "${OMES_TEST_TMPDIR}/project"
-  printf '{"nodes":[],"links":[]}\n' > "${OMES_TEST_TMPDIR}/project/graph.json"
+  printf '{"nodes":[],"links":[]}\n' >"${OMES_TEST_TMPDIR}/project/graph.json"
   run "$OMES_BIN" graphify mcp health --graph "${OMES_TEST_TMPDIR}/project/graph.json"
   [ "$status" -eq 0 ]
   run grep -c 'systemctl' "$SHIM_LOG"

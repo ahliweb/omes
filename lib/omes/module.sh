@@ -123,7 +123,7 @@ profile_load() {
     trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
     [[ -z "$trimmed" ]] && continue
     raw+=("$trimmed")
-  done < "$file"
+  done <"$file"
 
   module_resolve_order "${raw[@]}"
 }

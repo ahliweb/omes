@@ -8,7 +8,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'usermod %s\n' "$*" >> "$SHIM_LOG"
+  printf 'usermod %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 exit "${SHIM_USERMOD_EXIT:-0}"

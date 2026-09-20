@@ -21,7 +21,7 @@ teardown() {
   run "$OMES_BIN" version --json
   [ "$status" -eq 0 ]
   [ "${#lines[@]}" -eq 1 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="version"; assert d["ok"] is True; assert d["exit_code"]==0; print(d["version"])' <<< "${lines[0]}"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="version"; assert d["ok"] is True; assert d["exit_code"]==0; print(d["version"])' <<<"${lines[0]}"
   [ "$status" -eq 0 ]
 }
 

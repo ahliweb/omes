@@ -36,7 +36,7 @@ export OMES_LIB_DIR
 # ---------------------------------------------------------------------------
 
 if [[ -r "${OMES_ROOT}/VERSION" ]]; then
-  OMES_VERSION="$(tr -d '[:space:]' < "${OMES_ROOT}/VERSION")"
+  OMES_VERSION="$(tr -d '[:space:]' <"${OMES_ROOT}/VERSION")"
 else
   OMES_VERSION="unknown"
 fi
@@ -49,27 +49,27 @@ export OMES_VERSION
 # Read by every other sourced file (bin/omes, modules/*, tests); ShellCheck
 # cannot see that cross-file usage when analyzing this file on its own.
 # shellcheck disable=SC2034
-readonly OMES_EX_OK=0             # success
+readonly OMES_EX_OK=0 # success
 # shellcheck disable=SC2034
-readonly OMES_EX_ERROR=1          # general/unexpected error
+readonly OMES_EX_ERROR=1 # general/unexpected error
 # shellcheck disable=SC2034
-readonly OMES_EX_USAGE=2          # usage error
+readonly OMES_EX_USAGE=2 # usage error
 # shellcheck disable=SC2034
-readonly OMES_EX_UNSUPPORTED=3    # unsupported platform (OS/arch)
+readonly OMES_EX_UNSUPPORTED=3 # unsupported platform (OS/arch)
 # shellcheck disable=SC2034
-readonly OMES_EX_PREFLIGHT=4      # preflight failed
+readonly OMES_EX_PREFLIGHT=4 # preflight failed
 # shellcheck disable=SC2034
-readonly OMES_EX_PRIVILEGE=5      # privilege error (needs root / must not be root)
+readonly OMES_EX_PRIVILEGE=5 # privilege error (needs root / must not be root)
 # shellcheck disable=SC2034
-readonly OMES_EX_MODULE_APPLY=6   # module apply failed
+readonly OMES_EX_MODULE_APPLY=6 # module apply failed
 # shellcheck disable=SC2034
-readonly OMES_EX_VERIFY=7         # verification failed
+readonly OMES_EX_VERIFY=7 # verification failed
 # shellcheck disable=SC2034
-readonly OMES_EX_NETWORK=8        # network required but unavailable
+readonly OMES_EX_NETWORK=8 # network required but unavailable
 # shellcheck disable=SC2034
-readonly OMES_EX_BACKUP=9         # backup/restore failed
+readonly OMES_EX_BACKUP=9 # backup/restore failed
 # shellcheck disable=SC2034
-readonly OMES_EX_ROLLBACK=10      # rollback failed
+readonly OMES_EX_ROLLBACK=10 # rollback failed
 
 # ---------------------------------------------------------------------------
 # Redaction

@@ -84,7 +84,7 @@ _fake_python3_dir() {
   local version="$1"
   local dir="${OMES_TEST_TMPDIR}/fake-python-${RANDOM}"
   mkdir -p "$dir"
-  cat > "${dir}/python3" <<EOF
+  cat >"${dir}/python3" <<EOF
 #!/usr/bin/env bash
 printf 'Python %s\n' "${version}"
 exit 0
@@ -312,7 +312,7 @@ EOF
   [ "$status" -eq 0 ]
 
   mkdir -p "${OMES_TEST_TMPDIR}/project/graphify-out"
-  : > "${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
+  : >"${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
 
   run module_rollback
   [ "$status" -eq 0 ]
@@ -352,7 +352,7 @@ EOF
   export SHIM_GRAPHIFY_ABSENT=1
 
   local installer="${OMES_TEST_TMPDIR}/uv-installer.sh"
-  cat > "$installer" <<'EOF'
+  cat >"$installer" <<'EOF'
 #!/usr/bin/env bash
 if [[ -n "${SHIM_LOG:-}" ]]; then
   printf 'uv-installer-ran\n' >> "$SHIM_LOG"

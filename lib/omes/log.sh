@@ -72,7 +72,7 @@ _log_write() {
   local logfile
   logfile="$(log_file_path)"
   printf '%s %s%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$prefix" "$redacted" \
-    >> "$logfile" 2>/dev/null || true
+    >>"$logfile" 2>/dev/null || true
 
   local out_fd="$fd"
   if [[ "${OMES_JSON:-0}" == "1" ]]; then
@@ -112,7 +112,7 @@ log_debug() {
     redacted="$(omes_redact "$*")"
     logfile="$(log_file_path)"
     printf '%s [omes] DEBUG %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$redacted" \
-      >> "$logfile" 2>/dev/null || true
+      >>"$logfile" 2>/dev/null || true
     return 0
   fi
   _log_write "DEBUG" "1;30" "1" "$*"

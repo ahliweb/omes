@@ -16,7 +16,7 @@ setup() {
 
   WORK="${OMES_TEST_TMPDIR}/work"
   mkdir -p "${WORK}/repo/src"
-  printf 'print(1)\n' > "${WORK}/repo/src/a.py"
+  printf 'print(1)\n' >"${WORK}/repo/src/a.py"
   REPO="${WORK}/repo"
 }
 
@@ -66,7 +66,7 @@ teardown() {
 }
 
 @test "init-ignore preserves an operator's pre-existing .gitignore content" {
-  printf '*.log\n' > "${REPO}/.gitignore"
+  printf '*.log\n' >"${REPO}/.gitignore"
   run "$OMES_BIN" graphify init-ignore "$REPO" --yes
   [ "$status" -eq 0 ]
   run grep -c '\*\.log' "${REPO}/.gitignore"
@@ -76,7 +76,7 @@ teardown() {
 }
 
 @test "init-ignore backs up a pre-existing .graphifyignore before appending to it" {
-  printf '# my custom rules\ncustom-dir/\n' > "${REPO}/.graphifyignore"
+  printf '# my custom rules\ncustom-dir/\n' >"${REPO}/.graphifyignore"
   run "$OMES_BIN" graphify init-ignore "$REPO" --yes
   [ "$status" -eq 0 ]
   run grep -c 'custom-dir/' "${REPO}/.graphifyignore"
@@ -126,7 +126,7 @@ teardown() {
 
   local export_dir="${VAULT}/graphify/$(basename "$REPO")"
   [ -d "$export_dir" ]
-  printf 'my own note\n' > "${export_dir}/unrelated.md"
+  printf 'my own note\n' >"${export_dir}/unrelated.md"
 
   run "$OMES_BIN" graphify purge "$REPO" --vault "$VAULT" --yes --json
   [ "$status" -eq 0 ]

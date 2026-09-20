@@ -40,7 +40,7 @@ setup() {
   export OMES_DP_DISK_FREE_MB_OVERRIDE=40960
   export SHIM_ENABLED_SERVICES="lightdm"
   export OMES_CINNAMON_SESSION_FILE="${OMES_TEST_TMPDIR}/cinnamon.desktop"
-  printf '[Desktop Entry]\nName=Cinnamon\n' > "$OMES_CINNAMON_SESSION_FILE"
+  printf '[Desktop Entry]\nName=Cinnamon\n' >"$OMES_CINNAMON_SESSION_FILE"
 
   unset SHIM_APT_CACHE_UNKNOWN_PKGS SHIM_LSPCI_OUTPUT SHIM_LSPCI_K_OUTPUT \
     SHIM_LOGINCTL_FAIL SHIM_GLXINFO_DIRECT SHIM_NVIDIA_DRIVER_VERSION \
@@ -114,7 +114,7 @@ teardown() {
   export SHIM_LSPCI_K_OUTPUT=$'01:00.0 VGA compatible controller: NVIDIA Corporation GA106\n\tKernel driver in use: nvidia'
   export SHIM_NVIDIA_DRIVER_VERSION="555.42.02"
   local cmdline="${OMES_TEST_TMPDIR}/cmdline"
-  printf 'BOOT_IMAGE=/vmlinuz quiet nvidia-drm.modeset=1\n' > "$cmdline"
+  printf 'BOOT_IMAGE=/vmlinuz quiet nvidia-drm.modeset=1\n' >"$cmdline"
   export OMES_PROC_CMDLINE_FILE="$cmdline"
   run module_check
   [ "$status" -eq 0 ]
@@ -129,7 +129,7 @@ teardown() {
   export SHIM_LSPCI_K_OUTPUT=$'01:00.0 VGA compatible controller: NVIDIA Corporation GA106\n\tKernel driver in use: nvidia'
   export SHIM_NVIDIA_DRIVER_VERSION="535.129.03"
   export OMES_PROC_CMDLINE_FILE="${OMES_TEST_TMPDIR}/cmdline-empty"
-  : > "$OMES_PROC_CMDLINE_FILE"
+  : >"$OMES_PROC_CMDLINE_FILE"
   run module_check
   [ "$status" -eq 0 ]
   [[ "$output" == *"< 555"* ]]
@@ -179,7 +179,7 @@ teardown() {
 # --- display manager -----------------------------------------------------------
 
 @test "module_check marks lightdm as OK" {
-  printf 'lightdm\n' > "${OMES_TEST_TMPDIR}/dm"
+  printf 'lightdm\n' >"${OMES_TEST_TMPDIR}/dm"
   export SHIM_ENABLED_SERVICES="lightdm"
   # detect_display_manager checks /etc/X11/default-display-manager first;
   # keep that path unreadable so it falls through to the systemctl shim.

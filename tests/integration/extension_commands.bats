@@ -10,7 +10,7 @@ setup() {
   mkdir -p "$WORK"
   cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "${OMES_TEST_ROOT}/modules" "${OMES_TEST_ROOT}/VERSION" "$WORK/"
   mkdir -p "${WORK}/lib/omes/cmd"
-  cat > "${WORK}/lib/omes/cmd/probe.sh" <<'EOF2'
+  cat >"${WORK}/lib/omes/cmd/probe.sh" <<'EOF2'
 # omes-help: prints its arguments (test extension)
 cmd_probe() {
   local IFS=' '
@@ -49,7 +49,7 @@ teardown() {
 }
 
 @test "an extension file without cmd_<name> is a clear error" {
-  printf '# omes-help: broken\n' > "${WORK}/lib/omes/cmd/broken.sh"
+  printf '# omes-help: broken\n' >"${WORK}/lib/omes/cmd/broken.sh"
   run "$OMES_BIN" broken
   [ "$status" -eq 1 ]
   [[ "$output" == *"does not define cmd_broken"* ]]

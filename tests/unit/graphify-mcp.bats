@@ -207,7 +207,7 @@ _strip_shims() {
 
 @test "module_rollback never touches graphify-out or hermes-gateway" {
   mkdir -p "${OMES_TEST_TMPDIR}/project/graphify-out"
-  : > "${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
+  : >"${OMES_TEST_TMPDIR}/project/graphify-out/graph.json"
   run module_rollback
   [ "$status" -eq 0 ]
   [ -f "${OMES_TEST_TMPDIR}/project/graphify-out/graph.json" ]

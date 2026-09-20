@@ -142,7 +142,7 @@ _dc_ensure_shell_snippet() {
     printf '\n%s\n' "$DC_MARKER_BEGIN"
     printf '. "%s"\n' "$snippet"
     printf '%s\n' "$DC_MARKER_END"
-  } >> "$rc"
+  } >>"$rc"
   log_info "desktop-config: wired shell snippet into ${rc}"
 }
 
@@ -158,7 +158,7 @@ _dc_remove_marker_block() {
     $0==e {skip=0; next}
     skip {next}
     {print}
-  ' "$rc" > "$tmp"
+  ' "$rc" >"$tmp"
   mv -f "$tmp" "$rc"
 }
 

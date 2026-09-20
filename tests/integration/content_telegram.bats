@@ -22,7 +22,7 @@ EOF
   chmod 600 "${HERMES_HOME}/.env"
 
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "tiny-media-bytes" > "${CONTENT_ROOT}/inbox/clip.mp4"
+  echo "tiny-media-bytes" >"${CONTENT_ROOT}/inbox/clip.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   JOB_ID="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
   "$OMES_BIN" content plan "$JOB_ID" --actor alice --caption "hello" --target generic_browser >/dev/null

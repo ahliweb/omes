@@ -9,7 +9,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'Hyprland %s\n' "$*" >> "$SHIM_LOG"
+  printf 'Hyprland %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 printf 'Hyprland (fake shim, for tests) v0.0.0\n'

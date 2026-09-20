@@ -17,7 +17,7 @@ teardown() {
 
 _drop_inbox_file() {
   mkdir -p "${CONTENT_ROOT}/inbox"
-  printf '%s' "$2" > "${CONTENT_ROOT}/inbox/$1"
+  printf '%s' "$2" >"${CONTENT_ROOT}/inbox/$1"
 }
 
 @test "omes content scan creates a job for a settled inbox file" {
@@ -31,7 +31,7 @@ _drop_inbox_file() {
 }
 
 @test "omes content scan does not follow symlinks" {
-  echo "outside" > "${OMES_TEST_TMPDIR}/outside.mp4"
+  echo "outside" >"${OMES_TEST_TMPDIR}/outside.mp4"
   mkdir -p "${CONTENT_ROOT}/inbox"
   ln -s "${OMES_TEST_TMPDIR}/outside.mp4" "${CONTENT_ROOT}/inbox/link.mp4"
   run "$OMES_BIN" content scan --json --settle-seconds 0
@@ -70,7 +70,7 @@ _drop_inbox_file() {
 @test "concurrent scans are rejected via the lock file" {
   _drop_inbox_file "e.mp4" "lock-test-bytes"
   mkdir -p "${CONTENT_ROOT}/state"
-  echo "999999999" > "${CONTENT_ROOT}/state/scan.lock"
+  echo "999999999" >"${CONTENT_ROOT}/state/scan.lock"
   # A stale lock (nonexistent pid) is reclaimed automatically, so this
   # should still succeed rather than error.
   run "$OMES_BIN" content scan --json --settle-seconds 0

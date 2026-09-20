@@ -12,7 +12,7 @@ setup() {
   omes_test_setup
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -62,7 +62,7 @@ teardown() {
 }
 
 @test "update refuses a dirty working tree (exit 1, no mutation)" {
-  printf '# local edit\n' >> "${WORK_DIR}/bin/omes"
+  printf '# local edit\n' >>"${WORK_DIR}/bin/omes"
 
   run "$WORK_BIN" update
   [ "$status" -eq 1 ]
@@ -83,7 +83,7 @@ teardown() {
   git clone -q "$REMOTE_DIR" "$other"
   git -C "$other" config user.email "test@example.invalid"
   git -C "$other" config user.name "Test"
-  printf 'upstream change\n' > "${other}/CHANGED"
+  printf 'upstream change\n' >"${other}/CHANGED"
   git -C "$other" add -A
   git -C "$other" commit -q -m "upstream change"
   git -C "$other" push -q origin main
@@ -106,14 +106,14 @@ teardown() {
   git clone -q "$REMOTE_DIR" "$other"
   git -C "$other" config user.email "test@example.invalid"
   git -C "$other" config user.name "Test"
-  printf 'x\n' > "${other}/CHANGED2"
+  printf 'x\n' >"${other}/CHANGED2"
   git -C "$other" add -A
   git -C "$other" commit -q -m "another upstream change"
   git -C "$other" push -q origin main
 
   omes_run_stdout_only "$WORK_BIN" update --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="check"; assert d["exit_code"]==0' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="check"; assert d["exit_code"]==0' <<<"$output"
   [ "$status" -eq 0 ]
 }
 

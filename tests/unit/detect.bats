@@ -22,13 +22,14 @@ teardown() {
 _write_os_release() {
   local path
   path="$(omes_fixture_path os-release)"
-  cat > "$path"
+  cat >"$path"
   printf '%s' "$path"
 }
 
 @test "detect_os parses ubuntu 24.04 fields" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -37,7 +38,7 @@ ID=ubuntu
 ID_LIKE=debian
 UBUNTU_CODENAME=noble
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   [ "$OMES_OS_ID" = "ubuntu" ]
   [ "$OMES_OS_VERSION_ID" = "24.04" ]
@@ -48,14 +49,15 @@ EOF
 
 @test "detect_os falls back to VERSION_CODENAME when UBUNTU_CODENAME is absent" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 NAME="Debian GNU/Linux"
 VERSION_ID="12"
 VERSION_CODENAME=bookworm
 ID=debian
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   [ "$OMES_OS_CODENAME" = "bookworm" ]
 }
@@ -112,13 +114,14 @@ EOF
 
 @test "detect_tier: ubuntu 24.04 amd64 is tier1" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 VERSION_ID="24.04"
 ID=ubuntu
 UBUNTU_CODENAME=noble
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -128,13 +131,14 @@ EOF
 
 @test "detect_tier: ubuntu 22.04 amd64 is tier2" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Ubuntu 22.04.4 LTS"
 VERSION_ID="22.04"
 ID=ubuntu
 UBUNTU_CODENAME=jammy
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -144,14 +148,15 @@ EOF
 
 @test "detect_tier: linuxmint 22.1 amd64 is tier1" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Linux Mint 22.1"
 VERSION_ID="22.1"
 ID=linuxmint
 ID_LIKE="ubuntu debian"
 UBUNTU_CODENAME=noble
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -161,14 +166,15 @@ EOF
 
 @test "detect_tier: linuxmint 22 (no point release) is tier1" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Linux Mint 22"
 VERSION_ID="22"
 ID=linuxmint
 ID_LIKE="ubuntu debian"
 UBUNTU_CODENAME=noble
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -178,14 +184,15 @@ EOF
 
 @test "detect_tier: linuxmint 21.3 is unsupported" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Linux Mint 21.3"
 VERSION_ID="21.3"
 ID=linuxmint
 ID_LIKE="ubuntu debian"
 UBUNTU_CODENAME=jammy
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -195,12 +202,13 @@ EOF
 
 @test "detect_tier: debian 12 is unsupported" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 VERSION_ID="12"
 ID=debian
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -210,12 +218,13 @@ EOF
 
 @test "detect_tier: fedora is unsupported" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Fedora Linux 40"
 VERSION_ID="40"
 ID=fedora
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="amd64"
   run detect_tier
@@ -225,13 +234,14 @@ EOF
 
 @test "detect_tier: arm64 on a supported OS is tier3" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 VERSION_ID="24.04"
 ID=ubuntu
 UBUNTU_CODENAME=noble
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="arm64"
   run detect_tier
@@ -241,12 +251,13 @@ EOF
 
 @test "detect_tier: arm64 on an unsupported OS stays unsupported" {
   local path
-  path="$(_write_os_release <<'EOF'
+  path="$(
+    _write_os_release <<'EOF'
 PRETTY_NAME="Fedora Linux 40"
 VERSION_ID="40"
 ID=fedora
 EOF
-)"
+  )"
   OMES_OS_RELEASE_FILE="$path" detect_os
   OMES_ARCH="arm64"
   run detect_tier

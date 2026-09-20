@@ -12,7 +12,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'xdg-desktop-portal %s\n' "$*" >> "$SHIM_LOG"
+  printf 'xdg-desktop-portal %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 exit 0

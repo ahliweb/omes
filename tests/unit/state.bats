@@ -68,7 +68,7 @@ teardown() {
   # value, never a truncated/partial one.
   local tmp
   tmp="$(mktemp "${OMES_STATE_DIR}/.state.XXXXXX")"
-  printf 'k=partial-should-not-be-visible' > "$tmp"
+  printf 'k=partial-should-not-be-visible' >"$tmp"
   run state_get "k"
   [ "$output" = "original" ]
   rm -f "$tmp"

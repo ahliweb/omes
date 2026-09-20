@@ -9,7 +9,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -25,7 +25,7 @@ EOF
   # rationale/pattern.
   export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
   export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {

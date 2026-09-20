@@ -40,7 +40,7 @@ is_installed() {
 }
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'dpkg-query %s\n' "$*" >> "$SHIM_LOG"
+  printf 'dpkg-query %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 if is_installed "$pkg"; then

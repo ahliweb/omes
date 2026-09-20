@@ -36,7 +36,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'docker %s\n' "$*" >> "$SHIM_LOG"
+  printf 'docker %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 case "${1:-}" in
@@ -77,7 +77,7 @@ case "${1:-}" in
     subcommand=""
     for arg in "$@"; do
       case "$arg" in
-        up|ps|down|logs|exec|config)
+        up | ps | down | logs | exec | config)
           subcommand="$arg"
           break
           ;;

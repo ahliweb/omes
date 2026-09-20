@@ -13,7 +13,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -45,7 +45,7 @@ EOF
     printf -- '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n'
     printf 'mQINBFit2ioBEADhWpZ8/wvZ6hUTiXOwQHXMAlaFHcPH9hAtr4F1y2+OQ0OF\n'
     printf -- '-----END PGP PUBLIC KEY BLOCK-----\n'
-  } > "$PEM_FIXTURE"
+  } >"$PEM_FIXTURE"
   export SHIM_CURL_OUTPUT_FILE="$PEM_FIXTURE"
 }
 
@@ -73,7 +73,7 @@ teardown() {
 
 @test "install --profile server as root keeps SSH open when an active session is detected" {
   export SHIM_SYSTEM_ACTIVE_FILE="${OMES_TEST_TMPDIR}/sys-active"
-  printf 'ssh\n' > "$SHIM_SYSTEM_ACTIVE_FILE"
+  printf 'ssh\n' >"$SHIM_SYSTEM_ACTIVE_FILE"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]
@@ -86,7 +86,7 @@ teardown() {
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile server --yes
   [ "$status" -eq 0 ]
   run grep -Ec 'ufw (allow|default|--force enable|^enable|disable)' "$SHIM_LOG"

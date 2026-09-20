@@ -17,7 +17,7 @@ _write_request() {
   local operation="$1"
   local idem="$2"
   local extra="${3:-}"
-  cat > "$REQ" <<EOF
+  cat >"$REQ" <<EOF
 {
   "tenant_id": "tenant-acme",
   "correlation_id": "corr-1",
@@ -53,7 +53,7 @@ EOF
 }
 
 @test "a request with a free-form command field is rejected by schema" {
-  cat > "$REQ" <<'EOF'
+  cat >"$REQ" <<'EOF'
 {
   "tenant_id": "tenant-acme",
   "correlation_id": "corr-1",
@@ -70,7 +70,7 @@ EOF
 }
 
 @test "an option-like backup_id is rejected by schema, never reaching bin/omes restore" {
-  cat > "$REQ" <<'EOF'
+  cat >"$REQ" <<'EOF'
 {
   "tenant_id": "tenant-acme",
   "correlation_id": "corr-1",
@@ -89,7 +89,7 @@ EOF
 }
 
 @test "a cross-tenant request is rejected" {
-  cat > "$REQ" <<'EOF'
+  cat >"$REQ" <<'EOF'
 {
   "tenant_id": "tenant-other",
   "correlation_id": "corr-1",

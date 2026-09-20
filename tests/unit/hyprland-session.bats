@@ -48,7 +48,7 @@ setup() {
   export SHIM_ENABLED_SERVICES="lightdm"
 
   export OMES_CINNAMON_SESSION_FILE="${OMES_TEST_TMPDIR}/cinnamon.desktop"
-  printf '[Desktop Entry]\nName=Cinnamon\n' > "$OMES_CINNAMON_SESSION_FILE"
+  printf '[Desktop Entry]\nName=Cinnamon\n' >"$OMES_CINNAMON_SESSION_FILE"
 
   unset SHIM_APT_CACHE_UNKNOWN_PKGS SHIM_LSPCI_OUTPUT SHIM_LSPCI_K_OUTPUT || true
 }
@@ -123,7 +123,7 @@ _cinnamon_untouched() {
 @test "module_apply is idempotent: re-running installs nothing new" {
   run module_apply
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   run module_apply
   [ "$status" -eq 0 ]

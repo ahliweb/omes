@@ -16,7 +16,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -32,7 +32,7 @@ EOF
   # rationale/pattern.
   export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
   export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {
@@ -51,7 +51,7 @@ _install_apt_base() {
 
 @test "uninstall --dry-run prints the packages OMES installed without removing them or mutating state" {
   _install_apt_base
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" uninstall --module apt-base --dry-run --yes
   [ "$status" -eq 0 ]
@@ -67,7 +67,7 @@ _install_apt_base() {
 
 @test "uninstall without --purge-packages prints the packages but does not remove them; state becomes removed" {
   _install_apt_base
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" uninstall --module apt-base --yes
   [ "$status" -eq 0 ]
@@ -91,7 +91,7 @@ _install_apt_base() {
   local recorded
   recorded="$(grep '^module.apt-base.installed_packages=' "${OMES_STATE_DIR}/state" | cut -d= -f2-)"
   [ -n "$recorded" ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" uninstall --module apt-base --purge-packages --yes
   [ "$status" -eq 0 ]
@@ -114,7 +114,7 @@ _install_apt_base() {
 
 @test "uninstall --module naming a wrong-scope module exits 5 with no mutation" {
   _install_apt_base
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run "$OMES_BIN" uninstall --module apt-base --yes
   [ "$status" -eq 5 ]
   run grep -c 'apt-get' "$SHIM_LOG"
@@ -125,7 +125,7 @@ _install_apt_base() {
   _install_apt_base
   OMES_TEST=1 OMES_FAKE_ROOT=1 omes_run_stdout_only "$OMES_BIN" uninstall --module apt-base --yes --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="uninstall"; assert d["ok"] is True; assert d["modules"][0]["name"]=="apt-base"; assert d["modules"][0]["status"]=="removed"' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="uninstall"; assert d["ok"] is True; assert d["modules"][0]["name"]=="apt-base"; assert d["modules"][0]["status"]=="removed"' <<<"$output"
   [ "$status" -eq 0 ]
 }
 
@@ -134,7 +134,7 @@ _install_apt_base() {
   mkdir -p "$work"
   cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "$work/"
   mkdir -p "${work}/modules/fail-rollback"
-  cat > "${work}/modules/fail-rollback/module.sh" <<'EOF'
+  cat >"${work}/modules/fail-rollback/module.sh" <<'EOF'
 MODULE_NAME="fail-rollback"
 MODULE_DESCRIPTION="always fails module_rollback"
 MODULE_SCOPE="root"
@@ -149,7 +149,7 @@ EOF
   {
     printf 'module.fail-rollback.status=applied\n'
     printf 'module.fail-rollback.managed_paths=\n'
-  } >> "${OMES_STATE_DIR}/state"
+  } >>"${OMES_STATE_DIR}/state"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "${work}/bin/omes" uninstall --module fail-rollback --yes
   [ "$status" -eq 10 ]
@@ -164,7 +164,7 @@ EOF
   mkdir -p "$work"
   cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "$work/"
   mkdir -p "${work}/modules/base-dep" "${work}/modules/leaf"
-  cat > "${work}/modules/base-dep/module.sh" <<'EOF2'
+  cat >"${work}/modules/base-dep/module.sh" <<'EOF2'
 MODULE_NAME="base-dep"
 MODULE_DESCRIPTION="dependency"
 MODULE_SCOPE="root"
@@ -174,7 +174,7 @@ module_apply() { :; }
 module_verify() { :; }
 module_rollback() { echo "ROLLBACK base-dep"; }
 EOF2
-  cat > "${work}/modules/leaf/module.sh" <<'EOF2'
+  cat >"${work}/modules/leaf/module.sh" <<'EOF2'
 MODULE_NAME="leaf"
 MODULE_DESCRIPTION="depends on base-dep"
 MODULE_SCOPE="root"
@@ -191,7 +191,7 @@ EOF2
     printf 'module.base-dep.managed_paths=\n'
     printf 'module.leaf.status=applied\n'
     printf 'module.leaf.managed_paths=\n'
-  } >> "${OMES_STATE_DIR}/state"
+  } >>"${OMES_STATE_DIR}/state"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "${work}/bin/omes" uninstall --module leaf --yes
   [ "$status" -eq 0 ]

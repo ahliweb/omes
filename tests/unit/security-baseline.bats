@@ -51,7 +51,7 @@ teardown() {
 # A small helper so tests do not repeat the "packages already present"
 # boilerplate every time they only care about firewall/config behavior.
 _mark_packages_installed() {
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 # --- SSH lockout guard -----------------------------------------------------
@@ -59,7 +59,7 @@ _mark_packages_installed() {
 @test "module_apply adds the OpenSSH ufw rule BEFORE enabling, when the ssh service is active" {
   _mark_packages_installed
   export SHIM_SYSTEM_ACTIVE_FILE="${OMES_TEST_TMPDIR}/sys-active"
-  printf 'ssh\n' > "$SHIM_SYSTEM_ACTIVE_FILE"
+  printf 'ssh\n' >"$SHIM_SYSTEM_ACTIVE_FILE"
 
   run module_apply
   [ "$status" -eq 0 ]
@@ -137,7 +137,7 @@ _mark_packages_installed() {
   module_apply >/dev/null
   unset SSH_CONNECTION
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_apply
   [ "$status" -eq 0 ]
   run grep -c 'ufw delete' "$SHIM_LOG"
@@ -168,7 +168,7 @@ _mark_packages_installed() {
   run module_apply
   [ "$status" -eq 0 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_apply
   [ "$status" -eq 0 ]
 
@@ -188,13 +188,13 @@ _mark_packages_installed() {
   run grep -c 'systemctl restart systemd-journald' "$SHIM_LOG"
   [ "$output" -eq 1 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_apply
   [ "$status" -eq 0 ]
   run grep -c 'systemctl restart systemd-journald' "$SHIM_LOG"
   [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   OMES_JOURNALD_MAX_USE=1G run module_apply
   [ "$status" -eq 0 ]
   run grep -c 'systemctl restart systemd-journald' "$SHIM_LOG"
@@ -325,13 +325,13 @@ _mark_packages_installed() {
 @test "module_rollback leaves ufw alone when it was already active before OMES ran" {
   _mark_packages_installed
   mkdir -p "$(dirname "$SHIM_UFW_STATE_FILE")"
-  printf 'enabled=1\ndefault_in=deny\ndefault_out=allow\n' > "$SHIM_UFW_STATE_FILE"
+  printf 'enabled=1\ndefault_in=deny\ndefault_out=allow\n' >"$SHIM_UFW_STATE_FILE"
 
   module_apply >/dev/null
   run state_get "module.security-baseline.ufw_enabled_by_omes"
   [ "$status" -eq 1 ]
 
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run module_rollback
   [ "$status" -eq 0 ]
   run grep -c 'ufw disable' "$SHIM_LOG"
@@ -370,7 +370,7 @@ _mark_packages_installed() {
 # the ufw binary made a first-ever `omes install --profile server` exit 4.
 @test "module_check passes on a fresh host where ufw is not installed yet but is available in repos" {
   # Nothing recorded as installed; the shims report packages as available.
-  : > "$SHIM_INSTALLED_PKGS_FILE"
+  : >"$SHIM_INSTALLED_PKGS_FILE"
   local bindir="${OMES_TEST_TMPDIR}/no-ufw-bin"
   mkdir -p "$bindir"
   # Build a PATH that has every shim EXCEPT ufw, so `command -v ufw` fails.

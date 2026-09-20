@@ -70,7 +70,7 @@ teardown() {
 @test "module_doctor reports the last backup per class after a real backup" {
   export OMES_HERMES_HOME="${HOME}/.hermes"
   mkdir -p "$OMES_HERMES_HOME"
-  printf 'model: gpt\n' > "${OMES_HERMES_HOME}/config.yaml"
+  printf 'model: gpt\n' >"${OMES_HERMES_HOME}/config.yaml"
 
   PYTHONPATH="${OMES_TEST_ROOT}/lib/omes/py" HERMES_HOME="$OMES_HERMES_HOME" \
     python3 -m hermesbackup.cli create --class config >/dev/null

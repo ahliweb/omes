@@ -30,7 +30,7 @@ setup() {
   export OMES_HERMES_HOME="${HOME}/.hermes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" << 'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -42,7 +42,7 @@ EOF
   export OMES_OS_RELEASE_FILE
   export SHIM_HERMES_VERSION="1.2.3"
 
-  printf '# my custom prompt\n' > "${HOME}/.bashrc"
+  printf '# my custom prompt\n' >"${HOME}/.bashrc"
   run "$OMES_BIN" install --module hermes --yes
   [ "$status" -eq 0 ]
 }
@@ -53,7 +53,7 @@ teardown() {
 
 @test "a managed file, truncated/garbled outside OMES, is not flagged by omes doctor (known gap - see header)" {
   # Simulate external corruption: not something OMES itself did.
-  printf '\x00\x01GARBLED\x02' > "${HOME}/.bashrc"
+  printf '\x00\x01GARBLED\x02' >"${HOME}/.bashrc"
 
   run "$OMES_BIN" doctor --json
   # hermes's own module_verify (hermes --version / hermes doctor via the
@@ -64,7 +64,7 @@ teardown() {
 }
 
 @test "omes restore --from <ts> repairs the corrupted file" {
-  printf '\x00\x01GARBLED\x02' > "${HOME}/.bashrc"
+  printf '\x00\x01GARBLED\x02' >"${HOME}/.bashrc"
 
   omes_run_stdout_only "$OMES_BIN" restore --list --json
   [ "$status" -eq 0 ]
@@ -93,7 +93,7 @@ teardown() {
   ts="$(python3 -c 'import json,sys; d=json.loads(sys.argv[1]); ms=[b["timestamp"] for b in d["backups"] if b["module"]=="hermes"]; print(ms[0] if ms else "")' "$output")"
   [ -n "$ts" ]
 
-  printf 'not a valid manifest line\n' > "${OMES_STATE_DIR}/backups/${ts}/MANIFEST"
+  printf 'not a valid manifest line\n' >"${OMES_STATE_DIR}/backups/${ts}/MANIFEST"
 
   local before
   before="$(cat "${HOME}/.bashrc")"

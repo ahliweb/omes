@@ -242,8 +242,8 @@ hardening_check() {
     local tmp
     tmp="$(mktemp)"
     hardening_render "$profile" "$home" >"$tmp"
-    systemd-analyze verify "$tmp" >/dev/null 2>&1 || \
-      log_info "hermes-gateway hardening: 'systemd-analyze verify' could not fully validate a standalone drop-in fragment (expected outside a full unit context); this is informational only"
+    systemd-analyze verify "$tmp" >/dev/null 2>&1 \
+      || log_info "hermes-gateway hardening: 'systemd-analyze verify' could not fully validate a standalone drop-in fragment (expected outside a full unit context); this is informational only"
     rm -f "$tmp"
   fi
 
@@ -312,7 +312,7 @@ hardening_apply() {
 
   local timeout="${OMES_HERMES_HARDENING_TIMEOUT:-15}"
   local waited=0
-  while (( waited < timeout )); do
+  while ((waited < timeout)); do
     if _hardening_systemctl "$mode" is-active "$HARDENING_UNIT" >/dev/null 2>&1; then
       state_set "module.hermes-gateway.hardening_profile" "$profile"
       log_info "hermes-gateway hardening: ${HARDENING_UNIT} active under profile '${profile}'"

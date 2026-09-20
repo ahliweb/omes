@@ -253,7 +253,7 @@ detect_display_manager() {
 
   if [[ -r /etc/X11/default-display-manager ]]; then
     local raw
-    raw="$(tr -d '[:space:]' < /etc/X11/default-display-manager)"
+    raw="$(tr -d '[:space:]' </etc/X11/default-display-manager)"
     if [[ -n "$raw" ]]; then
       dm="$(basename "$raw")"
     fi

@@ -122,7 +122,7 @@ assert d["checksum"]["status"] in ("verified", "unverified")
   # silently strip the trailing newline curl's shim actually writes) so
   # the hash is computed over the exact same bytes.
   local body_file="${OMES_TEST_TMPDIR}/expected-installer-body"
-  printf '#!/usr/bin/env bash\nexit 0\n' > "$body_file"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$body_file"
   export OMES_HERMES_INSTALLER_SHA256
   OMES_HERMES_INSTALLER_SHA256="$(sha256sum "$body_file" | awk '{print $1}')"
 

@@ -37,7 +37,7 @@ teardown() {
 # --- pkg_is_installed / pkg_missing ---------------------------------------
 
 @test "pkg_is_installed is true for a package the dpkg-query shim reports installed" {
-  printf 'curl\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'curl\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   run pkg_is_installed curl
   [ "$status" -eq 0 ]
 }
@@ -48,7 +48,7 @@ teardown() {
 }
 
 @test "pkg_missing echoes only the not-yet-installed subset, preserving order" {
-  printf 'curl\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'curl\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   run pkg_missing curl git jq
   [ "$status" -eq 0 ]
   [ "${lines[0]}" = "git" ]
@@ -56,7 +56,7 @@ teardown() {
 }
 
 @test "pkg_missing prints nothing when every package is installed" {
-  printf 'curl\ngit\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'curl\ngit\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   run pkg_missing curl git
   [ "$status" -eq 0 ]
   [ -z "$output" ]
@@ -112,7 +112,7 @@ teardown() {
 
 @test "pkg_apt_update skips a second call within the max-age window" {
   pkg_apt_update >/dev/null
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run pkg_apt_update
   [ "$status" -eq 0 ]
   run grep -c 'apt-get update' "$SHIM_LOG"
@@ -123,7 +123,7 @@ teardown() {
   pkg_apt_update >/dev/null
   local past=$(($(date -u +%s) - 10))
   state_set "pkg.apt_update.last_run" "$past"
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   OMES_PKG_APT_UPDATE_MAX_AGE=5 run pkg_apt_update
   [ "$status" -eq 0 ]
   run grep -c '^apt-get update$' "$SHIM_LOG"
@@ -175,7 +175,7 @@ teardown() {
 # --- pkg_install ---------------------------------------------------------------
 
 @test "pkg_install is a no-op and returns 0 when everything is already installed" {
-  printf 'curl\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'curl\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   run pkg_install curl
   [ "$status" -eq 0 ]
   run grep -c 'apt-get install' "$SHIM_LOG"
@@ -183,7 +183,7 @@ teardown() {
 }
 
 @test "pkg_install installs only the missing subset and records installed_packages for MODULE_NAME" {
-  printf 'curl\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'curl\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   MODULE_NAME="demo"
   run pkg_install curl git jq
   [ "$status" -eq 0 ]
@@ -235,7 +235,7 @@ teardown() {
 
 @test "repo_validate rejects an http:// URI" {
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 644 "$keyring"
   run repo_validate demo "http://example.com/repo" noble "$keyring"
   [ "$status" -eq 1 ]
@@ -248,7 +248,7 @@ teardown() {
 
 @test "repo_validate rejects a keyring with the wrong mode" {
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 600 "$keyring"
   run repo_validate demo "https://example.com/repo" noble "$keyring"
   [ "$status" -eq 1 ]
@@ -256,7 +256,7 @@ teardown() {
 
 @test "repo_validate accepts a well-formed https repo with a 0644 keyring" {
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 644 "$keyring"
   run repo_validate demo "https://example.com/repo" noble "$keyring"
   [ "$status" -eq 0 ]
@@ -266,7 +266,7 @@ teardown() {
 
 @test "repo_add writes a deb822 .sources file and registers it via omes_manage_path" {
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 644 "$keyring"
   export OMES_APT_SOURCES_DIR="${OMES_TEST_TMPDIR}/sources.list.d"
 
@@ -292,7 +292,7 @@ teardown() {
 
 @test "repo_add honors dry-run: no file written" {
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 644 "$keyring"
   export OMES_APT_SOURCES_DIR="${OMES_TEST_TMPDIR}/sources.list.d"
   OMES_DRY_RUN=1 run repo_add demo "https://example.com/repo" noble "$keyring"
@@ -303,7 +303,7 @@ teardown() {
 @test "repo_add on Linux Mint with --ubuntu-only warns about non-parity" {
   OMES_OS_RELEASE_FILE="${OMES_TEST_ROOT}/tests/fixtures/os-release/linuxmint-22" detect_os >/dev/null
   local keyring="${OMES_TEST_TMPDIR}/keyring.gpg"
-  : > "$keyring"
+  : >"$keyring"
   chmod 644 "$keyring"
   export OMES_APT_SOURCES_DIR="${OMES_TEST_TMPDIR}/sources.list.d"
   run repo_add docker "https://download.docker.com/linux/ubuntu" "$OMES_OS_CODENAME" "$keyring" --ubuntu-only
@@ -316,7 +316,7 @@ teardown() {
   export OMES_APT_SOURCES_DIR="${OMES_TEST_TMPDIR}/sources.list.d"
   mkdir -p "$OMES_APT_SOURCES_DIR"
   local file="${OMES_APT_SOURCES_DIR}/demo.sources"
-  printf 'Types: deb\n' > "$file"
+  printf 'Types: deb\n' >"$file"
 
   repo_remove demo >/dev/null
 
