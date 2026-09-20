@@ -218,6 +218,10 @@ resource_policy)` is the single pure function anything (OMES or, per
 (issue #92's "no client-supplied entitlement" security requirement); it
 recomputes allow/deny from `entitlement.limits` and, for a
 non-active/trialing subscription state, from a `catalog-resource-policy`.
+When `entitlement.limits.backends` is present, provisioning, upgrades, and
+optional-worker starts must include a backend listed there; an unlisted or
+missing backend is denied. Entitlements created before backend eligibility was
+introduced remain compatible when that optional field is absent.
 The suspension-policy default is `existing_healthy_deployments_action:
 keep_running` — a suspended/cancelled/expired subscription never stops a
 currently-healthy deployment unless a resource policy explicitly says
