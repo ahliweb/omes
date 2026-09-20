@@ -103,9 +103,11 @@ def _api_call(
     timeout: int = 15,
 ) -> dict[str, Any]:
     """Calls `<base>/bot<TOKEN>/<method>` without ever placing the token
-    in argv or a logged URL - see module docstring. `form_fields`/
-    `file_field`+`file_path` become `-F`-style multipart form fields via
-    a `curl -K` config file's `form = "..."` lines."""
+    in argv or a logged URL - see module docstring. Form values are passed as
+    subprocess arguments, while the private `curl -K` config file contains
+    only the URL and non-sensitive transport options. This preserves
+    multiline message text without allowing curl config syntax to interpret
+    it as additional directives."""
     if method == _PROHIBITED_METHOD:
         raise TelegramError(f"{_PROHIBITED_METHOD} is prohibited (docs/telegram-security.md section 7)")
 
@@ -123,15 +125,16 @@ def _api_call(
             fh.write("silent\n")
             fh.write("show-error\n")
             fh.write(f"max-time = {int(timeout)}\n")
-            for key, value in (form_fields or {}).items():
-                escaped = str(value).replace('"', '\\"')
-                fh.write(f'form = "{key}={escaped}"\n')
-            if file_field and file_path:
-                fh.write(f'form = "{file_field}=@{file_path}"\n')
+
+        curl_args = ["curl", "-K", cfg_path]
+        for key, value in (form_fields or {}).items():
+            curl_args.extend(["--form-string", f"{key}={value}"])
+        if file_field and file_path:
+            curl_args.extend(["--form", f"{file_field}=@{file_path}"])
 
         try:
             proc = subprocess.run(
-                ["curl", "-K", cfg_path],
+                curl_args,
                 capture_output=True,
                 text=True,
                 timeout=timeout + 5,
