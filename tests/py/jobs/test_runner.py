@@ -161,6 +161,29 @@ class TestReadbackReconciliation(RunnerTestBase):
             updated = runner.run(record, actor="op-1", root=self.root)
         self.assertEqual(updated["state"], "succeeded")
 
+    def test_partial_readback_does_not_report_success(self):
+        record, _ = store.submit(
+            make_request(operation="backup", target={"server_id": "srv-1"}), root=self.root
+        )
+        execute = {
+            "ok": True,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "parsed": {"ok": True, "desired": {"state": "complete"}},
+            "output_tail": "",
+        }
+        readback = {
+            "ok": True,
+            "timed_out": False,
+            "duration_seconds": 0.01,
+            "parsed": {"ok": True, "observed": {"state": "partial"}},
+            "output_tail": "",
+        }
+        with mock.patch.object(runner, "_run_argv", side_effect=[execute, readback]):
+            updated = runner.run(record, actor="op-1", root=self.root)
+        self.assertEqual(updated["state"], "failed")
+        self.assertEqual(updated["error"]["code"], "reconciliation_mismatch")
+
     def test_rollback_success_reaches_rolled_back_state(self):
         record, _ = store.submit(
             make_request(
