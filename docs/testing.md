@@ -5,9 +5,11 @@
 > unit/integration bats suite from issue [#6](https://github.com/ahliweb/omes/issues/6) and the
 > lint/secret-scan/supply-chain CI from issue [#16](https://github.com/ahliweb/omes/issues/16)
 > (see [docs/ci.md](ci.md) for that layer). Rollback/disaster-recovery testing specifically is
-> covered in issue [#17](https://github.com/ahliweb/omes/issues/17); see `docs/disaster-recovery.md`
-> (not yet on this branch - added by #17) and [docs/rollback.md](rollback.md)'s "Tested
-> scenarios" section for that layer once it exists.
+> covered in issue [#17](https://github.com/ahliweb/omes/issues/17); see
+> [docs/disaster-recovery.md](disaster-recovery.md) and [docs/rollback.md](rollback.md)'s
+> "Tested scenarios" section. The recovery walkthrough is implemented and exercised by
+> the repository's integration coverage; real reboot/host-specific evidence remains in the
+> VM matrix and operator checklist.
 
 ## 1. The test pyramid
 

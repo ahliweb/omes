@@ -76,6 +76,14 @@ Grouped index of every document in this repository. See the top-level
 | [business/support-tiers.md](business/support-tiers.md) | Support tier definitions. |
 | [business/unit-economics.md](business/unit-economics.md) | Unit economics. |
 
+## Contracts and skills
+
+| Document | What it covers |
+|---|---|
+| [contracts/README.md](../contracts/README.md) | Versioned JSON schemas, request/response contracts, fixtures, and validation boundaries for OMES, AWCMS, and provider integrations. |
+| [skills/content/SKILL.md](../skills/content/SKILL.md) | Repository-local content workflow guidance; documentation only, not a second OMES runtime. |
+| [modules/graphify/skill/SKILL.md](../modules/graphify/skill/SKILL.md) | Graphify module skill boundary; operational guidance, not a replacement for OMES runtime contracts. |
+
 <!-- OMES-MERMAID: docs/README.md -->
 
 ## Visual summary

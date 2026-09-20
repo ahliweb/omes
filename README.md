@@ -197,6 +197,8 @@ install/preflight.sh     thin wrapper for `omes check`
 config/                  desktop config templates (hypr, waybar, foot, shell, nvim)
 tests/                   bats unit + integration tests, shims, scripts/test-matrix.sh, tests/vm/
 docs/                    installation, troubleshooting, configuration, architecture, security, ADRs, business
+contracts/               versioned JSON schemas and fixtures for OMES/AWCMS/provider boundaries
+skills/                  repository-local workflow and content skill documentation
 ```
 
 See [docs/README.md](docs/README.md) for a grouped index of every document,
