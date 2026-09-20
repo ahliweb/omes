@@ -6,6 +6,25 @@ All notable changes to OMES are documented here. The format follows
 `changes/*.md` fragments by `scripts/release.sh` (see
 `docs/adr/0010-versioning-and-change-fragments.md`); do not edit by hand.
 
+## [0.3.0](https://github.com/ahliweb/omes/releases/tag/v0.3.0) - 2026-09-20
+
+### Added
+
+- Add secure local Coolify instance registration persistence with atomic writes, credential references only, strict state permissions, idempotent replay, removal, and hash-chained audit events. ([#97](https://github.com/ahliweb/omes/issues/97))
+
+### Fixed
+
+- Preserve multiline Telegram notification text by keeping multipart form values out of the curl config file, preventing parsing failures while retaining token redaction guarantees. ([#65](https://github.com/ahliweb/omes/issues/65))
+- Require exact equality between backend desired and observed state when a read-back supplies both fields, rejecting incomplete or partial reconciliation. ([#90](https://github.com/ahliweb/omes/issues/90))
+- Enforce explicit entitlement backend eligibility for provisioning, upgrades, and optional-worker starts while preserving legacy entitlements. ([#92](https://github.com/ahliweb/omes/issues/92))
+
+### Documentation
+
+- Synchronize delivery sequence tables in documentation with active OMES implementations for issues 90 through 97, and isolate test runner stdin. ([#102](https://github.com/ahliweb/omes/issues/102))
+- Align the README release status with the current v0.2.0 tag and remove the obsolete untagged-release claim. ([#86](https://github.com/ahliweb/omes/issues/86))
+- Correct stale implementation-status claims for OMES control jobs, disaster recovery, CI/Bats, and agent deployment backends, and preserve explicit provider boundary statements. ([#90](https://github.com/ahliweb/omes/issues/90))
+- Document legacy ok-only read-back compatibility and exact desired/observed validation for stronger backend responses. ([#90](https://github.com/ahliweb/omes/issues/90))
+
 ## [0.2.0](https://github.com/ahliweb/omes/releases/tag/v0.2.0) - 2026-09-20
 
 ### Security
