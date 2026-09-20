@@ -179,10 +179,14 @@ if called again.
 
 For any operation with a read-back command (`backup`, `restore`,
 `rollback`), `runner.run()` re-runs that command after execution and
-compares desired vs. observed state (`_compare_desired_observed()`):
+validates the result (`_compare_desired_observed()`):
 
 - a timed-out read-back is **never** treated as success;
 - a read-back reporting `ok: false` is treated as a mismatch;
+- when the backend supplies both `desired` and `observed` objects, they must
+  match exactly; an incomplete pair or mismatch is rejected;
+- legacy status output that supplies only `ok: true` remains supported for
+  backwards compatibility;
 - a mismatch reports `failed` with `error.code ==
   "reconciliation_mismatch"` and both the execute and read-back evidence
   attached under `record["evidence"]`, so an operator/Control Center can
