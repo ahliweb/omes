@@ -338,14 +338,14 @@ The Control Center adds a new network-facing trust boundary. It must be added to
 | D2 | GitHub App/repository integration | #101 | Installation/mapping/webhook-envelope/observation contracts and a stdlib HMAC-SHA256 webhook verifier delivered: [docs/domain-providers.md](domain-providers.md) section 4, `lib/omes/py/domains/github.py`. No live GitHub App or webhook receiver in this repository. |
 | D3 | domain billing and reconciliation | #102 | Product/checkout/reminder/dedupe/refund/reconciliation/report contracts and a stdlib billing-rules module delivered: [docs/domain-providers.md](domain-providers.md) section 5, `lib/omes/py/domains/billing.py`, with Cloudflare and SRS-X end-to-end fake-provider tests. No live payment/registrar integration in this repository. |
 | Foundation | Control Center boundary | #89 | Contracts and threat model delivered: [docs/control-center-contracts.md](control-center-contracts.md), [docs/control-center-threat-model.md](control-center-threat-model.md), [`contracts/control-center/v1/`](../contracts/control-center/v1/). No AWCMS producer/consumer implementation in this repository. |
-| Foundation | idempotent audited jobs | #90 | Not implemented yet |
-| Foundation | AWCMS Control Center | #91 | Not implemented yet |
-| Foundation | service catalog/entitlements | #92 | Not implemented yet |
-| Billing | manual billing ledger | #93 | Not implemented yet |
-| Billing | recurring billing and webhooks | #94 | Not implemented yet |
-| Billing | reporting projections | #95 | Not implemented yet |
-| Isolation | rootless Docker Compose | #96 | Not implemented yet |
-| Multi-server | optional Coolify adapter | #97 | Not implemented yet |
+| Foundation | idempotent audited jobs | #90 | Implemented: job runner, atomic store, approval policy, and read-back reconciliation delivered in [docs/jobs.md](jobs.md), `lib/omes/py/jobs/runner.py`, `lib/omes/py/jobs/store.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
+| Foundation | AWCMS Control Center | #91 | OMES wire contracts delivered: `operation-request.schema.json`, `deployment-view.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), [docs/control-center-foundation.md](control-center-foundation.md). Web GUI and tenant DB remain in AWCMS/awcms-one. |
+| Foundation | service catalog/entitlements | #92 | Implemented: pure `evaluate()` policy, backend eligibility enforcement, and subscription/entitlement contracts delivered in `lib/omes/py/jobs/entitlement.py`, `lib/omes/py/jobs/states.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
+| Billing | manual billing ledger | #93 | Implemented: immutable price snapshots, integer-minor currency arithmetic, and reconciliation helpers delivered in `lib/omes/py/jobs/ledger.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Rendering/email remain in awcms-one. |
+| Billing | recurring billing and webhooks | #94 | Implemented: webhook signature verification, replay protection, grace periods, and suspension policy delivered in `lib/omes/py/jobs/recurring.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Gateway adapters remain external. |
+| Billing | reporting projections | #95 | Implemented: pure fixture-based usage, billing, and revenue projection contracts delivered in `lib/omes/py/jobs/projections.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
+| Isolation | rootless Docker Compose | #96 | Implemented: rootless Compose isolation backend, manifest schema, and doctor integration delivered in `lib/omes/py/compose/`, [docs/agent-deployment.md](agent-deployment.md), `bin/omes agent`. |
+| Multi-server | optional Coolify adapter | #97 | Implemented: contracts, API client, instance registry persistence, and audit logging delivered in `lib/omes/py/coolify/`, [docs/coolify-adapter.md](coolify-adapter.md), [`contracts/coolify/v1/`](../contracts/coolify/v1/). Live provider HTTP integration is external. |
 
 The current OMES repository remains a Bash CLI and host toolkit. This document is a design and traceability artifact, not evidence that the web or provider features have landed.
 
