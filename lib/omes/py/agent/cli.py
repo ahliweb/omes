@@ -762,29 +762,126 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     st = state_mod.load(args.name)
     managed_paths = st.get("managedPaths", [])
 
-    _run_systemctl(mode, ["stop", plan["unit"]["name"]])
-    _run_systemctl(mode, ["disable", plan["unit"]["name"]])
+    applied_steps = []
+    failed_steps = []
 
+    # Step 1: stop unit
+    stop_proc = _run_systemctl(mode, ["stop", plan["unit"]["name"]])
+    if stop_proc.returncode != 0:
+        act_proc = _run_systemctl(mode, ["is-active", plan["unit"]["name"]])
+        if act_proc.returncode == 0:
+            failed_steps.append({"step": "systemctl_stop", "error": f"systemctl stop failed: exit {stop_proc.returncode}"})
+        else:
+            applied_steps.append({"step": "systemctl_stop", "detail": "already inactive"})
+    else:
+        applied_steps.append({"step": "systemctl_stop", "detail": "stopped"})
+
+    # Step 2: disable unit
+    disable_proc = _run_systemctl(mode, ["disable", plan["unit"]["name"]])
+    if disable_proc.returncode != 0:
+        en_proc = _run_systemctl(mode, ["is-enabled", plan["unit"]["name"]])
+        if en_proc.returncode == 0:
+            failed_steps.append({"step": "systemctl_disable", "error": f"systemctl disable failed: exit {disable_proc.returncode}"})
+        else:
+            applied_steps.append({"step": "systemctl_disable", "detail": "already disabled"})
+    else:
+        applied_steps.append({"step": "systemctl_disable", "detail": "disabled"})
+
+    # Step 3: remove managed paths
     removed = []
+    remaining_managed = []
     for p in managed_paths:
         path = Path(p)
         try:
-            if path.is_file():
+            if path.is_file() or path.is_symlink():
                 path.unlink()
                 removed.append(str(path))
-        except OSError:
-            pass
+                applied_steps.append({"step": "unlink_file", "path": str(path)})
+            elif path.is_dir():
+                path.rmdir()
+                removed.append(str(path))
+                applied_steps.append({"step": "rmdir", "path": str(path)})
+        except OSError as exc:
+            if path.exists():
+                failed_steps.append({"step": "remove_path", "path": str(path), "error": str(exc)})
+                remaining_managed.append(str(path))
+
     try:
         dropin_dir = Path(plan["unit"]["dropin_dir"])
         if dropin_dir.is_dir() and not any(dropin_dir.iterdir()):
             dropin_dir.rmdir()
-    except OSError:
-        pass
+            applied_steps.append({"step": "rmdir", "path": str(dropin_dir)})
+    except OSError as exc:
+        if dropin_dir.is_dir():
+            failed_steps.append({"step": "rmdir", "path": str(dropin_dir), "error": str(exc)})
 
-    _run_systemctl(mode, ["daemon-reload"])
+    # Step 4: daemon-reload
+    reload_proc = _run_systemctl(mode, ["daemon-reload"])
+    if reload_proc.returncode != 0:
+        failed_steps.append({"step": "daemon_reload", "error": f"daemon-reload failed: exit {reload_proc.returncode}"})
+    else:
+        applied_steps.append({"step": "daemon_reload", "detail": "reloaded"})
+
+    # Step 5: Post-operation read-back verification
+    is_active_proc = _run_systemctl(mode, ["is-active", plan["unit"]["name"]])
+    unit_active = (is_active_proc.returncode == 0)
+    is_enabled_proc = _run_systemctl(mode, ["is-enabled", plan["unit"]["name"]])
+    unit_enabled = (is_enabled_proc.returncode == 0)
+    unremoved_files = [p for p in managed_paths if Path(p).exists()]
+
+    observed_state = {
+        "unit_active": unit_active,
+        "unit_enabled": unit_enabled,
+        "unremoved_files": unremoved_files,
+    }
+
+    reasons = [f"{s['step']}: {s.get('error', s.get('path', ''))}" for s in failed_steps]
+    if unit_active:
+        reasons.append(f"unit {plan['unit']['name']} is still active")
+    if unit_enabled:
+        reasons.append(f"unit {plan['unit']['name']} is still enabled")
+    if unremoved_files:
+        reasons.append(f"managed files still present: {unremoved_files}")
+
+    verification_passed = (len(reasons) == 0)
+
+    if not verification_passed:
+        error_msg = "; ".join(reasons) or "rollback verification failed"
+        state_mod.advance(
+            args.name,
+            "failed",
+            f"rollback failed: {error_msg}",
+            managed_paths=remaining_managed or managed_paths,
+        )
+        result = {
+            "ok": False,
+            "name": args.name,
+            "action": "rollback",
+            "backend": "systemd",
+            "state": "failed",
+            "error": error_msg,
+            "removed": removed,
+            "applied_steps": applied_steps,
+            "failed_steps": failed_steps,
+            "observed_state": observed_state,
+            "verification": {"passed": False, "reasons": reasons},
+        }
+        _print(result, args.json) if args.json else print(f"error: rollback failed: {error_msg}", file=sys.stderr)
+        return EX_ROLLBACK
 
     final_state = state_mod.advance(args.name, "rolled-back", "rollback removed OMES-managed unit/drop-in", managed_paths=[])
-    result = {"ok": True, "name": args.name, "state": final_state["state"], "removed": removed}
+    result = {
+        "ok": True,
+        "name": args.name,
+        "action": "rollback",
+        "backend": "systemd",
+        "state": final_state["state"],
+        "removed": removed,
+        "applied_steps": applied_steps,
+        "failed_steps": [],
+        "observed_state": observed_state,
+        "verification": {"passed": True},
+    }
     _print(result, args.json) if args.json else print(f"{args.name}: rolled back")
     return EX_OK
 
@@ -793,10 +890,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
     """`omes agent remove <name>` - compose backend only (issue #96).
     `docker compose down --volumes`, scoped to this agent's own project,
     then removes only the OMES-managed compose dir and state directory -
-    never HERMES_HOME, never another agent's resources. Not implemented
-    for the systemd backend (it has no removable named volumes and no
-    equivalent request in issue #87 - `rollback` already covers unit/
-    drop-in teardown there)."""
+    never HERMES_HOME, never another agent's resources."""
     omes_root = _omes_root()
     try:
         manifest = _load_manifest(args.name, omes_root)

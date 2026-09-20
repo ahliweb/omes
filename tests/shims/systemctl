@@ -133,6 +133,9 @@ case "${1:-}" in
     ;;
   disable)
     svc="${2:-}"
+    if [[ "${SHIM_SYSTEMCTL_DISABLE_FAILS:-0}" == "1" ]]; then
+      exit 1
+    fi
     _list_remove "$(_enabled_file)" "$svc"
     _list_remove "$(_active_file)" "$svc"
     exit 0
@@ -144,6 +147,9 @@ case "${1:-}" in
     ;;
   stop)
     svc="${2:-}"
+    if [[ "${SHIM_SYSTEMCTL_STOP_FAILS:-0}" == "1" ]]; then
+      exit 1
+    fi
     _list_remove "$(_active_file)" "$svc"
     exit 0
     ;;
@@ -180,6 +186,9 @@ case "${1:-}" in
     exit 0
     ;;
   daemon-reload)
+    if [[ "${SHIM_SYSTEMCTL_DAEMON_RELOAD_FAILS:-0}" == "1" ]]; then
+      exit 1
+    fi
     exit 0
     ;;
   *)

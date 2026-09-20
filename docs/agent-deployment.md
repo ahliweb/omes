@@ -221,8 +221,15 @@ issue #87's explicit requirement, inherited from #79).
 `omes agent rollback <name>` stops and disables the unit and removes
 **only** the paths this tool itself wrote (the unit file and its
 drop-in, tracked in the agent's own state file) - it never touches
-`HERMES_HOME` or any file an operator or Hermes itself created. State
-moves to `rolled-back`.
+`HERMES_HOME` or any file an operator or Hermes itself created.
+
+Before transitioning to `rolled-back`, OMES performs post-operation
+read-back verification: confirming the unit is stopped (`is-active`),
+disabled (`is-enabled`), managed unit files and drop-in directories are removed
+from disk, and `daemon-reload` succeeds. If any step fails or verification
+read-back detects leftover state, rollback fails closed, transitions lifecycle state
+to `failed`, records the applied vs failed steps, and returns exit code 6
+(`EX_ROLLBACK`). Subsequent rollback invocations can re-converge safely.
 
 ## 4. State and provenance
 

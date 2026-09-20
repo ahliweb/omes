@@ -214,6 +214,75 @@ class TestApplyLifecycle(AgentCliTestCase):
         finally:
             os.chmod(readonly_parent_owner, 0o755)
 
+    def test_rollback_stop_failure_marks_failed(self):
+        self._apply()
+        env = dict(self.env)
+        env["SHIM_SYSTEMCTL_STOP_FAILS"] = "1"
+        proc = self._run("rollback", "researcher", "--yes", "--json", env=env)
+        self.assertNotEqual(proc.returncode, 0)
+        result = json.loads(proc.stdout)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "failed")
+        self.assertTrue(any(s["step"] == "systemctl_stop" for s in result["failed_steps"]))
+        status = self._run("status", "researcher", "--json")
+        self.assertEqual(json.loads(status.stdout)["state"], "failed")
+
+    def test_rollback_disable_failure_marks_failed(self):
+        self._apply()
+        env = dict(self.env)
+        env["SHIM_SYSTEMCTL_DISABLE_FAILS"] = "1"
+        proc = self._run("rollback", "researcher", "--yes", "--json", env=env)
+        self.assertNotEqual(proc.returncode, 0)
+        result = json.loads(proc.stdout)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "failed")
+        self.assertTrue(any(s["step"] == "systemctl_disable" for s in result["failed_steps"]))
+
+    def test_rollback_daemon_reload_failure_marks_failed(self):
+        self._apply()
+        env = dict(self.env)
+        env["SHIM_SYSTEMCTL_DAEMON_RELOAD_FAILS"] = "1"
+        proc = self._run("rollback", "researcher", "--yes", "--json", env=env)
+        self.assertNotEqual(proc.returncode, 0)
+        result = json.loads(proc.stdout)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["state"], "failed")
+        self.assertTrue(any(s["step"] == "daemon_reload" for s in result["failed_steps"]))
+
+    def test_rollback_idempotent_convergence_after_failure(self):
+        self._apply()
+        env = dict(self.env)
+        env["SHIM_SYSTEMCTL_STOP_FAILS"] = "1"
+        # First attempt fails
+        proc1 = self._run("rollback", "researcher", "--yes", "--json", env=env)
+        self.assertNotEqual(proc1.returncode, 0)
+        status1 = self._run("status", "researcher", "--json")
+        self.assertEqual(json.loads(status1.stdout)["state"], "failed")
+
+        # Second attempt without failure trigger succeeds and converges to rolled-back
+        proc2 = self._run("rollback", "researcher", "--yes", "--json")
+        self.assertEqual(proc2.returncode, 0, proc2.stderr)
+        result2 = json.loads(proc2.stdout)
+        self.assertTrue(result2["ok"])
+        self.assertEqual(result2["state"], "rolled-back")
+        status2 = self._run("status", "researcher", "--json")
+        self.assertEqual(json.loads(status2.stdout)["state"], "rolled-back")
+
+    def test_rollback_structured_json_verification(self):
+        self._apply()
+        proc = self._run("rollback", "researcher", "--yes", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        result = json.loads(proc.stdout)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["action"], "rollback")
+        self.assertEqual(result["backend"], "systemd")
+        self.assertIn("applied_steps", result)
+        self.assertIn("observed_state", result)
+        self.assertIn("verification", result)
+        self.assertTrue(result["verification"]["passed"])
+        self.assertFalse(result["observed_state"]["unit_active"])
+        self.assertFalse(result["observed_state"]["unit_enabled"])
+
 
 class TestProfileIsolation(AgentCliTestCase):
     def test_two_agents_get_distinct_hermes_homes_and_units(self):

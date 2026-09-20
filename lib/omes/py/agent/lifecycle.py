@@ -58,8 +58,8 @@ for _idx, _state in enumerate(_FORWARD):
 # apply.
 _ALLOWED["healthy"].add("ready")
 _ALLOWED["degraded"] = {"ready", "healthy", "failed", "rolled-back"}
-_ALLOWED["failed"] = {"declared", "rolled-back"}
-_ALLOWED["rolled-back"] = {"declared"}
+_ALLOWED["failed"] = {"declared", "rolled-back", "failed"}
+_ALLOWED["rolled-back"] = {"declared", "rolled-back"}
 
 # `omes agent apply` must be idempotent (issue #87): re-running it against
 # an already-ready/healthy/degraded deployment re-enters the check ->
