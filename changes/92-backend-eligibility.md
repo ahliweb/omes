@@ -1,3 +1,5 @@
-## Entitlement backend eligibility
-
-- Enforce explicit `entitlement.limits.backends` eligibility for provisioning, upgrades, and optional-worker starts while preserving legacy entitlements without the optional field.
+---
+issue: 92
+type: fixed
+---
+Enforce explicit entitlement backend eligibility for provisioning, upgrades, and optional-worker starts while preserving legacy entitlements.
