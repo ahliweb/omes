@@ -166,6 +166,8 @@ tests/shims/                    # Fake apt-get/systemctl/sudo/hermes/curl for in
 docs/architecture.md            # This document.
 docs/adr/*.md                   # Architecture Decision Records.
 docs/business/*.md              # Business plan and go-to-market documents.
+contracts/                      # Versioned JSON schemas and fixtures for integration boundaries.
+skills/                         # Repository-local workflow/content skill documentation.
 VERSION                         # SemVer version string, single source of truth (see ADR-0010).
 CHANGELOG.md                    # Compiled at release time from changes/*.md; never hand-edited.
 changes/*.md                    # Per-PR change fragments, compiled into CHANGELOG.md at release.

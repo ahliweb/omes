@@ -31,7 +31,7 @@ the repository, comment on pull requests, or write security-events.
 |---|---|---|
 | `shellcheck` | Runs `scripts/lint.sh shellcheck` — ShellCheck at `-S warning` (blocking) then `-S style` (reported, not blocking) over every shell file in scope (§2.1). | **Yes** (at `warning` severity and above). Style-level findings are printed but do not fail the job. |
 | `shfmt` | Runs `scripts/lint.sh shfmt` — `shfmt -i 2 -ci -bn -d` (diff mode) over the same file set. | **No.** `continue-on-error: true`. See §3 for why. |
-| `bats` | Installs `bats` (apt) and runs `tests/run.sh` (ShellCheck + unit + integration, per [ADR-0009](adr/0009-testing-with-bats-in-containers.md)) — only if `tests/run.sh` exists yet. | **Yes**, once issue #6 merges. No-op (and passes) before that. |
+| `bats` | Installs `bats` (apt) and runs `tests/run.sh` (ShellCheck + unit + integration, per [ADR-0009](adr/0009-testing-with-bats-in-containers.md)). | **Yes**, when the workflow runs successfully. |
 | `gitleaks` | Full git-history secret scan via `gitleaks/gitleaks-action`, checked out with `fetch-depth: 0` so history (not just the diff) is scanned. | **Yes.** |
 | `yamllint` | Runs `scripts/lint.sh yamllint` over every tracked `*.yml`/`*.yaml` file (primarily `.github/workflows/*`), using `.yamllint.yml`. | **Yes.** |
 | `actionlint` | Runs `rhysd/actionlint` (via Docker, pinned by image digest) against `.github/workflows/*.yml`. | **Yes.** |
@@ -134,13 +134,13 @@ docker run --rm -v "$PWD:/repo" -w /repo \
   -color
 ```
 
-### 2.6 bats (once issue #6 merges)
+### 2.6 bats
 
 ```bash
 ./tests/run.sh
 ```
 
-Per [ADR-0009](adr/0009-testing-with-bats-in-containers.md), this runs
+Per [ADR-0009](adr/0009-testing-with-bats-in-containers.md), this implemented gate runs
 ShellCheck plus `tests/unit/*.bats` and `tests/integration/*.bats`, using
 Docker (`bats/bats:latest`) when `bats` is not installed locally.
 

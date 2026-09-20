@@ -94,7 +94,9 @@ schema's regexes alone express:
 - `spec.runtime` must be `hermes` (the MVP's only supported runtime -
   any other value fails preflight before any mutation, per issue #87's
   acceptance criteria);
-- `spec.backend` must be `systemd` (the only implemented backend);
+- `spec.backend` must be `systemd` or `compose`; these are the implemented
+  native backends. Coolify is not accepted by this validator and remains an
+  optional staged adapter.
 - `spec.serviceMode` must be `user` or `system`;
 - a manifest file's `metadata.name` must match the filename it is looked
   up under (`<name>.json`) - a mismatch is rejected as a duplicate/

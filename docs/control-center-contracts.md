@@ -108,9 +108,10 @@ subset (no conditional `if`/`then`).
 queued, approved, running, succeeded, failed, cancelled, expired, rolled_back
 ```
 
-See `docs/jobs.md` (issue #90; landing in the stacked `feat/90-control-jobs` branch, not yet on this branch) for the full state machine and
-transition table; this contract only fixes the wire shape of a status
-read.
+See [`docs/jobs.md`](jobs.md) (issue #90) for the implemented OMES-side
+state machine and transition table; this contract only fixes the wire shape
+of a status read. The HTTP/API transport, tenant database, web RBAC/ABAC,
+and Control Center UI remain AWCMS/awcms-one responsibilities.
 
 ### 2.4 `health-readiness.response`
 

@@ -98,4 +98,4 @@ Reuses `docs/threat-model.md` §4's asset list (A1–A9) plus:
 - [docs/control-center-contracts.md](control-center-contracts.md) — the contracts these threats apply to.
 - [docs/control-center-and-integrations.md](control-center-and-integrations.md) §10 — the mandatory design gates this document evidences.
 - [ADR-0011](adr/0011-control-center-and-provider-boundaries.md).
-- `docs/jobs.md` — the OMES-side job runner (issue #90; landing in the stacked `feat/90-control-jobs` branch, not yet on this branch), referenced throughout the mitigation column.
+- [`docs/jobs.md`](jobs.md) — the implemented OMES-side job runner (issue #90), referenced throughout the mitigation column. The HTTP/API transport, tenant database, web RBAC/ABAC, and UI remain outside this repository.
