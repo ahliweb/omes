@@ -26,10 +26,12 @@ source "${OMES_ROOT}/lib/omes/versions.sh"
 # shellcheck source=../../lib/omes/cmd/audit-provenance.sh
 source "${OMES_ROOT}/lib/omes/cmd/audit-provenance.sh"
 
-# Default upstream installer location (verified 2026-09-18). Overridable via
-# OMES_HERMES_INSTALLER_URL purely for testability; there is no documented
-# operator reason to change it.
+# Default upstream installer location (verified 2026-09-21 against Hermes Agent
+# v2026.9.14 / v0.21.3). Overridable via OMES_HERMES_INSTALLER_URL purely for
+# testability; there is no documented operator reason to change it.
 HERMES_DEFAULT_INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
+# Verified SHA-256 of the upstream installer for release v2026.9.14 (2026-09-21):
+# 00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22
 
 HERMES_PATH_MARKER_BEGIN="# BEGIN OMES hermes PATH"
 HERMES_PATH_MARKER_END="# END OMES hermes PATH"
@@ -126,7 +128,13 @@ _hermes_download_and_install() {
 
   log_info "hermes: running installer with HERMES_HOME=${home}"
   local rc=0
-  HERMES_HOME="$home" omes_run bash "$tmp" || rc=$?
+  local -a installer_args=()
+  if [[ -n "${OMES_HERMES_BRANCH:-}" ]]; then
+    installer_args+=(--branch "$OMES_HERMES_BRANCH")
+  elif [[ -n "${OMES_HERMES_VERSION:-}" ]]; then
+    installer_args+=(--branch "$OMES_HERMES_VERSION")
+  fi
+  HERMES_HOME="$home" omes_run bash "$tmp" "${installer_args[@]}" || rc=$?
   rm -f "$tmp"
 
   if [[ "$rc" -ne 0 ]]; then

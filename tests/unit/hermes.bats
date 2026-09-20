@@ -56,7 +56,7 @@ _fake_installer_body() {
   cat <<'EOF'
 #!/usr/bin/env bash
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'installer-ran HERMES_HOME=%s\n' "${HERMES_HOME:-}" >> "$SHIM_LOG"
+  printf 'installer-ran HERMES_HOME=%s%s\n' "${HERMES_HOME:-}" "${*:+ args=$*}" >> "$SHIM_LOG"
 fi
 exit 0
 EOF
@@ -117,6 +117,16 @@ EOF
   run grep -c '^curl ' "$SHIM_LOG"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
+}
+
+@test "module_apply passes --branch to installer when OMES_HERMES_VERSION is set" {
+  export OMES_HERMES_VERSION="v2026.9.14"
+  _set_fake_installer "$(_fake_installer_body)"
+  run module_apply
+  [ "$status" -eq 0 ]
+  run grep 'installer-ran' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"args=--branch v2026.9.14"* ]]
 }
 
 # --- module_apply: supply-chain (sha256 pin) --------------------------------

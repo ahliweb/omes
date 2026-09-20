@@ -123,7 +123,9 @@ hermes doctor                               # upstream self-check
 `modules/hermes/module.sh` downloads the upstream installer
 (`https://hermes-agent.nousresearch.com/install.sh`) **to a temporary
 file first**, optionally verifies it against
-`OMES_HERMES_INSTALLER_SHA256`, then executes it — never a direct
+`OMES_HERMES_INSTALLER_SHA256` (verified
+`00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for
+upstream release `v2026.9.14`), then executes it — never a direct
 `curl | bash` (`docs/security.md` §6, ADR-0006). It creates an empty,
 mode-`0600` `$HERMES_HOME/.env` if none exists and wires a managed `PATH`
 snippet; `module_verify` proves `hermes --version` and `hermes doctor`
