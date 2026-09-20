@@ -61,6 +61,68 @@ class TestLimitEnforcement(unittest.TestCase):
         )
         self.assertFalse(result["allow"])
 
+    def test_explicit_backend_eligibility_denies_an_unlisted_backend(self):
+        entitlement_with_backends = _entitlement(
+            limits={**_entitlement()["limits"], "backends": ["systemd"]}
+        )
+        result = entitlement.evaluate(
+            entitlement_with_backends,
+            {
+                "type": "provision_new",
+                "tenant_id": "tenant-acme",
+                "backend": "compose",
+                "resource": "servers",
+                "requested_total": 1,
+            },
+        )
+        self.assertFalse(result["allow"])
+        self.assertIn("backend_not_eligible", result["reason"])
+
+    def test_explicit_backend_eligibility_denies_a_missing_backend(self):
+        entitlement_with_backends = _entitlement(
+            limits={**_entitlement()["limits"], "backends": ["systemd"]}
+        )
+        result = entitlement.evaluate(
+            entitlement_with_backends,
+            {
+                "type": "start_optional_worker",
+                "tenant_id": "tenant-acme",
+                "resource": "isolated_workers",
+                "requested_total": 0,
+            },
+        )
+        self.assertFalse(result["allow"])
+        self.assertIn("backend_not_eligible", result["reason"])
+
+    def test_explicit_backend_eligibility_allows_a_listed_backend(self):
+        entitlement_with_backends = _entitlement(
+            limits={**_entitlement()["limits"], "backends": ["systemd", "compose"]}
+        )
+        result = entitlement.evaluate(
+            entitlement_with_backends,
+            {
+                "type": "upgrade",
+                "tenant_id": "tenant-acme",
+                "backend": "compose",
+                "resource": "servers",
+                "requested_total": 2,
+            },
+        )
+        self.assertTrue(result["allow"])
+
+    def test_legacy_entitlement_without_backend_limit_remains_compatible(self):
+        result = entitlement.evaluate(
+            _entitlement(),
+            {
+                "type": "provision_new",
+                "tenant_id": "tenant-acme",
+                "backend": "compose",
+                "resource": "servers",
+                "requested_total": 1,
+            },
+        )
+        self.assertTrue(result["allow"])
+
 
 class TestUpgradeDowngrade(unittest.TestCase):
     def test_upgrade_within_new_higher_limit_is_allowed(self):

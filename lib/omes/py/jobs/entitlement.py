@@ -61,6 +61,7 @@ def evaluate(
         "type": "provision_new" | "upgrade" | "start_optional_worker" | "keep_existing_running",
         "tenant_id": "...",           # the tenant actually making the request
         "resource": "servers", ...    # required for provision_new/upgrade/start_optional_worker
+        "backend": "systemd",          # required when limits.backends is configured
         "requested_total": 3,         # the total amount the tenant would hold after this action
     }
 
@@ -119,6 +120,14 @@ def evaluate(
         return _decision(False, f"unknown or missing resource: {resource!r}")
 
     limits = entitlement.get("limits", {})
+    if "backends" in limits:
+        backend = action.get("backend")
+        eligible_backends = limits["backends"]
+        if backend not in eligible_backends:
+            return _decision(
+                False,
+                f"backend_not_eligible: requested backend {backend!r} is not in eligible backends {eligible_backends!r}",
+            )
     if resource not in limits:
         return _decision(False, f"entitlement has no limit configured for resource {resource!r}")
 
