@@ -26,7 +26,7 @@ setup() {
 
   WORK="${OMES_TEST_TMPDIR}/work"
   mkdir -p "${WORK}/repo/src"
-  printf 'print(1)\n' > "${WORK}/repo/src/a.py"
+  printf 'print(1)\n' >"${WORK}/repo/src/a.py"
   REPO="${WORK}/repo"
 }
 
@@ -80,7 +80,7 @@ teardown() {
   mkdir -p "$export_dir"
   # Front matter opened but never closed - has_omes_marker must not crash
   # on this, and must treat it as "no marker" (never overwritten).
-  printf -- '---\nomes_generated: true\nsource: "whatever"\n' > "${export_dir}/app.py.md"
+  printf -- '---\nomes_generated: true\nsource: "whatever"\n' >"${export_dir}/app.py.md"
 
   run "$OMES_BIN" graphify export "${REPO}/graphify-out" --vault "$vault" --yes --json
   [ "$status" -eq 0 ]
@@ -93,13 +93,13 @@ teardown() {
 # ---------------------------------------------------------------------------
 
 @test "a symlinked source file is skipped by sync's change detection, not followed" {
-  printf 'print(2)\n' > "${WORK}/outside.py"
+  printf 'print(2)\n' >"${WORK}/outside.py"
   ln -s "${WORK}/outside.py" "${REPO}/src/linked.py"
   run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 0 ]
 
   # Modifying the symlink target must never register as a source change.
-  printf 'print(3)\n' >> "${WORK}/outside.py"
+  printf 'print(3)\n' >>"${WORK}/outside.py"
   run "$OMES_BIN" graphify status "$REPO" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"status":"up_to_date"'* ]]
@@ -107,7 +107,7 @@ teardown() {
 
 @test "a symlinked source directory is skipped entirely, not followed" {
   mkdir -p "${WORK}/outside-dir"
-  printf 'print(1)\n' > "${WORK}/outside-dir/x.py"
+  printf 'print(1)\n' >"${WORK}/outside-dir/x.py"
   ln -s "${WORK}/outside-dir" "${REPO}/linked-dir"
   run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 0 ]
@@ -120,7 +120,7 @@ teardown() {
 
 @test "OMES_GRAPHIFY_MAX_FILE_MB excludes an oversized file from change detection" {
   # 2 MiB file, 1 MB cap.
-  head -c 2097152 /dev/zero > "${REPO}/src/huge.bin" 2>/dev/null || {
+  head -c 2097152 /dev/zero >"${REPO}/src/huge.bin" 2>/dev/null || {
     python3 -c "open('${REPO}/src/huge.bin','wb').write(b'0' * 2097152)"
   }
   OMES_GRAPHIFY_MAX_FILE_MB=1 run "$OMES_BIN" graphify sync "$REPO" --yes >/dev/null
@@ -141,13 +141,13 @@ teardown() {
 @test "sync honors .graphifyignore in addition to .gitignore" {
   "$OMES_BIN" graphify init-ignore "$REPO" --yes >/dev/null
   mkdir -p "${REPO}/node_modules/pkg"
-  printf 'module.exports = {}\n' > "${REPO}/node_modules/pkg/index.js"
+  printf 'module.exports = {}\n' >"${REPO}/node_modules/pkg/index.js"
 
   run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 0 ]
 
   # Changing an ignored file must never register as a source change.
-  printf 'module.exports = { changed: true }\n' > "${REPO}/node_modules/pkg/index.js"
+  printf 'module.exports = { changed: true }\n' >"${REPO}/node_modules/pkg/index.js"
   run "$OMES_BIN" graphify status "$REPO" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"status":"up_to_date"'* ]]

@@ -21,7 +21,7 @@ setup() {
   export OMES_HERMES_HOME="${HOME}/.hermes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" << 'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -39,7 +39,7 @@ EOF
   # A pre-existing user file the `hermes` module manages (appends its PATH
   # marker block to) - this is what gets backed up before hermes writes to
   # it, and what `omes restore` will return to this exact content.
-  printf '# my custom prompt\n' > "${HOME}/.bashrc"
+  printf '# my custom prompt\n' >"${HOME}/.bashrc"
 }
 
 teardown() {

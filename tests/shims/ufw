@@ -23,7 +23,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'ufw %s\n' "$*" >> "$SHIM_LOG"
+  printf 'ufw %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 STATE="${SHIM_UFW_STATE_FILE:-}"
@@ -49,7 +49,10 @@ _state_set() {
   mkdir -p "$(dirname "$STATE")" 2>/dev/null || true
   touch "$STATE"
   local tmp="${STATE}.tmp.$$"
-  { grep -v "^${key}=" "$STATE" 2>/dev/null || true; printf '%s=%s\n' "$key" "$value"; } > "$tmp"
+  {
+    grep -v "^${key}=" "$STATE" 2>/dev/null || true
+    printf '%s=%s\n' "$key" "$value"
+  } >"$tmp"
   mv -f "$tmp" "$STATE"
 }
 
@@ -67,7 +70,7 @@ _add_rule() {
     return 0
   fi
   mkdir -p "$(dirname "$STATE")" 2>/dev/null || true
-  printf 'rule=%s\n' "$text" >> "$STATE"
+  printf 'rule=%s\n' "$text" >>"$STATE"
 }
 
 cmd="${1:-}"

@@ -30,7 +30,7 @@ state_init() {
 
   local state_file="${dir}/state"
   if [[ ! -e "$state_file" ]]; then
-    : > "$state_file"
+    : >"$state_file"
   fi
   chmod 600 "$state_file"
 
@@ -61,7 +61,7 @@ state_get() {
       printf '%s\n' "${line#"$prefix"}"
       return 0
     fi
-  done < "$file"
+  done <"$file"
   return 1
 }
 
@@ -87,10 +87,10 @@ state_set() {
       while IFS= read -r line; do
         [[ "$line" == "${key}="* ]] && continue
         printf '%s\n' "$line"
-      done < "$file"
+      done <"$file"
     fi
     printf '%s=%s\n' "$key" "$value"
-  } > "$tmp"
+  } >"$tmp"
 
   chmod 600 "$tmp"
   mv -f "$tmp" "$file"
@@ -112,7 +112,7 @@ state_unset() {
   while IFS= read -r line; do
     [[ "$line" == "${key}="* ]] && continue
     printf '%s\n' "$line"
-  done < "$file" > "$tmp"
+  done <"$file" >"$tmp"
 
   chmod 600 "$tmp"
   mv -f "$tmp" "$file"
@@ -140,5 +140,5 @@ state_list_modules() {
         fi
         ;;
     esac
-  done < "$file"
+  done <"$file"
 }

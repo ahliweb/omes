@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'apt-get %s\n' "$*" >> "$SHIM_LOG"
+  printf 'apt-get %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 if [[ "${1:-}" == "update" ]]; then
@@ -38,7 +38,7 @@ if [[ "${1:-}" == "install" ]]; then
     esac
   done
   if [[ -n "${SHIM_INSTALLED_PKGS_FILE:-}" ]] && [[ "${#pkgs[@]}" -gt 0 ]]; then
-    printf '%s\n' "${pkgs[@]}" >> "$SHIM_INSTALLED_PKGS_FILE"
+    printf '%s\n' "${pkgs[@]}" >>"$SHIM_INSTALLED_PKGS_FILE"
   fi
 fi
 

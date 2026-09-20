@@ -18,7 +18,7 @@ setup() {
 
   WORK="${OMES_TEST_TMPDIR}/work"
   mkdir -p "${WORK}/repo/src"
-  printf 'print(1)\n' > "${WORK}/repo/src/a.py"
+  printf 'print(1)\n' >"${WORK}/repo/src/a.py"
   REPO="${WORK}/repo"
 }
 
@@ -57,7 +57,7 @@ teardown() {
 
 @test "a second sync with no changes takes no action and does not call graphify again" {
   "$OMES_BIN" graphify sync "$REPO" --yes >/dev/null
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
   run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"action":"none"'* ]]
@@ -67,7 +67,7 @@ teardown() {
 
 @test "a change triggers 'graphify update' (not a full extract) on the second sync" {
   "$OMES_BIN" graphify sync "$REPO" --yes >/dev/null
-  printf 'print(2)\n' >> "${REPO}/src/a.py"
+  printf 'print(2)\n' >>"${REPO}/src/a.py"
   run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"action":"update"'* ]]
@@ -77,7 +77,7 @@ teardown() {
 
 @test "status reports stale after a source change, before the next sync" {
   "$OMES_BIN" graphify sync "$REPO" --yes >/dev/null
-  printf 'print(2)\n' >> "${REPO}/src/a.py"
+  printf 'print(2)\n' >>"${REPO}/src/a.py"
   run "$OMES_BIN" graphify status "$REPO" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"status":"stale"'* ]]
@@ -85,8 +85,8 @@ teardown() {
 
 @test "sync --min-interval debounces a rapid repeat call without invoking graphify" {
   "$OMES_BIN" graphify sync "$REPO" --yes >/dev/null
-  printf 'print(2)\n' >> "${REPO}/src/a.py"
-  : > "$SHIM_LOG"
+  printf 'print(2)\n' >>"${REPO}/src/a.py"
+  : >"$SHIM_LOG"
   run "$OMES_BIN" graphify sync "$REPO" --min-interval 3600 --yes --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'skipped_debounced'* ]]
@@ -128,14 +128,14 @@ teardown() {
   local before
   before="$(cat "${REPO}/graphify-out/graph.json")"
 
-  printf 'print(2)\n' >> "${REPO}/src/a.py"
+  printf 'print(2)\n' >>"${REPO}/src/a.py"
   SHIM_GRAPHIFY_UPDATE_CORRUPT=1 run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 1 ]
 
   local after
   after="$(cat "${REPO}/graphify-out/graph.json")"
   [ "$before" = "$after" ]
-  run python3 -m json.tool <<< "$after"
+  run python3 -m json.tool <<<"$after"
   [ "$status" -eq 0 ]
 }
 
@@ -144,7 +144,7 @@ teardown() {
   local before
   before="$(cat "${REPO}/graphify-out/graph.json")"
 
-  printf 'print(2)\n' >> "${REPO}/src/a.py"
+  printf 'print(2)\n' >>"${REPO}/src/a.py"
   SHIM_GRAPHIFY_UPDATE_FAIL=1 run "$OMES_BIN" graphify sync "$REPO" --yes --json
   [ "$status" -eq 1 ]
 

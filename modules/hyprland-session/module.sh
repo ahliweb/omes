@@ -121,7 +121,7 @@ _hs_write_wrapper() {
 
   omes_manage_path "$wrapper"
   mkdir -p "$(dirname "$wrapper")"
-  cat > "$wrapper" <<'EOF'
+  cat >"$wrapper" <<'EOF'
 #!/usr/bin/env bash
 # Managed by OMES (modules/hyprland-session) - do not edit by hand.
 # Sets the environment Hyprland and xdg-desktop-portal expect, then execs
@@ -156,7 +156,7 @@ _hs_write_session_file() {
     printf 'Exec=%s\n' "$wrapper"
     printf 'Type=Application\n'
     printf 'DesktopNames=Hyprland\n'
-  } > "$session"
+  } >"$session"
   chmod 644 "$session"
   log_info "hyprland-session: wrote session entry: ${session}"
 }
@@ -307,7 +307,7 @@ module_rollback() {
     local -a pkgs=()
     local old_ifs="$IFS"
     IFS=':'
-    read -r -a pkgs <<< "$installed"
+    read -r -a pkgs <<<"$installed"
     IFS="$old_ifs"
     log_warn "hyprland-session: OMES installed these packages and will not remove them automatically: ${pkgs[*]}"
     log_warn "hyprland-session: remove manually with: apt-get remove ${pkgs[*]}"

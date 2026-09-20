@@ -41,7 +41,9 @@ _agent_manifest_service_mode() {
     config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/omes"
   fi
   local manifest="${config_dir}/agents/${name}.json"
-  [[ -r "$manifest" ]] || { printf 'user\n'; return 0; }
+  [[ -r "$manifest" ]] || {
+    printf 'user\n'; return 0
+  }
   python3 -c '
 import json, sys
 try:
@@ -69,7 +71,9 @@ _agent_manifest_backend() {
     config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/omes"
   fi
   local manifest="${config_dir}/agents/${name}.json"
-  [[ -r "$manifest" ]] || { printf 'systemd\n'; return 0; }
+  [[ -r "$manifest" ]] || {
+    printf 'systemd\n'; return 0
+  }
   python3 -c '
 import json, sys
 try:
@@ -103,7 +107,9 @@ _agent_logs_compose() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --tail)
-        [[ $# -ge 2 ]] || { printf '[omes] --tail requires an argument\n' >&2; return 2; }
+        [[ $# -ge 2 ]] || {
+          printf '[omes] --tail requires an argument\n' >&2; return 2
+        }
         tail="$2"
         shift 2
         ;;

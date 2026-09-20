@@ -13,7 +13,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'sshd %s\n' "$*" >> "$SHIM_LOG"
+  printf 'sshd %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 case "${1:-}" in

@@ -141,7 +141,7 @@ teardown() {
 
 @test "hardening_check warns about browser incompatibility for strict when a browser is present" {
   mkdir -p "${OMES_TEST_TMPDIR}/bin"
-  cat > "${OMES_TEST_TMPDIR}/bin/chromium" <<'EOF'
+  cat >"${OMES_TEST_TMPDIR}/bin/chromium" <<'EOF'
 #!/usr/bin/env bash
 exit 0
 EOF
@@ -206,7 +206,7 @@ EOF
   dropin_dir="$(hardening_dropin_dir "user")"
   mkdir -p "$dropin_dir"
   path_dropin="${dropin_dir}/omes-path.conf"
-  printf '[Service]\nEnvironment=PATH=/x\n' > "$path_dropin"
+  printf '[Service]\nEnvironment=PATH=/x\n' >"$path_dropin"
 
   run hardening_apply "user" "${HOME}/.hermes"
   [ "$status" -eq 0 ]

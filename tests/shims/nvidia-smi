@@ -9,7 +9,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'nvidia-smi %s\n' "$*" >> "$SHIM_LOG"
+  printf 'nvidia-smi %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 printf '%s\n' "${SHIM_NVIDIA_DRIVER_VERSION:-555.42.02}"

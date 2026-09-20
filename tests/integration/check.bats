@@ -25,7 +25,7 @@ teardown() {
 _ubuntu_2404_fixture() {
   local path
   path="$(omes_fixture_path os-release)"
-  cat > "$path" <<'EOF'
+  cat >"$path" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -40,7 +40,7 @@ EOF
 _debian_12_fixture() {
   local path
   path="$(omes_fixture_path os-release)"
-  cat > "$path" <<'EOF'
+  cat >"$path" <<'EOF'
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 NAME="Debian GNU/Linux"
 VERSION_ID="12"
@@ -63,7 +63,7 @@ EOF
   osr="$(_ubuntu_2404_fixture)"
   OMES_OS_RELEASE_FILE="$osr" run "$OMES_BIN" check --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["exit_code"]==0; assert d["platform"]["tier"]=="tier1"' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["exit_code"]==0; assert d["platform"]["tier"]=="tier1"' <<<"$output"
   [ "$status" -eq 0 ]
 }
 

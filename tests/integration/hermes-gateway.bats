@@ -49,7 +49,7 @@ EOF
   # rationale/pattern.
   export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
   export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {

@@ -117,7 +117,7 @@ module_rollback() {
   local -a pkgs=()
   local old_ifs="$IFS"
   IFS=':'
-  read -r -a pkgs <<< "$installed"
+  read -r -a pkgs <<<"$installed"
   IFS="$old_ifs"
 
   log_warn "apt-base: OMES installed these packages and will not remove them automatically: ${pkgs[*]}"

@@ -281,7 +281,7 @@ _pkg_record_installed() {
     local -a existing_arr=()
     local old_ifs="$IFS"
     IFS=':'
-    read -r -a existing_arr <<< "$existing"
+    read -r -a existing_arr <<<"$existing"
     IFS="$old_ifs"
     for p in "${existing_arr[@]}"; do
       [[ -z "$p" ]] && continue
@@ -524,7 +524,7 @@ repo_add() {
     printf 'Suites: %s\n' "$suite"
     printf 'Components: %s\n' "$components"
     printf 'Signed-By: %s\n' "$signed_by"
-  } > "$tmp"
+  } >"$tmp"
   chmod 644 "$tmp"
   mv -f "$tmp" "$file"
   log_info "repo_add: wrote ${file}"

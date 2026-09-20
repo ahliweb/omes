@@ -47,7 +47,7 @@ teardown() {
 @test "runtime_describe hermes matches the contract fixture" {
   run runtime_describe hermes
   [ "$status" -eq 0 ]
-  echo "$output" > "${OMES_TEST_TMPDIR}/actual.json"
+  echo "$output" >"${OMES_TEST_TMPDIR}/actual.json"
   run python3 -c "
 import json, sys
 with open('${OMES_TEST_TMPDIR}/actual.json') as f:

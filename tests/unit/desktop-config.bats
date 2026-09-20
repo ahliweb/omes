@@ -65,7 +65,7 @@ teardown() {
 
 @test "module_apply backs up an existing differing hyprland.conf before replacing it, with --yes" {
   mkdir -p "${HOME}/.config/hypr"
-  printf '# my own custom config\n' > "${HOME}/.config/hypr/hyprland.conf"
+  printf '# my own custom config\n' >"${HOME}/.config/hypr/hyprland.conf"
 
   export OMES_NONINTERACTIVE=1
   backup_begin "desktop-config" "pre-apply" >/dev/null
@@ -89,7 +89,7 @@ teardown() {
 
 @test "module_apply skips an existing differing file without --yes and records it as skipped" {
   mkdir -p "${HOME}/.config/hypr"
-  printf '# my own custom config\n' > "${HOME}/.config/hypr/hyprland.conf"
+  printf '# my own custom config\n' >"${HOME}/.config/hypr/hyprland.conf"
 
   run module_apply
   [ "$status" -eq 0 ]

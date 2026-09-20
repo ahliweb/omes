@@ -48,7 +48,7 @@ EOF
   # install) remain valid.
   export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
   export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {
@@ -145,7 +145,7 @@ teardown() {
   mkdir -p "$work"
   cp -a "${OMES_TEST_ROOT}/bin" "${OMES_TEST_ROOT}/lib" "${OMES_TEST_ROOT}/profiles" "$work/"
   mkdir -p "${work}/modules/user-pre" "${work}/modules/root-leaf"
-  cat > "${work}/modules/user-pre/module.sh" <<'EOF2'
+  cat >"${work}/modules/user-pre/module.sh" <<'EOF2'
 MODULE_NAME="user-pre"
 MODULE_DESCRIPTION="user-scope preflight"
 MODULE_SCOPE="user"
@@ -155,7 +155,7 @@ module_apply() { echo "APPLY user-pre"; }
 module_verify() { :; }
 module_rollback() { :; }
 EOF2
-  cat > "${work}/modules/root-leaf/module.sh" <<'EOF2'
+  cat >"${work}/modules/root-leaf/module.sh" <<'EOF2'
 MODULE_NAME="root-leaf"
 MODULE_DESCRIPTION="root-scope module requiring user-pre"
 MODULE_SCOPE="root"

@@ -25,7 +25,7 @@ setup() {
   unset XDG_CONFIG_HOME || true
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Linux Mint 22"
 NAME="Linux Mint"
 VERSION_ID="22"
@@ -50,7 +50,7 @@ EOF
   export SHIM_ENABLED_SERVICES="lightdm"
 
   export OMES_CINNAMON_SESSION_FILE="${OMES_TEST_TMPDIR}/cinnamon.desktop"
-  printf '[Desktop Entry]\nName=Cinnamon\n' > "$OMES_CINNAMON_SESSION_FILE"
+  printf '[Desktop Entry]\nName=Cinnamon\n' >"$OMES_CINNAMON_SESSION_FILE"
 
   # hermes is commented out of profiles/desktop.profile by default, so it
   # never runs in this suite; SHIM_HERMES_VERSION is set defensively only
@@ -116,7 +116,7 @@ _cinnamon_untouched() {
 @test "install --profile desktop as (simulated) root is idempotent" {
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile desktop --yes
   [ "$status" -eq 0 ]
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   OMES_TEST=1 OMES_FAKE_ROOT=1 run "$OMES_BIN" install --profile desktop --yes
   [ "$status" -eq 0 ]

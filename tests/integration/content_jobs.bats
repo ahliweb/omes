@@ -14,7 +14,7 @@ setup() {
   # integration; #67 only needs the state machine + retry/reconcile CLI,
   # which this test exercises against a hand-seeded job record).
   mkdir -p "${CONTENT_ROOT}/state/jobs" "${CONTENT_ROOT}/processing/job1"
-  echo "tiny-media" > "${CONTENT_ROOT}/processing/job1/source.mp4"
+  echo "tiny-media" >"${CONTENT_ROOT}/processing/job1/source.mp4"
   PYTHONPATH="${OMES_TEST_ROOT}/lib/omes/py" python3 - "$CONTENT_ROOT" <<'PYEOF'
 import sys
 from content import jobs, paths

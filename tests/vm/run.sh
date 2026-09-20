@@ -95,7 +95,7 @@ DISK_GB="${OMES_VM_DISK_GB:-20}"
 VM_USER="omes"
 
 usage() {
-  cat << 'EOF'
+  cat <<'EOF'
 Usage: tests/vm/run.sh --image <ubuntu-24.04-cloud-image> [options]
 
 Options:
@@ -172,15 +172,15 @@ if [[ ! -r "$SSH_KEY" ]]; then
 fi
 
 for cmd in virt-install virsh qemu-img; do
-  command -v "$cmd" > /dev/null 2>&1 || {
+  command -v "$cmd" >/dev/null 2>&1 || {
     err "required command not found: ${cmd} (see this script's 'Requirements' comment)"
     exit 2
   }
 done
 SEED_TOOL=""
-if command -v cloud-localds > /dev/null 2>&1; then
+if command -v cloud-localds >/dev/null 2>&1; then
   SEED_TOOL="cloud-localds"
-elif command -v genisoimage > /dev/null 2>&1; then
+elif command -v genisoimage >/dev/null 2>&1; then
   SEED_TOOL="genisoimage"
 else
   err "neither cloud-localds nor genisoimage found (install cloud-image-utils or genisoimage)"
@@ -197,8 +197,8 @@ SEED="${WORKDIR}/seed.iso"
 cleanup() {
   local rc=$?
   if [[ "$KEEP" != "1" ]]; then
-    virsh destroy "$VM_NAME" > /dev/null 2>&1 || true
-    virsh undefine "$VM_NAME" --nvram > /dev/null 2>&1 || true
+    virsh destroy "$VM_NAME" >/dev/null 2>&1 || true
+    virsh undefine "$VM_NAME" --nvram >/dev/null 2>&1 || true
     rm -rf "$WORKDIR"
   else
     log "kept: VM '${VM_NAME}' and workdir ${WORKDIR} (use --keep intentionally, remember to clean up)"
@@ -216,21 +216,21 @@ log "building disk (copy-on-write over ${IMAGE})"
 qemu-img create -f qcow2 -F qcow2 -b "$IMAGE" "$DISK" "${DISK_GB}G" \
   | tee -a "${EVIDENCE_DIR}/00-qemu-img.log"
 
-SSH_PUBKEY_CONTENT="$(tr -d '\n' < "$SSH_KEY")"
+SSH_PUBKEY_CONTENT="$(tr -d '\n' <"$SSH_KEY")"
 USER_DATA="${WORKDIR}/user-data"
 META_DATA="${WORKDIR}/meta-data"
 sed -e "s#__OMES_VM_USER__#${VM_USER}#g" \
   -e "s#__OMES_VM_SSH_PUBKEY__#${SSH_PUBKEY_CONTENT}#g" \
-  "${VMDIR}/cloud-init/user-data.tmpl" > "$USER_DATA"
+  "${VMDIR}/cloud-init/user-data.tmpl" >"$USER_DATA"
 sed -e "s#__OMES_VM_NAME__#${VM_NAME}#g" \
-  "${VMDIR}/cloud-init/meta-data.tmpl" > "$META_DATA"
+  "${VMDIR}/cloud-init/meta-data.tmpl" >"$META_DATA"
 
 log "building cloud-init seed ISO (${SEED_TOOL})"
 if [[ "$SEED_TOOL" == "cloud-localds" ]]; then
   cloud-localds "$SEED" "$USER_DATA" "$META_DATA"
 else
   genisoimage -output "$SEED" -volid cidata -joliet -rock "$USER_DATA" "$META_DATA" \
-    > "${EVIDENCE_DIR}/00-genisoimage.log" 2>&1
+    >"${EVIDENCE_DIR}/00-genisoimage.log" 2>&1
 fi
 
 # ---------------------------------------------------------------------------
@@ -266,7 +266,7 @@ virt-install "${VIRT_INSTALL_ARGS[@]}" | tee -a "${EVIDENCE_DIR}/01-virt-install
 log "waiting for the guest to acquire a DHCP lease"
 GUEST_IP=""
 for _ in $(seq 1 60); do
-  GUEST_IP="$(virsh domifaddr "$VM_NAME" 2> /dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1 | head -n1)"
+  GUEST_IP="$(virsh domifaddr "$VM_NAME" 2>/dev/null | awk '/ipv4/ {print $4}' | cut -d/ -f1 | head -n1)"
   [[ -n "$GUEST_IP" ]] && break
   sleep 5
 done
@@ -282,7 +282,7 @@ SCP=(scp -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectT
 log "waiting for SSH and cloud-init to finish"
 SSH_UP=0
 for _ in $(seq 1 60); do
-  if "${SSH[@]}" -o BatchMode=yes true 2> /dev/null; then
+  if "${SSH[@]}" -o BatchMode=yes true 2>/dev/null; then
     SSH_UP=1
     break
   fi
@@ -331,7 +331,7 @@ log "waiting for the guest to go down, then come back up"
 sleep 10
 SSH_UP=0
 for _ in $(seq 1 60); do
-  if "${SSH[@]}" -o BatchMode=yes true 2> /dev/null; then
+  if "${SSH[@]}" -o BatchMode=yes true 2>/dev/null; then
     SSH_UP=1
     break
   fi
@@ -349,25 +349,25 @@ log "guest is back up after a real reboot"
 HERMES_OK=1
 if [[ "${OMES_VM_SKIP_HERMES:-0}" != "1" ]]; then
   log "asserting hermes is present and the gateway unit is enabled after reboot"
-  if ! "${SSH[@]}" 'command -v hermes' > "${EVIDENCE_DIR}/08-hermes-present.log" 2>&1; then
+  if ! "${SSH[@]}" 'command -v hermes' >"${EVIDENCE_DIR}/08-hermes-present.log" 2>&1; then
     HERMES_OK=0
     err "hermes binary not found on PATH after reboot"
   fi
   if ! "${SSH[@]}" 'systemctl --user is-enabled hermes-gateway 2>/dev/null || sudo systemctl is-enabled hermes-gateway' \
-    > "${EVIDENCE_DIR}/09-hermes-gateway-enabled.log" 2>&1; then
+    >"${EVIDENCE_DIR}/09-hermes-gateway-enabled.log" 2>&1; then
     HERMES_OK=0
     err "hermes-gateway unit is not enabled after reboot"
   fi
 fi
 
 "${SSH[@]}" 'sudo journalctl -u hermes-gateway --no-pager -n 200 2>/dev/null; journalctl --user -u hermes-gateway --no-pager -n 200 2>/dev/null' \
-  > "${EVIDENCE_DIR}/10-journal-hermes-gateway.log" 2>&1 || true
+  >"${EVIDENCE_DIR}/10-journal-hermes-gateway.log" 2>&1 || true
 
 # ---------------------------------------------------------------------------
 # 6. Evidence bundle: sha256sum of everything collected.
 # ---------------------------------------------------------------------------
 
-(cd "$EVIDENCE_DIR" && sha256sum -- * > SHA256SUMS 2> /dev/null || true)
+(cd "$EVIDENCE_DIR" && sha256sum -- * >SHA256SUMS 2>/dev/null || true)
 log "evidence bundle: ${EVIDENCE_DIR}"
 
 if [[ "$HERMES_OK" != "1" ]]; then

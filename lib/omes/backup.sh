@@ -51,7 +51,7 @@ backup_begin() {
   mkdir -p "$backup_dir"
   chmod 700 "$backup_dir"
 
-  : > "${backup_dir}/MANIFEST"
+  : >"${backup_dir}/MANIFEST"
   chmod 600 "${backup_dir}/MANIFEST"
 
   {
@@ -59,7 +59,7 @@ backup_begin() {
     printf 'module=%s\n' "$module"
     printf 'reason=%s\n' "$reason"
     printf 'started_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-  } > "${backup_dir}/META"
+  } >"${backup_dir}/META"
   chmod 600 "${backup_dir}/META"
 
   OMES_CURRENT_BACKUP_DIR="$backup_dir"
@@ -102,7 +102,7 @@ backup_path() {
     while IFS= read -r -d '' f; do
       relf="${f#/}"
       sum="$(sha256sum "$f" | awk '{print $1}')"
-      printf '%s  %s\n' "$sum" "$relf" >> "${OMES_CURRENT_BACKUP_DIR}/MANIFEST"
+      printf '%s  %s\n' "$sum" "$relf" >>"${OMES_CURRENT_BACKUP_DIR}/MANIFEST"
     done < <(find "$abs" -type f -print0)
   else
     if [[ "$base" == ".env" ]]; then
@@ -110,7 +110,7 @@ backup_path() {
     fi
     local sum
     sum="$(sha256sum "$abs" | awk '{print $1}')"
-    printf '%s  %s\n' "$sum" "$rel" >> "${OMES_CURRENT_BACKUP_DIR}/MANIFEST"
+    printf '%s  %s\n' "$sum" "$rel" >>"${OMES_CURRENT_BACKUP_DIR}/MANIFEST"
   fi
 }
 
@@ -138,9 +138,9 @@ backup_finish() {
     return 0
   fi
   local dir="$OMES_CURRENT_BACKUP_DIR"
-  printf 'finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "${dir}/META"
+  printf 'finished_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >>"${dir}/META"
 
-  : > "${dir}/.finished"
+  : >"${dir}/.finished"
   chmod 600 "${dir}/.finished"
 
   OMES_LAST_BACKUP_ID="$(basename "$dir")"
@@ -185,7 +185,7 @@ backup_prune() {
   done < <(backup_list)
 
   local total="${#backups[@]}"
-  if (( total <= keep )); then
+  if ((total <= keep)); then
     return 0
   fi
 

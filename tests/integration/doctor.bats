@@ -7,7 +7,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" <<'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -23,7 +23,7 @@ EOF
   # rationale/pattern.
   export OMES_ETC_DIR="${OMES_TEST_TMPDIR}/etc"
   export SHIM_UFW_STATE_FILE="${OMES_TEST_TMPDIR}/ufw-state"
-  printf 'ufw\nunattended-upgrades\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'ufw\nunattended-upgrades\n' >>"$SHIM_INSTALLED_PKGS_FILE"
 }
 
 teardown() {
@@ -47,14 +47,14 @@ d=json.loads(sys.stdin.read())
 assert d["command"]=="doctor"
 assert d["ok"] is True
 assert any(c["name"]=="platform" and c["level"]=="OK" for c in d["checks"])
-assert all(c["level"] in ("OK","WARN","FAIL") for c in d["checks"])' <<< "$output"
+assert all(c["level"] in ("OK","WARN","FAIL") for c in d["checks"])' <<<"$output"
   [ "$status" -eq 0 ]
 }
 
 @test "doctor on an unsupported platform reports platform FAIL and exits non-zero" {
   local debian_osr
   debian_osr="$(omes_fixture_path os-release-debian)"
-  cat > "$debian_osr" <<'EOF'
+  cat >"$debian_osr" <<'EOF'
 PRETTY_NAME="Debian GNU/Linux 12 (bookworm)"
 NAME="Debian GNU/Linux"
 VERSION_ID="12"
@@ -71,7 +71,7 @@ EOF
   {
     printf 'module.ghost.status=applied\n'
     printf 'module.ghost.managed_paths=\n'
-  } >> "${OMES_STATE_DIR}/state"
+  } >>"${OMES_STATE_DIR}/state"
 
   run "$OMES_BIN" doctor
   [ "$status" -eq 0 ]

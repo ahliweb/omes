@@ -25,7 +25,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'curl %s\n' "$*" >> "$SHIM_LOG"
+  printf 'curl %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 # `curl -K <config>` form (lib/omes/py/content/telegram.py's token-handling
@@ -54,7 +54,7 @@ if [[ -n "$out" ]]; then
   if [[ -n "${SHIM_CURL_OUTPUT_FILE:-}" ]] && [[ -r "${SHIM_CURL_OUTPUT_FILE}" ]]; then
     cp "${SHIM_CURL_OUTPUT_FILE}" "$out"
   else
-    printf '#!/usr/bin/env bash\nexit 0\n' > "$out"
+    printf '#!/usr/bin/env bash\nexit 0\n' >"$out"
   fi
 fi
 

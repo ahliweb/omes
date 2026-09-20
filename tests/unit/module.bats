@@ -96,7 +96,7 @@ teardown() {
 @test "module_load dies with a usage error when required metadata is missing" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules/broken-meta"
   mkdir -p "$dir"
-  cat > "${dir}/module.sh" <<'EOF'
+  cat >"${dir}/module.sh" <<'EOF'
 #!/usr/bin/env bash
 MODULE_NAME="broken-meta"
 MODULE_SCOPE="root"
@@ -120,7 +120,7 @@ EOF
 @test "module_load dies with a usage error when a required function is missing" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules/broken-func"
   mkdir -p "$dir"
-  cat > "${dir}/module.sh" <<'EOF'
+  cat >"${dir}/module.sh" <<'EOF'
 #!/usr/bin/env bash
 MODULE_NAME="broken-func"
 MODULE_DESCRIPTION="missing module_verify"
@@ -144,7 +144,7 @@ EOF
 @test "module_load rejects an invalid MODULE_SCOPE" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules/bad-scope"
   mkdir -p "$dir"
-  cat > "${dir}/module.sh" <<'EOF'
+  cat >"${dir}/module.sh" <<'EOF'
 #!/usr/bin/env bash
 MODULE_NAME="bad-scope"
 MODULE_DESCRIPTION="invalid scope"
@@ -171,7 +171,7 @@ EOF
 @test "module_filter_by_scope keeps only current-scope modules as non-root" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules"
   mkdir -p "${dir}/root-mod" "${dir}/user-mod"
-  cat > "${dir}/root-mod/module.sh" <<'EOF'
+  cat >"${dir}/root-mod/module.sh" <<'EOF'
 MODULE_NAME="root-mod"
 MODULE_DESCRIPTION="root scope"
 MODULE_SCOPE="root"
@@ -181,7 +181,7 @@ module_apply() { :; }
 module_verify() { :; }
 module_rollback() { :; }
 EOF
-  cat > "${dir}/user-mod/module.sh" <<'EOF'
+  cat >"${dir}/user-mod/module.sh" <<'EOF'
 MODULE_NAME="user-mod"
 MODULE_DESCRIPTION="user scope"
 MODULE_SCOPE="user"
@@ -206,7 +206,7 @@ EOF
 @test "module_other_scope_modules reports the mismatched-scope modules" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules"
   mkdir -p "${dir}/root-mod" "${dir}/user-mod"
-  cat > "${dir}/root-mod/module.sh" <<'EOF'
+  cat >"${dir}/root-mod/module.sh" <<'EOF'
 MODULE_NAME="root-mod"
 MODULE_DESCRIPTION="root scope"
 MODULE_SCOPE="root"
@@ -216,7 +216,7 @@ module_apply() { :; }
 module_verify() { :; }
 module_rollback() { :; }
 EOF
-  cat > "${dir}/user-mod/module.sh" <<'EOF'
+  cat >"${dir}/user-mod/module.sh" <<'EOF'
 MODULE_NAME="user-mod"
 MODULE_DESCRIPTION="user scope"
 MODULE_SCOPE="user"
@@ -243,7 +243,7 @@ EOF
 @test "run_apply maps a module_apply return of exactly OMES_EX_NETWORK to process exit 8" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules/net-mod"
   mkdir -p "$dir"
-  cat > "${dir}/module.sh" <<'EOF'
+  cat >"${dir}/module.sh" <<'EOF'
 MODULE_NAME="net-mod"
 MODULE_DESCRIPTION="returns the network sentinel from module_apply"
 MODULE_SCOPE="root"
@@ -268,7 +268,7 @@ EOF
 @test "run_apply maps any other module_apply failure to process exit 6" {
   local dir="${OMES_TEST_TMPDIR}/modroot/modules/fail-mod"
   mkdir -p "$dir"
-  cat > "${dir}/module.sh" <<'EOF'
+  cat >"${dir}/module.sh" <<'EOF'
 MODULE_NAME="fail-mod"
 MODULE_DESCRIPTION="returns a generic failure from module_apply"
 MODULE_SCOPE="root"

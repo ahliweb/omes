@@ -18,10 +18,10 @@ omes_test_setup() {
   mkdir -p "$OMES_STATE_DIR"
 
   export SHIM_LOG="${OMES_TEST_TMPDIR}/shim.log"
-  : > "$SHIM_LOG"
+  : >"$SHIM_LOG"
 
   export SHIM_INSTALLED_PKGS_FILE="${OMES_TEST_TMPDIR}/installed-pkgs.txt"
-  : > "$SHIM_INSTALLED_PKGS_FILE"
+  : >"$SHIM_INSTALLED_PKGS_FILE"
 
   export PATH="${OMES_TEST_ROOT}/tests/shims:${PATH}"
 

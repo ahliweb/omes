@@ -35,7 +35,7 @@ setup() {
     printf -- '-----BEGIN PGP PUBLIC KEY BLOCK-----\n\n'
     printf 'mQINBFit2ioBEADhWpZ8/wvZ6hUTiXOwQHXMAlaFHcPH9hAtr4F1y2+OQ0OF\n'
     printf -- '-----END PGP PUBLIC KEY BLOCK-----\n'
-  } > "$PEM_FIXTURE"
+  } >"$PEM_FIXTURE"
   export SHIM_CURL_OUTPUT_FILE="$PEM_FIXTURE"
 
   # shellcheck source=../../lib/omes/core.sh
@@ -129,7 +129,7 @@ teardown() {
 }
 
 @test "module_apply refuses to install a key that is not ASCII-armored/PEM" {
-  printf 'not a real key\n' > "$PEM_FIXTURE"
+  printf 'not a real key\n' >"$PEM_FIXTURE"
   run module_apply
   [ "$status" -ne 0 ]
   [[ "$output" == *"does not look like an ASCII-armored"* ]]
@@ -234,7 +234,7 @@ assert d["package_manager"]["name"] == "apt"
 @test "rootless: satisfied prerequisites install docker-ce-rootless-extras and print the user-level setup command" {
   export SUDO_USER=alice
   export OMES_DOCKER_ROOTLESS=1
-  printf 'uidmap\ndbus-user-session\n' >> "$SHIM_INSTALLED_PKGS_FILE"
+  printf 'uidmap\ndbus-user-session\n' >>"$SHIM_INSTALLED_PKGS_FILE"
   export SHIM_GETENT_SUBUID_USERS=alice
   export SHIM_GETENT_SUBGID_USERS=alice
   export SHIM_LOGINCTL_KNOWN_USERS=alice

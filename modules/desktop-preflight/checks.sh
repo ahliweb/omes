@@ -305,7 +305,7 @@ _dp_gpu_vendor() {
 
   case "$line" in
     *[Ii]ntel*) printf 'intel\n' ;;
-    *"Advanced Micro Devices"* | *AMD* | *ATI* ) printf 'amd\n' ;;
+    *"Advanced Micro Devices"* | *AMD* | *ATI*) printf 'amd\n' ;;
     *NVIDIA*) printf 'nvidia\n' ;;
     *[Vv]irtio* | *QXL* | *"VMware SVGA"*) printf 'virtio\n' ;;
     *) printf 'unknown\n' ;;
@@ -335,7 +335,7 @@ _dp_nvidia_modeset_enabled() {
   fi
   if [[ -r "$param_file" ]]; then
     local val
-    val="$(tr -d '[:space:]' < "$param_file" 2>/dev/null || true)"
+    val="$(tr -d '[:space:]' <"$param_file" 2>/dev/null || true)"
     [[ "$val" == "Y" ]] && return 0
   fi
   return 1

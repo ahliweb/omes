@@ -21,7 +21,7 @@ teardown() {
 @test "omes modules --json is valid JSON" {
   run "$OMES_BIN" modules --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert any(m["name"]=="apt-base" for m in d["modules"])' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert any(m["name"]=="apt-base" for m in d["modules"])' <<<"$output"
   [ "$status" -eq 0 ]
 }
 
@@ -34,7 +34,7 @@ teardown() {
 @test "omes status --json is valid JSON" {
   run "$OMES_BIN" status --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="status"; assert d["modules"]==[]' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="status"; assert d["modules"]==[]' <<<"$output"
   [ "$status" -eq 0 ]
 }
 
@@ -59,7 +59,7 @@ assert "omes" in evidence["components"]
 @test "omes status (human mode) prints an evidence summary and never a secret canary from .env" {
   local home="${OMES_TEST_TMPDIR}/hermes-home"
   mkdir -p "$home"
-  printf 'TELEGRAM_BOT_TOKEN=canary-should-never-appear\n' > "${home}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=canary-should-never-appear\n' >"${home}/.env"
   chmod 600 "${home}/.env"
   export OMES_HERMES_HOME="$home"
 

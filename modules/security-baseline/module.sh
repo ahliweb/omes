@@ -134,7 +134,7 @@ _security_sshd_port() {
     # match itself succeeded - see the identical fix in module_doctor.
     local sshd_out
     sshd_out="$(sshd -T 2>/dev/null || true)"
-    port="$(awk 'tolower($1)=="port"{print $2; exit}' <<< "$sshd_out")"
+    port="$(awk 'tolower($1)=="port"{print $2; exit}' <<<"$sshd_out")"
   fi
   if [[ -z "$port" ]]; then
     local cfg
@@ -246,7 +246,7 @@ _security_write_if_changed() {
 
   mkdir -p "$(dirname "$path")"
   omes_manage_path "$path"
-  printf '%s\n' "$content" > "$path"
+  printf '%s\n' "$content" >"$path"
   chmod 644 "$path"
   log_info "security-baseline: wrote ${path}"
   return 0

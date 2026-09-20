@@ -102,8 +102,8 @@ DEFAULT_SCENARIOS="fresh rerun offline partial-failure reboot rollback dr"
 # IFS is scoped to just this `read`, not the global $'\n\t' set above: the
 # global IFS deliberately excludes a plain space (standard hardening), but
 # these two lists are plain space-separated words and must split on it.
-IFS=' ' read -r -a MATRIX_IMAGES <<< "${OMES_MATRIX_IMAGES:-$DEFAULT_IMAGES}"
-IFS=' ' read -r -a MATRIX_SCENARIOS <<< "${OMES_MATRIX_SCENARIOS:-$DEFAULT_SCENARIOS}"
+IFS=' ' read -r -a MATRIX_IMAGES <<<"${OMES_MATRIX_IMAGES:-$DEFAULT_IMAGES}"
+IFS=' ' read -r -a MATRIX_SCENARIOS <<<"${OMES_MATRIX_SCENARIOS:-$DEFAULT_SCENARIOS}"
 
 # image_tier <image> - per docs/compatibility-matrix.md section 1/2. A
 # custom image not in this table is treated as tier3 (advisory), never
@@ -161,7 +161,7 @@ write_result() {
     printf '"tier":"%s",' "$(image_tier "$image")"
     printf '"notes":"%s"' "$(json_escape "$notes")"
     printf '}\n'
-  } > "$out"
+  } >"$out"
 
   local tier
   tier="$(image_tier "$image")"
@@ -196,10 +196,10 @@ mx_start() {
   docker run -d --rm=false --name "$name" \
     -v "${ROOT}:/omes:ro" \
     "$@" \
-    "$image" sleep infinity > /dev/null
+    "$image" sleep infinity >/dev/null
   local attempt
   for attempt in 1 2 3; do
-    if docker exec "$name" apt-get update -qq > /dev/null 2>&1; then
+    if docker exec "$name" apt-get update -qq >/dev/null 2>&1; then
       return 0
     fi
     log "apt-get update attempt ${attempt}/3 failed inside ${name} (${image}), retrying"
@@ -226,10 +226,10 @@ mx_exec() {
 
   {
     printf '\n+++ exec %s\n' "$*"
-  } >> "$logfile"
+  } >>"$logfile"
   local rc=0
-  docker exec "${envargs[@]}" "$container" "$@" >> "$logfile" 2>&1 || rc=$?
-  printf '(exit %s)\n' "$rc" >> "$logfile"
+  docker exec "${envargs[@]}" "$container" "$@" >>"$logfile" 2>&1 || rc=$?
+  printf '(exit %s)\n' "$rc" >>"$logfile"
   return "$rc"
 }
 
@@ -247,12 +247,12 @@ mx_json() {
     shift
   done
   [[ "${1:-}" == "--" ]] && shift
-  docker exec "${envargs[@]}" "$container" "$@" 2> /dev/null
+  docker exec "${envargs[@]}" "$container" "$@" 2>/dev/null
 }
 
 mx_stop() {
   local name="$1"
-  docker rm -f "$name" > /dev/null 2>&1 || true
+  docker rm -f "$name" >/dev/null 2>&1 || true
 }
 
 # ---------------------------------------------------------------------------
@@ -267,7 +267,7 @@ scenario_fresh() {
   local scenario="fresh"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 rc=0 notes=""
@@ -276,7 +276,7 @@ scenario_fresh() {
   check_json="$(mx_json "$container" -- /omes/bin/omes check --json)" || rc=$?
   {
     printf '\n+++ check --json\n%s\n(exit %s)\n' "$check_json" "$rc"
-  } >> "$logfile"
+  } >>"$logfile"
   if [[ "$rc" != "0" ]] && [[ "$rc" != "3" ]]; then
     ok=0
     notes="check --json exited ${rc} (expected 0 or 3 per tier)"
@@ -291,7 +291,7 @@ scenario_fresh() {
     notes="${notes:+$notes; }dry-run install of apt-base (sudo-less root) failed"
   fi
   if ! mx_exec "$container" "$logfile" -- /omes/bin/omes install --profile server --dry-run --yes; then
-    printf '\n(full-profile dry-run exited non-zero in a container: recorded, not gating; systemd-dependent modules are proven in tests/vm)\n' >> "$logfile"
+    printf '\n(full-profile dry-run exited non-zero in a container: recorded, not gating; systemd-dependent modules are proven in tests/vm)\n' >>"$logfile"
   fi
 
   if ! mx_exec "$container" "$logfile" -- /omes/bin/omes install --module apt-base --yes; then
@@ -300,7 +300,7 @@ scenario_fresh() {
     rc=1
   fi
 
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -319,7 +319,7 @@ scenario_rerun() {
   local scenario="rerun"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 rc=0 notes=""
@@ -349,7 +349,7 @@ scenario_rerun() {
     notes="${notes:+$notes; }applied_at changed on a no-op rerun (before=${before_ts} after=${after_ts})"
   fi
 
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -364,7 +364,7 @@ scenario_offline() {
   local scenario="offline"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 rc=0 notes=""
@@ -405,7 +405,7 @@ scenario_offline() {
 
   local rc=0
   [[ "$ok" == "1" ]] || rc=1
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -424,7 +424,7 @@ scenario_partial_failure() {
   local scenario="partial-failure"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 notes=""
@@ -451,7 +451,7 @@ scenario_partial_failure() {
   local status_json
   status_json="$(mx_json "$name" -- /omes/bin/omes status --json)"
   local applied
-  applied="$(printf '%s\n' "$status_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for x in d["modules"] if x["name"]=="apt-base" and x["status"]=="applied"]; print("yes" if m else "no")' 2> /dev/null || echo "error")"
+  applied="$(printf '%s\n' "$status_json" | python3 -c 'import json,sys; d=json.load(sys.stdin); m=[x for x in d["modules"] if x["name"]=="apt-base" and x["status"]=="applied"]; print("yes" if m else "no")' 2>/dev/null || echo "error")"
   if [[ "$applied" == "yes" ]]; then
     ok=0
     notes="${notes:+$notes; }apt-base was recorded as applied despite the failed install"
@@ -461,7 +461,7 @@ scenario_partial_failure() {
 
   local rc=0
   [[ "$ok" == "1" ]] || rc=1
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -476,7 +476,7 @@ scenario_reboot() {
   local scenario="reboot"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 notes=""
@@ -485,7 +485,7 @@ scenario_reboot() {
     printf '\n+++ docker stop/start %s (simulated reboot; see header note)\n' "$container"
     docker stop "$container" || true
     docker start "$container" || true
-  } >> "$logfile" 2>&1
+  } >>"$logfile" 2>&1
   # Give the container a moment to be exec-ready again.
   sleep 1
 
@@ -504,7 +504,7 @@ scenario_reboot() {
 
   local rc=0
   [[ "$ok" == "1" ]] || rc=1
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" \
     "${notes:-container stop/start only - NOT a real reboot; systemd unit re-enablement is not exercised here, see tests/vm/}"
   [[ "$ok" == "1" ]]
@@ -521,7 +521,7 @@ scenario_rollback() {
   local scenario="rollback"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 notes=""
@@ -563,7 +563,7 @@ scenario_rollback() {
   fi
 
   local restored
-  restored="$(mx_json "$container" -- cat "$target" 2> /dev/null || true)"
+  restored="$(mx_json "$container" -- cat "$target" 2>/dev/null || true)"
   if [[ "$(printf '%s' "$restored" | tr -d '[:space:]')" != "original-content" ]]; then
     ok=0
     notes="${notes:+$notes; }restored content mismatch (got: ${restored})"
@@ -590,7 +590,7 @@ scenario_rollback() {
 
   local rc=0
   [[ "$ok" == "1" ]] || rc=1
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -609,7 +609,7 @@ scenario_dr() {
   local scenario="dr"
   local logfile
   logfile="${LOGS_DIR}/$(safe_name "$image")-${scenario}.log"
-  : > "$logfile"
+  : >"$logfile"
   local start
   start="$(date +%s)"
   local ok=1 notes=""
@@ -639,8 +639,8 @@ scenario_dr() {
   # Resolve the just-created session's timestamp the same way an operator
   # would: omes restore --list --json, picking the reason=matrix-dr-test entry.
   local ts
-  ts="$(mx_json "$container" -- /omes/bin/omes restore --list --json 2> /dev/null \
-    | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); ms=[b["timestamp"] for b in d["backups"] if b["reason"]=="matrix-dr-test"]; print(ms[-1] if ms else "")' 2> /dev/null || true)"
+  ts="$(mx_json "$container" -- /omes/bin/omes restore --list --json 2>/dev/null \
+    | python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); ms=[b["timestamp"] for b in d["backups"] if b["reason"]=="matrix-dr-test"]; print(ms[-1] if ms else "")' 2>/dev/null || true)"
   if [[ -z "$ts" ]]; then
     ok=0
     notes="${notes:+$notes; }could not resolve the matrix-dr-test backup session's timestamp"
@@ -658,7 +658,7 @@ scenario_dr() {
       notes="${notes:+$notes; }restore failed with a corrupted state file"
     fi
     local restored
-    restored="$(mx_json "$container" -- cat "$target" 2> /dev/null || true)"
+    restored="$(mx_json "$container" -- cat "$target" 2>/dev/null || true)"
     if [[ "$(printf '%s' "$restored" | tr -d '[:space:]')" != "dr-original-content" ]]; then
       ok=0
       notes="${notes:+$notes; }restore-with-corrupted-state-file did not repair the file (got: ${restored})"
@@ -678,7 +678,7 @@ scenario_dr() {
 
   local rc=0
   [[ "$ok" == "1" ]] || rc=1
-  local dur=$(( $(date +%s) - start ))
+  local dur=$(($(date +%s) - start))
   write_result "$image" "$scenario" "$rc" "$ok" "$dur" "$logfile" "$notes"
   [[ "$ok" == "1" ]]
 }
@@ -741,11 +741,11 @@ run_image() {
 # ---------------------------------------------------------------------------
 
 main() {
-  command -v docker > /dev/null 2>&1 || {
+  command -v docker >/dev/null 2>&1 || {
     err "docker is required to run the container test matrix"
     exit 1
   }
-  command -v python3 > /dev/null 2>&1 || {
+  command -v python3 >/dev/null 2>&1 || {
     err "python3 is required (used for JSON assertions)"
     exit 1
   }
@@ -759,7 +759,7 @@ main() {
   printf '%-30s %-16s %-6s %-6s %-6s %s\n' "IMAGE" "SCENARIO" "TIER" "OK" "EXIT" "DURATION"
   local row image_c scenario_c tier_c ok_c exit_c dur_c
   for row in "${RESULT_ROWS[@]}"; do
-    IFS='|' read -r image_c scenario_c tier_c ok_c exit_c dur_c <<< "$row"
+    IFS='|' read -r image_c scenario_c tier_c ok_c exit_c dur_c <<<"$row"
     printf '%-30s %-16s %-6s %-6s %-6s %s\n' "$image_c" "$scenario_c" "$tier_c" "$ok_c" "$exit_c" "$dur_c"
   done
 

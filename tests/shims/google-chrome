@@ -11,7 +11,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'google-chrome %s\n' "$*" >> "$SHIM_LOG"
+  printf 'google-chrome %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 case "${1:-}" in

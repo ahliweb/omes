@@ -649,7 +649,7 @@ cmd_backup() {
     local -a mod_paths=()
     old_ifs="$IFS"
     IFS=':'
-    read -r -a mod_paths <<< "$paths_str"
+    read -r -a mod_paths <<<"$paths_str"
     IFS="$old_ifs"
     all_paths+=("${mod_paths[@]}")
   done
@@ -775,7 +775,7 @@ _omes_uninstall_report_packages() {
   local -a pkgs=()
   local old_ifs="$IFS"
   IFS=':'
-  read -r -a pkgs <<< "$installed"
+  read -r -a pkgs <<<"$installed"
   IFS="$old_ifs"
 
   log_info "uninstall: '${mod}' installed these packages (kept unless --purge-packages): ${pkgs[*]}"
@@ -800,7 +800,7 @@ _omes_uninstall_handle_packages() {
   local -a pkgs=()
   local old_ifs="$IFS"
   IFS=':'
-  read -r -a pkgs <<< "$installed"
+  read -r -a pkgs <<<"$installed"
   IFS="$old_ifs"
 
   if ! DEBIAN_FRONTEND=noninteractive omes_run apt-get remove -y "${pkgs[@]}"; then
@@ -1121,7 +1121,7 @@ for a in data.get("agents", []):
           while IFS=$'\t' read -r level name detail; do
             [[ -n "$name" ]] || continue
             _doctor_check "agent:${name}" "$level" "$detail"
-          done <<< "$agent_rows"
+          done <<<"$agent_rows"
         fi
       fi
     fi

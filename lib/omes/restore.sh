@@ -89,7 +89,7 @@ backup_manifest_validate() {
       log_error "restore: MANIFEST is corrupt (malformed line): ${manifest}"
       return 1
     fi
-  done < "$manifest"
+  done <"$manifest"
 
   return 0
 }
@@ -171,7 +171,7 @@ restore_backup() {
   # longer append into the very manifest being restored from - but
   # snapshotting first removes any dependency on that invariant holding
   # for every current and future caller (#129).
-  mapfile -t manifest_lines < "$manifest"
+  mapfile -t manifest_lines <"$manifest"
   local line sha rel path src actual
 
   for line in "${manifest_lines[@]}"; do
@@ -264,7 +264,7 @@ _restore_find_oldest_backup_for_path() {
         printf '%s\n' "$entry"
         return 0
       fi
-    done < "$manifest"
+    done <"$manifest"
   done < <(backup_list)
 
   return 1
@@ -293,7 +293,7 @@ _restore_copy_one() {
       expected="${line%%  *}"
       break
     fi
-  done < "$manifest"
+  done <"$manifest"
 
   if [[ -z "$expected" ]]; then
     log_error "uninstall: no MANIFEST entry for: ${path} (in ${manifest})"
@@ -330,7 +330,7 @@ module_rollback_managed_paths() {
   local -a paths=()
   local old_ifs="$IFS"
   IFS=':'
-  read -r -a paths <<< "$raw"
+  read -r -a paths <<<"$raw"
   IFS="$old_ifs"
 
   local p src_dir

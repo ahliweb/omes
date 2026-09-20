@@ -20,12 +20,12 @@ teardown() {
 
 @test "a duplicate inbox file is recorded, not republished" {
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "identical bytes" > "${CONTENT_ROOT}/inbox/first.mp4"
+  echo "identical bytes" >"${CONTENT_ROOT}/inbox/first.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   ORIGINAL_JOB="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
 
   sleep 1.1
-  echo "identical bytes" > "${CONTENT_ROOT}/inbox/second.mp4"
+  echo "identical bytes" >"${CONTENT_ROOT}/inbox/second.mp4"
   run "$OMES_BIN" content scan --json --settle-seconds 0
   [ "$status" -eq 0 ]
   [[ "$output" == *'"created": []'* ]]
@@ -38,7 +38,7 @@ teardown() {
 
 @test "artifact tampering between approval and publish forces manual-review" {
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "tiny-media" > "${CONTENT_ROOT}/inbox/clip.mp4"
+  echo "tiny-media" >"${CONTENT_ROOT}/inbox/clip.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   JOB_ID="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
   "$OMES_BIN" content plan "$JOB_ID" --actor alice --caption "hi" --target generic_browser >/dev/null
@@ -64,7 +64,7 @@ PYEOF
 
 @test "cancel is auditable and archives a non-terminal job" {
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "tiny-media" > "${CONTENT_ROOT}/inbox/clip.mp4"
+  echo "tiny-media" >"${CONTENT_ROOT}/inbox/clip.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   JOB_ID="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
   "$OMES_BIN" content plan "$JOB_ID" --actor alice --caption "hi" --target generic_browser >/dev/null
@@ -78,14 +78,14 @@ PYEOF
 
 @test "a partial platform failure on one job never touches another job's evidence" {
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "ok bytes" > "${CONTENT_ROOT}/inbox/ok.mp4"
+  echo "ok bytes" >"${CONTENT_ROOT}/inbox/ok.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   OK_JOB="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
   "$OMES_BIN" content plan "$OK_JOB" --actor alice --caption "hi" --target generic_browser >/dev/null
   "$OMES_BIN" content approve "$OK_JOB" --actor alice >/dev/null
 
   sleep 1.1
-  echo "fails bytes" > "${CONTENT_ROOT}/inbox/fails.mp4"
+  echo "fails bytes" >"${CONTENT_ROOT}/inbox/fails.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   FAIL_JOB="$(ls "${CONTENT_ROOT}/state/jobs" | grep -v "$OK_JOB" | head -1 | sed 's/\.json$//')"
   "$OMES_BIN" content plan "$FAIL_JOB" --actor alice --caption "hi" --target generic_browser >/dev/null

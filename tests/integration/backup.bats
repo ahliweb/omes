@@ -15,8 +15,8 @@ setup() {
   mkdir -p "$LIVE_DIR"
   FILE_A="${LIVE_DIR}/a.conf"
   FILE_B="${LIVE_DIR}/b.conf"
-  printf 'file a\n' > "$FILE_A"
-  printf 'file b\n' > "$FILE_B"
+  printf 'file a\n' >"$FILE_A"
+  printf 'file b\n' >"$FILE_B"
 }
 
 teardown() {
@@ -29,7 +29,7 @@ _seed_state() {
   {
     printf 'module.demo.status=applied\n'
     printf 'module.demo.managed_paths=%s:%s\n' "$FILE_A" "$FILE_B"
-  } >> "${OMES_STATE_DIR}/state"
+  } >>"${OMES_STATE_DIR}/state"
   chmod 600 "${OMES_STATE_DIR}/state" 2>/dev/null || true
 }
 
@@ -59,8 +59,8 @@ _seed_state() {
 @test "backup --module targets only that module's managed paths" {
   _seed_state
   mkdir -p "${OMES_STATE_DIR}"
-  printf 'module.other.managed_paths=%s\n' "${LIVE_DIR}/other.conf" >> "${OMES_STATE_DIR}/state"
-  printf 'other\n' > "${LIVE_DIR}/other.conf"
+  printf 'module.other.managed_paths=%s\n' "${LIVE_DIR}/other.conf" >>"${OMES_STATE_DIR}/state"
+  printf 'other\n' >"${LIVE_DIR}/other.conf"
 
   run "$OMES_BIN" backup --module demo
   [ "$status" -eq 0 ]
@@ -87,6 +87,6 @@ _seed_state() {
   _seed_state
   omes_run_stdout_only "$OMES_BIN" backup --json
   [ "$status" -eq 0 ]
-  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="backup"; assert d["ok"] is True; assert d["files_backed_up"]==2' <<< "$output"
+  run python3 -c 'import json,sys; d=json.loads(sys.stdin.read()); assert d["command"]=="backup"; assert d["ok"] is True; assert d["files_backed_up"]==2' <<<"$output"
   [ "$status" -eq 0 ]
 }

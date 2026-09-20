@@ -120,7 +120,7 @@ for f in "${fragments[@]}"; do
     [[ -n "${line// /}" ]] || continue
     [[ "$line" != \<!--* ]] || continue
     desc="${desc:+$desc }${line}"
-  done < "$f"
+  done <"$f"
 
   if [[ -z "$issue" || -z "$type" || -z "$desc" ]]; then
     echo "release: malformed fragment (need issue, type and a description): $f" >&2
@@ -167,8 +167,8 @@ if [[ "$dry_run" -eq 1 ]]; then
   exit 0
 fi
 
-printf '%s' "$new_changelog" > CHANGELOG.md
-printf '%s\n' "$version" > VERSION
+printf '%s' "$new_changelog" >CHANGELOG.md
+printf '%s\n' "$version" >VERSION
 git rm -q "${fragments[@]}"
 git add CHANGELOG.md VERSION
 echo "release: compiled ${#fragments[@]} fragment(s) into CHANGELOG.md; VERSION=${version}"

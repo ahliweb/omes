@@ -14,7 +14,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'who %s\n' "$*" >> "$SHIM_LOG"
+  printf 'who %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 if [[ "${1:-}" == "am" ]] && [[ "${2:-}" == "i" ]]; then

@@ -68,7 +68,7 @@ assert d["components"] == []
 
 @test "omes audit provenance flags a checksum mismatch fixture as FAIL (exit 7), fail closed" {
   mkdir -p "${OMES_STATE_DIR}/provenance"
-  cat > "${OMES_STATE_DIR}/provenance/broken.json" <<'JSON'
+  cat >"${OMES_STATE_DIR}/provenance/broken.json" <<'JSON'
 {"component":"broken","installer_source_url":"https://example.com/x.sh","resolved_version":"1.0","install_time":"2026-01-01T00:00:00Z","checksum":{"algorithm":"sha256","expected":"aaa","actual":"bbb","status":"unknown"}}
 JSON
   chmod 600 "${OMES_STATE_DIR}/provenance/broken.json"
@@ -90,7 +90,7 @@ assert severities["checksum_mismatch"] == "FAIL"
 
 @test "omes audit provenance warns on a mutable installer URL" {
   mkdir -p "${OMES_STATE_DIR}/provenance"
-  cat > "${OMES_STATE_DIR}/provenance/mutable.json" <<'JSON'
+  cat >"${OMES_STATE_DIR}/provenance/mutable.json" <<'JSON'
 {"component":"mutable","installer_source_url":"https://example.com/main/install.sh","resolved_version":"1.0","install_time":"2026-01-01T00:00:00Z","checksum":{"status":"locally-built"}}
 JSON
   chmod 600 "${OMES_STATE_DIR}/provenance/mutable.json"
@@ -109,7 +109,7 @@ assert "mutable_url" in kinds, kinds
 
 @test "omes audit provenance warns on missing metadata" {
   mkdir -p "${OMES_STATE_DIR}/provenance"
-  printf '{"component":"incomplete"}\n' > "${OMES_STATE_DIR}/provenance/incomplete.json"
+  printf '{"component":"incomplete"}\n' >"${OMES_STATE_DIR}/provenance/incomplete.json"
   chmod 600 "${OMES_STATE_DIR}/provenance/incomplete.json"
 
   omes_run_stdout_only "$OMES_BIN" audit provenance --json
@@ -126,7 +126,7 @@ assert "missing_metadata" in kinds, kinds
 
 @test "omes audit provenance --profile filters by recorded profile" {
   mkdir -p "${OMES_STATE_DIR}/provenance"
-  cat > "${OMES_STATE_DIR}/provenance/scoped.json" <<'JSON'
+  cat >"${OMES_STATE_DIR}/provenance/scoped.json" <<'JSON'
 {"component":"scoped","profile":"hermes","installer_source_url":"https://example.com/x.sh","resolved_version":"1.0","install_time":"2026-01-01T00:00:00Z","checksum":{"status":"locally-built"}}
 JSON
   chmod 600 "${OMES_STATE_DIR}/provenance/scoped.json"
@@ -157,7 +157,7 @@ assert "scoped" in names, names
   local canary="${OMES_TEST_TMPDIR}/canary-should-not-exist"
   rm -f "$canary"
   mkdir -p "${HOME}/.hermes/skills/evil"
-  cat > "${HOME}/.hermes/skills/evil/run.sh" <<EOF
+  cat >"${HOME}/.hermes/skills/evil/run.sh" <<EOF
 #!/usr/bin/env bash
 touch "${canary}"
 EOF

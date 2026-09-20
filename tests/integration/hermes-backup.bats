@@ -15,9 +15,9 @@ setup() {
   export HOME="${OMES_TEST_TMPDIR}/home"
   export HERMES_HOME="${HOME}/.hermes"
   mkdir -p "$HERMES_HOME/skills"
-  printf 'model: gpt\n' > "${HERMES_HOME}/config.yaml"
-  printf 'print(1)\n' > "${HERMES_HOME}/skills/foo.py"
-  printf 'TELEGRAM_BOT_TOKEN=canary-secret-value\n' > "${HERMES_HOME}/.env"
+  printf 'model: gpt\n' >"${HERMES_HOME}/config.yaml"
+  printf 'print(1)\n' >"${HERMES_HOME}/skills/foo.py"
+  printf 'TELEGRAM_BOT_TOKEN=canary-secret-value\n' >"${HERMES_HOME}/.env"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
   cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
@@ -87,7 +87,7 @@ teardown() {
 @test "omes agent-backup restore requires --yes or a TTY to proceed" {
   run "$OMES_BIN" agent-backup create --json
   ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
-  printf 'changed\n' > "${HERMES_HOME}/config.yaml"
+  printf 'changed\n' >"${HERMES_HOME}/config.yaml"
 
   run "$OMES_BIN" agent-backup restore "$ts"
   [ "$status" -ne 0 ]
@@ -97,7 +97,7 @@ teardown() {
 @test "omes agent-backup restore --yes restores config and creates a pre-restore backup" {
   run "$OMES_BIN" agent-backup create --json
   ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
-  printf 'changed\n' > "${HERMES_HOME}/config.yaml"
+  printf 'changed\n' >"${HERMES_HOME}/config.yaml"
 
   run "$OMES_BIN" agent-backup restore "$ts" --class config --yes --json
   [ "$status" -eq 0 ]
@@ -109,7 +109,7 @@ teardown() {
   local create_out
   create_out="$("$OMES_BIN" agent-backup create --class secrets --include-secrets --yes --json 2>/dev/null)"
   ts="$(printf '%s' "$create_out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
-  printf 'TELEGRAM_BOT_TOKEN=live-value\n' > "${HERMES_HOME}/.env"
+  printf 'TELEGRAM_BOT_TOKEN=live-value\n' >"${HERMES_HOME}/.env"
 
   run "$OMES_BIN" agent-backup restore "$ts" --class secrets --yes --json
   [ "$status" -eq 0 ]

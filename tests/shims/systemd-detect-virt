@@ -8,7 +8,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'systemd-detect-virt %s\n' "$*" >> "$SHIM_LOG"
+  printf 'systemd-detect-virt %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 result="${SHIM_VIRT:-none}"

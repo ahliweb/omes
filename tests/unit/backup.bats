@@ -42,7 +42,7 @@ teardown() {
 
 @test "backup_path records a correct sha256 line in MANIFEST" {
   local f="${SRC_DIR}/config.yaml"
-  printf 'hello world\n' > "$f"
+  printf 'hello world\n' >"$f"
   local expected
   expected="$(sha256sum "$f" | awk '{print $1}')"
 
@@ -64,8 +64,8 @@ teardown() {
 
 @test "backup_path on a directory hashes every regular file inside it" {
   mkdir -p "${SRC_DIR}/tree/sub"
-  printf 'one\n' > "${SRC_DIR}/tree/a.txt"
-  printf 'two\n' > "${SRC_DIR}/tree/sub/b.txt"
+  printf 'one\n' >"${SRC_DIR}/tree/a.txt"
+  printf 'two\n' >"${SRC_DIR}/tree/sub/b.txt"
 
   backup_begin "m" "pre-apply" >/dev/null
   local dir="$OMES_CURRENT_BACKUP_DIR"

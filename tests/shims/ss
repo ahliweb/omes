@@ -9,7 +9,7 @@
 set -Eeuo pipefail
 
 if [[ -n "${SHIM_LOG:-}" ]]; then
-  printf 'ss %s\n' "$*" >> "$SHIM_LOG"
+  printf 'ss %s\n' "$*" >>"$SHIM_LOG"
 fi
 
 if [[ -n "${SHIM_SS_OUTPUT:-}" ]]; then

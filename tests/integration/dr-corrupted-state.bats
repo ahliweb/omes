@@ -33,7 +33,7 @@ setup() {
   export OMES_HERMES_HOME="${HOME}/.hermes"
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" << 'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Ubuntu 24.04 LTS"
 NAME="Ubuntu"
 VERSION_ID="24.04"
@@ -45,7 +45,7 @@ EOF
   export OMES_OS_RELEASE_FILE
   export SHIM_HERMES_VERSION="1.2.3"
 
-  printf '# my custom prompt\n' > "${HOME}/.bashrc"
+  printf '# my custom prompt\n' >"${HOME}/.bashrc"
   run "$OMES_BIN" install --module hermes --yes
   [ "$status" -eq 0 ]
 }
@@ -55,7 +55,7 @@ teardown() {
 }
 
 @test "omes status on a corrupted (binary garbage) state file does not crash, but does not surface a clear error either (known limitation - see header)" {
-  printf '\x00\x01\x02garbage-not-key-value-lines\xff\xfe' > "${OMES_STATE_DIR}/state"
+  printf '\x00\x01\x02garbage-not-key-value-lines\xff\xfe' >"${OMES_STATE_DIR}/state"
 
   run "$OMES_BIN" status --json
   # Documents the actual behavior: exits 0 (status "never fails on its
@@ -82,7 +82,7 @@ teardown() {
   [ -n "$ts" ]
 
   rm -f "${OMES_STATE_DIR}/state"
-  printf 'CORRUPTED\n' >> "${HOME}/.bashrc"
+  printf 'CORRUPTED\n' >>"${HOME}/.bashrc"
 
   run "$OMES_BIN" restore --from "$ts" --yes
   [ "$status" -eq 0 ]

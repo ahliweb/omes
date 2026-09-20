@@ -220,7 +220,7 @@ _hermes_record_uv_provenance() {
     version="${version%% *}"
     [[ -z "$name" ]] && continue
     _hermes_record_pkgmgr_provenance "uv" "$name" "$version" ""
-  done <<< "$out"
+  done <<<"$out"
 }
 
 # _hermes_record_pipx_provenance
@@ -258,7 +258,7 @@ for name, venv in (d.get("venvs") or {}).items():
   while IFS=$'\t' read -r package version; do
     [[ -z "$package" ]] && continue
     _hermes_record_pkgmgr_provenance "pipx" "$package" "$version" ""
-  done <<< "$parsed"
+  done <<<"$parsed"
 }
 
 # _hermes_record_package_manager_provenance
@@ -292,7 +292,7 @@ _hermes_ensure_path_snippet() {
 
   omes_manage_path "$snippet"
   mkdir -p "$(dirname "$snippet")"
-  cat > "$snippet" <<'SNIPPET'
+  cat >"$snippet" <<'SNIPPET'
 # Managed by OMES (modules/hermes) - do not edit by hand.
 # Ensures ~/.local/bin (where the Hermes installer places its binary) is on PATH.
 case ":$PATH:" in
@@ -313,7 +313,7 @@ SNIPPET
       printf '\n%s\n' "$HERMES_PATH_MARKER_BEGIN"
       printf '. "%s"\n' "$snippet"
       printf '%s\n' "$HERMES_PATH_MARKER_END"
-    } >> "$rc"
+    } >>"$rc"
     log_info "hermes: wired PATH snippet into ${rc}"
   done
 }
@@ -333,7 +333,7 @@ _hermes_remove_marker_block() {
     $0==e {skip=0; next}
     skip {next}
     {print}
-  ' "$rc" > "$tmp"
+  ' "$rc" >"$tmp"
   mv -f "$tmp" "$rc"
 }
 
@@ -361,7 +361,7 @@ _hermes_ensure_env_file() {
 
   if [[ ! -e "$env_file" ]]; then
     mkdir -p "$home"
-    : > "$env_file"
+    : >"$env_file"
     log_info "hermes: created ${env_file} (not a managed/backed-up path - see docs/hermes-integration.md §5)"
   fi
   chmod 600 "$env_file"

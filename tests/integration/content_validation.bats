@@ -10,7 +10,7 @@ setup() {
   OMES_BIN="${OMES_TEST_ROOT}/bin/omes"
 
   mkdir -p "${CONTENT_ROOT}/inbox"
-  echo "tiny-media-bytes" > "${CONTENT_ROOT}/inbox/clip.mp4"
+  echo "tiny-media-bytes" >"${CONTENT_ROOT}/inbox/clip.mp4"
   "$OMES_BIN" content scan --json --settle-seconds 0 >/dev/null
   JOB_ID="$(ls "${CONTENT_ROOT}/state/jobs" | head -1 | sed 's/\.json$//')"
 }
@@ -37,7 +37,7 @@ teardown() {
 
 @test "edit --platform --caption-file saves a versioned variant and leaves plan.caption untouched" {
   "$OMES_BIN" content plan "$JOB_ID" --actor alice --caption "original caption" --target generic_browser >/dev/null
-  echo "a clean, edited caption" > "${OMES_TEST_TMPDIR}/caption.txt"
+  echo "a clean, edited caption" >"${OMES_TEST_TMPDIR}/caption.txt"
   run "$OMES_BIN" content edit "$JOB_ID" --actor alice --platform generic_browser --caption-file "${OMES_TEST_TMPDIR}/caption.txt" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *"caption.v1"* ]]
@@ -48,7 +48,7 @@ teardown() {
 
 @test "a clean edited variant passes validation where the original caption would have blocked" {
   "$OMES_BIN" content plan "$JOB_ID" --actor alice --caption "guaranteed results" --target generic_browser >/dev/null
-  echo "a clean, edited caption" > "${OMES_TEST_TMPDIR}/caption.txt"
+  echo "a clean, edited caption" >"${OMES_TEST_TMPDIR}/caption.txt"
   "$OMES_BIN" content edit "$JOB_ID" --actor alice --platform generic_browser --caption-file "${OMES_TEST_TMPDIR}/caption.txt" >/dev/null
   "$OMES_BIN" content approve "$JOB_ID" --actor alice >/dev/null
   run "$OMES_BIN" content publish "$JOB_ID" --platform generic_browser --json

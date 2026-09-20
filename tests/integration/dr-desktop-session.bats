@@ -27,7 +27,7 @@ setup() {
   unset XDG_CONFIG_HOME || true
 
   OMES_OS_RELEASE_FILE="$(omes_fixture_path os-release)"
-  cat > "$OMES_OS_RELEASE_FILE" << 'EOF'
+  cat >"$OMES_OS_RELEASE_FILE" <<'EOF'
 PRETTY_NAME="Linux Mint 22"
 NAME="Linux Mint"
 VERSION_ID="22"
@@ -47,7 +47,7 @@ EOF
   export SHIM_ENABLED_SERVICES="lightdm"
 
   export OMES_CINNAMON_SESSION_FILE="${OMES_TEST_TMPDIR}/cinnamon.desktop"
-  printf '[Desktop Entry]\nName=Cinnamon\n' > "$OMES_CINNAMON_SESSION_FILE"
+  printf '[Desktop Entry]\nName=Cinnamon\n' >"$OMES_CINNAMON_SESSION_FILE"
 
   export SHIM_HERMES_VERSION="1.2.3"
 
@@ -55,7 +55,7 @@ EOF
   # own template differs from this, so applying it with --yes overwrites
   # (backing up first) rather than no-op'ing on an identical file.
   mkdir -p "${HOME}/.config/hypr"
-  printf '# my custom binds - do not lose me\n' > "${HOME}/.config/hypr/hyprland.conf"
+  printf '# my custom binds - do not lose me\n' >"${HOME}/.config/hypr/hyprland.conf"
 }
 
 teardown() {
