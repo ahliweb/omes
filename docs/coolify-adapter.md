@@ -30,7 +30,7 @@ OMES ships three deployment backends on a deliberate staged path
 | Backend | When to use it | Status |
 |---|---|---|
 | Native systemd (user or system unit) | The default. A single host, or a small number of independently administered hosts, each running its own OMES install. No shared control plane needed. | Implemented (issues #79-#87). |
-| Rootless Docker Compose | A single host running several isolated agent workloads that benefit from container isolation, without needing a multi-server control plane. | Not implemented yet (tracked in #96). |
+| Rootless Docker Compose | A single host running several isolated agent workloads that benefit from container isolation, without needing a multi-server control plane. | Implemented (`lib/omes/py/compose/`, [docs/agent-deployment.md](agent-deployment.md), `bin/omes agent`; issue #96). |
 | Coolify adapter (this document) | Multiple servers whose container deployments should be centrally visible/managed through Coolify's own UI/API - e.g. an operator who already runs Coolify for other workloads and wants OMES-managed agent deployments to show up there too, or who needs Coolify's proxy/domain and build-history features across more than one node. | Contracts and a fake-provider implementation only (this issue, #97); no live integration. |
 | Nomad/Kubernetes | Evidence-gated only - measured multi-node scheduling, HA, autoscaling, or multi-tenant requirements that neither of the above meets. | Not evaluated; see roadmap section 2.5. |
 

@@ -79,6 +79,7 @@ class AgentCliTestCase(unittest.TestCase):
             capture_output=True,
             text=True,
             input=input_text,
+            stdin=subprocess.DEVNULL if input_text is None else None,
             timeout=30,
             check=False,
         )

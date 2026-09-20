@@ -9,8 +9,10 @@ import io
 import json
 import os
 import shutil
+import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from . import _pathfix  # noqa: F401
@@ -20,7 +22,7 @@ from content import cli, paths, reports  # noqa: E402
 
 def _run_cli(argv):
     out = io.StringIO()
-    with contextlib.redirect_stdout(out):
+    with contextlib.redirect_stdout(out), mock.patch.object(sys.stdin, "isatty", return_value=False):
         code = cli.main(argv)
     return code, out.getvalue()
 
