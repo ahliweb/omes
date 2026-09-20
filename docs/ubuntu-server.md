@@ -7,7 +7,7 @@
 > [#7](https://github.com/ahliweb/omes/issues/7)).
 >
 > OMES is an independent, MIT-licensed, Omarchy-inspired compatibility
-> layer for Ubuntu Server 24.04/22.04 LTS and Linux Mint 22.x. It is not
+> layer for Ubuntu Server 26.04/24.04/22.04 LTS and Linux Mint 22.x. It is not
 > official Omarchy. This document covers the **server** profile: a
 > headless host with Hermes Agent as the primary operations surface.
 >

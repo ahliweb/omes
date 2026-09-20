@@ -47,6 +47,28 @@ EOF
   [ "$OMES_OS_PRETTY" = "Ubuntu 24.04 LTS" ]
 }
 
+@test "detect_os parses ubuntu 26.04 fields" {
+  local path
+  path="$(
+    _write_os_release <<'EOF'
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+NAME="Ubuntu"
+VERSION_ID="26.04"
+VERSION="26.04.1 LTS (Resolute Raccoon)"
+VERSION_CODENAME=resolute
+ID=ubuntu
+ID_LIKE=debian
+UBUNTU_CODENAME=resolute
+EOF
+  )"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  [ "$OMES_OS_ID" = "ubuntu" ]
+  [ "$OMES_OS_VERSION_ID" = "26.04" ]
+  [ "$OMES_OS_CODENAME" = "resolute" ]
+  [ "$OMES_OS_LIKE" = "debian" ]
+  [ "$OMES_OS_PRETTY" = "Ubuntu 26.04.1 LTS" ]
+}
+
 @test "detect_os falls back to VERSION_CODENAME when UBUNTU_CODENAME is absent" {
   local path
   path="$(
@@ -110,6 +132,40 @@ EOF
   '
   [ "$status" -eq 0 ]
   [ "$output" = "unsupported" ]
+}
+
+@test "detect_tier: ubuntu 26.04 amd64 is tier1" {
+  local path
+  path="$(
+    _write_os_release <<'EOF'
+PRETTY_NAME="Ubuntu 26.04 LTS"
+VERSION_ID="26.04"
+ID=ubuntu
+UBUNTU_CODENAME=resolute
+EOF
+  )"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  OMES_ARCH="amd64"
+  run detect_tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "tier1" ]
+}
+
+@test "detect_tier: ubuntu 26.04.1 (point release) amd64 is tier1" {
+  local path
+  path="$(
+    _write_os_release <<'EOF'
+PRETTY_NAME="Ubuntu 26.04.1 LTS"
+VERSION_ID="26.04.1"
+ID=ubuntu
+UBUNTU_CODENAME=resolute
+EOF
+  )"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  OMES_ARCH="amd64"
+  run detect_tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "tier1" ]
 }
 
 @test "detect_tier: ubuntu 24.04 amd64 is tier1" {

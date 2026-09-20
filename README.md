@@ -1,7 +1,7 @@
 # OMES
 
 OMES is an **independent, Omarchy-inspired** compatibility layer and deployment
-toolkit for **Ubuntu Server 24.04 LTS** and **Linux Mint 22.x**, with
+toolkit for **Ubuntu Server 26.04/24.04 LTS** and **Linux Mint 22.x**, with
 [Hermes Agent](https://hermes-agent.nousresearch.com/) as the integrated
 automation layer.
 
@@ -15,7 +15,7 @@ automation layer.
 
 ## What OMES does
 
-1. Detects your platform (Ubuntu Server 24.04/22.04 LTS, Linux Mint 22.x) and
+1. Detects your platform (Ubuntu Server 26.04/24.04/22.04 LTS, Linux Mint 22.x) and
    refuses to mutate anything unsupported (exit 3 before any mutation).
 2. Runs every module's read-only preflight check before applying anything
    (`omes check` → `omes install`), backing up any file it is about to touch.
@@ -83,7 +83,7 @@ and [ADR-0011](docs/adr/0011-control-center-and-provider-boundaries.md).
 
 | Platform | Tier | Notes |
 |---|---|---|
-| Ubuntu Server 24.04 LTS, amd64 | tier1 | Primary target |
+| Ubuntu Server 26.04 LTS / 24.04 LTS, amd64 | tier1 | Primary targets |
 | Linux Mint 22.x, amd64 | tier1 | Desktop target |
 | Ubuntu Server 22.04 LTS, amd64 | tier2 | Supported, lower priority |
 | Any supported OS above, arm64 | tier3 | Best-effort |

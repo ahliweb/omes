@@ -36,7 +36,7 @@ product. The distinction is architectural, not just a naming preference:
 
 | Aspect | Official Omarchy | OMES |
 |---|---|---|
-| Base OS | Arch Linux | Ubuntu Server 24.04/22.04 LTS, Linux Mint 22.x (existing installs) |
+| Base OS | Arch Linux | Ubuntu Server 26.04/24.04/22.04 LTS, Linux Mint 22.x (existing installs) |
 | Compositor | Hyprland (mandatory, Wayland-only) | Optional, desktop-profile-only, opt-in on Mint; server profile has no GUI |
 | Distribution mechanism | Bootable ISO, full-disk install | apt packages + shell installer running on an already-installed host |
 | Package manager | pacman / AUR | apt only; no pacman, no AUR, no source builds by default |
@@ -160,6 +160,7 @@ parallel workstream). Summary as of this writing:
 
 | Target | Tier | Profile |
 |---|---|---|
+| Ubuntu Server 26.04 LTS, amd64 | 1 | server |
 | Ubuntu Server 24.04 LTS, amd64 | 1 | server |
 | Ubuntu Server 22.04 LTS, amd64 | 2 | server |
 | Linux Mint 22.x, amd64 | 1 (desktop) | desktop |

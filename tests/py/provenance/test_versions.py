@@ -126,6 +126,16 @@ class TestWarnings(unittest.TestCase):
         warnings = versions.build_warnings(components)
         self.assertFalse(any("unsupported OS" in w for w in warnings))
 
+    def test_supported_os_ubuntu_26_04_no_warning(self):
+        components = self._components(os={"id": versions._fact("ubuntu", "x", "y"), "version_id": versions._fact("26.04", "x", "y")})
+        warnings = versions.build_warnings(components)
+        self.assertFalse(any("unsupported OS" in w for w in warnings))
+
+    def test_supported_os_ubuntu_26_04_1_no_warning(self):
+        components = self._components(os={"id": versions._fact("ubuntu", "x", "y"), "version_id": versions._fact("26.04.1", "x", "y")})
+        warnings = versions.build_warnings(components)
+        self.assertFalse(any("unsupported OS" in w for w in warnings))
+
     def test_old_python_warns(self):
         components = self._components(python3=versions._fact("Python 3.8.5", "x", "y"))
         warnings = versions.build_warnings(components)

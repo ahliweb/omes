@@ -53,8 +53,9 @@ tier="unsupported"
 case "$os_id" in
   ubuntu)
     case "$os_version_id" in
-      24.04) tier="tier1" ;;
-      22.04) tier="tier2" ;;
+      26.04 | 26.04.*) tier="tier1" ;;
+      24.04 | 24.04.*) tier="tier1" ;;
+      22.04 | 22.04.*) tier="tier2" ;;
     esac
     ;;
   linuxmint)
@@ -65,7 +66,7 @@ case "$os_id" in
 esac
 
 if [[ "$tier" == "unsupported" ]]; then
-  die 3 "unsupported platform: ${os_id} ${os_version_id} (supported: Ubuntu Server 24.04/22.04 LTS, Linux Mint 22.x)"
+  die 3 "unsupported platform: ${os_id} ${os_version_id} (supported: Ubuntu Server 26.04/24.04/22.04 LTS, Linux Mint 22.x)"
 fi
 
 log "detected supported platform: ${os_id} ${os_version_id} (tier=${tier})"
