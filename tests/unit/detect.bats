@@ -164,6 +164,27 @@ EOF
   [ "$output" = "tier1" ]
 }
 
+@test "detect_tier: linuxmint 22.3 (Zena) amd64 is tier1" {
+  local path
+  path="$(
+    _write_os_release <<'EOF'
+PRETTY_NAME="Linux Mint 22.3"
+VERSION_ID="22.3"
+VERSION="22.3 (Zena)"
+VERSION_CODENAME=zena
+ID=linuxmint
+ID_LIKE="ubuntu debian"
+UBUNTU_CODENAME=noble
+EOF
+  )"
+  OMES_OS_RELEASE_FILE="$path" detect_os
+  [ "$OMES_OS_CODENAME" = "noble" ]
+  OMES_ARCH="amd64"
+  run detect_tier
+  [ "$status" -eq 0 ]
+  [ "$output" = "tier1" ]
+}
+
 @test "detect_tier: linuxmint 22 (no point release) is tier1" {
   local path
   path="$(
