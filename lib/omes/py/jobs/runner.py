@@ -222,6 +222,18 @@ def _compare_desired_observed(record: dict[str, Any], readback_result: dict[str,
     parsed = readback_result.get("parsed") or {}
     if parsed.get("ok") is False:
         return False, "read-back reports ok=false"
+
+    # Older OMES status commands expose only `ok`; preserve that contract.
+    # When a backend supplies the stronger desired/observed pair, require
+    # both sides and compare them exactly so a partial observation cannot be
+    # reported as a successful mutation.
+    desired = parsed.get("desired")
+    observed = parsed.get("observed")
+    if desired is not None or observed is not None:
+        if not isinstance(desired, dict) or not isinstance(observed, dict):
+            return False, "read-back has an incomplete desired/observed state pair"
+        if desired != observed:
+            return False, "read-back observed state does not match desired state"
     return True, "read-back confirms observed state matches desired outcome"
 
 
