@@ -78,6 +78,26 @@
           },
           "detail": {
             "type": "string"
+          },
+          "authority": {
+            "type": "string",
+            "enum": [
+              "hermes",
+              "omes-host",
+              "external-provider"
+            ]
+          },
+          "source": {
+            "type": "string"
+          },
+          "compatibility_fallback": {
+            "type": "boolean"
+          },
+          "removal_trigger": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         }
       }

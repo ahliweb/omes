@@ -36,12 +36,16 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from httpjson import HttpJsonError, capped, request_json  # noqa: E402
 from model import (  # noqa: E402
+    AUTHORITY_EXTERNAL_PROVIDER,
+    AUTHORITY_HERMES,
+    AUTHORITY_OMES_HOST,
     STATUS_FAIL,
     STATUS_NOT_APPLICABLE,
     STATUS_PASS,
     build_result,
     layer_result,
 )
+import hermes_adapter  # noqa: E402
 
 EXIT_READY = 0
 EXIT_NOT_READY = 7
@@ -81,6 +85,8 @@ def check_host(host_facts: Optional[dict]) -> dict:
             STATUS_NOT_APPLICABLE,
             proves="No host facts were supplied; this layer was not evaluated.",
             detail="pass a JSON object with systemd_present/disk_free_mb/mem_mb on stdin to evaluate this layer",
+            authority=AUTHORITY_OMES_HOST,
+            source="systemd",
         )
 
     systemd_present = bool(host_facts.get("systemd_present"))
@@ -105,32 +111,16 @@ def check_host(host_facts: Optional[dict]) -> dict:
         proves="Proves the host has systemd and meets minimum disk/memory thresholds. Does NOT prove Hermes itself is installed or running.",
         remediation=None if status == STATUS_PASS else "free disk space / add memory, or adjust OMES_HEALTH_DISK_MIN_MB / OMES_HEALTH_MEM_MIN_MB",
         detail="; ".join(problems) if problems else "systemd present, disk/memory above threshold",
+        authority=AUTHORITY_OMES_HOST,
+        source="systemd",
     )
 
 
-def check_runtime(timeout: float) -> dict:
-    rc, out, err = _run(["hermes", "--version"], timeout)
-    if rc != 0:
-        return layer_result(
-            STATUS_FAIL,
-            signals={"enabled": rc != -1, "active": False},
-            proves="Proves whether the `hermes` binary is present and runnable. Does NOT prove the gateway or any channel is connected.",
-            remediation="install Hermes (modules/hermes) or verify PATH" if rc == -1 else "run `hermes --version` manually to see the failure",
-            detail=capped(err or out or f"exit {rc}"),
-        )
-
-    doctor_rc, doctor_out, doctor_err = _run(["hermes", "doctor"], timeout)
-    doctor_ok = doctor_rc == 0
-    return layer_result(
-        STATUS_PASS if doctor_ok else STATUS_FAIL,
-        signals={"enabled": True, "active": True, "ready": doctor_ok},
-        proves="Proves the Hermes binary runs and `hermes doctor` (Hermes's own self-check) passed. Does NOT prove the gateway service or any messaging channel is connected.",
-        remediation=None if doctor_ok else "run `hermes doctor` manually and address what it reports",
-        detail=capped(out.strip()) if doctor_ok else capped(doctor_err or doctor_out or f"exit {doctor_rc}"),
-    )
+def check_runtime(timeout: float, profile: Optional[str] = None) -> dict:
+    return hermes_adapter.check_hermes_runtime(profile=profile, timeout=timeout, runner=_run)
 
 
-def check_gateway(mode: str, timeout: float) -> dict:
+def check_gateway(mode: str, timeout: float, profile: Optional[str] = None) -> dict:
     unit = "hermes-gateway"
     systemctl_cmd = ["systemctl"] + (["--user"] if mode == "user" else [])
 
@@ -139,8 +129,8 @@ def check_gateway(mode: str, timeout: float) -> dict:
     enabled = enabled_rc == 0
     active = active_rc == 0
 
-    status_rc, status_out, status_err = _run(["hermes", "gateway", "status"], timeout)
-    reachable = status_rc == 0
+    gw_res = hermes_adapter.check_hermes_gateway(profile=profile, timeout=timeout, runner=_run)
+    reachable = gw_res["signals"].get("reachable", False)
 
     api_status = None
     api_url = os.environ.get("OMES_HERMES_GATEWAY_HEALTH_URL", "").strip()
@@ -172,7 +162,9 @@ def check_gateway(mode: str, timeout: float) -> dict:
         signals={"enabled": enabled, "active": active, "reachable": reachable, "ready": ready},
         proves="Proves the gateway systemd unit is enabled/active and `hermes gateway status` succeeded (plus the API health endpoint, if configured). Does NOT by itself prove a messaging channel is connected - see the channel layer.",
         remediation=None if status == STATUS_PASS else f"check `systemctl {'--user ' if mode == 'user' else ''}status {unit}` and `hermes gateway status`",
-        detail=capped(status_out.strip() or status_err.strip()) if (status_out or status_err) else f"enabled={enabled} active={active}",
+        detail=gw_res.get("detail") or f"enabled={enabled} active={active}",
+        authority=AUTHORITY_HERMES,
+        source="hermes gateway status",
     )
 
 
@@ -184,6 +176,8 @@ def check_provider(timeout: float) -> dict:
             STATUS_NOT_APPLICABLE,
             proves="No provider is configured for this deployment.",
             detail="set OMES_OLLAMA_ENABLED=1 (or install ollama and set OMES_OLLAMA_MODEL) to evaluate this layer",
+            authority=AUTHORITY_EXTERNAL_PROVIDER,
+            source="ollama",
         )
 
     import ollama as ollama_health  # local import: keeps `hermes.py --help` fast, and avoids a hard dependency when no provider is configured
@@ -196,6 +190,8 @@ def check_provider(timeout: float) -> dict:
         proves="Proves the configured Ollama provider (service, model, required capabilities) is healthy. See `omes health ollama` for the full layered breakdown.",
         remediation=None if ready else "run `omes health ollama` for the detailed failure",
         detail=f"provider={result.get('provider')} service={result.get('service', {}).get('status')} model={result.get('model', {}).get('status')}",
+        authority=AUTHORITY_EXTERNAL_PROVIDER,
+        source="ollama",
     )
 
 
@@ -213,6 +209,8 @@ def check_channel(hermes_home: str, timeout: float) -> dict:
             STATUS_NOT_APPLICABLE,
             proves="No Telegram channel is configured for this deployment.",
             detail="set TELEGRAM_BOT_TOKEN in $HERMES_HOME/.env to evaluate this layer",
+            authority=AUTHORITY_EXTERNAL_PROVIDER,
+            source="telegram",
         )
 
     script = os.environ.get(
@@ -236,6 +234,10 @@ def check_channel(hermes_home: str, timeout: float) -> dict:
             proves="Could not locate the telegram-allowlist.sh health probe.",
             remediation=f"verify {script} exists and is executable",
             detail="script not found or not executable",
+            authority=AUTHORITY_EXTERNAL_PROVIDER,
+            source="telegram-allowlist",
+            compatibility_fallback=True,
+            removal_trigger="upstream hermes native channel status CLI",
         )
 
     try:
@@ -257,6 +259,10 @@ def check_channel(hermes_home: str, timeout: float) -> dict:
         ),
         remediation=None if status == STATUS_PASS else "verify TELEGRAM_BOT_TOKEN and network access to api.telegram.org; see docs/telegram-security.md",
         detail=capped(parsed.get("detail", "") or err or out),
+        authority=AUTHORITY_EXTERNAL_PROVIDER,
+        source="telegram-allowlist",
+        compatibility_fallback=True,
+        removal_trigger="upstream hermes native channel status CLI",
     )
 
 
