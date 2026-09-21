@@ -14,6 +14,8 @@ setup() {
 
   export HOME="${OMES_TEST_TMPDIR}/home"
   mkdir -p "$HOME"
+  export XDG_CONFIG_HOME="${HOME}/.config"
+  export XDG_STATE_HOME="${HOME}/.local/state"
   export OMES_CONFIG_DIR="${OMES_TEST_TMPDIR}/config"
   mkdir -p "${OMES_CONFIG_DIR}/agents"
   export SHIM_HERMES_VERSION="1.2.3"
