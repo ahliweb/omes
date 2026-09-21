@@ -1,0 +1,17 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "smuggled-role",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "researcher"
+  },
+  "placement": {
+    "backend": "native",
+    "serviceScope": "user"
+  },
+  "role": "generic"
+}

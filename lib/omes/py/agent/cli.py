@@ -24,6 +24,7 @@ from . import compose_health
 from . import compose_preflight
 from . import health as health_mod
 from . import manifest as manifest_mod
+from . import migration as migration_mod
 from . import paths, plan as plan_mod, provenance, runtime_bridge, state as state_mod, unitfile
 import hashlib
 import time
@@ -82,8 +83,48 @@ def _check_privilege(service_mode: str) -> Optional[str]:
     return None
 
 
+def _service_mode(manifest: dict) -> str:
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        return manifest.get("placement", {}).get("serviceScope", "user")
+    return manifest["spec"]["serviceMode"]
+
+
 def _backend(manifest: dict) -> str:
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        b = manifest.get("placement", {}).get("backend", "native")
+        return "systemd" if b == "native" else b
     return manifest["spec"].get("backend", "systemd")
+
+
+def _check_hermes_profile(profile_ref: str) -> Optional[str]:
+    """Resolves Hermes profile existence via supported Hermes CLI ('hermes profile list').
+    Returns an error string if Hermes CLI fails or the profile is absent, None if valid."""
+    if not shutil.which("hermes"):
+        return f"Hermes runtime CLI 'hermes' not found on PATH; required to verify profile '{profile_ref}'"
+    try:
+        proc = subprocess.run(
+            ["hermes", "profile", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+            check=False,
+        )
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        return f"failed to execute 'hermes profile list': {exc}"
+
+    if proc.returncode != 0:
+        return f"'hermes profile list' exited {proc.returncode}: {proc.stderr.strip() or proc.stdout.strip()}"
+
+    lines = proc.stdout.splitlines()
+    profiles = set()
+    for line in lines:
+        cleaned = line.strip().lstrip("*-• ").split()
+        if cleaned:
+            profiles.add(cleaned[0].rstrip(":"))
+
+    if profile_ref not in profiles:
+        return f"Hermes profile '{profile_ref}' not found in active Hermes profiles ({sorted(profiles)}) - fail preflight"
+    return None
 
 
 def _sha256_file(path: Path) -> Optional[str]:
@@ -105,7 +146,7 @@ def _build_systemd_plan(manifest: Dict[str, Any], omes_root: Path) -> Dict[str, 
     bridge cannot run, so a missing/unreadable runtime.sh never blocks
     `omes agent` - see docs/agent-deployment.md section 7a."""
     name = manifest["metadata"]["name"]
-    scope = manifest["spec"]["serviceMode"]
+    scope = _service_mode(manifest)
     unit_override = runtime_bridge.agent_service_unit(name, scope, omes_root)
     return plan_mod.build_plan(manifest, unit_name_override=unit_override)
 
@@ -192,8 +233,14 @@ def cmd_list(args: argparse.Namespace) -> int:
         if manifest_file.exists():
             try:
                 data = manifest_mod.load_and_validate(manifest_file, omes_root, expected_name=name)
-                entry["role"] = data["spec"]["role"]
-                entry["serviceMode"] = data["spec"]["serviceMode"]
+                if data.get("apiVersion") == "omes.ahliweb.com/v2":
+                    entry["role"] = None
+                    entry["serviceMode"] = data.get("placement", {}).get("serviceScope", "user")
+                    entry["profileRef"] = data.get("runtime", {}).get("profileRef")
+                else:
+                    entry["role"] = data["spec"]["role"]
+                    entry["serviceMode"] = data["spec"]["serviceMode"]
+                    entry["profileRef"] = data["spec"].get("profile")
             except manifest_mod.ManifestError as exc:
                 entry["manifestError"] = str(exc)
         results.append(entry)
@@ -240,7 +287,7 @@ def _doctor_one(name: str, omes_root: Path, timeout: float) -> Dict[str, Any]:
 
     backend = _backend(manifest)
     entry["backend"] = backend
-    entry["serviceMode"] = manifest["spec"]["serviceMode"]
+    entry["serviceMode"] = _service_mode(manifest)
 
     try:
         if backend == "compose":
@@ -298,12 +345,22 @@ def cmd_check(args: argparse.Namespace) -> int:
         )
         return EX_PREFLIGHT
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    service_mode = _service_mode(manifest)
+    priv_error = _check_privilege(service_mode)
     if priv_error:
         _print({"ok": False, "errors": [priv_error]}, args.json) if args.json else print(
             f"error: {priv_error}", file=sys.stderr
         )
         return EX_PRIVILEGE
+
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", "")
+        prof_error = _check_hermes_profile(profile_ref)
+        if prof_error:
+            _print({"ok": False, "errors": [prof_error]}, args.json) if args.json else print(
+                f"error: {prof_error}", file=sys.stderr
+            )
+            return EX_PREFLIGHT
 
     backend = _backend(manifest)
     if backend == "compose":
@@ -318,9 +375,15 @@ def cmd_check(args: argparse.Namespace) -> int:
         _print({"ok": False, "errors": [msg]}, args.json) if args.json else print(f"error: {msg}", file=sys.stderr)
         return EX_PREFLIGHT
 
-    result = {"ok": True, "name": args.name, "serviceMode": manifest["spec"]["serviceMode"], "backend": backend}
+    result = {
+        "ok": True,
+        "name": args.name,
+        "serviceMode": service_mode,
+        "backend": backend,
+        "apiVersion": manifest.get("apiVersion", "omes.ahliweb.com/v1"),
+    }
     _print(result, args.json) if args.json else print(
-        f"{args.name}: check ok (serviceMode={manifest['spec']['serviceMode']}, backend={backend})"
+        f"{args.name}: check ok (serviceMode={service_mode}, backend={backend})"
     )
     return EX_OK
 
@@ -333,7 +396,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EX_PREFLIGHT
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    priv_error = _check_privilege(_service_mode(manifest))
     if priv_error:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
@@ -415,6 +478,15 @@ def _apply_compose(name: str, manifest: Dict[str, Any], args: argparse.Namespace
             f"error: {'; '.join(preflight['errors'])}", file=sys.stderr
         )
         return EX_PREFLIGHT
+
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", "")
+        prof_error = _check_hermes_profile(profile_ref)
+        if prof_error:
+            _print({"ok": False, "stage": "preflight", "errors": [prof_error]}, args.json) if args.json else print(
+                f"error: {prof_error}", file=sys.stderr
+            )
+            return EX_PREFLIGHT
 
     if shutil.which("docker") is None:
         print("error: docker not found on PATH", file=sys.stderr)
@@ -498,6 +570,7 @@ def _apply_compose(name: str, manifest: Dict[str, Any], args: argparse.Namespace
         "project": plan["project"],
         "composeFile": str(compose_file),
         "health": health_result,
+        "apiVersion": manifest.get("apiVersion", "omes.ahliweb.com/v1"),
     }
     _print(result, args.json) if args.json else print(f"{name}: applied (compose), state={final_state['state']}")
     return EX_OK
@@ -515,12 +588,22 @@ def cmd_apply(args: argparse.Namespace) -> int:
         )
         return EX_PREFLIGHT
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    service_mode = _service_mode(manifest)
+    priv_error = _check_privilege(service_mode)
     if priv_error:
         _print({"ok": False, "stage": "preflight", "errors": [priv_error]}, args.json) if args.json else print(
             f"error: {priv_error}", file=sys.stderr
         )
         return EX_PRIVILEGE
+
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", "")
+        prof_error = _check_hermes_profile(profile_ref)
+        if prof_error:
+            _print({"ok": False, "stage": "preflight", "errors": [prof_error]}, args.json) if args.json else print(
+                f"error: {prof_error}", file=sys.stderr
+            )
+            return EX_PREFLIGHT
 
     if _backend(manifest) == "compose":
         return _apply_compose(name, manifest, args)
@@ -616,7 +699,14 @@ def cmd_apply(args: argparse.Namespace) -> int:
     else:
         final_state = state_mod.advance(name, "degraded", "post-apply health check did not pass")
 
-    result = {"ok": True, "name": name, "state": final_state["state"], "unit": plan["unit"]["name"], "health": health_result}
+    result = {
+        "ok": True,
+        "name": name,
+        "state": final_state["state"],
+        "unit": plan["unit"]["name"],
+        "health": health_result,
+        "apiVersion": manifest.get("apiVersion", "omes.ahliweb.com/v1"),
+    }
     _print(result, args.json) if args.json else print(f"{name}: applied, state={final_state['state']}")
     return EX_OK
 
@@ -674,7 +764,7 @@ def cmd_restart(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EX_PREFLIGHT
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    priv_error = _check_privilege(_service_mode(manifest))
     if priv_error:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
@@ -739,7 +829,7 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return EX_PREFLIGHT
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    priv_error = _check_privilege(_service_mode(manifest))
     if priv_error:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
@@ -902,7 +992,7 @@ def cmd_remove(args: argparse.Namespace) -> int:
         print("error: 'omes agent remove' is only implemented for backend=compose (see docs/agent-deployment.md)", file=sys.stderr)
         return EX_USAGE
 
-    priv_error = _check_privilege(manifest["spec"]["serviceMode"])
+    priv_error = _check_privilege(_service_mode(manifest))
     if priv_error:
         print(f"error: {priv_error}", file=sys.stderr)
         return EX_PRIVILEGE
@@ -953,6 +1043,80 @@ def cmd_remove(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def cmd_migrate(args: argparse.Namespace) -> int:
+    omes_root = _omes_root()
+    name = args.name
+    try:
+        manifest = _load_manifest(name, omes_root)
+    except manifest_mod.ManifestError as exc:
+        _print({"ok": False, "errors": exc.errors}, args.json) if args.json else print(
+            f"error: {exc}", file=sys.stderr
+        )
+        return EX_PREFLIGHT
+
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        msg = f"manifest for agent '{name}' is already at apiVersion 'omes.ahliweb.com/v2'"
+        _print({"ok": True, "message": msg, "manifest": manifest}, args.json) if args.json else print(msg)
+        return EX_OK
+
+    try:
+        v2_manifest, audit_records = migration_mod.migrate_manifest_v1_to_v2(manifest)
+    except migration_mod.MigrationError as exc:
+        _print({"ok": False, "error": str(exc)}, args.json) if args.json else print(
+            f"error: migration failed: {exc}", file=sys.stderr
+        )
+        return EX_ERROR
+
+    # Validate generated v2 manifest against schema & semantic rules
+    v2_errors = manifest_mod.validate(v2_manifest, omes_root)
+    if v2_errors:
+        _print({"ok": False, "error": "migrated manifest failed v2 validation", "errors": v2_errors}, args.json) if args.json else print(
+            f"error: migrated manifest failed v2 validation: {'; '.join(v2_errors)}", file=sys.stderr
+        )
+        return EX_ERROR
+
+    written_to = None
+    backup_file = None
+    if not args.dry_run:
+        if args.output:
+            out_path = Path(args.output)
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_text(json.dumps(v2_manifest, indent=2) + "\n", encoding="utf-8")
+            written_to = str(out_path)
+        else:
+            manifest_path = paths.manifest_path(name)
+            backup_path = manifest_path.with_suffix(".json.bak")
+            backup_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+            manifest_path.write_text(json.dumps(v2_manifest, indent=2) + "\n", encoding="utf-8")
+            written_to = str(manifest_path)
+            backup_file = str(backup_path)
+
+    result = {
+        "ok": True,
+        "name": name,
+        "migrated": True,
+        "dry_run": args.dry_run,
+        "dryRun": args.dry_run,
+        "migrated_manifest": v2_manifest,
+        "v2Manifest": v2_manifest,
+        "audit": audit_records,
+    }
+    if written_to:
+        result["writtenTo"] = written_to
+    if backup_file:
+        result["backup"] = backup_file
+
+    if args.json:
+        _print(result, True)
+    else:
+        print(f"Migration preview for agent '{name}':")
+        print(json.dumps(v2_manifest, indent=2))
+        print("\nAudit classification:")
+        for r in audit_records:
+            print(f"  {r['v1_field']:<25} -> {r['action']:<10} -> {r['target']}")
+    return EX_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omes agent")
     sub = parser.add_subparsers(dest="subcommand")
@@ -989,6 +1153,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_remove.add_argument("--yes", action="store_true")
     p_remove.add_argument("--json", action="store_true")
     p_remove.set_defaults(func=cmd_remove)
+
+    p_migrate = sub.add_parser("migrate")
+    p_migrate.add_argument("agent_name", metavar="name")
+    p_migrate.add_argument("--dry-run", action="store_true")
+    p_migrate.add_argument("--output", metavar="path", help="Path to write migrated v2 manifest")
+    p_migrate.add_argument("--json", action="store_true")
+    p_migrate.set_defaults(func=cmd_migrate, name_attr="agent_name")
 
     return parser
 

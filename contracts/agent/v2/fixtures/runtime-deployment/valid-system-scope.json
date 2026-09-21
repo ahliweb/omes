@@ -1,0 +1,16 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "AgentDeployment",
+  "metadata": {
+    "name": "system-monitor",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "sysmon"
+  },
+  "placement": {
+    "backend": "systemd",
+    "serviceScope": "system"
+  }
+}

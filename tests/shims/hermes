@@ -74,6 +74,26 @@ case "${1:-}" in
   model)
     exit 0
     ;;
+  profile)
+    shift || true
+    case "${1:-}" in
+      list)
+        if [[ "${SHIM_HERMES_PROFILE_LIST_EXIT:-0}" != "0" ]]; then
+          printf '%s\n' "${SHIM_HERMES_PROFILE_LIST_OUTPUT:-FAIL: simulated profile list failure}" >&2
+          exit "${SHIM_HERMES_PROFILE_LIST_EXIT}"
+        fi
+        if [[ -n "${SHIM_HERMES_PROFILES:-}" ]]; then
+          tr ',' '\n' <<<"$SHIM_HERMES_PROFILES"
+          exit 0
+        fi
+        printf 'default\nresearcher\nsysmon\n'
+        exit 0
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
+    ;;
   gateway)
     shift || true
     case "${1:-}" in

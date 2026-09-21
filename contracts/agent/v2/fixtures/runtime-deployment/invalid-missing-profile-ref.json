@@ -1,0 +1,15 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "no-profile",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes"
+  },
+  "placement": {
+    "backend": "native",
+    "serviceScope": "user"
+  }
+}

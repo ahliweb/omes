@@ -16,7 +16,7 @@ Per ADR-0017 and the upstream-first hierarchy (`DELEGATE -> PORT -> ADAPT -> DEF
   automation, cron/webhooks, or model/provider routing;
 - OMES does **not** access Hermes private databases (`messages.db`, `.hermes/`) directly;
 - Follow-up issues delegate specific runtime concerns natively to Hermes:
-  - [#174](https://github.com/ahliweb/omes/issues/174): RuntimeDeployment v2 / profile reference boundary.
+  - [#174](https://github.com/ahliweb/omes/issues/174): RuntimeDeployment v2 / profile reference boundary (implemented via [ADR-0018](adr/0018-runtimedeployment-v2-and-hermes-profile-references.md)).
   - [#175](https://github.com/ahliweb/omes/issues/175): delegate native Hermes gateway/service lifecycle.
   - [#176](https://github.com/ahliweb/omes/issues/176): delegate backup/export to native `hermes backup`/`hermes profile export`.
   - [#177](https://github.com/ahliweb/omes/issues/177): align container deployments with official Hermes Docker topology.
