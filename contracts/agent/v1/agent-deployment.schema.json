@@ -119,6 +119,11 @@
           "additionalProperties": false,
           "required": ["image"],
           "properties": {
+            "topology": {
+              "type": "string",
+              "enum": ["shared", "dedicated"],
+              "description": "Container topology ('shared' or 'dedicated'). Defaults to 'dedicated' for v1 backward compatibility."
+            },
             "image": {
               "type": "string",
               "minLength": 1,

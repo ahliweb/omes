@@ -266,6 +266,48 @@ class TestPlanAndRendering(unittest.TestCase):
         self.assertEqual(compose._memory_to_compose("1G"), "1g")
         self.assertEqual(compose._memory_to_compose("2048K"), "2048k")
 
+    def test_plan_mounts_opt_data_and_tmpfs(self):
+        plan = compose.build_plan(self.manifest)
+        self.assertEqual(plan["topology"], "dedicated")
+        self.assertTrue(any(v["containerPath"] == "/opt/data" for v in plan["volumes"]))
+        rendered = compose.render_compose_yaml(plan)
+        self.assertIn("/opt/data:rw", rendered)
+        self.assertIn("tmpfs:", rendered)
+        self.assertIn("/run:rw,noexec,nosuid,size=64k", rendered)
+        self.assertIn("/tmp:rw,noexec,nosuid,size=64k", rendered)
+
+    def test_plan_shared_topology(self):
+        data = copy.deepcopy(self.manifest)
+        data["spec"]["compose"]["topology"] = "shared"
+        del data["spec"]["compose"]["project"]
+        plan = compose.build_plan(data)
+        self.assertEqual(plan["topology"], "shared")
+        self.assertEqual(plan["project"], "omes-shared-hermes")
+        self.assertEqual(plan["serviceName"], "hermes")
+        self.assertEqual(plan["containerName"], "omes-shared-hermes-hermes")
+        self.assertTrue(any(v["containerPath"] == "/opt/data" and "shared-hermes" in v["hostPath"] for v in plan["volumes"]))
+
+
+class TestTopologyValidation(unittest.TestCase):
+    def _spec(self, topology):
+        return {
+            "image": f"registry.example.com/x@{VALID_DIGEST}",
+            "user": "1000:1000",
+            "topology": topology,
+        }
+
+    def test_topology_dedicated_accepted(self):
+        errors = compose.validate_compose_spec(self._spec("dedicated"), "worker")
+        self.assertEqual(errors, [])
+
+    def test_topology_shared_accepted(self):
+        errors = compose.validate_compose_spec(self._spec("shared"), "worker")
+        self.assertEqual(errors, [])
+
+    def test_topology_invalid_rejected(self):
+        errors = compose.validate_compose_spec(self._spec("clustered"), "worker")
+        self.assertTrue(any("topology" in e for e in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
