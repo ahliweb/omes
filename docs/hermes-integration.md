@@ -78,15 +78,14 @@ shell (`curl | bash`). `module_apply`:
 1. Downloads `https://hermes-agent.nousresearch.com/install.sh` (override
    for testing only via `OMES_HERMES_INSTALLER_URL`) to a private temp file
    with `curl -fsSL <url> -o <tmpfile>`.
-2. If `OMES_HERMES_INSTALLER_SHA256` is set, verifies the downloaded file's
-   sha256 against it; a mismatch aborts with **no execution** and
-   `module_apply` fails (exit 6 from `omes install`). For Hermes release
+2. Automatically resolves the expected SHA-256 for supported baselines (or operator override
+   via `OMES_HERMES_INSTALLER_SHA256`). For the supported release
    **v2026.9.14** (v0.21.3), the verified installer SHA-256 is
    `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
-3. If `OMES_HERMES_INSTALLER_SHA256` is **not** set, logs a `WARN` and
-   proceeds anyway — pinning is optional (upstream installer is verified
-   periodically per release) but its absence is always visible in the log,
-   never silent. See `docs/security.md` §6.
+3. Verifies the downloaded file's SHA-256 before execution. If a mismatch is detected,
+   or if an unmapped/untrusted baseline is requested without an explicit digest or explicit
+   `OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1` development override, installation
+   **fails closed** with **no execution**, records provenance, and exits non-zero (issue #170).
 4. Runs the verified temp file with an explicit `HERMES_HOME=<resolved
    home>` environment variable (and `--branch "$OMES_HERMES_VERSION"` when
    `OMES_HERMES_VERSION` is set), then deletes the temp file.
@@ -252,7 +251,8 @@ fully remove Hermes themselves:
 |---|---|---|
 | `OMES_HERMES_HOME` | Overrides `HERMES_HOME` for this install | `~/.hermes` |
 | `OMES_HERMES_VERSION` | Pins the installed version (passes `--branch <version>` to the upstream installer); a mismatch triggers re-install | unset (accept whatever the installer provides; recommends `v2026.9.14`) |
-| `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it | unset (proceeds with a `WARN`; verified `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for `v2026.9.14`) |
+| `OMES_HERMES_INSTALLER_SHA256` | Verifies the downloaded installer's integrity before executing it (overriding default baseline) | auto-resolved to verified digest (`00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for `v2026.9.14`); fail-closed if unmapped |
+| `OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER` | Explicitly permits unverified execution for unmapped custom/testing baselines | `0` (fail closed by default; requires `1` for unverified test builds) |
 | `OMES_HERMES_INSTALLER_URL` | Overrides the installer URL | `https://hermes-agent.nousresearch.com/install.sh` (testing only; not a documented operator knob) |
 
 ## 10. Status (part 1 / `hermes` module)

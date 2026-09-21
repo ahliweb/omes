@@ -40,6 +40,30 @@ for _omes_versions_dep in json detect state; do
   source "${OMES_ROOT}/lib/omes/${_omes_versions_dep}.sh"
 done
 unset _omes_versions_dep
+# ---------------------------------------------------------------------------
+# Supported upstream baselines & trusted metadata (issues #164, #170)
+# ---------------------------------------------------------------------------
+HERMES_BASELINE_VERSION="v2026.9.14"
+HERMES_BASELINE_INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
+HERMES_BASELINE_INSTALLER_SHA256="00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22"
+
+# hermes_lookup_installer_digest <url> <version/branch>
+# Resolves the trusted expected SHA-256 digest for a known upstream Hermes baseline.
+# Returns 0 and prints the digest on stdout if mapped; returns 1 if unmapped.
+hermes_lookup_installer_digest() {
+  local url="${1:-$HERMES_BASELINE_INSTALLER_URL}"
+  local ver="${2:-}"
+
+  if [[ -z "$url" || "$url" == "$HERMES_BASELINE_INSTALLER_URL" ]]; then
+    case "${ver:-}" in
+      "" | "$HERMES_BASELINE_VERSION" | "v2026.9.14" | "v0.21.3" | "0.21.3")
+        printf '%s\n' "$HERMES_BASELINE_INSTALLER_SHA256"
+        return 0
+        ;;
+    esac
+  fi
+  return 1
+}
 
 # _versions_py_script
 # Prints the path to lib/omes/py/provenance/versions.py.

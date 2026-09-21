@@ -78,7 +78,8 @@ has no documented, supported effect and is not recommended.
 |---|---|---|---|
 | `OMES_HERMES_HOME` | `~/.hermes` | Operator | Overrides `HERMES_HOME`. Set before `omes install` to give a profile an isolated Hermes instance. |
 | `OMES_HERMES_VERSION` | unset | Operator | Pins the installed version (passed as `--branch <version>` to the installer); a mismatch against the currently installed `hermes --version` output triggers a re-install (e.g. `v2026.9.14`). |
-| `OMES_HERMES_INSTALLER_SHA256` | unset | Operator | Verifies the downloaded installer's sha256 before executing it; a mismatch aborts with no execution (verified `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for release `v2026.9.14`). |
+| `OMES_HERMES_INSTALLER_SHA256` | auto-resolved | Operator | Verifies the downloaded installer's sha256 before executing it; defaults to verified baseline digest (`00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22` for release `v2026.9.14`). A mismatch aborts with no execution (issue #170). |
+| `OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER` | `0` | Operator (unsafe) | Set to `1` to permit unverified execution for unmapped custom/testing baselines without integrity metadata. |
 | `OMES_HERMES_INSTALLER_URL` | `https://hermes-agent.nousresearch.com/install.sh` | Test-only | Not a documented operator knob. |
 
 ## 8. `hermes-gateway` / `hermes-gateway-system` modules

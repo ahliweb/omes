@@ -164,20 +164,20 @@ $ omes audit provenance --json
 {"ok": false, "profile": null, "components": [...], "findings": [{"component": "hermes", "severity": "FAIL", "kind": "checksum_mismatch", "detail": "..."}], "review": [...]}
 ```
 
-## 3. Pinning: `OMES_HERMES_INSTALLER_SHA256`
+## 3. Trusted Baselines and Pinning: `OMES_HERMES_INSTALLER_SHA256`
 
-Set `OMES_HERMES_INSTALLER_SHA256` before `omes install`/`omes update`
-to pin the expected sha256 of the Hermes installer script
-(`docs/hermes-integration.md` §2, `docs/security.md` §6). A mismatch
-aborts the install with **no execution** (exit 6) — nothing is ever run
-past a failed comparison. When unset, the installer runs with a logged
-`WARN` and the resulting provenance record's `checksum.status` is
-`unverified`, which `omes audit provenance` surfaces as a `WARN`
-finding, never silently.
+For known OMES-supported Hermes releases, installer verification is **enabled by default** (issue #170).
+OMES automatically resolves the expected digest from trusted repository metadata (`lib/omes/versions.sh`) without requiring manual operator configuration:
+- For upstream Hermes release **v2026.9.14** (Hermes Agent v0.21.3), the verified installer SHA-256 is:
+  `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
 
-For upstream Hermes release **v2026.9.14** (Hermes Agent v0.21.3), the
-verified installer SHA-256 is:
-`00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
+Operators can override the expected hash by setting `OMES_HERMES_INSTALLER_SHA256` before `omes install`/`omes update`
+(`docs/hermes-integration.md` §2, `docs/security.md` §6). A mismatch aborts the install with **no execution** (exit 6)
+and records fail-closed provenance with `checksum.status="mismatch"`.
+
+Unmapped baselines fail closed by default. An explicit development override `OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1`
+is required to execute an unmapped baseline without verification, recording provenance as `unverified`, which
+`omes audit provenance` surfaces as a `WARN` finding, never silently.
 
 ## 4. Remediation
 

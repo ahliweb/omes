@@ -86,6 +86,9 @@ assert d["checksum"]["status"] == "unverified"
   # hermes is NOT yet installed so it actually goes through
   # _hermes_download_and_install (where provenance is recorded), rather
   # than taking the "already installed, skip download" shortcut.
+  # Use an unmapped version with explicit unverified override to exercise unverified provenance.
+  export OMES_HERMES_VERSION="unmapped-test"
+  export OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1
 
   run module_apply
   [ "$status" -eq 0 ]

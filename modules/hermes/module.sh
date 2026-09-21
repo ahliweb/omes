@@ -88,18 +88,56 @@ _hermes_installed_version() {
   hermes --version 2>/dev/null
 }
 
+# _hermes_target_version
+# Returns the target Hermes version/branch requested by the operator/profile,
+# or empty for the default baseline.
+_hermes_target_version() {
+  printf '%s\n' "${OMES_HERMES_BRANCH:-${OMES_HERMES_VERSION:-}}"
+}
+
+# _hermes_expected_installer_sha256 <url> <version>
+# Resolves the expected SHA-256 for the Hermes installer:
+# 1. Operator override via OMES_HERMES_INSTALLER_SHA256 (if set);
+# 2. Known baseline digest via hermes_lookup_installer_digest from lib/omes/versions.sh.
+_hermes_expected_installer_sha256() {
+  local url="$1" ver="$2"
+  if [[ -n "${OMES_HERMES_INSTALLER_SHA256:-}" ]]; then
+    printf '%s\n' "${OMES_HERMES_INSTALLER_SHA256}"
+    return 0
+  fi
+  if declare -F hermes_lookup_installer_digest >/dev/null 2>&1; then
+    hermes_lookup_installer_digest "$url" "$ver"
+    return $?
+  fi
+  return 1
+}
+
 # _hermes_download_and_install <home>
 # Downloads the Hermes installer to a temp file (never `curl | bash`),
-# optionally verifies OMES_HERMES_INSTALLER_SHA256, then runs it with an
+# enforces verified installer digest for known baselines (fail closed on
+# mismatch or unmapped baseline without override), then runs it with an
 # explicit HERMES_HOME. Honors dry-run (no download, no execution).
 _hermes_download_and_install() {
   local home="$1"
-  local url
+  local url ver
   url="$(_hermes_installer_url)"
+  ver="$(_hermes_target_version)"
 
   if omes_dry_run; then
     log_info "[dry-run] would download the Hermes installer from ${url} and run it with HERMES_HOME=${home}"
     return 0
+  fi
+
+  local expected=""
+  expected="$(_hermes_expected_installer_sha256 "$url" "$ver" || true)"
+
+  if [[ -z "$expected" ]]; then
+    if [[ "${OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER:-0}" == "1" ]]; then
+      log_warn "hermes: OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1 is set; running installer for unmapped baseline (url: ${url}, version: ${ver:-default}) without cryptographic integrity verification (see docs/security.md §6)"
+    else
+      log_error "hermes: unmapped or untrusted Hermes installer baseline (url: ${url}, version: ${ver:-default}) has no verified digest and OMES_HERMES_INSTALLER_SHA256 is not set. Refusing to execute unverified installer (fail closed). Set OMES_HERMES_INSTALLER_SHA256=<sha256> or explicit unsafe override OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1 to proceed."
+      return 1
+    fi
   fi
 
   local tmp
@@ -113,26 +151,26 @@ _hermes_download_and_install() {
   fi
 
   local actual="" checksum_status="unverified"
-  if [[ -n "${OMES_HERMES_INSTALLER_SHA256:-}" ]]; then
-    actual="$(sha256sum "$tmp" | awk '{print $1}')"
-    if [[ "$actual" != "${OMES_HERMES_INSTALLER_SHA256}" ]]; then
-      log_error "hermes: installer sha256 mismatch (expected ${OMES_HERMES_INSTALLER_SHA256}, got ${actual}); aborting, nothing executed"
+  actual="$(sha256sum "$tmp" | awk '{print $1}')"
+
+  if [[ -n "$expected" ]]; then
+    if [[ "$actual" != "$expected" ]]; then
+      log_error "hermes: installer sha256 mismatch (expected ${expected}, got ${actual}); aborting, nothing executed"
+      _hermes_record_provenance "$url" "$expected" "$actual" "mismatch"
       rm -f "$tmp"
       return 1
     fi
-    log_info "hermes: installer sha256 verified against OMES_HERMES_INSTALLER_SHA256"
+    log_info "hermes: installer sha256 verified against trusted baseline digest (${expected})"
     checksum_status="verified"
   else
-    log_warn "hermes: OMES_HERMES_INSTALLER_SHA256 is not set; running the Hermes installer without verifying its integrity (see docs/security.md §6)"
+    checksum_status="unverified"
   fi
 
   log_info "hermes: running installer with HERMES_HOME=${home}"
   local rc=0
   local -a installer_args=()
-  if [[ -n "${OMES_HERMES_BRANCH:-}" ]]; then
-    installer_args+=(--branch "$OMES_HERMES_BRANCH")
-  elif [[ -n "${OMES_HERMES_VERSION:-}" ]]; then
-    installer_args+=(--branch "$OMES_HERMES_VERSION")
+  if [[ -n "$ver" ]]; then
+    installer_args+=(--branch "$ver")
   fi
   HERMES_HOME="$home" omes_run bash "$tmp" "${installer_args[@]}" || rc=$?
   rm -f "$tmp"
@@ -142,7 +180,7 @@ _hermes_download_and_install() {
     return 1
   fi
 
-  _hermes_record_provenance "$url" "${OMES_HERMES_INSTALLER_SHA256:-}" "$actual" "$checksum_status"
+  _hermes_record_provenance "$url" "$expected" "$actual" "$checksum_status"
 
   return 0
 }
