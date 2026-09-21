@@ -767,7 +767,10 @@ omes agent logs <name> [journalctl-args...]      # systemd backend
 omes agent logs <name> [--tail N] [--follow]     # compose backend (docker compose logs)
 omes agent rollback <name> [--yes] [--json]
 omes agent remove <name> [--yes] [--json]        # compose backend only
+omes agent orchestration --session <id> [--tenant <id>] [--server <id>] [--json]
 ```
+
+- `orchestration` inspects live Hermes delegated-task subagent process trees reconstructed from `hermes.observer.v1` observer telemetry (issue #183, ADR-0028). Returns hierarchical process trees with step counts, active tools, elapsed durations, and freshness states.
 
 **Exit codes:** 0 ok; 2 usage error (including `remove` against a
 non-compose backend, which is not implemented); 4 preflight failed

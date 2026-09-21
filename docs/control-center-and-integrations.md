@@ -136,6 +136,17 @@ Key properties:
 - **Fixed-Argv Execution**: Polled jobs pass through `lib/omes/py/jobs/store.py` and `lib/omes/py/jobs/runner.py`. Arbitrary commands and shell invocation are strictly prohibited.
 - **Sanitized Results & Liveness**: The worker posts sanitized results and telemetry heartbeats (`omes worker heartbeat`), validating payloads against `contracts/control-center/v1/worker-*.schema.json`.
 
+### 4.2 Hermes Subagent Orchestration & Process Observability (ADR-0028, issue #183)
+
+Under [ADR-0028](adr/0028-hermes-orchestration-visualization.md) and issue [#183](https://github.com/ahliweb/omes/issues/183), OMES visualizes live Hermes delegated-task subagent process trees in the Control Center Screen 6.
+
+Key properties:
+- **Upstream Delegation Authority**: Hermes owns task delegation (`delegate_task`), child concurrency (up to 10 child agents per batch), model routing, and execution. OMES provides an **observability projection only**.
+- **Observer Hook Ingestion**: Collects read-only events from `hermes.observer.v1` (`subagent_start`, `subagent_stop`, `subagent_step`) and validates against `contracts/control-center/v1/hermes-orchestration-event.schema.json`.
+- **Hierarchical Process Trees**: Assembles nested parent-child hierarchies from opaque correlation IDs (`session_id`, `parent_subagent_id`, `subagent_id`).
+- **Privacy & Sanitization**: Prohibits chain-of-thought, raw prompts, full transcripts, shell commands, or credentials. Binds goals and summaries to 512 characters with HTML escaping.
+- **Freshness & Staleness**: Transitions active subagents to `stale` or `unknown` when unconfirmed by heartbeats or observer events.
+
 ## 5. Domain provider abstraction
 
 Issue [#98](https://github.com/ahliweb/omes/issues/98) owns the provider-neutral domain contract. Registrar and DNS are separate adapters:

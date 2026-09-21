@@ -32,6 +32,7 @@ Specific migrations delegating runtime features upstream to Hermes are tracked i
 - [#176](https://github.com/ahliweb/omes/issues/176): delegate Hermes backup/export/import to native commands.
 - [#177](https://github.com/ahliweb/omes/issues/177): align container deployments with official Hermes Docker topology.
 - [#178](https://github.com/ahliweb/omes/issues/178): consume native Hermes health endpoints.
+- [#183](https://github.com/ahliweb/omes/issues/183): visualize Hermes delegated-task orchestration and live subagent processes (ADR-0028).
 
 The target is a small, auditable control layer that can manage generic and specialist agent deployments without forcing Coolify, Docker, Redis, PostgreSQL, Kubernetes, or a web dashboard onto the MVP.
 

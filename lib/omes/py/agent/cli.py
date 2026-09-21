@@ -1304,7 +1304,42 @@ def build_parser() -> argparse.ArgumentParser:
     p_migrate.add_argument("--json", action="store_true")
     p_migrate.set_defaults(func=cmd_migrate, name_attr="agent_name")
 
+    p_orch = sub.add_parser("orchestration", help="inspect Hermes delegated-task process trees")
+    p_orch.add_argument("--session", required=True, help="Hermes session ID")
+    p_orch.add_argument("--tenant", default=None, help="Tenant ID")
+    p_orch.add_argument("--server", default=None, help="Server ID")
+    p_orch.add_argument("--json", action="store_true")
+    p_orch.set_defaults(func=cmd_orchestration)
+
     return parser
+
+
+def cmd_orchestration(args: argparse.Namespace) -> int:
+    from . import orchestration
+
+    tenant = args.tenant or os.environ.get("OMES_JOBS_TENANT_ID") or "default"
+    server = args.server or os.environ.get("OMES_JOBS_SERVER_ID") or "default"
+
+    try:
+        tree = orchestration.build_tree(
+            session_id=args.session,
+            tenant_id=tenant,
+            server_id=server,
+        )
+    except orchestration.OrchestrationError as exc:
+        print(f"[omes-agent] ERROR: {exc}", file=sys.stderr)
+        return EX_ERROR
+
+    if args.json:
+        _print(tree, True)
+    else:
+        print(f"Hermes Orchestration Session: {tree['session_id']}")
+        print(f"Freshness: {tree['freshness']} · Active: {tree['active_count']} · Completed: {tree['completed_count']} · Failed: {tree['failed_count']}")
+        print("Subagent Process Tree:")
+        for node in tree["nodes"]:
+            prefix = "  └── " if node["parent_subagent_id"] else "● "
+            print(f"{prefix}{node['subagent_id']} [{node['state']}] role={node['role']} tool={node['active_tool']} ({node['duration_seconds']}s)")
+    return EX_OK
 
 
 def main(argv=None) -> int:
