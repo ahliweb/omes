@@ -22,3 +22,6 @@ tests/vm/evidence/
 
 # Python bytecode caches (issue #64 tests/py)
 __pycache__/
+
+# Bootstrap release channel provenance marker
+/.omes-channel.json

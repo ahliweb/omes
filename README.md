@@ -100,8 +100,14 @@ profiles, provider/Telegram setup, upgrading, uninstalling, supported vs.
 unsupported configurations): [docs/installation.md](docs/installation.md).
 
 ```bash
-# 1. Bootstrap: clones OMES and symlinks ~/.local/bin/omes (no other mutation)
-curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/main/install/bootstrap.sh | bash
+# 1. Bootstrap: installs immutable stable release and symlinks ~/.local/bin/omes
+curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash
+
+# Alternatively, select an explicit release channel:
+#   stable (default): curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel stable
+#   rc:               curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel rc --ref v0.4.0-rc1
+#   edge:             curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel edge
+#   dev:              curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel dev
 
 # 2. Preflight: read-only checks, safe to run any time, as any user
 omes check --profile server        # or --profile desktop
@@ -119,11 +125,13 @@ omes doctor
 sudo omes doctor
 ```
 
-`install/bootstrap.sh` never mutates the system beyond installing `git` (via
-apt, with an explicit sudo prompt printed first) and cloning/symlinking OMES
-itself; it never installs an OMES module. Every module apply is preceded by a
-read-only check phase, and idempotent: re-running `omes install` on an
-unchanged system makes no further changes.
+`install/bootstrap.sh` defaults to the immutable `stable` release channel (`v0.3.0`),
+validates origin remote URL, protects against clobbering dirty working trees,
+and records verification metadata in `~/.local/share/omes/.omes-channel.json`.
+It never mutates the system beyond installing `git` (via apt, with an explicit
+warning first) and cloning/symlinking OMES itself; it never installs an OMES
+module. Every module apply is preceded by a read-only check phase, and idempotent:
+re-running `omes install` on an unchanged system makes no further changes.
 
 ## CLI overview
 
