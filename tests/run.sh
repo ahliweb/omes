@@ -159,10 +159,28 @@ if [[ -d contracts ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Architecture boundaries and capability registry (ADR-0017, issue #171)
+# ---------------------------------------------------------------------------
+
+if [[ -f scripts/check-architecture.py ]]; then
+  log "running python3 scripts/check-architecture.py"
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 scripts/check-architecture.py; then
+      err "scripts/check-architecture.py failed"
+      FAILED=1
+    fi
+  else
+    err "python3 not available; cannot run scripts/check-architecture.py"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # bash -n on every shell script (fast syntax sanity check)
 # ---------------------------------------------------------------------------
 
 log "running bash -n on ${#SHELL_FILES[@]} files"
+
 for f in "${SHELL_FILES[@]}"; do
   case "$f" in
     *.profile) continue ;;

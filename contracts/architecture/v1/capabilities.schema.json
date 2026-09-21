@@ -1,0 +1,110 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://specs.omes.ahliweb.com/architecture/v1/capabilities.schema.json",
+  "title": "ArchitectureCapabilitiesRegistry",
+  "description": "Machine-readable source of truth for upstream capability ownership, maturity, and OMES disposition (ADR-0017, issue #171).",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "precedence",
+    "capabilities"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "enum": ["1.0.0"]
+    },
+    "precedence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["delegate", "port", "adapt", "defer", "reject"]
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "capability_id",
+          "title",
+          "authority",
+          "upstream_project",
+          "supported_baseline",
+          "maturity",
+          "disposition",
+          "duplication_allowed",
+          "evidence_urls"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "capability_id": {
+            "type": "string",
+            "pattern": "^[a-z0-9_.-]+$"
+          },
+          "title": {
+            "type": "string"
+          },
+          "authority": {
+            "type": "string",
+            "enum": [
+              "omes",
+              "hermes",
+              "omarchy",
+              "awcms",
+              "graphify",
+              "provider"
+            ]
+          },
+          "upstream_project": {
+            "type": "string"
+          },
+          "supported_baseline": {
+            "type": "string"
+          },
+          "observed_upstream_revision": {
+            "type": ["string", "null"]
+          },
+          "maturity": {
+            "type": "string",
+            "enum": [
+              "released_supported",
+              "released_unverified",
+              "upstream_main_candidate",
+              "deprecated"
+            ]
+          },
+          "disposition": {
+            "type": "string",
+            "enum": [
+              "delegate",
+              "port",
+              "adapt",
+              "defer",
+              "reject"
+            ]
+          },
+          "omes_module": {
+            "type": ["string", "null"]
+          },
+          "duplication_allowed": {
+            "type": "boolean"
+          },
+          "adr_reference": {
+            "type": ["string", "null"]
+          },
+          "removal_trigger": {
+            "type": ["string", "null"]
+          },
+          "evidence_urls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    }
+  }
+}

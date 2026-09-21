@@ -20,13 +20,8 @@ installed. It is a layer of package installation, configuration templates,
 systemd services, checks, backups, and rollback — not an operating system,
 not an installer image, and not a distribution.
 
-OMES is a "compatibility layer" in the sense that it selectively reproduces
-the *parts of the Omarchy workflow that make sense on apt/systemd hosts*
-(terminal-first tooling, mise, themable configuration, an agent-first
-operations model, explicit update/backup/rollback flows) while rejecting or
-adapting the parts that depend on Arch-specific mechanisms. The full mapping
-of what is ported, adapted, deferred, or rejected is tracked separately in
-[docs/omarchy-compatibility-inventory.md](omarchy-compatibility-inventory.md).
+OMES is a "compatibility layer" governed by the upstream-first decision hierarchy (`DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT`, [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md)). It delegates agent runtime behavior to Hermes Agent, graph extraction to Graphify, and ports or adapts portable Omarchy desktop patterns while rejecting Arch-specific mechanisms. The full capability registry is machine-enforced in `architecture/capabilities.json` and tracked in [docs/omarchy-compatibility-inventory.md](omarchy-compatibility-inventory.md).
+
 
 ## 2. What OMES is not
 

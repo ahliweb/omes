@@ -14,14 +14,13 @@ the decision can be revisited as Ubuntu/Mint package availability changes.
 
 ### 1.1 Decision categories
 
-- **PORT** — usable as-is (or with only packaging changes) because an
-  Ubuntu/Mint package (or an install method OMES already trusts) exists.
-- **ADAPT** — the underlying capability is kept, but OMES re-implements it
-  for apt/systemd rather than reusing Omarchy's Arch-specific mechanism.
+Per [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md), capabilities follow the mandatory upstream-first precedence: `DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT`.
+
+- **DELEGATE** — upstream project owns the capability and exposes a supported interface; OMES invokes/observes it directly and strictly prohibits reimplementation (e.g., Hermes Agent for agent operations, Graphify for codebase knowledge extraction).
+- **PORT** — usable as-is (or with only packaging changes) because an Ubuntu/Mint package (or an install method OMES already trusts) exists.
+- **ADAPT** — the underlying capability is kept, but OMES implements it natively for apt/systemd rather than reusing Omarchy's Arch-specific mechanism.
 - **DEFER** — plausible for a later release; not part of the MVP.
-- **REJECT** — never implemented by OMES, because it depends on a mechanism
-  OMES explicitly excludes (see [docs/scope.md §4, non-goals](scope.md)) or
-  because it would overstate what OMES can guarantee.
+- **REJECT** — never implemented by OMES, because it depends on a mechanism OMES explicitly excludes (see [docs/scope.md §4, non-goals](scope.md)) or because it would overstate what OMES can guarantee.
 
 ### 1.2 How to read the table
 
@@ -42,7 +41,8 @@ OMES profile(s) it applies to, and a source link.
 | Shell tooling (zsh/bash, starship, fzf, zoxide, eza, bat, ripgrep, fd, lazygit, lazydocker, btop) | PORT | This is the highest-value, lowest-risk part of the Omarchy workflow: all of these tools are widely packaged for Debian/Ubuntu and provide immediate value on a headless server as well as a desktop | All listed tools are in Ubuntu universe/main in recent releases (verify exact versions per release; `bat`/`fd` may be installed as `batcat`/`fdfind` on older Ubuntu and need a compatibility shim) | both | [Omarchy Manual](https://omarchy.org/manual/), [Omakub Manual](https://manual.omakub.org/1/read) |
 | Neovim (LazyVim) | PORT | Neovim is packaged for Ubuntu/Mint; LazyVim is a configuration distribution (a git-based config template), not a binary package, so OMES templates the config rather than "installing LazyVim" | Neovim in Ubuntu universe (verify per-release version is recent enough for LazyVim's plugin requirements); LazyVim itself is applied as a templated config, not an apt package | both | [Omarchy Manual](https://omarchy.org/manual/) |
 | AI CLIs (Claude Code, etc.) | ADAPT | Individual AI CLIs are optional developer tools OMES can install/document like any other dev tool, but they are not OMES's primary automation layer | Installed per-vendor instructions (npm/curl installers), not from Ubuntu/Mint archives; OMES treats these as optional, documented add-ons | both | [Omarchy AI](https://omarchy.org/manual/ai/) |
-| Omarchy's AI menu | REJECT (replaced) | Omarchy's built-in AI menu is Arch/Hyprland-integrated tooling; OMES's automation layer is Hermes Agent, a separate, already-adopted product, so the AI menu itself is not reproduced — its *role* is filled by Hermes, not by porting the menu | N/A — replaced by Hermes Agent | both | [Omarchy AI](https://omarchy.org/manual/ai/), [Hermes messaging gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/) |
+| Omarchy's AI menu | DELEGATE (to Hermes Agent) | Omarchy's built-in AI menu is Arch/Hyprland-integrated tooling; OMES delegates host operations and reasoning entirely to Hermes Agent rather than reimplementing or reproducing an AI menu | N/A — delegated to Hermes Agent | both | [Omarchy AI](https://omarchy.org/manual/ai/), [Hermes messaging gateway](https://hermes-agent.nousresearch.com/docs/user-guide/messaging/) |
+
 | Themes / theme switching | ADAPT | Theme switching (terminal color scheme, bar, wallpaper) is a desktop-experience feature; OMES can template terminal/shell color schemes for both profiles but full visual theming (bar, compositor, wallpaper) only applies where there is a GUI | Implemented via OMES-managed config templates, not an apt package | desktop (terminal color scheme only: both) | [Omarchy Manual](https://omarchy.org/manual/) |
 | mise (runtime/tool version manager) | PORT | Directly reusable: mise has an official install script and works identically on any systemd Linux; it is one of the most valuable "developer baseline" pieces of the Omarchy workflow and applies equally to a headless server | Installed via mise's official install script (not from Ubuntu/Mint archives); works on both profiles unmodified | both | research plan §2.1 |
 | Dev tools: Docker | ADAPT | Docker is officially supported on Ubuntu; on Mint it works but is not officially supported, so OMES must detect the host and use the underlying `$UBUNTU_CODENAME` repository with an explicit warning rather than claiming parity | Ubuntu: official Docker apt repo, tier-1 support; Mint: works via the Ubuntu codename repo but is not Docker-official — see [docs/scope.md non-goals](scope.md) | both (server: default; desktop: opt-in with warning) | [Docker Ubuntu installation](https://docs.docker.com/engine/install/ubuntu/), [Docker post-install security](https://docs.docker.com/install/linux/linux-postinstall) |

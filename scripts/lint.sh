@@ -156,6 +156,16 @@ run_contracts() {
   fi
 }
 
+run_architecture() {
+  echo "== scripts/check-architecture.py (ADR-0017 architecture boundary) =="
+  if command -v python3 >/dev/null 2>&1; then
+    python3 "$(repo_root)/scripts/check-architecture.py"
+  else
+    echo "scripts/lint.sh: python3 not available; cannot run scripts/check-architecture.py" >&2
+    return 1
+  fi
+}
+
 cmd_all() {
   local overall=0
   run_shellcheck || overall=1
@@ -165,6 +175,8 @@ cmd_all() {
   run_yamllint || overall=1
   echo
   run_contracts || overall=1
+  echo
+  run_architecture || overall=1
   return "$overall"
 }
 
@@ -176,9 +188,10 @@ main() {
     shfmt) run_shfmt ;;
     yamllint) run_yamllint ;;
     contracts) run_contracts ;;
+    architecture) run_architecture ;;
     all) cmd_all ;;
     *)
-      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|all]" >&2
+      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|architecture|all]" >&2
       return 2
       ;;
   esac

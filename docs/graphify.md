@@ -12,8 +12,12 @@
 >
 > Upstream facts in this document were verified 2026-09-19 against
 > `graphify` version `0.9.64` (see
-> [ADR-0014](adr/0014-graphify-integration-boundary.md) for how that
-> verification was done and why it matters for what OMES commits to).
+> [ADR-0014](adr/0014-graphify-integration-boundary.md) and
+> [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md)).
+> Under ADR-0017 and issue [#171](https://github.com/ahliweb/omes/issues/171), OMES
+> delegates workspace AST extraction and graph format upstream, and delegates skill/MCP
+> behavior upstream in issue [#180](https://github.com/ahliweb/omes/issues/180).
+
 
 ## §1 Identity, modes, and ownership boundary
 

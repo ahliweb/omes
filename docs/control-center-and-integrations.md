@@ -30,7 +30,12 @@ The Control Center does not replace the three existing authorities:
 | Repository, workflow, release, and deployment observations | GitHub |
 | Delegated Coolify resource state | Coolify for the external resource; OMES for logical intent and policy |
 
-The Control Center must never become a second Hermes runtime, arbitrary remote shell, or replacement for the OMES local recovery path.
+Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171):
+- OMES core modules (`agent`, `jobs`, `health`, `provenance`, `architecture`) must never import or depend directly on commercial/domain modules (`content`, `domains`, `billing`).
+- The Control Center must never execute arbitrary shell commands; mutations are restricted to typed, allowlisted OMES jobs.
+- Domain-level content orchestration is temporary in OMES core and scheduled to migrate into an agent skill ([#179](https://github.com/ahliweb/omes/issues/179)).
+- The Control Center must never become a second Hermes runtime, arbitrary remote shell, or replacement for the OMES local recovery path.
+
 
 ## 2. Component model
 

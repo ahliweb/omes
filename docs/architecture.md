@@ -36,8 +36,10 @@
 13. [Non-goals and known limitations](#13-non-goals-and-known-limitations)
 14. [Control Center and provider boundary](#14-control-center-and-provider-boundary)
 15. [Web-panel reference boundary](#15-web-panel-reference-boundary)
+16. [Upstream-first ownership and architecture boundaries](#16-upstream-first-ownership-and-architecture-boundaries)
 
 ---
+
 
 ## 1. Overview and component diagram
 
@@ -1027,7 +1029,37 @@ The following patterns are suitable for reimplementation in a future Control Cen
 
 The following are not transferable without redesign: local token-only authentication, direct subprocess or filesystem execution, raw SSH/API/git credential handling, arbitrary endpoint probing, coupling to Hermes internal databases, and local single-user assumptions. The web surface must never become an arbitrary shell or privileged listener. This section is a design boundary only; it does not mean Herman or an OMES web GUI is implemented.
 
+## 16. Upstream-first ownership and architecture boundaries
+
+Per [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171), OMES enforces an explicit, machine-verifiable architecture boundary across OMES, Hermes Agent, Omarchy, Graphify, and AWCMS.
+
+### 16.1 Decision hierarchy
+
+```text
+DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT
+```
+
+1. **DELEGATE**: Upstream owns the capability and exposes a supported interface; OMES invokes or observes it and never reimplements it (e.g., Hermes for agent reasoning and tool orchestration; Graphify for AST parsing and knowledge graph extraction).
+2. **PORT**: Portable upstream components or configs are ported with minimal packaging changes (e.g., shell plugins and release channels).
+3. **ADAPT**: The policy/concept is retained but adapted natively for Ubuntu Server / Linux Mint systemd hosts (e.g., desktop styling and privilege hardening).
+4. **DEFER**: Capabilities not yet stabilized or candidate features on upstream `main` are deferred.
+5. **REJECT**: Mechanisms that conflict with OMES target OS, safety policies, or minimal privilege boundaries are rejected.
+
+### 16.2 Capability registry and CI guard
+
+The architecture source of truth is codified in `architecture/capabilities.json` and validated by JSON Schema in `contracts/architecture/v1/capabilities.schema.json`.
+
+Enforcement rules:
+- **Zero unclassified modules**: All Python submodules under `lib/omes/py` must be classified in `architecture/capabilities.json`.
+- **Layer boundary integrity**: OMES core host modules (`agent`, `jobs`, `health`, `provenance`, `architecture`) cannot import commercial/domain modules (`content`, `domains`).
+- **Decoupled agent runtime**: OMES must not directly query Hermes private databases (`messages.db`, `.hermes/`); operations must use supported Hermes CLI commands.
+- **Candidate feature isolation**: Upstream features observed only on `main` cannot be classified as `released_supported`.
+- **Expiry condition on duplication**: Any temporary duplication requires `duplication_allowed: true`, an `adr_reference`, and a non-empty `removal_trigger`.
+
+These rules are enforced in CI via `scripts/check-architecture.py` and unit tests in `tests/py/architecture/test_registry.py`.
+
 <!-- OMES-MERMAID: docs/architecture.md -->
+
 
 ## Visual summary
 

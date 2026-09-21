@@ -1,0 +1,485 @@
+{
+  "schema_version": "1.0.0",
+  "precedence": ["delegate", "port", "adapt", "defer", "reject"],
+  "capabilities": [
+    {
+      "capability_id": "hermes.agent.reasoning",
+      "title": "Hermes Agent Core Reasoning and Tool Execution",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": null,
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.14",
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/reference/cli-commands.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.profiles",
+      "title": "Hermes Multi-Profile Isolation",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": null,
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/user-guide/profiles.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.gateway",
+      "title": "Hermes Gateway and Service Management",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "agent",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0013",
+      "removal_trigger": "issue #175 native hermes gateway lifecycle delegation",
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/user-guide/multi-profile-gateways.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.backup",
+      "title": "Hermes Profile Backup and Restore",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "hermesbackup",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0013",
+      "removal_trigger": "issue #176 native hermes backup/export delegation",
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/reference/cli-commands.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.docker",
+      "title": "Hermes Docker Topology with s6 Supervision",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "agent",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0013",
+      "removal_trigger": "issue #177 official hermes docker topology alignment",
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/user-guide/docker.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.health",
+      "title": "Hermes Runtime Health and Doctor Diagnostics",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "health",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0013",
+      "removal_trigger": "issue #178 consume native hermes health endpoints",
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/reference/cli-commands.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.security",
+      "title": "Hermes Dangerous-Command Approval and Toolset Filtering",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": null,
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/user-guide/security.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.bot_mode",
+      "title": "Hermes Bot Mode Specialist Personas and Routines",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.14",
+      "observed_upstream_revision": "v2026.9.14",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": null,
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.14"
+      ]
+    },
+    {
+      "capability_id": "omarchy.release.channels",
+      "title": "Omarchy Release Channel Update Specification",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "bootstrap",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0010",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/omacom/omarchy/releases/tag/v4.0.4",
+        "https://omarchy.org/manual/updates/"
+      ]
+    },
+    {
+      "capability_id": "omarchy.theme.composition",
+      "title": "Omarchy Theme Composition Specification",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "desktop",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0008",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/omacom/omarchy/releases/tag/v4.0.4",
+        "https://omarchy.org/manual/themes/"
+      ]
+    },
+    {
+      "capability_id": "omarchy.shell.plugins",
+      "title": "Omarchy Shell Plugins and Prompt Enhancements",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0008",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://omarchy.org/manual/shell-plugins/"
+      ]
+    },
+    {
+      "capability_id": "omarchy.devtools.catalog",
+      "title": "Omarchy Development Tools Catalog",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "desktop",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0008",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://omarchy.org/manual/development-tools/"
+      ]
+    },
+    {
+      "capability_id": "omarchy.security.policy",
+      "title": "Omarchy Desktop Security and Privilege Rules",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "desktop",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0005",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://omarchy.org/manual/security/"
+      ]
+    },
+    {
+      "capability_id": "omarchy.arch.chroot",
+      "title": "Omarchy Arch-Specific Chroot Packaging",
+      "authority": "omarchy",
+      "upstream_project": "omacom/omarchy",
+      "supported_baseline": "v4.0.4",
+      "observed_upstream_revision": "v4.0.4",
+      "maturity": "released_supported",
+      "disposition": "reject",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0008",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/omacom/omarchy/releases/tag/v4.0.4"
+      ]
+    },
+    {
+      "capability_id": "graphify.knowledge.extraction",
+      "title": "Graphify Codebase Knowledge Graph Extraction",
+      "authority": "graphify",
+      "upstream_project": "graphify",
+      "supported_baseline": "0.9.64",
+      "observed_upstream_revision": "0.9.64",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0014",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://pypi.org/project/graphifyy/0.9.64/"
+      ]
+    },
+    {
+      "capability_id": "graphify.mcp.server",
+      "title": "Graphify MCP Server and Hermes Skill Integration",
+      "authority": "graphify",
+      "upstream_project": "graphify",
+      "supported_baseline": "0.9.64",
+      "observed_upstream_revision": "0.9.64",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "graphify",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0014",
+      "removal_trigger": "issue #180 delegate skill/MCP behavior upstream",
+      "evidence_urls": [
+        "https://pypi.org/project/graphifyy/0.9.64/"
+      ]
+    },
+    {
+      "capability_id": "omes.host.preflight",
+      "title": "OMES Host Platform and Privilege Preflight",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "preflight",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0004",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "omes.host.lifecycle",
+      "title": "OMES Host Service Lifecycle and Hardening",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "agent",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0003",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "omes.host.backup",
+      "title": "OMES Host Atomic Backup, Restore, and Rollback",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "backup",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0003",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "omes.host.provenance",
+      "title": "OMES Release Provenance and Channel Management",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "provenance",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0010",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "omes.jobs.engine",
+      "title": "OMES Subprocess Job Execution Engine",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "jobs",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0012",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "omes.architecture.registry",
+      "title": "OMES Architecture Boundary and Capability Registry",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "port",
+      "omes_module": "architecture",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0017",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/releases/tag/v0.3.0"
+      ]
+    },
+    {
+      "capability_id": "coolify.deployment.adapter",
+      "title": "Coolify Optional Deployment Adapter",
+      "authority": "omes",
+      "upstream_project": "coollabsio/coolify",
+      "supported_baseline": "v4.0.0",
+      "observed_upstream_revision": "v4.0.0",
+      "maturity": "released_supported",
+      "disposition": "defer",
+      "omes_module": "coolify",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0013",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/coollabsio/coolify"
+      ]
+    },
+    {
+      "capability_id": "awcms.commercial.billing",
+      "title": "AWCMS Commercial Subscriptions and Invoicing",
+      "authority": "awcms",
+      "upstream_project": "awcms",
+      "supported_baseline": "v1.0.0",
+      "observed_upstream_revision": "v1.0.0",
+      "maturity": "released_supported",
+      "disposition": "defer",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0011",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://specs.omes.ahliweb.com/control-center/v1/jobs.schema.json"
+      ]
+    },
+    {
+      "capability_id": "awcms.tenant.portal",
+      "title": "AWCMS Multi-Tenant Customer Portal",
+      "authority": "awcms",
+      "upstream_project": "awcms",
+      "supported_baseline": "v1.0.0",
+      "observed_upstream_revision": "v1.0.0",
+      "maturity": "released_supported",
+      "disposition": "defer",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0011",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://specs.omes.ahliweb.com/control-center/v1/jobs.schema.json"
+      ]
+    },
+    {
+      "capability_id": "awcms.content.orchestration",
+      "title": "AWCMS Domain Content Distribution Workflow",
+      "authority": "awcms",
+      "upstream_project": "awcms",
+      "supported_baseline": "v1.0.0",
+      "observed_upstream_revision": "v1.0.0",
+      "maturity": "released_supported",
+      "disposition": "defer",
+      "omes_module": "content",
+      "duplication_allowed": true,
+      "adr_reference": "ADR-0015",
+      "removal_trigger": "issue #179 move content orchestration into agent skill",
+      "evidence_urls": [
+        "https://specs.omes.ahliweb.com/control-center/v1/jobs.schema.json"
+      ]
+    },
+    {
+      "capability_id": "provider.cloudflare.registrar",
+      "title": "Cloudflare Registrar and DNS Reconciliation",
+      "authority": "provider",
+      "upstream_project": "cloudflare",
+      "supported_baseline": "api.v4",
+      "observed_upstream_revision": "api.v4",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "domains",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0011",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://api.cloudflare.com/#getting-started"
+      ]
+    },
+    {
+      "capability_id": "provider.srsx.registrar",
+      "title": "SRS-X .id Registrar and Document Verification",
+      "authority": "provider",
+      "upstream_project": "srs-x",
+      "supported_baseline": "api.v1",
+      "observed_upstream_revision": "api.v1",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "omes_module": "domains",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0011",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://specs.omes.ahliweb.com/domains/v1/registrar.schema.json"
+      ]
+    }
+  ]
+}

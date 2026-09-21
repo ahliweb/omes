@@ -17,12 +17,38 @@ If the repository state, issue, or documentation disagrees, stop and resolve the
 
 - **OMES** owns host compatibility, preflight, installation, service lifecycle, hardening, health, backup, restore, rollback, compatibility evidence, provenance, and host/deployment state.
 - **Hermes Agent** owns agent runtime behavior: reasoning, messaging, channels, sessions, memory, skills, delegation, cron, browser automation, and model/provider routing. OMES integrates with Hermes; it must not implement a second Hermes runtime.
+- **Omarchy** provides upstream desktop styling, shell enhancements, developer catalogs, and update channels. OMES ports portable components and adapts policies to Ubuntu/Mint, never duplicating Arch-specific mechanisms.
+- **Graphify** owns codebase knowledge graph extraction, AST analysis, and Hermes MCP tools. OMES delegates graph extraction upstream.
 - **AWCMS/Control Center**, when implemented, owns tenant, customer, catalog, subscription, invoice, payment, entitlement, approval, support, and portal state. It must request allowlisted OMES jobs and must never execute arbitrary host shell commands.
 - **Cloudflare Registrar/SRS-X** own actual registrar state. The selected DNS provider owns DNS state. OMES stores intent and reconciliation evidence, not a false copy of provider truth.
 - **GitHub** owns repository, workflow, release, webhook, and deployment observations. GitHub is not the OMES billing authority.
 - **Coolify** is an optional later deployment adapter. It is not the OMES runtime, billing engine, or source of truth. Nomad/Kubernetes are evidence-gated evaluation only.
 
+### Upstream-first precedence and decision tree (ADR-0017)
+
+Adopt this mandatory hierarchy for every capability:
+```text
+DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT
+```
+
+Before introducing or modifying an OMES capability, contributors must evaluate:
+1. Does supported Hermes already own it? -> **DELEGATE**.
+2. Does Omarchy or another upstream implement a portable equivalent? -> **PORT** when safe.
+3. Is only the policy/concept portable? -> **ADAPT** for Ubuntu/Mint.
+4. Is it a host compatibility, installation, lifecycle, hardening, or recovery concern? -> **OMES** may own it.
+5. Is it agent runtime behavior? -> **Hermes**.
+6. Is it business/control-plane/domain workflow? -> **AWCMS** or another application.
+7. Otherwise, require an ADR.
+
+Rules enforced by CI (`scripts/check-architecture.py`):
+- All capabilities and module mappings are recorded in `architecture/capabilities.json`.
+- Core modules (`agent`, `jobs`, `health`, `provenance`, `architecture`) must never import commercial/domain workflow modules (`content`, `domains`).
+- OMES must not directly access internal Hermes databases (`messages.db`, `.hermes/`); interact via supported CLI/API interfaces.
+- Upstream features observed only on `main` cannot be classified as `released_supported`.
+- Any temporary capability duplication requires an ADR reference and an explicit `removal_trigger`.
+
 The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Control Center, registrar adapters, GitHub integration, and Coolify are staged work unless their implementation issue has landed.
+
 
 ## 3. Non-negotiable safety rules
 
