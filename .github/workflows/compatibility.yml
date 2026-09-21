@@ -41,6 +41,9 @@ jobs:
         include:
           # Tier 1 (per docs/compatibility-matrix.md section 1): a
           # regression here blocks the release, so these are blocking.
+          - image: "ubuntu:26.04"
+            tier: "1"
+            advisory: false
           - image: "ubuntu:24.04"
             tier: "1"
             advisory: false
@@ -79,6 +82,36 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: omes-test-matrix-${{ steps.sanitize.outputs.name }}
+          path: |
+            tests/matrix/results/
+            tests/matrix/logs/
+          if-no-files-found: ignore
+
+  real-install-ubuntu-26-04:
+    name: Real install + idempotency (ubuntu:26.04, root, apt-base)
+    runs-on: ubuntu-24.04
+    continue-on-error: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: scripts/test-matrix.sh (fresh + rerun only)
+        if: hashFiles('scripts/test-matrix.sh') != ''
+        env:
+          OMES_MATRIX_IMAGES: "ubuntu:26.04"
+          OMES_MATRIX_SCENARIOS: "fresh rerun"
+        run: ./scripts/test-matrix.sh
+
+      - name: scripts/test-matrix.sh not present yet
+        if: hashFiles('scripts/test-matrix.sh') == ''
+        run: |
+          echo "scripts/test-matrix.sh not present yet; skipping. Tracked in #15."
+
+      - name: Upload tests/matrix/ results and logs
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
+        with:
+          name: omes-real-install-ubuntu-26.04
           path: |
             tests/matrix/results/
             tests/matrix/logs/

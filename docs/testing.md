@@ -119,7 +119,7 @@ OMES_MATRIX_SCENARIOS="fresh rerun" scripts/test-matrix.sh # a subset of scenari
 OMES_MATRIX_FAIL_PKG=curl scripts/test-matrix.sh           # override the partial-failure scenario's package
 ```
 
-Requires Docker. Runs, per image in `OMES_MATRIX_IMAGES` (default: `ubuntu:24.04`,
+Requires Docker. Runs, per image in `OMES_MATRIX_IMAGES` (default: `ubuntu:26.04`, `ubuntu:24.04`,
 `ubuntu:22.04`, `linuxmintd/mint22-amd64`):
 
 | Scenario | What it proves |
@@ -130,6 +130,7 @@ Requires Docker. Runs, per image in `OMES_MATRIX_IMAGES` (default: `ubuntu:24.04
 | `partial-failure` | A forced `apt-get install` failure (via `tests/matrix/shims/apt-get`, mounted ahead on `PATH`) surfaces as exit 6, naming the module. |
 | `reboot` | A container stop/start proxy for a real reboot - see [6. Known gaps](#6-known-gaps). |
 | `rollback` | `omes backup` → modify → `omes restore` → checksum equality; a plain `omes uninstall` leaves packages installed. |
+| `dr` | Disaster recovery: state corruption recovery and invalid manifest rejection. |
 
 The repository is bind-mounted **read-only** at `/omes` in every container; only a per-scenario
 writable state directory and the container's own writable root filesystem (for real `apt-get`
@@ -143,13 +144,14 @@ advisory, matching [docs/ci.md](ci.md) section 3's blocking/advisory split).
 ### 2.3 VM matrix
 
 ```bash
+tests/vm/run.sh --image /path/to/ubuntu-26.04-server-cloudimg-amd64.img
 tests/vm/run.sh --image /path/to/ubuntu-24.04-server-cloudimg-amd64.img
 OMES_VM_SKIP_HERMES=1 tests/vm/run.sh --image <path>   # skip the Hermes install/verify steps
 ```
 
 Requires `virt-install`/`virsh`/`qemu-img` (`apt-get install virtinst qemu-system-x86
-libvirt-daemon-system genisoimage` on Ubuntu), KVM, and an operator-supplied Ubuntu Server 24.04
-cloud image (this script deliberately never downloads one itself - see `tests/vm/run.sh`'s
+libvirt-daemon-system genisoimage` on Ubuntu), KVM, and an operator-supplied Ubuntu Server 26.04
+or 24.04 cloud image (this script deliberately never downloads one itself - see `tests/vm/run.sh`'s
 header comment and [`tests/vm/README.md`](../tests/vm/README.md)). Boots the image, copies this
 exact working tree over SSH, runs check → install → a **real** `reboot` → post-reboot
 assertions, and writes a timestamped, sha256-summed evidence bundle under `tests/vm/evidence/`
