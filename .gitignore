@@ -28,3 +28,6 @@ __pycache__/
 
 # Release artifacts and evidence bundles
 dist/
+
+# Scratch redesign archives
+redesign/

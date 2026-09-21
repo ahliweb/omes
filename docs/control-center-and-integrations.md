@@ -36,6 +36,9 @@ Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) 
 - Domain-level content orchestration is temporary in OMES core and scheduled to migrate into an agent skill ([#179](https://github.com/ahliweb/omes/issues/179)).
 - The Control Center must never become a second Hermes runtime, arbitrary remote shell, or replacement for the OMES local recovery path.
 
+### 1.1 UI/UX Design System and Screen Architecture
+Under [ADR-0023](adr/0023-control-center-ui-ux-design-system.md) and [docs/ui-ux-design-system.md](ui-ux-design-system.md), the Control Center UI/UX baseline is governed by a canonical 9-screen architecture and interactive prototype in [`ui/control-center/index.html`](../ui/control-center/index.html). The interface establishes two-role RBAC (`Owner` approval gate vs `Operator` proposal), allowlisted operation runner drawer (`Cmd+K`), dark high-density styling (`#0E1216`), and dedicated screens for fleet overview, servers/drift, deployments, operations/jobs, Hermes orchestration, health, backup, audit, and pull-worker enrollment.
+
 
 ## 2. Component model
 
