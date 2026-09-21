@@ -79,16 +79,28 @@ Run on a freshly provisioned host, as your own non-root user with `sudo` access.
 ### 3.1 Bootstrap
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/main/install/bootstrap.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash
+```
+
+Alternatively, select an explicit release channel:
+- `stable` (default): verified immutable release tag (`v0.3.0`).
+- `rc`: explicit release candidate tag (requires `--ref v0.4.0-rc1` or similar).
+- `edge`: rolling `main` resolved to a single exact commit SHA before execution.
+- `dev`: local development checkout, preserving working trees and uncommitted changes.
+
+```console
+# Example: opt in to edge or a candidate
+$ curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel edge
 ```
 
 **Privileged command this may run, and why:** only if `git` is missing,
 `install/bootstrap.sh` runs `sudo apt-get update` and
 `sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git`
 — both printed before they run, and both no-ops if `git` is already present.
-Everything else (cloning to `~/.local/share/omes`, symlinking
-`~/.local/bin/omes`) runs as your own user. The script never installs an OMES
-module; it hands off to `omes check` and prints the next commands.
+Everything else (validating origin URL, cloning/updating to `~/.local/share/omes`,
+recording channel provenance to `~/.local/share/omes/.omes-channel.json`, and
+symlinking `~/.local/bin/omes`) runs as your own user. The script never installs an
+OMES module; it hands off to `omes check` and prints the next commands.
 
 ### 3.2 Check (no mutation)
 
@@ -168,7 +180,7 @@ opt-in second login option.
 ### 4.1 Bootstrap and check
 
 ```console
-$ curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/main/install/bootstrap.sh | bash
+$ curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash
 $ omes check --profile desktop
 ```
 

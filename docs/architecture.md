@@ -149,7 +149,7 @@ modules/<name>/module.sh        # One module implementing the module contract (S
 profiles/server.profile         # Ordered module list for the server profile.
 profiles/desktop.profile        # Ordered module list for the desktop profile.
 profiles/hermes.profile         # Ordered module list for the hermes profile.
-install/bootstrap.sh            # curl-able entry point: clones a pinned ref, runs preflight, hands off to bin/omes.
+install/bootstrap.sh            # Safe curl-able entry point: channel-aware (stable/rc/edge/dev), clones pinned release, hands off to bin/omes.
 install/preflight.sh            # Thin wrapper around `bin/omes check`.
 config/hypr/                    # Desktop config templates (desktop profile only, Hyprland).
 config/waybar/                  # Desktop config templates (desktop profile only, status bar).
