@@ -273,6 +273,30 @@ adding an entry:
    remains in history by design (gitleaks scans history) and is not
    something an allowlist entry should hide.
 
+## 8. Release automation and verification (`scripts/release.sh`)
+
+Releases follow the authoritative sequence defined in [ADR-0010](adr/0010-versioning-and-change-fragments.md) and issue #168:
+
+```bash
+# 1. Non-mutating check / dry-run
+scripts/release.sh <X.Y.Z> --dry-run
+
+# 2. Cut release on clean main with green CI checks
+scripts/release.sh <X.Y.Z>
+
+# 3. Publish tag, create GitHub Release, and verify read-back
+scripts/release.sh <X.Y.Z> --publish
+```
+
+`scripts/release.sh` enforces:
+- Execution on clean `main` branch with no uncommitted changes.
+- Pre-release check: verifies all required CI status checks on the target commit pass.
+- Compilation of all `changes/*.md` fragments into `CHANGELOG.md` and bump of `VERSION`.
+- Synchronization of `README.md` version claims.
+- Creation of an annotated git tag `v<X.Y.Z>` matching the exact release commit SHA.
+- Refusal to retarget or force-move existing public release tags.
+- Post-publish read-back verification: reads back the pushed git tag and the published GitHub Release.
+
 <!-- OMES-MERMAID: docs/ci.md -->
 
 ## Visual summary

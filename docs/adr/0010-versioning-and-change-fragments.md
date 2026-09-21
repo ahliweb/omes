@@ -132,10 +132,20 @@ cleared and a `vX.Y.Z` git tag is created matching the new `VERSION`.
   table (Section 9) — these are the load-bearing contracts external
   modules/operators depend on.
 - The release-time compilation step (fragment → `CHANGELOG.md`, tag
-  creation) is process, not yet automated tooling at the time this ADR is
-  written; automating it is a natural candidate for a future issue, but
-  this ADR's decision (the fragment mechanism itself) does not depend on
-  that automation existing yet.
+  creation, and verification) is automated via `scripts/release.sh` (issue #168).
+  It enforces:
+  1. Clean `main` branch and green CI checks on the release commit.
+  2. Compilation of `changes/*.md` fragments into `CHANGELOG.md` and bump of `VERSION`.
+  3. Synchronization of `README.md` version claims.
+  4. Creation of annotated tag `vX.Y.Z` pointing to the exact release commit.
+  5. Refusal to rewrite or retarget existing public release tags.
+  6. Optional push, GitHub Release creation, and read-back verification.
+- **Historical divergence note (`v0.3.0`, issue #168)**: Git tag `v0.3.0` points
+  immutably to commit `626751635ca1f43993679cecf076850f86ba0845`. A subsequent
+  rebase on `main` produced commit `f669f08365a716f60908e2e1ef180f1e8e3fff2f`.
+  Per ADR-0010 and security policy, existing public release tags are never force-moved;
+  all releases after `v0.3.0` enforce strict linear ancestry and required check
+  verification via `scripts/release.sh`.
 - `docs/architecture.md`'s repository layout (Section 2) reflects
   `VERSION`, `CHANGELOG.md`, and `changes/` exactly as this ADR defines
   them.
