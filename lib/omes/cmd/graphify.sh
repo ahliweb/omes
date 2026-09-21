@@ -93,6 +93,80 @@ _graphify_cmd_installer_or_die() {
   exit "$OMES_EX_ERROR"
 }
 
+# _graphify_version_lt <v1> <v2>
+# Returns 0 if v1 < v2 under version sort.
+_graphify_version_lt() {
+  local v1="$1" v2="$2"
+  if [[ "$v1" == "$v2" ]]; then
+    return 1
+  fi
+  local lowest
+  lowest="$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | head -n 1)"
+  [[ "$lowest" == "$v1" ]]
+}
+
+# _graphify_version_gt <v1> <v2>
+# Returns 0 if v1 > v2 under version sort.
+_graphify_version_gt() {
+  local v1="$1" v2="$2"
+  if [[ "$v1" == "$v2" ]]; then
+    return 1
+  fi
+  local lowest
+  lowest="$(printf '%s\n%s\n' "$v1" "$v2" | sort -V | head -n 1)"
+  [[ "$lowest" == "$v2" ]]
+}
+
+# _graphify_version_policy_check
+# Enforces version baseline and compatibility policies (ADR-0025, issue #180):
+# - Pinning: must match OMES_GRAPHIFY_VERSION if set.
+# - Minimum baseline: must be >= 0.9.64 (or OMES_GRAPHIFY_MIN_VERSION).
+# - Candidate warning: warns if newer than released-supported baseline 0.9.64.
+_graphify_version_policy_check() {
+  local version_str
+  version_str="$(_graphify_installed_version 2>/dev/null || true)"
+  if [[ -z "$version_str" ]]; then
+    log_error "graphify: the graphify CLI is not installed or not runnable"
+    return 1
+  fi
+  local ver="${version_str#graphify }"
+  ver="$(printf '%s' "$ver" | tr -d '[:space:]')"
+
+  if [[ -n "${OMES_GRAPHIFY_VERSION:-}" ]] && [[ "$ver" != "${OMES_GRAPHIFY_VERSION}" ]]; then
+    log_error "graphify: installed version '${ver}' does not match pinned OMES_GRAPHIFY_VERSION '${OMES_GRAPHIFY_VERSION}'"
+    return 1
+  fi
+
+  local min_base="0.9.64"
+  if [[ -n "${OMES_GRAPHIFY_MIN_VERSION:-}" ]]; then
+    min_base="${OMES_GRAPHIFY_MIN_VERSION}"
+  fi
+
+  if _graphify_version_lt "$ver" "$min_base"; then
+    log_error "graphify: installed version '${ver}' is older than minimum supported baseline '${min_base}' (ADR-0025)"
+    return 1
+  fi
+
+  if _graphify_version_gt "$ver" "0.9.64"; then
+    log_warn "graphify: installed version '${ver}' is newer than released-supported baseline (0.9.64); running with candidate upstream capability"
+  fi
+  return 0
+}
+
+# _graphify_supports_upstream_skill_install
+# Returns 0 if installed graphify CLI supports `graphify install --platform hermes`
+_graphify_supports_upstream_skill_install() {
+  if [[ "${SHIM_GRAPHIFY_UPSTREAM_INSTALL:-0}" == "1" ]]; then
+    return 0
+  fi
+  command -v graphify >/dev/null 2>&1 || return 1
+  local help_out
+  if help_out="$(graphify install --help 2>&1)" && [[ "$help_out" == *"--platform"* ]]; then
+    return 0
+  fi
+  return 1
+}
+
 _graphify_cmd_update() {
   _graphify_cmd_parse_flags "$@"
 
@@ -335,10 +409,17 @@ _graphify_cmd_run() {
   fi
 
   module_load graphify
-  if ! command -v graphify >/dev/null 2>&1; then
+  if ! command -v graphify >/dev/null 2>&1 || ! _graphify_installed_version >/dev/null 2>&1; then
     log_error "graphify: the graphify CLI is not installed - run 'omes install --module graphify' first"
     exit "$OMES_EX_USAGE"
   fi
+
+  if ! _graphify_version_policy_check; then
+    _graphify_run_json false "$OMES_EX_ERROR"
+    exit "$OMES_EX_ERROR"
+  fi
+
+  log_info "graphify: 'omes graphify run' is a compatibility wrapper for 'graphify extract' with OMES safety checks and provenance (ADR-0025)"
 
   local out_dir
   if [[ -n "$out" ]]; then
@@ -462,6 +543,48 @@ _graphify_cmd_run() {
   exit "$OMES_EX_OK"
 }
 
+_graphify_cmd_extract() {
+  _graphify_cmd_run "$@"
+}
+
+_graphify_cmd_query() {
+  _graphify_cmd_parse_flags "$@"
+  module_load graphify
+  if ! command -v graphify >/dev/null 2>&1 || ! _graphify_installed_version >/dev/null 2>&1; then
+    log_error "graphify: the graphify CLI is not installed - run 'omes install --module graphify' first"
+    exit "$OMES_EX_USAGE"
+  fi
+  if ! _graphify_version_policy_check; then
+    exit "$OMES_EX_ERROR"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] would run: graphify query $*"
+    exit "$OMES_EX_OK"
+  fi
+
+  omes_run graphify query "$@"
+}
+
+_graphify_cmd_hook() {
+  _graphify_cmd_parse_flags "$@"
+  module_load graphify
+  if ! command -v graphify >/dev/null 2>&1 || ! _graphify_installed_version >/dev/null 2>&1; then
+    log_error "graphify: the graphify CLI is not installed - run 'omes install --module graphify' first"
+    exit "$OMES_EX_USAGE"
+  fi
+  if ! _graphify_version_policy_check; then
+    exit "$OMES_EX_ERROR"
+  fi
+
+  if omes_dry_run; then
+    log_info "[dry-run] would run: graphify hook $*"
+    exit "$OMES_EX_OK"
+  fi
+
+  omes_run graphify hook "$@"
+}
+
 _graphify_cmd_skill_install() {
   _graphify_cmd_parse_flags "$@"
 
@@ -470,14 +593,87 @@ _graphify_cmd_skill_install() {
   target_dir="${hermes_home}/skills/graphify"
   local source_dir="${OMES_ROOT}/modules/graphify/skill"
 
-  if omes_dry_run; then
-    log_info "[dry-run] would install ${source_dir}/{SKILL.md,run.sh} into ${target_dir}"
+  module_load graphify
+  if ! command -v graphify >/dev/null 2>&1 || ! _graphify_installed_version >/dev/null 2>&1; then
+    log_error "graphify: the graphify CLI is not installed - run 'omes install --module graphify' first"
+    exit "$OMES_EX_USAGE"
+  fi
+  if ! _graphify_version_policy_check; then
+    exit "$OMES_EX_ERROR"
+  fi
+
+  if _graphify_supports_upstream_skill_install; then
+    if omes_dry_run; then
+      log_info "[dry-run] would run: graphify install --platform hermes (delegated upstream)"
+      if [[ "$OMES_JSON" == "1" ]]; then
+        json_obj \
+          "$(json_kv command graphify)" \
+          "$(json_kv subcommand skill)" \
+          "$(json_kv action install)" \
+          "$(json_kv ok true --raw)" \
+          "$(json_kv mode upstream)" \
+          "$(json_kv target_dir "$target_dir")" \
+          "$(json_kv exit_code 0 --raw)"
+        printf '\n'
+      fi
+      exit "$OMES_EX_OK"
+    fi
+
+    if ! omes_confirm "Install the Graphify Hermes skill via upstream 'graphify install --platform hermes' into ${target_dir}?"; then
+      log_error "aborted: confirmation required (re-run with --yes to proceed non-interactively)"
+      if [[ "$OMES_JSON" == "1" ]]; then
+        json_obj "$(json_kv command graphify)" "$(json_kv subcommand skill)" "$(json_kv action install)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+        printf '\n'
+      fi
+      exit "$OMES_EX_ERROR"
+    fi
+
+    mkdir -p "$target_dir"
+    backup_begin "graphify-skill" "pre-apply" >/dev/null
+    if [[ -f "${target_dir}/SKILL.md" ]]; then
+      omes_manage_path "${target_dir}/SKILL.md"
+    fi
+    if [[ -f "${target_dir}/run.sh" ]]; then
+      omes_manage_path "${target_dir}/run.sh"
+    fi
+
+    if ! omes_run graphify install --platform hermes; then
+      backup_abort >/dev/null || true
+      log_error "graphify: upstream 'graphify install --platform hermes' failed"
+      if [[ "$OMES_JSON" == "1" ]]; then
+        json_obj "$(json_kv command graphify)" "$(json_kv subcommand skill)" "$(json_kv action install)" "$(json_kv ok false --raw)" "$(json_kv exit_code "$OMES_EX_ERROR" --raw)"
+        printf '\n'
+      fi
+      exit "$OMES_EX_ERROR"
+    fi
+    backup_finish >/dev/null
+
+    log_info "graphify: installed Hermes skill via upstream 'graphify install --platform hermes' into ${target_dir}"
+
     if [[ "$OMES_JSON" == "1" ]]; then
       json_obj \
         "$(json_kv command graphify)" \
         "$(json_kv subcommand skill)" \
         "$(json_kv action install)" \
         "$(json_kv ok true --raw)" \
+        "$(json_kv mode upstream)" \
+        "$(json_kv target_dir "$target_dir")" \
+        "$(json_kv exit_code 0 --raw)"
+      printf '\n'
+    fi
+    exit "$OMES_EX_OK"
+  fi
+
+  # Fallback to bundled skill when upstream install --platform hermes is unavailable
+  if omes_dry_run; then
+    log_info "[dry-run] would install ${source_dir}/{SKILL.md,run.sh} into ${target_dir} (bundled fallback)"
+    if [[ "$OMES_JSON" == "1" ]]; then
+      json_obj \
+        "$(json_kv command graphify)" \
+        "$(json_kv subcommand skill)" \
+        "$(json_kv action install)" \
+        "$(json_kv ok true --raw)" \
+        "$(json_kv mode bundled_fallback)" \
         "$(json_kv target_dir "$target_dir")" \
         "$(json_kv exit_code 0 --raw)"
       printf '\n'
@@ -503,7 +699,9 @@ _graphify_cmd_skill_install() {
   chmod +x "${target_dir}/run.sh"
   backup_finish >/dev/null
 
-  log_info "graphify: installed Hermes skill into ${target_dir}"
+  log_info "graphify: installed Hermes skill into ${target_dir} (bundled fallback; upstream 'graphify install --platform hermes' is candidate)"
+  log_warn "graphify: bundled skill is deprecated; will be removed when minimum supported baseline advances to upstream release with native Hermes skill installer"
+
   if ! command -v omes >/dev/null 2>&1; then
     log_warn "graphify: 'omes' is not currently on PATH - ${target_dir}/run.sh will not find it when Hermes invokes this skill until it is"
   fi
@@ -514,6 +712,7 @@ _graphify_cmd_skill_install() {
       "$(json_kv subcommand skill)" \
       "$(json_kv action install)" \
       "$(json_kv ok true --raw)" \
+      "$(json_kv mode bundled_fallback)" \
       "$(json_kv target_dir "$target_dir")" \
       "$(json_kv exit_code 0 --raw)"
     printf '\n'
@@ -1867,6 +2066,15 @@ cmd_graphify() {
     run)
       _graphify_cmd_run "$@"
       ;;
+    extract)
+      _graphify_cmd_extract "$@"
+      ;;
+    query)
+      _graphify_cmd_query "$@"
+      ;;
+    hook)
+      _graphify_cmd_hook "$@"
+      ;;
     skill)
       _graphify_cmd_skill "$@"
       ;;
@@ -1889,7 +2097,7 @@ cmd_graphify() {
       _graphify_cmd_purge "$@"
       ;;
     *)
-      log_error "graphify: usage: omes graphify {update|uninstall|run|skill|mcp|export|sync|status|init-ignore|purge} [args...]"
+      log_error "graphify: usage: omes graphify {update|uninstall|run|extract|query|hook|skill|mcp|export|sync|status|init-ignore|purge} [args...]"
       exit "$OMES_EX_USAGE"
       ;;
   esac

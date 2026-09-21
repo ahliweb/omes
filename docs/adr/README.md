@@ -36,6 +36,7 @@ architecture and state model."
 | [0022](0022-consume-hermes-native-health.md) | Consume Hermes-native health endpoints and retain OMES host aggregation | Accepted |
 | [0023](0023-control-center-ui-ux-design-system.md) | Adopt OMES Control Center UI/UX design system and screen architecture | Accepted |
 | [0024](0024-content-workflow-boundary-and-migration.md) | Content distribution workflow boundary and migration to AWCMS and Hermes | Accepted |
+| [0025](0025-graphify-upstream-delegation.md) | Graphify upstream delegation and skill/MCP boundary | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -74,6 +75,10 @@ Center UI/UX design system and screen architecture."
 ADR 0024 was authored on 2026-09-21 as part of issue
 [#179](https://github.com/ahliweb/omes/issues/179), "refactor(content):
 move domain-heavy content workflows out of OMES core to AWCMS module."
+
+ADR 0025 was authored on 2026-09-21 as part of issue
+[#180](https://github.com/ahliweb/omes/issues/180), "refactor(graphify):
+delegate skill, MCP and workflow behavior to upstream Graphify and Hermes."
 
 
 ## Conventions

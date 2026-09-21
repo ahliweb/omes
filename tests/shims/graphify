@@ -158,6 +158,47 @@ NOTEEOF
       >"${update_out_dir}/graph.json"
     exit 0
     ;;
+  query)
+    shift
+    printf 'query: %s\n' "$*"
+    exit 0
+    ;;
+  hook)
+    shift
+    printf 'hook: %s\n' "$*"
+    exit 0
+    ;;
+  install)
+    if [[ "${2:-}" == "--help" ]] || [[ "${2:-}" == "-h" ]]; then
+      if [[ "${SHIM_GRAPHIFY_UPSTREAM_INSTALL:-0}" == "1" ]]; then
+        printf 'usage: graphify install [--platform PLATFORM]\nOptions:\n  --platform hermes\n'
+        exit 0
+      else
+        exit 127
+      fi
+    fi
+    if [[ "${2:-}" == "--platform" ]] && [[ "${3:-}" == "hermes" ]]; then
+      if [[ "${SHIM_GRAPHIFY_INSTALL_FAIL:-0}" == "1" ]]; then
+        exit 1
+      fi
+      hermes_dir="${OMES_HERMES_HOME:-$HOME/.hermes}/skills/graphify"
+      mkdir -p "$hermes_dir"
+      cat >"${hermes_dir}/SKILL.md" <<'SKILL_EOF'
+---
+name: graphify
+description: Upstream Graphify skill for Hermes
+---
+SKILL_EOF
+      cat >"${hermes_dir}/run.sh" <<'RUN_EOF'
+#!/usr/bin/env bash
+exec omes graphify run "$@"
+RUN_EOF
+      chmod +x "${hermes_dir}/run.sh"
+      printf 'installed graphify skill for hermes in %s\n' "$hermes_dir"
+      exit 0
+    fi
+    exit 0
+    ;;
   *)
     exit 0
     ;;
