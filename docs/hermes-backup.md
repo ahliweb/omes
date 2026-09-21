@@ -56,66 +56,49 @@ Every path in `lib/omes/py/hermesbackup/classes.py` is one of the above;
 none are guessed. If a path does not exist on a given install (e.g. no
 `cron/` yet), it is silently skipped rather than treated as an error.
 
-## 3. Backup classes
+## 3. Recovery classes and upstream delegation (ADR-0020)
 
-| Class | Paths | Default? |
-| --- | --- | --- |
-| `config` | `config.yaml`, `SOUL.md` | Yes |
-| `skills` | `skills/` | Yes |
-| `memory` | `memories/` | No - explicit `--class memory` |
-| `sessions` | `sessions/`, `state.db` | No - explicit `--class sessions` |
-| `runtime-state` | `logs/`, `cache/`, `cron/`, `state-snapshots/`, `modal_snapshots.json`, `verification_evidence.db` | No - explicit `--class runtime-state` |
-| `secrets` | `.env`, `auth.json` | **Never** - requires `--include-secrets` |
+Under ADR-0020 (issue [#176](https://github.com/ahliweb/omes/issues/176)), OMES delegates profile and runtime backup directly to upstream Hermes CLI commands, while retaining host-level recovery and backward compatibility for legacy archives:
 
-`omes agent-backup create` with no `--class` flag backs up only `config`
-and `skills`. Hermes's own `backups/` directory is intentionally excluded
-from every class (backing up Hermes's own backups would duplicate data
-across nested generations).
+| Recovery Class | Upstream Command | Description | Sensitive Credentials? |
+| --- | --- | --- | --- |
+| `portable-profile` (default) | `hermes profile export <profile> --output <path>` | Exports an isolated, portable profile archive containing skills, configuration, memories, and session state. | Excluded by upstream design |
+| `full-runtime-dr` | `hermes backup --output <path>` | Full disaster recovery archive containing complete runtime state, databases, and credentials. | **Yes** — requires `--allow-sensitive-credentials` |
+| `omes-host` | Managed-path backup engine | OMES host-level configuration, drop-ins, and legacy data classes (`config`, `skills`, `memory`, `sessions`, `runtime-state`, `secrets`). | Mode `0600`; requires `--allow-sensitive-credentials` or `--include-secrets` |
+
+`omes agent-backup create` defaults to `--recovery-class portable-profile` (`profile: default`).
+Existing archives without `format: native-*` are classified as `legacy-omes` and remain fully readable, verifiable, and restorable.
 
 ## 4. Commands
 
 ```
-omes agent-backup create [--class NAME]... [--include-secrets] [--dry-run] [--json] [--hermes-home PATH]
+omes agent-backup create [--recovery-class CLASS] [--profile NAME]
+                         [--allow-sensitive-credentials] [--include-secrets]
+                         [--class NAME]... [--dry-run] [--json] [--hermes-home PATH]
 omes agent-backup list [--json]
+omes agent-backup inventory [--json]
 omes agent-backup verify <timestamp> [--json]
-omes agent-backup restore <timestamp> [--class NAME]... [--dry-run] [--yes]
-                                       [--restore-secrets] [--force-home]
-                                       [--hermes-home PATH] [--json]
+omes agent-backup restore <timestamp> [--recovery-class CLASS] [--profile NAME]
+                                       [--allow-sensitive-credentials] [--restore-secrets]
+                                       [--class NAME]... [--dry-run] [--yes]
+                                       [--force-home] [--hermes-home PATH] [--json]
 ```
 
-- **`create`**: writes `<state-dir>/backups/hermes/<timestamp>/` containing
-  `archive.tar` (a plain tar of the selected files, member paths relative
-  to `$HERMES_HOME`), `MANIFEST` (one JSON object per file: `category`,
-  `path`, `sha256`, `size`, `mode`), and `META` (`hermes_version`
-  (from `hermes --version`, best-effort), `hermes_home`, `classes`,
-  `include_secrets`, `timestamp`, `omes_version`). The session directory
-  is mode `0700`; `MANIFEST`, `META`, and `archive.tar` are mode `0600`.
-  Retention follows the same `OMES_BACKUP_KEEP` semantics as
-  `lib/omes/backup.sh` (default 10, applied after every successful
-  create).
-- **`--include-secrets`**: required before `--class secrets` is accepted;
-  without it, requesting the `secrets` class is refused with a clear
-  error. When used, a warning is printed before the backup is written.
-- **`--dry-run`**: previews classes/paths/sizes via `os.stat` only -
-  **no file's content is ever opened** during a dry run, even for
-  `secrets` with `--include-secrets`, so a dry run cannot leak secret
-  content through an error path or timing side channel.
-- **`list`**: lists sessions with their classes and whether they include
-  secrets.
-- **`verify <timestamp>`**: re-hashes every archive member against its
-  `MANIFEST` entry; reports `OK` or lists every mismatched/missing file.
-  A structurally corrupt `MANIFEST`/`META` (bad JSON, missing fields) or
-  an unreadable tar container is refused with a clear error rather than
-  silently treated as empty.
-- **`restore <timestamp>`**: validates checksums for every file it is
-  about to write **before** writing any of them; creates a pre-restore
-  backup of the classes being restored (from the live `$HERMES_HOME`,
-  before any file is overwritten); preserves the original file
-  permissions recorded in `MANIFEST`; works fully offline (no network
-  call anywhere in this tool); never restores the `secrets` class unless
-  `--restore-secrets` is passed (and confirmed, unless `--yes`); refuses
-  to restore into a different `$HERMES_HOME` than the one recorded in
-  `META` unless `--force-home` is passed.
+- **`create`**: writes `<state-dir>/backups/hermes/<timestamp>/` containing:
+  - For native backups: `<profile>.hermes-profile.tar.gz` or `hermes-backup.tar.gz`, `MANIFEST`, and `META` (recording `format`, `recovery_class`, `profile`, `sha256`, `artifact_size`, `sensitive`, `hermes_version`, and `timestamp`).
+  - For legacy backups: `archive.tar`, `MANIFEST`, and `META`.
+  Session directory permissions are set to `0700`; files are mode `0600`. Retention follows `OMES_BACKUP_KEEP` (default 10 sessions).
+- **`--allow-sensitive-credentials`** (or `--include-credentials` / `--include-secrets`): required for `full-runtime-dr` backups and when restoring sensitive credentials.
+- **`--dry-run`**: previews the recovery class and format without mutating the filesystem or exporting archives.
+- **`list` / `inventory`**: displays all backup sessions with their format (`native-hermes-profile`, `native-hermes-runtime`, or `legacy-omes`), recovery class, target profile, and sensitivity status.
+- **`verify <timestamp>`**: validates SHA-256 checksums of native artifacts and checks tar archive integrity. Detects tampered, corrupted, or missing files.
+- **`restore <timestamp>`**:
+  1. Validates artifact integrity and SHA-256 checksum **before** mutating any files.
+  2. Refuses sensitive credential restoration unless `--allow-sensitive-credentials` is passed and confirmed.
+  3. Creates an automatic pre-restore recovery point to protect existing runtime state.
+  4. Delegates to `hermes profile import` or `hermes import` (or legacy tar extraction).
+  5. Runs `hermes doctor` post-restore to verify runtime health across dependencies, tools, and memory backends.
+  6. Refuses restore into a different `$HERMES_HOME` than recorded in `META` unless `--force-home` is passed.
 
 ## 5. Secrets handling
 

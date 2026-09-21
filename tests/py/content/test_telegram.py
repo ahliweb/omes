@@ -61,6 +61,7 @@ class TelegramTestBase(unittest.TestCase):
     def setUp(self):
         _FakeTelegramHandler.received_paths = []
         self.server, self.thread = _run_fake_server()
+        self.addCleanup(self.server.server_close)
         self.addCleanup(self.server.shutdown)
 
         self._tmp = tempfile.mkdtemp(prefix="omes-content-telegram-")

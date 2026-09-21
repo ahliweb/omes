@@ -68,7 +68,7 @@ class TestClasses(HermesBackupTestCase):
 
 class TestCreateAndSecretExclusion(HermesBackupTestCase):
     def test_default_create_excludes_secrets_everywhere(self):
-        result = backup.create(self.hermes_home, None, include_secrets=False, dry_run=False, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, ["config", "skills"], include_secrets=False, dry_run=False, dest_root=self.backups_root)
         session_dir = Path(result["path"])
 
         manifest_text = (session_dir / "MANIFEST").read_text(encoding="utf-8")
@@ -113,7 +113,7 @@ class TestCreateAndSecretExclusion(HermesBackupTestCase):
             os.chmod(env_path, original_mode)
 
     def test_dry_run_creates_no_session_directory(self):
-        backup.create(self.hermes_home, None, include_secrets=False, dry_run=True, dest_root=self.backups_root)
+        backup.create(self.hermes_home, ["config", "skills"], include_secrets=False, dry_run=True, dest_root=self.backups_root)
         self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
 
 

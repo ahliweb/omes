@@ -89,10 +89,86 @@ case "${1:-}" in
         printf 'default\nresearcher\nsysmon\n'
         exit 0
         ;;
+      export)
+        shift || true
+        prof="${1:-default}"
+        if [[ $# -gt 0 && "$1" != --* ]]; then
+          shift
+        fi
+        out_path=""
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --output|-o)
+              out_path="$2"
+              shift 2
+              ;;
+            *)
+              shift
+              ;;
+          esac
+        done
+        if [[ "${SHIM_HERMES_PROFILE_EXPORT_EXIT:-0}" != "0" ]]; then
+          printf '%s\n' "${SHIM_HERMES_PROFILE_EXPORT_OUTPUT:-FAIL: simulated profile export failure}" >&2
+          exit "${SHIM_HERMES_PROFILE_EXPORT_EXIT}"
+        fi
+        if [[ -z "$out_path" ]]; then
+          out_path="${prof}.hermes-profile.tar.gz"
+        fi
+        mkdir -p "$(dirname "$out_path")"
+        tmp_dir="$(mktemp -d)"
+        printf '{"format":"native-hermes-profile","profile":"%s"}\n' "$prof" > "${tmp_dir}/profile.json"
+        tar -czf "$out_path" -C "$tmp_dir" profile.json
+        rm -rf "$tmp_dir"
+        exit 0
+        ;;
+      import)
+        shift || true
+        if [[ "${SHIM_HERMES_PROFILE_IMPORT_EXIT:-0}" != "0" ]]; then
+          printf '%s\n' "${SHIM_HERMES_PROFILE_IMPORT_OUTPUT:-FAIL: simulated profile import failure}" >&2
+          exit "${SHIM_HERMES_PROFILE_IMPORT_EXIT}"
+        fi
+        exit 0
+        ;;
       *)
         exit 0
         ;;
     esac
+    ;;
+  backup)
+    shift || true
+    out_path=""
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --output|-o)
+          out_path="$2"
+          shift 2
+          ;;
+        *)
+          shift
+          ;;
+      esac
+    done
+    if [[ "${SHIM_HERMES_BACKUP_EXIT:-0}" != "0" ]]; then
+      printf '%s\n' "${SHIM_HERMES_BACKUP_OUTPUT:-FAIL: simulated backup failure}" >&2
+      exit "${SHIM_HERMES_BACKUP_EXIT}"
+    fi
+    if [[ -z "$out_path" ]]; then
+      out_path="hermes-backup.tar.gz"
+    fi
+    mkdir -p "$(dirname "$out_path")"
+    tmp_dir="$(mktemp -d)"
+    printf '{"format":"native-hermes-runtime","sensitive":true}\n' > "${tmp_dir}/backup.json"
+    tar -czf "$out_path" -C "$tmp_dir" backup.json
+    rm -rf "$tmp_dir"
+    exit 0
+    ;;
+  import)
+    shift || true
+    if [[ "${SHIM_HERMES_IMPORT_EXIT:-0}" != "0" ]]; then
+      printf '%s\n' "${SHIM_HERMES_IMPORT_OUTPUT:-FAIL: simulated import failure}" >&2
+      exit "${SHIM_HERMES_IMPORT_EXIT}"
+    fi
+    exit 0
     ;;
   gateway)
     shift || true
