@@ -68,6 +68,8 @@ Each has at least one valid and one invalid fixture under
 | Worker heartbeat response (issue #192, ADR-0027) | `worker-heartbeat.response.schema.json` | Control Center → OMES Worker |
 | Worker result request (issue #192, ADR-0027) | `worker-result.request.schema.json` | OMES Worker → Control Center |
 | Worker result response (issue #192, ADR-0027) | `worker-result.response.schema.json` | Control Center → OMES Worker |
+| Hermes orchestration event (issue #183, ADR-0028) | `hermes-orchestration-event.schema.json` | Hermes Observer → OMES |
+| Hermes orchestration tree (issue #183, ADR-0028) | `hermes-orchestration-tree.schema.json` | OMES → Control Center |
 
 ### 2.1 Mutating-request common fields
 

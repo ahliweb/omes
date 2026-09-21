@@ -1074,6 +1074,16 @@ The drift inspection engine:
 - Fails closed (`BLOCKED`/`WARN`) when upstream APIs are unreachable.
 - Enforces release quality via `python3 scripts/upstream-drift.py --check`.
 
+### 16.4 Hermes Delegated-Task Process Tree Observability
+
+Per [ADR-0028](adr/0028-hermes-orchestration-visualization.md) and issue [#183](https://github.com/ahliweb/omes/issues/183), OMES provides a real-time observability projection for Hermes Agent's multi-task delegation (`delegate_task` batches and subagents).
+
+Boundary rules:
+- **Authority Delegation**: Hermes Agent owns task delegation, child process scheduling, model routing, and reasoning. OMES acts strictly as a read-only observer.
+- **Hook Ingestion**: Consumes `hermes.observer.v1` events (`subagent_start`, `subagent_stop`, `subagent_step`) and validates against `contracts/control-center/v1/hermes-orchestration-event.schema.json`.
+- **Zero Raw Secrets & Privacy**: Goals and summaries are bounded to 512 characters with HTML escaping. Raw prompts, chain-of-thought transcripts, shell commands, and credentials are prohibited.
+- **Tree Projection**: `lib/omes/py/agent/orchestration.py` reconstructs nested process hierarchies (`hermes-orchestration-tree.schema.json`), tracks active step counts, reconciles staleness, and displays live trees in Control Center Screen 6.
+
 
 <!-- OMES-MERMAID: docs/architecture.md -->
 

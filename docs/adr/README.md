@@ -39,6 +39,7 @@ architecture and state model."
 | [0025](0025-graphify-upstream-delegation.md) | Graphify upstream delegation and skill/MCP boundary | Accepted |
 | [0026](0026-upstream-drift-automation.md) | Automated upstream drift review and deprecation tracking | Accepted |
 | [0027](0027-control-center-pull-worker-transport.md) | Control Center secure pull-worker transport | Accepted |
+| [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -90,6 +91,11 @@ ADR 0027 was authored on 2026-09-21 as part of issue
 [#192](https://github.com/ahliweb/omes/issues/192) and epic
 [#195](https://github.com/ahliweb/omes/issues/195), "feat(control-center):
 add a secure pull-worker transport for the AWCMS-one web GUI."
+
+ADR 0028 was authored on 2026-09-21 as part of issue
+[#183](https://github.com/ahliweb/omes/issues/183) and epic
+[#195](https://github.com/ahliweb/omes/issues/195), "feat(control-center):
+visualize Hermes delegated-task orchestration and live subagent processes."
 
 
 
