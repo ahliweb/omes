@@ -126,3 +126,99 @@ class TestSecretNameLists(unittest.TestCase):
         self.assertTrue(schema.validate({"secrets": [sample]}, s))
         self.assertTrue(schema.validate({"secrets": ["ok", "has space"]}, s))
         self.assertTrue(schema.validate({"secrets": [{"store": "env", "key": "X"}, 5]}, s))
+
+
+class TestSchemaKeywords(unittest.TestCase):
+    """Tests for fail-closed schema keyword validation (issue #172)."""
+
+    def test_unsupported_top_level_keyword_fails(self):
+        unsupported = [
+            "$ref",
+            "format",
+            "if",
+            "then",
+            "else",
+            "allOf",
+            "not",
+            "uniqueItems",
+            "patternProperties",
+        ]
+        for kw in unsupported:
+            s = {"type": "string", kw: "something"}
+            with self.assertRaises(schema.SchemaError) as ctx:
+                schema.validate("val", s)
+            self.assertIn("unsupported JSON Schema keyword", str(ctx.exception))
+            self.assertIn(repr(kw), str(ctx.exception))
+
+    def test_unsupported_nested_keyword_fails(self):
+        # Nested in properties
+        s_prop = {"type": "object", "properties": {"a": {"type": "string", "$ref": "#/defs/Foo"}}}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate({"a": "foo"}, s_prop)
+        self.assertIn("unsupported JSON Schema keyword '$ref'", str(ctx.exception))
+        self.assertIn("$.properties.a", str(ctx.exception))
+
+        # Nested in items
+        s_items = {"type": "array", "items": {"type": "string", "format": "email"}}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate(["test@example.com"], s_items)
+        self.assertIn("unsupported JSON Schema keyword 'format'", str(ctx.exception))
+        self.assertIn("$.items", str(ctx.exception))
+
+        # Nested in additionalProperties
+        s_add = {"type": "object", "additionalProperties": {"type": "string", "uniqueItems": True}}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate({"k": "v"}, s_add)
+        self.assertIn("unsupported JSON Schema keyword 'uniqueItems'", str(ctx.exception))
+        self.assertIn("$.additionalProperties", str(ctx.exception))
+
+        # Nested in oneOf
+        s_oneof = {"oneOf": [{"type": "string"}, {"type": "string", "allOf": []}]}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate("val", s_oneof)
+        self.assertIn("unsupported JSON Schema keyword 'allOf'", str(ctx.exception))
+        self.assertIn("$.oneOf[1]", str(ctx.exception))
+
+        # Nested in anyOf
+        s_anyof = {"anyOf": [{"type": "string", "not": {"type": "number"}}]}
+        with self.assertRaises(schema.SchemaError) as ctx:
+            schema.validate("val", s_anyof)
+        self.assertIn("unsupported JSON Schema keyword 'not'", str(ctx.exception))
+        self.assertIn("$.anyOf[0]", str(ctx.exception))
+
+    def test_annotation_keywords_pass(self):
+        s = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "https://example.com/schema.json",
+            "title": "Example Schema",
+            "description": "A schema with annotations",
+            "type": "string",
+        }
+        self.assertEqual(schema.validate("hello", s), [])
+
+    def test_validator_subset_mismatch_detected(self):
+        from agent import jsonschema_lite
+
+        self.assertEqual(
+            schema.SUPPORTED_VALIDATION_KEYWORDS,
+            jsonschema_lite.SUPPORTED_VALIDATION_KEYWORDS,
+        )
+        self.assertEqual(
+            schema.ALLOWED_ANNOTATION_KEYWORDS,
+            jsonschema_lite.ALLOWED_ANNOTATION_KEYWORDS,
+        )
+        self.assertEqual(
+            schema.ALLOWED_SCHEMA_KEYWORDS,
+            jsonschema_lite.ALLOWED_SCHEMA_KEYWORDS,
+        )
+
+    def test_string_min_max_length(self):
+        s = {"type": "string", "minLength": 2, "maxLength": 5}
+        self.assertEqual(schema.validate("abc", s), [])
+        self.assertTrue(any("shorter than minLength" in e for e in schema.validate("a", s)))
+        self.assertTrue(any("longer than maxLength" in e for e in schema.validate("abcdef", s)))
+
+    def test_secret_defense_remains_independent_of_schema_validation(self):
+        s = {"type": "object", "properties": {"token": {"type": "string"}}}
+        errors = schema.validate({"token": "raw-secret-scalar"}, s)
+        self.assertTrue(any("secret pattern" in e for e in errors))
