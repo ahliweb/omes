@@ -35,6 +35,9 @@ layer. It is not the official Omarchy project, and no release gate below waives 
 - No destructive default: every mutating command requires an explicit profile/module choice or
   confirmation (`--yes`), and unsupported-platform detection (exit 3) happens before any
   mutation, proven jointly by #15 and #17.
+- Release provenance and commit integrity: release cut via `scripts/release.sh` (#168) from clean
+  `main` with green CI checks, matching VERSION/changelog/tag, and verified read-back of git tag
+  and GitHub Release.
 - Docs walkthrough by a second operator: someone other than ahliweb follows the published
   documentation unaided and completes at least the Ubuntu Server onboarding steps in
   `docs/business/pilot-program.md` section 2.1, recorded as part of the internal pilot's exit

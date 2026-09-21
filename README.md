@@ -30,13 +30,13 @@ automation layer.
 
 ## Status
 
-**Pre-alpha, version `0.2.0`.** The CLI (`bin/omes`), the shared library
+**Pre-alpha, version `0.3.0`.** The CLI (`bin/omes`), the shared library
 (`lib/omes/*.sh`), every module referenced by the `server`/`desktop`/`hermes`
 profiles (`apt-base`, `security-baseline`, `containers`, `hermes`,
 `hermes-gateway`, `hermes-gateway-system`, `desktop-preflight`,
 `hyprland-session`, `desktop-config`), the bootstrap installer, and the bats
 unit/integration test suite are all implemented and tested against shimmed
-commands in CI. The project is pre-alpha despite the `v0.2.0` tag: the
+commands in CI. The project is pre-alpha despite the `v0.3.0` tag: the
 container/VM compatibility matrix (`scripts/test-matrix.sh`, `tests/vm/`) is
 still building out real-host coverage for every scenario — see
 [docs/architecture.md §13](docs/architecture.md#13-non-goals-and-known-limitations)
