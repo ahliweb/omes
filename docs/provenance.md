@@ -211,12 +211,45 @@ is required to execute an unmapped baseline without verification, recording prov
   checks) or `docs/security.md` §6's supply-chain rules — it is a
   runtime, host-side, diagnostic layer on top of them.
 
-## 6. Related
+## 6. Release-scoped evidence bundles (issue #173, ADR-0010)
 
-- `docs/compatibility-evidence.md` — the related runtime
+For each published release, OMES generates and verifies a complete, reproducible evidence bundle (`dist/release-v<version>/`):
+
+1. **`release-manifest.json`**: Conforms to `contracts/provenance/v1/release-manifest.schema.json`. Records version, tag, exact commit SHA, release date, repository URL, and an artifact inventory table.
+2. **`sbom.json`**: Machine-readable Software Bill of Materials distinguishing managed distributions (OMES source, Hermes `v2026.9.14`, Omarchy `v4.0.4`, Graphify `0.9.64`) from discovered host packages.
+3. **`provenance.slsa.json`**: SLSA/in-toto compatible build provenance attestation binding the release tag, commit SHA, build definition, and resolved upstream dependencies.
+4. **`compatibility-evidence.json`**: Platform compatibility matrix evidence for Tier 1 (Ubuntu 24.04/26.04, Linux Mint 22) and Tier 2. Enforces fail-closed evaluation: missing evidence cannot be rendered as `PASS`.
+5. **`recovery-evidence.json`**: Rollback, backup/restore, and disaster recovery gate statuses (`PASS`, `FAIL`, `WARN`, `BLOCKED`, `NOT TESTED`).
+6. **`security-checks.json`**: Verifies `gitleaks` secret scan, `scripts/check-supply-chain.sh`, `scripts/check-contracts.py`, and `scripts/check-architecture.py` gate passes.
+7. **`limitations.json`**: Codifies known operational limitations, platform caveats, and staged feature boundaries.
+8. **`SHA256SUMS`**: SHA-256 cryptographic hashes for all evidence bundle files.
+
+### 6.1 Generation and verification CLI
+
+```bash
+# Generate evidence bundle
+python3 scripts/generate-release-bundle.py \
+  --version 0.3.0 \
+  --tag v0.3.0 \
+  --commit <40-char-sha> \
+  --output dist/release-v0.3.0
+
+# Verify evidence bundle integrity and tamper detection
+python3 scripts/verify-release-bundle.py \
+  --bundle-dir dist/release-v0.3.0 \
+  --version 0.3.0 \
+  --commit <40-char-sha>
+```
+
+`scripts/release.sh` integrates this generation and verification automatically prior to tagging and publishing.
+
+## 7. Related
+
+- [docs/compatibility-evidence.md](compatibility-evidence.md) — the related runtime
   version/compatibility evidence report (issue #83).
-- `docs/hermes-integration.md` §2 — the Hermes installer's
+- [docs/hermes-integration.md](hermes-integration.md) §2 — the Hermes installer's
   download-to-file, optional-sha256-pin contract this provenance record
   is attached to.
-- `docs/security.md` §6 — supply-chain rules.
-- `docs/threat-model.md` T15, T41 — the threats this control mitigates.
+- [docs/security.md](security.md) §6 — supply-chain rules.
+- [docs/threat-model.md](threat-model.md) T15, T41 — the threats this control mitigates.
+- [ADR-0010](adr/0010-versioning-and-change-fragments.md) and [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md).

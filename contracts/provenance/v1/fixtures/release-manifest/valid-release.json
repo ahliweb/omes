@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "version": "0.3.0",
+  "tag": "v0.3.0",
+  "commit_sha": "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0",
+  "release_date": "2026-09-21",
+  "repository": "https://github.com/ahliweb/omes",
+  "artifacts": [
+    {
+      "filename": "sbom.json",
+      "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+      "size_bytes": 1024,
+      "content_type": "application/json"
+    }
+  ]
+}

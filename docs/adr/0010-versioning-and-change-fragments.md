@@ -140,6 +140,13 @@ cleared and a `vX.Y.Z` git tag is created matching the new `VERSION`.
   4. Creation of annotated tag `vX.Y.Z` pointing to the exact release commit.
   5. Refusal to rewrite or retarget existing public release tags.
   6. Optional push, GitHub Release creation, and read-back verification.
+- The release process generates and verifies a comprehensive Release Evidence Bundle
+  (issue #173, `scripts/generate-release-bundle.py`, `scripts/verify-release-bundle.py`):
+  `release-manifest.json` (schema-validated), `sbom.json` (CycloneDX 1.5 format),
+  `provenance.slsa.json` (in-toto SLSA v1.0 provenance attestation),
+  `compatibility-evidence.json` (fail-closed OS/scenarios), `recovery-evidence.json`,
+  `security-checks.json`, `limitations.json`, and `SHA256SUMS`. Releases cannot proceed
+  with unverified, missing, or tampered evidence artifacts.
 - **Historical divergence note (`v0.3.0`, issue #168)**: Git tag `v0.3.0` points
   immutably to commit `626751635ca1f43993679cecf076850f86ba0845`. A subsequent
   rebase on `main` produced commit `f669f08365a716f60908e2e1ef180f1e8e3fff2f`.

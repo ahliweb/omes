@@ -25,3 +25,6 @@ __pycache__/
 
 # Bootstrap release channel provenance marker
 /.omes-channel.json
+
+# Release artifacts and evidence bundles
+dist/

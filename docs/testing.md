@@ -110,6 +110,15 @@ daemon is available in this implementation environment) - see
 [docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)
 "Left for follow-up".
 
+`tests/py/provenance/` (issue #173) covers release SLSA provenance and
+SBOM artifact generation: `test_release_bundle.py` exercises deterministic
+manifest/SBOM/SLSA provenance/SHA256SUMS generation, checksum tamper
+detection, secret canary leak rejection, gate enforcement (fail-closed
+on missing or non-passing evidence), and metadata completeness.
+`tests/unit/release.bats` covers `scripts/release.sh` bundle generation,
+custom `--bundle-dir`, `--skip-bundle`, GitHub release asset upload,
+and read-back verification.
+
 ### 2.2 Container regression matrix
 
 ```bash
