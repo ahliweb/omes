@@ -39,6 +39,7 @@ layer. It is not the official Omarchy project, and no release gate below waives 
   `main` with green CI checks, matching VERSION/changelog/tag, and verified read-back of git tag
   and GitHub Release.
 - Release evidence bundle verified: SLSA provenance, SBOM, compatibility evidence, recovery evidence, security checks, and SHA256SUMS generated via `scripts/generate-release-bundle.py` and verified via `scripts/verify-release-bundle.py` (#173, ADR-0010). Missing evidence cannot be rendered as PASS; BLOCKED or NOT TESTED is required.
+- Upstream drift review clean or triaged: `python3 scripts/upstream-drift.py --check` passes or all actionable findings have tracked issues with documented disposition decisions (ADR-0026, #181).
 - Docs walkthrough by a second operator: someone other than ahliweb follows the published
   documentation unaided and completes at least the Ubuntu Server onboarding steps in
   `docs/business/pilot-program.md` section 2.1, recorded as part of the internal pilot's exit

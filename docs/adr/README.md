@@ -37,6 +37,7 @@ architecture and state model."
 | [0023](0023-control-center-ui-ux-design-system.md) | Adopt OMES Control Center UI/UX design system and screen architecture | Accepted |
 | [0024](0024-content-workflow-boundary-and-migration.md) | Content distribution workflow boundary and migration to AWCMS and Hermes | Accepted |
 | [0025](0025-graphify-upstream-delegation.md) | Graphify upstream delegation and skill/MCP boundary | Accepted |
+| [0026](0026-upstream-drift-automation.md) | Automated upstream drift review and deprecation tracking | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -79,6 +80,11 @@ move domain-heavy content workflows out of OMES core to AWCMS module."
 ADR 0025 was authored on 2026-09-21 as part of issue
 [#180](https://github.com/ahliweb/omes/issues/180), "refactor(graphify):
 delegate skill, MCP and workflow behavior to upstream Graphify and Hermes."
+
+ADR 0026 was authored on 2026-09-21 as part of issue
+[#181](https://github.com/ahliweb/omes/issues/181), "chore(upstream):
+automate upstream drift review and deprecation tracking."
+
 
 
 ## Conventions

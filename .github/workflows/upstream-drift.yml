@@ -1,0 +1,38 @@
+name: Upstream Drift Review
+
+# Scheduled and manual upstream capability drift review (ADR-0026, issue #181).
+# Inspects public upstream releases (Hermes, Omarchy, Graphify, Coolify) against
+# architecture/capabilities.json. Manages a single deduplicated tracking issue
+# when actionable drift exists.
+
+on:
+  schedule:
+    # Run weekly on Mondays at 06:00 UTC
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift-review:
+    name: Upstream Drift Review (scripts/upstream-drift.py)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Python
+        run: |
+          python3 --version
+
+      - name: Evaluate Upstream Drift and Reconcile Tracking Issue
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 scripts/upstream-drift.py --update-issue
