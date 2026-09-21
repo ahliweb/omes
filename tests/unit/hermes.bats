@@ -23,10 +23,14 @@ setup() {
   source "${OMES_TEST_ROOT}/lib/omes/core.sh"
   # shellcheck source=../../lib/omes/log.sh
   source "${OMES_TEST_ROOT}/lib/omes/log.sh"
+  # shellcheck source=../../lib/omes/json.sh
+  source "${OMES_TEST_ROOT}/lib/omes/json.sh"
   # shellcheck source=../../lib/omes/state.sh
   source "${OMES_TEST_ROOT}/lib/omes/state.sh"
   # shellcheck source=../../lib/omes/backup.sh
   source "${OMES_TEST_ROOT}/lib/omes/backup.sh"
+  # shellcheck source=../../lib/omes/cmd/audit-provenance.sh
+  source "${OMES_TEST_ROOT}/lib/omes/cmd/audit-provenance.sh"
   # shellcheck source=../../lib/omes/module.sh
   source "${OMES_TEST_ROOT}/lib/omes/module.sh"
 
@@ -111,6 +115,7 @@ EOF
 @test "module_apply re-downloads when OMES_HERMES_VERSION does not match the installed version" {
   export SHIM_HERMES_VERSION="1.2.3"
   export OMES_HERMES_VERSION="9.9.9"
+  export OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1
   _set_fake_installer "$(_fake_installer_body)"
   run module_apply
   [ "$status" -eq 0 ]
@@ -121,7 +126,10 @@ EOF
 
 @test "module_apply passes --branch to installer when OMES_HERMES_VERSION is set" {
   export OMES_HERMES_VERSION="v2026.9.14"
-  _set_fake_installer "$(_fake_installer_body)"
+  local installer="${OMES_TEST_TMPDIR}/installer.sh"
+  _fake_installer_body >"$installer"
+  export SHIM_CURL_OUTPUT_FILE="$installer"
+  export OMES_HERMES_INSTALLER_SHA256="$(sha256sum "$installer" | awk '{print $1}')"
   run module_apply
   [ "$status" -eq 0 ]
   run grep 'installer-ran' "$SHIM_LOG"
@@ -129,19 +137,65 @@ EOF
   [[ "$output" == *"args=--branch v2026.9.14"* ]]
 }
 
-# --- module_apply: supply-chain (sha256 pin) --------------------------------
+# --- module_apply: supply-chain (sha256 baseline & pin) ----------------------
 
-@test "module_apply proceeds with a WARN when OMES_HERMES_INSTALLER_SHA256 is not set" {
+@test "module_apply verifies known baseline digest by default and fails closed on mismatch" {
+  _set_fake_installer "$(_fake_installer_body)"
+  # Unset any pin and bypass; default URL and version resolve expected baseline digest
+  unset OMES_HERMES_INSTALLER_SHA256 OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER || true
+  run module_apply
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"installer sha256 mismatch"* ]]
+  run grep -c 'installer-ran' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+
+  # Provenance records the mismatch and fail-closed state
+  local target="${OMES_STATE_DIR}/provenance/hermes.json"
+  [ -f "$target" ]
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["checksum"]["status"] == "mismatch", d
+assert d["checksum"]["expected"] == "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "module_apply fails closed when baseline is unmapped and no hash or override is given" {
+  export OMES_HERMES_VERSION="unmapped-custom-branch"
+  _set_fake_installer "$(_fake_installer_body)"
+  unset OMES_HERMES_INSTALLER_SHA256 OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER || true
+  run module_apply
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"unmapped or untrusted Hermes installer baseline"* ]]
+  run grep -c 'installer-ran' "$SHIM_LOG"
+  [ "$status" -ne 0 ] || [ "$output" -eq 0 ]
+}
+
+@test "module_apply proceeds with a WARN when OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1 is set for unmapped baseline" {
+  export OMES_HERMES_VERSION="unmapped-custom-branch"
+  export OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1
   _set_fake_installer "$(_fake_installer_body)"
   run module_apply
   [ "$status" -eq 0 ]
-  [[ "$output" == *"OMES_HERMES_INSTALLER_SHA256"* ]]
+  [[ "$output" == *"OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1 is set"* ]]
   run grep -c 'installer-ran' "$SHIM_LOG"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
+
+  local target="${OMES_STATE_DIR}/provenance/hermes.json"
+  [ -f "$target" ]
+  OMES_TEST_JSON="$(cat "$target")" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["checksum"]["status"] == "unverified", d
+'
+  [ "$status" -eq 0 ]
 }
 
-@test "module_apply aborts and does not execute the installer on a sha256 mismatch" {
+@test "module_apply aborts and does not execute the installer on an explicit sha256 mismatch" {
   _set_fake_installer "$(_fake_installer_body)"
   export OMES_HERMES_INSTALLER_SHA256="0000000000000000000000000000000000000000000000000000000000000000"
   run module_apply
@@ -166,6 +220,26 @@ EOF
   run grep -c "installer-ran HERMES_HOME=${OMES_HERMES_HOME}" "$SHIM_LOG"
   [ "$status" -eq 0 ]
   [ "$output" -eq 1 ]
+}
+
+@test "hermes_lookup_installer_digest resolves trusted digest for supported baselines" {
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" ""
+  [ "$status" -eq 0 ]
+  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v2026.9.14"
+  [ "$status" -eq 0 ]
+  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v0.21.3"
+  [ "$status" -eq 0 ]
+  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+
+  run hermes_lookup_installer_digest "https://example.com/custom.sh" "v2026.9.14"
+  [ "$status" -eq 1 ]
+
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "unmapped"
+  [ "$status" -eq 1 ]
 }
 
 # --- module_apply: dry-run ---------------------------------------------------

@@ -55,6 +55,7 @@ VALID_CHECKSUM_STATUSES = {
     "unverified",
     "unknown",
     "locally-built",
+    "mismatch",
     # A package manager (apt/dpkg) verified the package's signature/hash
     # itself at install time; OMES did not independently re-verify a
     # pinned checksum, but this is not "unverified" either (issue #84's

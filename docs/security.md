@@ -150,11 +150,14 @@ Implementing issue: #6 (core helpers), #11 (Hermes secret handling), #16 (CI enf
 ## 6. Supply-chain rules
 
 - **Download-to-file, never `curl | bash` directly.** Any third-party installer (notably the
-  Hermes installer) is downloaded to a temporary file first, then optionally verified, then
-  executed as a separate step. This makes the exact bytes executed inspectable and pinnable.
-- **Optional SHA-256 pins.** `OMES_HERMES_INSTALLER_SHA256` (and equivalent variables for other
-  fetched artifacts) let an operator pin an expected hash; a mismatch aborts before execution
-  with no mutation.
+  Hermes installer) is downloaded to a temporary file first, cryptographically verified, then
+  executed as a separate step. This makes the exact bytes executed inspectable and verifiable.
+- **Enforced SHA-256 verification by default.** Known upstream baselines (such as Hermes
+  v2026.9.14) have their verified installer digests recorded in trusted repository metadata
+  (`lib/omes/versions.sh`) and enforced by default (issue #170). A mismatch aborts before
+  execution with no mutation and records fail-closed provenance. Unmapped baselines fail closed
+  unless an explicit expected hash (`OMES_HERMES_INSTALLER_SHA256`) or explicit unsafe development
+  override (`OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1`) is supplied.
 - **GitHub Actions pinned by SHA.** Every third-party Action referenced in
   `.github/workflows/*.yml` is pinned to a commit SHA, not a mutable tag or branch. Bumping a
   pin is a reviewed change, not an automatic update.
