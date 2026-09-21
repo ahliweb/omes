@@ -14,7 +14,7 @@ from typing import Any, Dict
 
 from . import paths
 
-UNIT_PREFIX = "omes-agent-"
+UNIT_PREFIX = "hermes-gateway-"
 UNIT_SUFFIX = ".service"
 
 
@@ -28,16 +28,18 @@ def _cpu_quota_percent(cpu: str) -> str:
     return f"{int(round(cores * 100))}%"
 
 
-def unit_name(agent_name: str) -> str:
-    """The default/fallback unit-name computation. Kept here (and kept
-    equal to what lib/omes/runtime.sh's `runtime_agent_service_unit`
-    prints) so this module stays pure and independently unit-testable
-    with no subprocess call; `build_plan`'s `unit_name_override` is how a
-    caller that already resolved the name via
-    lib/omes/py/agent/runtime_bridge.py (the source-of-truth path) feeds
-    it in instead of this fallback - see docs/agent-deployment.md
-    section 7a."""
-    return f"{UNIT_PREFIX}{agent_name}{UNIT_SUFFIX}"
+def unit_name(profile_name: str) -> str:
+    """The upstream Hermes unit-name computation (issue #175). Kept equal to what
+    lib/omes/runtime.sh's `runtime_agent_service_unit` prints:
+    'hermes-gateway.service' for default profile, 'hermes-gateway-<profile>.service' for named profiles."""
+    if not profile_name or profile_name == "default":
+        return "hermes-gateway.service"
+    return f"{UNIT_PREFIX}{profile_name}{UNIT_SUFFIX}"
+
+
+def legacy_unit_name(agent_name: str) -> str:
+    """Legacy pre-#175 OMES unit name."""
+    return f"omes-agent-{agent_name}.service"
 
 
 def dropin_name() -> str:
@@ -59,7 +61,6 @@ def systemd_dirs(service_mode: str, home: Path) -> Dict[str, Path]:
         unit_dir = Path(os.environ.get("OMES_AGENT_SYSTEM_UNIT_DIR", "/etc/systemd/system"))
     return {
         "unit_dir": unit_dir,
-        "dropin_dir": unit_dir / f"{UNIT_PREFIX}{{name}}{UNIT_SUFFIX}.d",
     }
 
 
@@ -113,8 +114,9 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
         home = paths.base_home(service_mode)
         hermes_home = paths.hermes_home_for_agent(name, service_mode)
         dirs = systemd_dirs(service_mode, home)
-        unit = unit_name_override or unit_name(name)
-        dropin_dir = str(dirs["dropin_dir"]).format(name=name)
+        unit = unit_name_override or unit_name(profile_ref)
+        dropin_dir = str(dirs["unit_dir"] / f"{unit}.d")
+        dropin_path = f"{dropin_dir}/{dropin_name()}"
 
         return {
             "apiVersion": "omes.ahliweb.com/v2",
@@ -131,10 +133,12 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
             "serviceMode": service_mode,
             "unit": {
                 "name": unit,
+                "legacy_name": legacy_unit_name(name),
                 "dir": str(dirs["unit_dir"]),
                 "path": str(dirs["unit_dir"] / unit),
                 "dropin_dir": dropin_dir,
-                "dropin_path": f"{dropin_dir}/{dropin_name()}",
+                "dropin_path": dropin_path,
+                "upstream_managed": True,
             },
             "hermesHome": str(hermes_home),
             "restartPolicy": restart_policy,
@@ -161,12 +165,14 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
     spec = manifest["spec"]
     service_mode = spec["serviceMode"]
     backend = spec.get("backend", "systemd")
+    profile = spec.get("profile", name)
 
     home = paths.base_home(service_mode)
     hermes_home = paths.hermes_home_for_agent(name, service_mode)
     dirs = systemd_dirs(service_mode, home)
-    unit = unit_name_override or unit_name(name)
-    dropin_dir = str(dirs["dropin_dir"]).format(name=name)
+    unit = unit_name_override or unit_name(profile)
+    dropin_dir = str(dirs["unit_dir"] / f"{unit}.d")
+    dropin_path = f"{dropin_dir}/{dropin_name()}"
 
     secret_refs = list(spec.get("secrets", []))
     env_file_ref = str(hermes_home / ".env") if secret_refs else None
@@ -177,16 +183,18 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
         "workspace": metadata.get("workspace"),
         "environment": metadata.get("environment"),
         "role": spec.get("role"),
-        "profile": spec.get("profile"),
-        "profileRef": spec.get("profile"),
+        "profile": profile,
+        "profileRef": profile,
         "backend": backend,
         "serviceMode": service_mode,
         "unit": {
             "name": unit,
+            "legacy_name": legacy_unit_name(name),
             "dir": str(dirs["unit_dir"]),
             "path": str(dirs["unit_dir"] / unit),
             "dropin_dir": dropin_dir,
-            "dropin_path": f"{dropin_dir}/{dropin_name()}",
+            "dropin_path": dropin_path,
+            "upstream_managed": True,
         },
         "hermesHome": str(hermes_home),
         "restartPolicy": spec["restartPolicy"],

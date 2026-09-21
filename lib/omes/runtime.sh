@@ -160,5 +160,9 @@ runtime_agent_service_unit() {
       omes_die "$OMES_EX_USAGE" "runtime_agent_service_unit: scope must be 'user' or 'system' (got '${scope}')"
       ;;
   esac
-  printf 'omes-agent-%s.service\n' "$name"
+  if [[ "$name" == "default" ]]; then
+    printf 'hermes-gateway.service\n'
+  else
+    printf 'hermes-gateway-%s.service\n' "$name"
+  fi
 }

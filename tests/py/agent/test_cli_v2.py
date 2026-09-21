@@ -100,7 +100,7 @@ class AgentCliV2TestCase(unittest.TestCase):
         proc = self._run("plan", "researcher", "--json")
         self.assertEqual(proc.returncode, 0)
         plan_data = json.loads(proc.stdout)
-        self.assertEqual(plan_data["unit"]["name"], "omes-agent-researcher.service")
+        self.assertEqual(plan_data["unit"]["name"], "hermes-gateway-researcher.service")
         self.assertEqual(plan_data["profileRef"], "researcher")
 
     def test_apply_v2_succeeds_end_to_end(self):

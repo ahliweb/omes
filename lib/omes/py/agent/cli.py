@@ -137,17 +137,57 @@ def _sha256_file(path: Path) -> Optional[str]:
     return h.hexdigest()
 
 
+def _hermes_gateway_cmd(
+    subcmd: str,
+    profile_ref: str,
+    extra_args: Optional[List[str]] = None,
+    timeout: float = 30.0,
+    hermes_home: Optional[str] = None,
+) -> Any:
+    cmd = ["hermes", "gateway", subcmd]
+    if profile_ref and profile_ref != "default":
+        cmd.extend(["--profile", profile_ref])
+    if extra_args:
+        cmd.extend(extra_args)
+    env = dict(os.environ)
+    if hermes_home:
+        env["HERMES_HOME"] = str(hermes_home)
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env, check=False)
+    except (subprocess.TimeoutExpired, OSError) as exc:
+        class _ProcRes:
+            returncode = -1
+            stdout = ""
+            stderr = str(exc)
+
+        return _ProcRes()
+
+
+def _is_multiplexed_mode(profile_ref: str, hermes_home: Optional[str] = None) -> bool:
+    if os.environ.get("SHIM_HERMES_MULTIPLEXED") == "1":
+        return True
+    try:
+        proc = _hermes_gateway_cmd("status", profile_ref, hermes_home=hermes_home)
+        if proc.returncode == 0 and "multiplexed" in proc.stdout.lower():
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _build_systemd_plan(manifest: Dict[str, Any], omes_root: Path) -> Dict[str, Any]:
     """Builds the systemd-backend plan with its unit name resolved
     through lib/omes/py/agent/runtime_bridge.py -> lib/omes/runtime.sh's
     `runtime_agent_service_unit` (the one source of truth for
-    "omes-agent-<name>.service" naming - issue #85/#87/#96 follow-up).
-    Falls back to plan.py's own `unit_name()` (same literal shape) if the
-    bridge cannot run, so a missing/unreadable runtime.sh never blocks
-    `omes agent` - see docs/agent-deployment.md section 7a."""
+    hermes-gateway[-<profile>].service naming - issues #85, #87, #96, #175).
+    Falls back to plan.py's own `unit_name()` if the bridge cannot run."""
     name = manifest["metadata"]["name"]
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", name)
+    else:
+        profile_ref = manifest.get("spec", {}).get("profile", name)
     scope = _service_mode(manifest)
-    unit_override = runtime_bridge.agent_service_unit(name, scope, omes_root)
+    unit_override = runtime_bridge.agent_service_unit(profile_ref, scope, omes_root)
     return plan_mod.build_plan(manifest, unit_name_override=unit_override)
 
 
@@ -653,21 +693,60 @@ def cmd_apply(args: argparse.Namespace) -> int:
         return EX_BACKUP
     state_mod.advance(name, "backed-up", json.dumps(backup_result)[:200])
 
-    unit_path = Path(plan["unit"]["path"])
-    dropin_path = Path(plan["unit"]["dropin_path"])
+    profile_ref = plan.get("profileRef", name)
 
+    # Step: Detect and migrate legacy omes-agent-<name>.service if present
+    legacy_unit = plan["unit"].get("legacy_name")
+    unit_dir = Path(plan["unit"]["dir"])
+    if legacy_unit:
+        legacy_path = unit_dir / legacy_unit
+        legacy_dropin = unit_dir / f"{legacy_unit}.d"
+        act_res = _run_systemctl(mode, ["is-active", legacy_unit])
+        en_res = _run_systemctl(mode, ["is-enabled", legacy_unit])
+        if legacy_path.exists() or legacy_dropin.exists() or act_res.returncode == 0 or en_res.returncode == 0:
+            if act_res.returncode == 0:
+                _run_systemctl(mode, ["stop", legacy_unit])
+            if en_res.returncode == 0:
+                _run_systemctl(mode, ["disable", legacy_unit])
+            if legacy_path.is_file() or legacy_path.is_symlink():
+                try:
+                    legacy_path.unlink()
+                except OSError:
+                    pass
+            if legacy_dropin.is_dir():
+                for c in sorted(legacy_dropin.iterdir(), reverse=True):
+                    try:
+                        c.unlink()
+                    except OSError:
+                        pass
+                try:
+                    legacy_dropin.rmdir()
+                except OSError:
+                    pass
+            _run_systemctl(mode, ["daemon-reload"])
+
+    # Step: Install upstream Hermes gateway service (Hermes owns base unit)
+    multiplexed = _is_multiplexed_mode(profile_ref, plan["hermesHome"])
+    if not multiplexed:
+        install_proc = _hermes_gateway_cmd("install", profile_ref, hermes_home=plan["hermesHome"])
+        if install_proc.returncode != 0:
+            state_mod.advance(name, "failed", f"hermes gateway install failed: {install_proc.stderr}")
+            print(f"error: hermes gateway install failed: {install_proc.stderr}", file=sys.stderr)
+            return EX_APPLY
+
+    # Step: Apply OMES-owned resource/hardening drop-in overlay only
+    dropin_path = Path(plan["unit"]["dropin_path"])
     try:
-        unit_content = unitfile.render_unit(plan)
         dropin_content = unitfile.render_dropin(plan, omes_root)
-        _write_atomic(unit_path, unit_content)
+        dropin_path.parent.mkdir(parents=True, exist_ok=True)
         _write_atomic(dropin_path, dropin_content)
         Path(plan["hermesHome"]).mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        state_mod.advance(name, "failed", f"failed to write unit/drop-in: {exc}")
-        print(f"error: failed to write unit/drop-in: {exc}", file=sys.stderr)
+        state_mod.advance(name, "failed", f"failed to write drop-in: {exc}")
+        print(f"error: failed to write drop-in: {exc}", file=sys.stderr)
         return EX_APPLY
 
-    managed_paths = [str(unit_path), str(dropin_path)]
+    managed_paths = [str(dropin_path)]
 
     reload_proc = _run_systemctl(mode, ["daemon-reload"])
     if reload_proc.returncode != 0:
@@ -675,17 +754,22 @@ def cmd_apply(args: argparse.Namespace) -> int:
         print(f"error: systemctl daemon-reload failed: {reload_proc.stderr}", file=sys.stderr)
         return EX_APPLY
 
-    enable_proc = _run_systemctl(mode, ["enable", "--now", plan["unit"]["name"]])
-    if enable_proc.returncode != 0:
-        state_mod.advance(name, "failed", "enable failed", managed_paths=managed_paths)
-        print(f"error: systemctl enable --now failed: {enable_proc.stderr}", file=sys.stderr)
-        return EX_APPLY
+    if not multiplexed:
+        start_proc = _hermes_gateway_cmd("start", profile_ref, hermes_home=plan["hermesHome"])
+        enable_proc = _run_systemctl(mode, ["enable", "--now", plan["unit"]["name"]])
+        if enable_proc.returncode != 0 and start_proc.returncode != 0:
+            state_mod.advance(name, "failed", "enable/start failed", managed_paths=managed_paths)
+            print(f"error: gateway start failed: {enable_proc.stderr or start_proc.stderr}", file=sys.stderr)
+            return EX_APPLY
+    else:
+        _run_systemctl(mode, ["daemon-reload"])
 
     prov = provenance.collect(omes_root)
-    state_mod.advance(name, "applied", "unit enabled and started", managed_paths=managed_paths, provenance=prov)
+    state_mod.advance(name, "applied", "upstream gateway configured and overlay applied", managed_paths=managed_paths, provenance=prov)
 
     active_proc = _run_systemctl(mode, ["is-active", plan["unit"]["name"]])
-    if active_proc.returncode != 0:
+    status_proc = _hermes_gateway_cmd("status", profile_ref, hermes_home=plan["hermesHome"])
+    if active_proc.returncode != 0 and status_proc.returncode != 0:
         state_mod.advance(name, "failed", "unit did not become active", managed_paths=managed_paths)
         print("error: unit did not become active after apply", file=sys.stderr)
         return EX_VERIFY
@@ -725,10 +809,18 @@ def cmd_status(args: argparse.Namespace) -> int:
             result["backend"] = "compose"
         else:
             plan = _build_systemd_plan(manifest, omes_root)
+            name = manifest["metadata"]["name"]
+            if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+                profile_ref = manifest.get("runtime", {}).get("profileRef", name)
+            else:
+                profile_ref = manifest.get("spec", {}).get("profile", name)
             proc = _run_systemctl(plan["serviceMode"], ["is-active", plan["unit"]["name"]])
-            result["unitActive"] = proc.returncode == 0
+            gw_status = _hermes_gateway_cmd("status", profile_ref, hermes_home=plan["hermesHome"])
+            result["unitActive"] = proc.returncode == 0 or (gw_status.returncode == 0 and "running" in gw_status.stdout.lower())
             result["unit"] = plan["unit"]["name"]
             result["backend"] = "systemd"
+            if _is_multiplexed_mode(profile_ref, plan["hermesHome"]):
+                result["multiplexed"] = True
     except manifest_mod.ManifestError as exc:
         result["manifestError"] = str(exc)
 
@@ -779,9 +871,16 @@ def cmd_restart(args: argparse.Namespace) -> int:
         return EX_OK
 
     plan = _build_systemd_plan(manifest, omes_root)
+    name = manifest["metadata"]["name"]
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", name)
+    else:
+        profile_ref = manifest.get("spec", {}).get("profile", name)
+
+    gw_res = _hermes_gateway_cmd("restart", profile_ref, hermes_home=plan["hermesHome"])
     proc = _run_systemctl(plan["serviceMode"], ["restart", plan["unit"]["name"]])
-    if proc.returncode != 0:
-        print(f"error: restart failed: {proc.stderr}", file=sys.stderr)
+    if proc.returncode != 0 and gw_res.returncode != 0:
+        print(f"error: restart failed: {proc.stderr or gw_res.stderr}", file=sys.stderr)
         return EX_APPLY
     _print({"ok": True, "unit": plan["unit"]["name"]}, args.json) if args.json else print(f"{args.name}: restarted")
     return EX_OK
@@ -848,6 +947,11 @@ def cmd_rollback(args: argparse.Namespace) -> int:
         return _rollback_compose(args.name, manifest, args)
 
     plan = _build_systemd_plan(manifest, omes_root)
+    name = manifest["metadata"]["name"]
+    if manifest.get("apiVersion") == "omes.ahliweb.com/v2":
+        profile_ref = manifest.get("runtime", {}).get("profileRef", name)
+    else:
+        profile_ref = manifest.get("spec", {}).get("profile", name)
     mode = plan["serviceMode"]
     st = state_mod.load(args.name)
     managed_paths = st.get("managedPaths", [])
@@ -855,11 +959,13 @@ def cmd_rollback(args: argparse.Namespace) -> int:
     applied_steps = []
     failed_steps = []
 
-    # Step 1: stop unit
-    stop_proc = _run_systemctl(mode, ["stop", plan["unit"]["name"]])
+    # Step 1: stop unit (Hermes CLI + systemctl)
+    stop_proc = _hermes_gateway_cmd("stop", profile_ref, hermes_home=plan["hermesHome"])
+    if stop_proc.returncode != 0:
+        stop_proc = _run_systemctl(mode, ["stop", plan["unit"]["name"]])
     if stop_proc.returncode != 0:
         act_proc = _run_systemctl(mode, ["is-active", plan["unit"]["name"]])
-        if act_proc.returncode == 0:
+        if act_proc.returncode == 0 or stop_proc.returncode == 1:
             failed_steps.append({"step": "systemctl_stop", "error": f"systemctl stop failed: exit {stop_proc.returncode}"})
         else:
             applied_steps.append({"step": "systemctl_stop", "detail": "already inactive"})

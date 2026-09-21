@@ -20,7 +20,8 @@ def _load(name: str) -> dict:
 class TestBuildPlan(unittest.TestCase):
     def test_unit_name_derivation(self):
         p = plan_mod.build_plan(_load("valid-generic-user.json"))
-        self.assertEqual(p["unit"]["name"], "omes-agent-researcher.service")
+        self.assertEqual(p["unit"]["name"], "hermes-gateway-researcher.service")
+        self.assertEqual(p["unit"]["legacy_name"], "omes-agent-researcher.service")
 
     def test_user_mode_unit_dir_is_under_home(self):
         p = plan_mod.build_plan(_load("valid-generic-user.json"))

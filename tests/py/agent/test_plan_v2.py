@@ -22,7 +22,8 @@ class TestBuildPlanV2(unittest.TestCase):
     def test_native_plan_derivation(self):
         manifest = _load("valid-native-user.json")
         p = plan_mod.build_plan(manifest)
-        self.assertEqual(p["unit"]["name"], "omes-agent-researcher.service")
+        self.assertEqual(p["unit"]["name"], "hermes-gateway-researcher.service")
+        self.assertEqual(p["unit"]["legacy_name"], "omes-agent-researcher.service")
         self.assertIn(".config/systemd/user", p["unit"]["dir"])
         self.assertIn("researcher", p["hermesHome"])
         self.assertEqual(p["secretReferences"], [])
