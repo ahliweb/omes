@@ -1059,6 +1059,22 @@ Enforcement rules:
 
 These rules are enforced in CI via `scripts/check-architecture.py` and unit tests in `tests/py/architecture/test_registry.py`.
 
+### 16.3 Automated upstream drift review and deprecation tracking
+
+Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml`.
+
+The drift inspection engine:
+- Compares latest released upstream versions against `architecture/capabilities.json` supported baselines.
+- Separately tracks upstream `main` candidate changes without promoting them to `released_supported`.
+- Classifies findings across standard categories: `NO_IMPACT`, `NEW_DELEGATE_CANDIDATE`, `PORT_ADAPT_REVIEW`, `BREAKING_CHANGE`, `SECURITY_OR_LICENSE_REVIEW`, `BASELINE_UPDATE_AVAILABLE`.
+- Surfaces temporary capability duplication and evaluates deprecation triggers.
+- Detects upstream license modifications and installer/package provenance shifts.
+- Is strictly read-only: never auto-ports, auto-merges, or mutates code or hosts.
+- Manages a single deduplicated GitHub issue with label `area:upstream-drift` to avoid notification spam.
+- Fails closed (`BLOCKED`/`WARN`) when upstream APIs are unreachable.
+- Enforces release quality via `python3 scripts/upstream-drift.py --check`.
+
+
 <!-- OMES-MERMAID: docs/architecture.md -->
 
 
