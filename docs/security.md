@@ -209,6 +209,7 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Control | Implemented in |
 |---|---|
 | Allowlisted operations only; no free-form command field | `contracts/control-center/v1/deployment.request.schema.json` (#89), enforced by `lib/omes/py/jobs/cli.py`'s `cmd_submit` before a job record is even created |
+| Contract schema validation fails closed on unsupported keywords (`$ref`, `format`, `if`/`then`, etc.) with `SchemaError`; annotations are explicitly allowlisted; raw-secret detection operates independently | `lib/omes/py/jobs/schema.py`, `lib/omes/py/agent/jsonschema_lite.py`, `scripts/check-contracts.py` (#172) |
 | Idempotent submission; a replay never re-executes | `lib/omes/py/jobs/store.py`'s `submit()`, `idempotency.json` index |
 | Destructive operations (`restore`, `rollback`, `stop`, `configure`) require explicit approval | `lib/omes/py/jobs/store.py`'s `is_destructive()`/`can_auto_approve()`, enforced in `runner.run()` |
 | Cross-tenant/cross-target rejection, audited | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks |

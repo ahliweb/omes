@@ -1,24 +1,25 @@
 """lib/omes/py/jobs/schema.py - a minimal, dependency-free JSON Schema
-(draft 2020-12 subset) validator.
+(draft 2020-12 subset) validator with fail-closed schema keyword validation.
 
-Why this exists (ADR-0012, issue #89/#90): OMES is Python-stdlib-only, so
+Why this exists (ADR-0012, issues #89/#90, #172): OMES is Python-stdlib-only, so
 `jsonschema` and other PyPI validators are not available. This module
-implements only the keywords the OMES/Control Center contracts under
-`contracts/control-center/v1/*.schema.json` actually use:
+implements an explicit subset of JSON Schema draft 2020-12 keywords:
 
     type, required, properties, additionalProperties, enum, const,
-    pattern, minimum, maximum, minItems, maxItems, items, oneOf, anyOf
+    pattern, minimum, maximum, minLength, maxLength, minItems, maxItems,
+    items, oneOf, anyOf
 
-It is deliberately not a general-purpose JSON Schema engine. Anything
-outside that keyword list is ignored rather than rejected, so schema
-authors must keep contracts inside this subset (see
-docs/control-center-contracts.md "Validator subset").
+Metadata-only annotation keywords are explicitly allowlisted:
+
+    $schema, $id, title, description
+
+In accordance with issue #172, this validator fails closed on unknown or
+unsupported JSON Schema keywords (such as $ref, format, if/then, allOf, not,
+uniqueItems) by raising SchemaError rather than silently ignoring them.
 
 `scripts/check-contracts.py` is the CLI entry point that walks
 `contracts/**/v1/fixtures/**` and validates every fixture against its
-schema; it imports this module rather than duplicating it (the CLI must
-stay a thin wrapper so `lib/omes/py/jobs/cli.py` can reuse the exact same
-validation code path when validating a live `omes job submit` request).
+schema; it imports this module rather than duplicating it.
 """
 from __future__ import annotations
 
@@ -26,6 +27,71 @@ import json
 import re
 from pathlib import Path
 from typing import Any
+
+# ---------------------------------------------------------------------------
+# Supported JSON Schema keywords and annotations (issue #172)
+# ---------------------------------------------------------------------------
+
+SUPPORTED_VALIDATION_KEYWORDS: frozenset[str] = frozenset({
+    "type",
+    "required",
+    "properties",
+    "additionalProperties",
+    "enum",
+    "const",
+    "pattern",
+    "minimum",
+    "maximum",
+    "minLength",
+    "maxLength",
+    "minItems",
+    "maxItems",
+    "items",
+    "oneOf",
+    "anyOf",
+})
+
+ALLOWED_ANNOTATION_KEYWORDS: frozenset[str] = frozenset({
+    "$schema",
+    "$id",
+    "title",
+    "description",
+})
+
+ALLOWED_SCHEMA_KEYWORDS: frozenset[str] = SUPPORTED_VALIDATION_KEYWORDS | ALLOWED_ANNOTATION_KEYWORDS
+
+
+class SchemaError(Exception):
+    """Raised for a malformed schema (a bug in the contract itself or unsupported keyword)."""
+
+
+def validate_schema(schema: Any, path: str = "$") -> None:
+    """Recursively inspects `schema` to ensure every keyword is in
+    ALLOWED_SCHEMA_KEYWORDS. Fails closed with `SchemaError` if an unsupported
+    keyword (such as $ref, format, if/then, allOf, not, uniqueItems) is found.
+    """
+    if not isinstance(schema, dict):
+        raise SchemaError(f"{path}: schema must be an object (dict), got {type(schema).__name__}")
+
+    for key, value in schema.items():
+        if key not in ALLOWED_SCHEMA_KEYWORDS:
+            raise SchemaError(f"{path}: unsupported JSON Schema keyword {key!r}")
+
+        # Recurse into sub-schemas
+        if key == "properties" and isinstance(value, dict):
+            for prop_name, prop_schema in value.items():
+                validate_schema(prop_schema, f"{path}.properties.{prop_name}")
+        elif key == "additionalProperties" and isinstance(value, dict):
+            validate_schema(value, f"{path}.additionalProperties")
+        elif key == "items":
+            if isinstance(value, dict):
+                validate_schema(value, f"{path}.items")
+            elif isinstance(value, list):
+                for idx, item_schema in enumerate(value):
+                    validate_schema(item_schema, f"{path}.items[{idx}]")
+        elif key in ("oneOf", "anyOf") and isinstance(value, list):
+            for idx, sub_schema in enumerate(value):
+                validate_schema(sub_schema, f"{path}.{key}[{idx}]")
 
 # ---------------------------------------------------------------------------
 # Secret-value ban (docs/control-center-contracts.md "Authentication and
@@ -161,6 +227,10 @@ def _validate(instance: Any, schema: dict[str, Any], path: str, errors: list[str
         if "pattern" in schema:
             if not re.search(schema["pattern"], instance):
                 errors.append(f"{path}: {instance!r} does not match pattern {schema['pattern']!r}")
+        if "minLength" in schema and len(instance) < schema["minLength"]:
+            errors.append(f"{path}: {instance!r} length {len(instance)} is shorter than minLength {schema['minLength']}")
+        if "maxLength" in schema and len(instance) > schema["maxLength"]:
+            errors.append(f"{path}: {instance!r} length {len(instance)} is longer than maxLength {schema['maxLength']}")
 
     if isinstance(instance, (int, float)) and not isinstance(instance, bool):
         if "minimum" in schema and instance < schema["minimum"]:
@@ -213,13 +283,15 @@ def _validate(instance: Any, schema: dict[str, Any], path: str, errors: list[str
                 errors.append(f"{path}: matched 0 of {len(sub_schemas)} anyOf branches, expected at least 1")
 
 
-def validate(instance: Any, schema: dict[str, Any]) -> list[str]:
+def validate(instance: Any, schema: dict[str, Any], path: str = "$") -> list[str]:
     """Validates `instance` against `schema`. Returns a list of error
-    strings (empty means valid). Always also runs the secret-value ban,
-    regardless of what the schema itself declares."""
+    strings (empty means valid). Fails closed by raising `SchemaError` if
+    `schema` contains unsupported keywords. Always also runs the secret-value
+    ban, regardless of what the schema itself declares."""
+    validate_schema(schema, path)
     errors: list[str] = []
-    _validate(instance, schema, "$", errors)
-    errors.extend(scan_for_raw_secrets(instance))
+    _validate(instance, schema, path, errors)
+    errors.extend(scan_for_raw_secrets(instance, path))
     return errors
 
 

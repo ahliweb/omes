@@ -54,3 +54,24 @@ class TestCheckContracts(unittest.TestCase):
 
             failures = check_contracts.check_contract_dir(root)
             self.assertTrue(any("expected INVALID" in f for f in failures))
+
+    def test_schema_with_unsupported_keyword_is_rejected(self):
+        import json
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "widget.schema.json").write_text(
+                json.dumps({
+                    "type": "object",
+                    "properties": {"a": {"type": "string", "$ref": "#/defs/Foo"}},
+                })
+            )
+            fixtures = root / "fixtures" / "widget"
+            fixtures.mkdir(parents=True)
+            (fixtures / "valid-01.json").write_text(json.dumps({"a": "x"}))
+            (fixtures / "invalid-01.json").write_text(json.dumps({"a": 123}))
+
+            failures = check_contracts.check_contract_dir(root)
+            self.assertTrue(any("unsupported JSON Schema keyword '$ref'" in f for f in failures))

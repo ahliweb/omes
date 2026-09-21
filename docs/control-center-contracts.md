@@ -42,8 +42,8 @@ decision 1, per entity rather than per concern.
 
 All schemas live under
 [`contracts/control-center/v1/`](../contracts/control-center/v1/) as JSON
-Schema (draft 2020-12 subset — see
-[`contracts/README.md`](../contracts/README.md) "Validator subset").
+Schema (draft 2020-12 subset with fail-closed keyword enforcement — see
+[`contracts/README.md`](../contracts/README.md) "Validator subset and fail-closed keyword enforcement").
 Each has at least one valid and one invalid fixture under
 `contracts/control-center/v1/fixtures/<schema-name>/`.
 

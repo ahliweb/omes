@@ -31,24 +31,45 @@ contracts/<area>/v<major>/fixtures/<schema-name>/invalid-*.reason.txt   (optiona
   *intended* reason (e.g. "additional properties not allowed", not some
   unrelated typo) rather than merely failing for any reason.
 
-## Validator subset
+## Validator subset and fail-closed keyword enforcement
 
 `scripts/check-contracts.py` (core logic in
-`lib/omes/py/jobs/schema.py`) implements a deliberately small,
-dependency-free subset of JSON Schema draft 2020-12:
+`lib/omes/py/jobs/schema.py`, unified with `lib/omes/py/agent/jsonschema_lite.py`)
+implements a deliberately small, dependency-free subset of JSON Schema draft
+2020-12 (issue #172):
+
+### Supported validation keywords
 
 ```
 type, required, properties, additionalProperties, enum, const,
-pattern, minimum, maximum, minItems, maxItems, items, oneOf, anyOf
+pattern, minimum, maximum, minLength, maxLength, minItems, maxItems,
+items, oneOf, anyOf
 ```
 
-Any other JSON Schema keyword (`$ref`, `if`/`then`, `patternProperties`,
-`format`, ...) is not evaluated. Contract authors must stay inside this
-subset; a schema that relies on an unsupported keyword will silently not
-enforce that keyword; it will not raise "unsupported keyword" — this is a
-known trade-off of a minimal, stdlib-only implementation (ADR-0012) and is
-mitigated by every schema having positive and negative fixtures that
-exercise its actual constraints.
+### Allowlisted metadata annotations
+
+```
+$schema, $id, title, description
+```
+
+### Fail-closed enforcement (issue #172)
+
+Any other JSON Schema keyword (`$ref`, `format`, `if`/`then`/`else`, `allOf`,
+`not`, `uniqueItems`, `patternProperties`, ...) is **rejected** with a
+`SchemaError` naming the exact schema path and keyword (e.g. `$.properties.a:
+unsupported JSON Schema keyword '$ref'`).
+
+OMES deliberately fails closed in CI and runtime contract loading rather than
+silently ignoring constraints. Schema authors must stay strictly within this
+supported subset. If a contract requires semantics outside this subset, it must
+either be rewritten within the supported keywords or trigger an explicit
+architecture/ADR decision to expand the stdlib engine.
+
+Standards-compliant Draft 2020-12 validation was evaluated for CI. In keeping
+with ADR-0012's Python-stdlib-only policy, third-party PyPI dependencies (such as
+`jsonschema`) are excluded from both runtime and CI to prevent supply-chain
+risks and network dependencies. The stdlib validator provides deterministic,
+air-gapped contract assurance across all platforms.
 
 The validator additionally runs two checks that are **not** part of JSON
 Schema and cannot be turned off by a schema:

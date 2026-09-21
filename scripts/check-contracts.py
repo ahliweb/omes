@@ -59,6 +59,13 @@ def check_contract_dir(contract_dir: Path) -> list[str]:
     failures: list[str] = []
     fixtures_root = contract_dir / "fixtures"
     for schema_path in sorted(contract_dir.glob("*.schema.json")):
+        try:
+            schema_data = schema_mod.load_json(schema_path)
+            schema_mod.validate_schema(schema_data)
+        except Exception as exc:
+            failures.append(f"{schema_path}: invalid schema: {exc}")
+            continue
+
         schema_name = schema_path.name[: -len(".schema.json")]
         fixture_dir = fixtures_root / schema_name
         if not fixture_dir.is_dir():
