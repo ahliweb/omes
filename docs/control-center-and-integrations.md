@@ -33,7 +33,7 @@ The Control Center does not replace the three existing authorities:
 Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171):
 - OMES core modules (`agent`, `jobs`, `health`, `provenance`, `architecture`) must never import or depend directly on commercial/domain modules (`content`, `domains`, `billing`).
 - The Control Center must never execute arbitrary shell commands; mutations are restricted to typed, allowlisted OMES jobs.
-- Domain-level content orchestration is temporary in OMES core and scheduled to migrate into an agent skill ([#179](https://github.com/ahliweb/omes/issues/179)).
+- Domain-level content orchestration is decoupled from OMES core under [ADR-0024](adr/0024-content-workflow-boundary-and-migration.md) ([#179](https://github.com/ahliweb/omes/issues/179)); content publishing intent, business approvals, and records transition to AWCMS Control Center, while reasoning and browser automation transition to Hermes Agent.
 - The Control Center must never become a second Hermes runtime, arbitrary remote shell, or replacement for the OMES local recovery path.
 
 ### 1.1 UI/UX Design System and Screen Architecture

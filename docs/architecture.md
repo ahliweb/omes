@@ -1055,6 +1055,7 @@ Enforcement rules:
 - **Decoupled agent runtime**: OMES must not directly query Hermes private databases (`messages.db`, `.hermes/`); operations must use supported Hermes CLI commands.
 - **Candidate feature isolation**: Upstream features observed only on `main` cannot be classified as `released_supported`.
 - **Expiry condition on duplication**: Any temporary duplication requires `duplication_allowed: true`, an `adr_reference`, and a non-empty `removal_trigger`.
+- **Content domain boundary (ADR-0024)**: Domain content workflows (`content` module) are decoupled from OMES host core; publishing records and approval state transfer to AWCMS Control Center (#179), while browser automation and chat channels transfer to Hermes Agent.
 
 These rules are enforced in CI via `scripts/check-architecture.py` and unit tests in `tests/py/architecture/test_registry.py`.
 

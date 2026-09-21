@@ -448,13 +448,31 @@ def cmd_report(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+CONTENT_DEPRECATION_NOTICE = (
+    "[omes] DEPRECATION: 'omes content' is deprecated in OMES v1.x and scheduled for retirement "
+    "in OMES v2.0 (ADR-0024, issue #179). Content distribution workflows are transitioning to "
+    "AWCMS Control Center and Hermes agent skills. Use 'omes content export --format awcms-v1' "
+    "to export job records and audit logs to the successor format."
+)
+
+
 def cmd_export(args: argparse.Namespace) -> int:
     root = paths.ensure_layout()
-    result = reports.export_reports(root, args.since, Path(args.out))
+    fmt = getattr(args, "format", "legacy")
+    if fmt == "awcms-v1":
+        result = reports.export_awcms_v1(root, args.since, Path(args.out))
+    else:
+        result = reports.export_reports(root, args.since, Path(args.out))
     if args.json:
         _print_json(result)
     else:
-        print(f"exported {len(result['exported_jobs'])} job report(s) and {result['audit_lines']} audit line(s) to {result['out_dir']}")
+        if fmt == "awcms-v1":
+            print(
+                f"exported {len(result['exported_jobs'])} job(s) to AWCMS manifest at {result['manifest']} "
+                f"(requires_manual_review={result['requires_manual_review_count']})"
+            )
+        else:
+            print(f"exported {len(result['exported_jobs'])} job report(s) and {result['audit_lines']} audit line(s) to {result['out_dir']}")
     return EX_OK
 
 
@@ -835,9 +853,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--json", action="store_true")
     p_report.set_defaults(func=cmd_report)
 
-    p_export = sub.add_parser("export", help="redacted export of reports/audit")
+    p_export = sub.add_parser("export", help="redacted export of reports/audit or AWCMS migration manifest")
     p_export.add_argument("--since", required=True, help="YYYY-MM-DD")
     p_export.add_argument("--out", required=True)
+    p_export.add_argument(
+        "--format",
+        choices=["legacy", "awcms-v1"],
+        default="legacy",
+        help="export format (legacy=reports/audit, awcms-v1=AWCMS migration manifest)",
+    )
     p_export.add_argument("--json", action="store_true")
     p_export.set_defaults(func=cmd_export)
 

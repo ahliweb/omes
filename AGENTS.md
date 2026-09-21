@@ -19,7 +19,7 @@ If the repository state, issue, or documentation disagrees, stop and resolve the
 - **Hermes Agent** owns agent runtime behavior: reasoning, messaging, channels, sessions, memory, skills, delegation, cron, browser automation, and model/provider routing. OMES integrates with Hermes; it must not implement a second Hermes runtime.
 - **Omarchy** provides upstream desktop styling, shell enhancements, developer catalogs, and update channels. OMES ports portable components and adapts policies to Ubuntu/Mint, never duplicating Arch-specific mechanisms.
 - **Graphify** owns codebase knowledge graph extraction, AST analysis, and Hermes MCP tools. OMES delegates graph extraction upstream.
-- **AWCMS/Control Center**, when implemented, owns tenant, customer, catalog, subscription, invoice, payment, entitlement, approval, support, and portal state. It must request allowlisted OMES jobs and must never execute arbitrary host shell commands.
+- **AWCMS/Control Center**, when implemented, owns tenant, customer, catalog, subscription, invoice, payment, entitlement, approval, support, content records, publishing intent, and portal state. It must request allowlisted OMES jobs and must never execute arbitrary host shell commands.
 - **Cloudflare Registrar/SRS-X** own actual registrar state. The selected DNS provider owns DNS state. OMES stores intent and reconciliation evidence, not a false copy of provider truth.
 - **GitHub** owns repository, workflow, release, webhook, and deployment observations. GitHub is not the OMES billing authority.
 - **Coolify** is an optional later deployment adapter. It is not the OMES runtime, billing engine, or source of truth. Nomad/Kubernetes are evidence-gated evaluation only.

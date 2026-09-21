@@ -1,9 +1,9 @@
 # ADR-0015 — Content distribution workflow architecture
 
-- **Status:** Accepted as design boundary; implementation tracked in issues [#63](https://github.com/ahliweb/omes/issues/63)–[#70](https://github.com/ahliweb/omes/issues/70)
-- **Date:** 2026-09-19
+- **Status:** Superseded by ADR-0024 (issue #179)
+- **Date:** 2026-09-19 (superseded 2026-09-21)
 - **Decision maker:** @ahliweb
-- **Related:** ADR-0002 (explicit state), ADR-0003 (module lifecycle), ADR-0004 (check before mutate), ADR-0005 (root/user separation), ADR-0011 (Control Center and provider boundaries), [docs/content-distribution.md](../content-distribution.md), [docs/telegram-security.md](../telegram-security.md)
+- **Related:** ADR-0002 (explicit state), ADR-0003 (module lifecycle), ADR-0004 (check before mutate), ADR-0005 (root/user separation), ADR-0011 (Control Center and provider boundaries), ADR-0017 (upstream-first precedence), ADR-0024 (content workflow boundary and migration), [docs/content-distribution.md](../content-distribution.md), [docs/telegram-security.md](../telegram-security.md)
 
 ## Context
 

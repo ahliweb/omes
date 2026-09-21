@@ -1,19 +1,19 @@
 # Content distribution workflow
 
-> Status: design (this document) + partial implementation, tracked across issues
-> [#63](https://github.com/ahliweb/omes/issues/63) (this epic/design),
-> [#64](https://github.com/ahliweb/omes/issues/64) (inbox watcher and artifact
-> lifecycle), [#67](https://github.com/ahliweb/omes/issues/67) (job state machine,
-> retry, reconciliation), [#68](https://github.com/ahliweb/omes/issues/68)
-> (provenance/audit/archive reports), [#66](https://github.com/ahliweb/omes/issues/66)
-> (platform worker contract), [#65](https://github.com/ahliweb/omes/issues/65)
-> (Telegram approval front end), [#69](https://github.com/ahliweb/omes/issues/69)
-> (caption/cover/policy validation), [#70](https://github.com/ahliweb/omes/issues/70)
-> (test and threat-model). See [ADR-0015](adr/0015-content-distribution-workflow.md)
-> for why this shape was chosen.
+> **DEPRECATION & MIGRATION NOTICE (ADR-0024, issue #179)**: The content distribution workflow
+> in OMES core is deprecated in OMES v1.x and superseded by [ADR-0024](adr/0024-content-workflow-boundary-and-migration.md).
+> Per repository architecture boundaries ([AGENTS.md](../AGENTS.md), [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md)),
+> content management, publishing intent, business approvals, and durable records transition to
+> **AWCMS Control Center**, while reasoning, browser automation, and chat messaging transition to
+> **Hermes Agent**. Existing OMES content records, media hashes, and audit history can be exported
+> using `omes content export --format awcms-v1`. OMES core retains compatibility shims in v1.x,
+> scheduled for retirement in OMES v2.0.
 >
-> **This workflow is optional.** It is never referenced by `profiles/*.profile` or by
-> any installer path — see §9. Enabling it is an explicit, separate operator action.
+> Status: Historical design (issues #63–#70) + compatibility mode (issue #179). See [ADR-0015](adr/0015-content-distribution-workflow.md)
+> and [ADR-0024](adr/0024-content-workflow-boundary-and-migration.md).
+>
+> **This workflow is optional and frozen.** It is never referenced by `profiles/*.profile` or by
+> any installer path — see §9. Existing data is preserved without deletion.
 
 ## 1. MVP definition
 
