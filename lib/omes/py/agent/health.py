@@ -81,6 +81,8 @@ def check_agent_unit(unit: str, mode: str, timeout: float) -> dict:
         ),
         remediation=None if status == _model.STATUS_PASS else f"check `systemctl {'--user ' if mode == 'user' else ''}status {unit}`",
         detail=(active_out or active_err or f"enabled={enabled} active={active}").strip(),
+        authority=_model.AUTHORITY_OMES_HOST,
+        source="systemd",
     )
 
 

@@ -238,5 +238,35 @@ class TestRunIntegration(unittest.TestCase):
         self.assertFalse(result["ready"])
 
 
+class TestLayerAuthorityAndAttribution(unittest.TestCase):
+    def test_authorities_and_sources(self):
+        host_res = hermes.check_host({"systemd_present": True, "disk_free_mb": 5000, "mem_mb": 4096})
+        self.assertEqual(host_res["authority"], model.AUTHORITY_OMES_HOST)
+        self.assertEqual(host_res["source"], "systemd")
+
+        def fake_run(cmd, timeout):
+            if cmd[:2] == ["hermes", "--version"]:
+                return 0, "hermes 2026.9.14", ""
+            if "doctor" in cmd:
+                return 0, "doctor ok", ""
+            if "gateway" in cmd:
+                return 0, "gateway running", ""
+            return 0, "active", ""
+
+        with mock.patch.object(hermes, "_run", side_effect=fake_run):
+            rt_res = hermes.check_runtime(2.0)
+            self.assertEqual(rt_res["authority"], model.AUTHORITY_HERMES)
+            self.assertEqual(rt_res["source"], "hermes doctor")
+
+            gw_res = hermes.check_gateway("user", 2.0)
+            self.assertEqual(gw_res["authority"], model.AUTHORITY_HERMES)
+            self.assertEqual(gw_res["source"], "hermes gateway status")
+
+    def test_channel_compatibility_fallback(self):
+        res = hermes.check_channel("/nonexistent-dir", 2.0)
+        self.assertEqual(res["status"], model.STATUS_NOT_APPLICABLE)
+        self.assertEqual(res["authority"], model.AUTHORITY_EXTERNAL_PROVIDER)
+
+
 if __name__ == "__main__":
     unittest.main()

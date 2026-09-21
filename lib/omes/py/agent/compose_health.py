@@ -110,6 +110,8 @@ def check_container(project: str, compose_file: str, service: str, timeout: floa
             proves="Proves whether the agent's container is running via `docker compose ps`.",
             remediation="install docker / docker compose",
             detail="docker not found on PATH",
+            authority=_model.AUTHORITY_OMES_HOST,
+            source="compose",
         )
     proc_cmd = ["docker", "compose", "-p", project, "-f", str(compose_file), "ps", "--format", "json"]
     try:
@@ -122,6 +124,8 @@ def check_container(project: str, compose_file: str, service: str, timeout: floa
             proves="Proves whether the agent's container is running via `docker compose ps`.",
             remediation="check `docker compose ps` manually",
             detail=str(exc),
+            authority=_model.AUTHORITY_OMES_HOST,
+            source="compose",
         )
 
     running = False
@@ -144,6 +148,8 @@ def check_container(project: str, compose_file: str, service: str, timeout: floa
         proves="Proves the agent's container is running (and reports a healthy Docker HEALTHCHECK, if any) via `docker compose ps`. Does NOT prove a messaging channel is connected - see the channel layer.",
         remediation=None if status == _model.STATUS_PASS else "run `docker compose ps` and `docker compose logs` for this project",
         detail=detail or f"exit {proc.returncode}",
+        authority=_model.AUTHORITY_OMES_HOST,
+        source="compose",
     )
 
 
@@ -158,6 +164,8 @@ def check_runtime(project: str, compose_file: str, service: str, timeout: float)
             _model.STATUS_NOT_APPLICABLE,
             proves="Not evaluated: the container was not reachable via `docker compose exec -T`.",
             detail="container is not running or `docker compose exec` failed; see the container layer",
+            authority=_model.AUTHORITY_HERMES,
+            source="hermes doctor",
         )
 
     rc, out, err = _exec(project, compose_file, service, ["hermes", "--version"], timeout)
@@ -168,6 +176,8 @@ def check_runtime(project: str, compose_file: str, service: str, timeout: float)
             proves="Proves whether the `hermes` binary is present and runnable inside the agent's container. Does NOT prove the channel is connected.",
             remediation="verify the agent image installs Hermes on PATH",
             detail=(err or out or f"exit {rc}").strip(),
+            authority=_model.AUTHORITY_HERMES,
+            source="hermes --version",
         )
 
     doctor_rc, doctor_out, doctor_err = _exec(project, compose_file, service, ["hermes", "doctor"], timeout)
@@ -178,6 +188,8 @@ def check_runtime(project: str, compose_file: str, service: str, timeout: float)
         proves="Proves the Hermes binary runs and `hermes doctor` passed, evaluated inside the agent's own container via `docker compose exec -T`.",
         remediation=None if doctor_ok else "run `docker compose exec -T <service> hermes doctor` manually",
         detail=(out.strip() if doctor_ok else (doctor_err or doctor_out or f"exit {doctor_rc}").strip()),
+        authority=_model.AUTHORITY_HERMES,
+        source="hermes doctor",
     )
 
 
@@ -194,6 +206,8 @@ def check_provider(project: str, compose_file: str, service: str, timeout: float
             _model.STATUS_NOT_APPLICABLE,
             proves="No provider is configured for this deployment.",
             detail="set OMES_OLLAMA_ENABLED=1 to evaluate this layer",
+            authority=_model.AUTHORITY_EXTERNAL_PROVIDER,
+            source="ollama",
         )
 
     if not container_reachable(project, compose_file, service, timeout):
@@ -201,6 +215,8 @@ def check_provider(project: str, compose_file: str, service: str, timeout: float
             _model.STATUS_NOT_APPLICABLE,
             proves="Not evaluated: the provider layer requires probing from inside the container's own network namespace, and the container was not reachable via `docker compose exec -T`.",
             detail="container is not running or `docker compose exec` failed; see the container layer",
+            authority=_model.AUTHORITY_EXTERNAL_PROVIDER,
+            source="ollama",
         )
 
     endpoint = os.environ.get("OMES_OLLAMA_ENDPOINT", "http://127.0.0.1:11434").strip()
@@ -217,6 +233,8 @@ def check_provider(project: str, compose_file: str, service: str, timeout: float
         proves="Proves the configured Ollama provider is reachable from inside the agent's own container (docker compose exec -T). Does NOT prove a specific model is loaded - see `omes health ollama` for the full layered breakdown on the host.",
         remediation=None if ready else "verify OMES_OLLAMA_ENDPOINT/network reachability from inside the container (curl, or the container's DNS/route to the Ollama host)",
         detail=(out or err or f"exit {rc}").strip(),
+        authority=_model.AUTHORITY_EXTERNAL_PROVIDER,
+        source="ollama",
     )
 
 
@@ -238,12 +256,16 @@ def check_health_command(project: str, compose_file: str, service: str, command:
             _model.STATUS_NOT_APPLICABLE,
             proves="No spec.health.command was declared for this agent.",
             detail="set spec.health.command in the manifest to evaluate this layer",
+            authority=_model.AUTHORITY_OMES_HOST,
+            source="spec.health.command",
         )
     if not container_ok:
         return _model.layer_result(
             _model.STATUS_NOT_APPLICABLE,
             proves="Not evaluated: the container is not running - see the container layer.",
             detail="container is not running or unhealthy",
+            authority=_model.AUTHORITY_OMES_HOST,
+            source="spec.health.command",
         )
     rc, out, err = _exec(project, compose_file, service, ["sh", "-c", command], timeout)
     ok = rc == 0
@@ -253,6 +275,8 @@ def check_health_command(project: str, compose_file: str, service: str, command:
         proves="Proves the manifest's own spec.health.command exits 0 inside the agent's container.",
         remediation=None if ok else "run the command manually via `docker compose exec -T <service> ...` to see the failure",
         detail=(out or err or f"exit {rc}").strip(),
+        authority=_model.AUTHORITY_OMES_HOST,
+        source="spec.health.command",
     )
 
 

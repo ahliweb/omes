@@ -33,6 +33,7 @@ architecture and state model."
 | [0019](0019-delegate-native-hermes-gateway-lifecycle.md) | Delegate native agent deployment lifecycle to Hermes CLI | Accepted |
 | [0020](0020-delegate-hermes-backup-and-recovery.md) | Delegate profile and full-runtime backup to Hermes native commands | Accepted |
 | [0021](0021-align-hermes-docker-topology.md) | Align Hermes container deployment with official Docker topology | Accepted |
+| [0022](0022-consume-hermes-native-health.md) | Consume Hermes-native health endpoints and retain OMES host aggregation | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -58,6 +59,10 @@ delegate profile and full-runtime backup to Hermes native commands."
 ADR 0021 was authored on 2026-09-21 as part of issue
 [#177](https://github.com/ahliweb/omes/issues/177), "refactor(hermes):
 align container deployment with official Hermes Docker topology."
+
+ADR 0022 was authored on 2026-09-21 as part of issue
+[#178](https://github.com/ahliweb/omes/issues/178), "refactor(health):
+consume Hermes-native runtime status and keep OMES host aggregation."
 
 
 ## Conventions

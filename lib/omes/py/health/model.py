@@ -22,6 +22,10 @@ STATUS_PASS = "pass"
 STATUS_FAIL = "fail"
 STATUS_NOT_APPLICABLE = "not_applicable"
 
+AUTHORITY_HERMES = "hermes"
+AUTHORITY_OMES_HOST = "omes-host"
+AUTHORITY_EXTERNAL_PROVIDER = "external-provider"
+
 
 def layer_result(
     status: str,
@@ -29,6 +33,10 @@ def layer_result(
     proves: str = "",
     remediation: Optional[str] = None,
     detail: str = "",
+    authority: str = "omes-host",
+    source: str = "omes",
+    compatibility_fallback: bool = False,
+    removal_trigger: Optional[str] = None,
 ) -> dict:
     """Builds one layer's result object. `signals` maps a subset of
     SIGNAL_NAMES to True/False/None (None = not evaluated for this
@@ -36,14 +44,26 @@ def layer_result(
     "pass" on this layer establishes - and, just as importantly, what it
     does NOT establish (docs/hermes-integration.md's "green signals can
     lie" principle, issue #79's core requirement).
+
+    Every layer identifies its authority ("hermes", "omes-host", or
+    "external-provider") and source ("hermes doctor", "systemd", etc.,
+    issue #178). If a fallback is used because stable Hermes lacks a
+    machine-readable signal, compatibility_fallback is True with an
+    explicit removal_trigger.
     """
-    return {
+    res = {
         "status": status,
         "signals": signals or {},
         "proves": proves,
         "remediation": remediation,
         "detail": detail,
+        "authority": authority,
+        "source": source,
+        "compatibility_fallback": compatibility_fallback,
     }
+    if removal_trigger is not None:
+        res["removal_trigger"] = removal_trigger
+    return res
 
 
 def aggregate(layers: dict) -> tuple:
