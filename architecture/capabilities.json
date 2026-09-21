@@ -249,15 +249,16 @@
       "authority": "graphify",
       "upstream_project": "graphify",
       "supported_baseline": "0.9.64",
-      "observed_upstream_revision": "0.9.64",
+      "observed_upstream_revision": "0.9.65",
       "maturity": "released_supported",
       "disposition": "delegate",
       "omes_module": null,
       "duplication_allowed": false,
-      "adr_reference": "ADR-0014",
+      "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.64/"
+        "https://pypi.org/project/graphifyy/0.9.64/",
+        "https://pypi.org/project/graphifyy/0.9.65/"
       ]
     },
     {
@@ -266,15 +267,50 @@
       "authority": "graphify",
       "upstream_project": "graphify",
       "supported_baseline": "0.9.64",
-      "observed_upstream_revision": "0.9.64",
+      "observed_upstream_revision": "0.9.65",
       "maturity": "released_supported",
       "disposition": "delegate",
-      "omes_module": "graphify",
-      "duplication_allowed": true,
-      "adr_reference": "ADR-0014",
-      "removal_trigger": "issue #180 delegate skill/MCP behavior upstream",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0025",
+      "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.64/"
+        "https://pypi.org/project/graphifyy/0.9.64/",
+        "https://pypi.org/project/graphifyy/0.9.65/"
+      ]
+    },
+    {
+      "capability_id": "graphify.skill.hermes_installer",
+      "title": "Graphify Upstream Hermes Skill Installer",
+      "authority": "graphify",
+      "upstream_project": "graphify",
+      "supported_baseline": "0.9.64",
+      "observed_upstream_revision": "0.9.65",
+      "maturity": "released_unverified",
+      "disposition": "delegate",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0025",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://pypi.org/project/graphifyy/0.9.65/"
+      ]
+    },
+    {
+      "capability_id": "omes.graphify.export_sync",
+      "title": "OMES Graphify Safe Obsidian Export, Sync, and Privacy Controls",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "graphify",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0025",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/graphify.md"
       ]
     },
     {

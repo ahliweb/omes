@@ -9,7 +9,7 @@
 ## 1. Local AST extraction vs. provider-backed semantic extraction
 
 This is the single most important distinction in this document — repeated from
-[docs/graphify.md §1.5](graphify.md#15-local-vs-external-processing-boundary) because every other
+[docs/graphify.md §1.6](graphify.md#16-local-vs-external-processing-boundary) because every other
 section here depends on it:
 
 | Mode | What runs | What leaves the machine |
@@ -22,13 +22,13 @@ OMES never enables semantic extraction by default, anywhere, in any command:
 - `omes graphify run` defaults to `--mode code`; `--mode semantic` requires the operator to
   additionally set `OMES_GRAPHIFY_PROVIDER_ENV=<VAR_NAME>` pointing at a real, non-empty
   credential variable, AND pass `--yes` (or answer an interactive confirmation prompt that states
-  "this calls an external LLM API") — [docs/graphify.md §3.1](graphify.md#31-omes-graphify-run).
+  "this calls an external LLM API") — [docs/graphify.md §3.1](graphify.md#31-omes-graphify-extract-and-omes-graphify-run).
 - `omes graphify sync` never runs a semantic pass at all — only `extract --code-only` (first run)
   or `update` (later runs), both 100% local —
   [docs/graphify.md §6.2](graphify.md#62-omes-graphify-sync-change-detection-debounce-and-the-two-extraction-paths).
 - `omes graphify export` never re-extracts anything; it only reads an already-produced
   `graph.json` and/or shells out to `graphify export obsidian` (a 100% local rendering step, per
-  [docs/graphify.md §1.5](graphify.md#15-local-vs-external-processing-boundary)'s table).
+  [docs/graphify.md §1.6](graphify.md#16-local-vs-external-processing-boundary)'s table).
 
 **Token/cost implication** (also documented in
 [docs/graphify.md §6.2](graphify.md#62-omes-graphify-sync-change-detection-debounce-and-the-two-extraction-paths)):
@@ -59,7 +59,7 @@ When `--mode semantic` runs (an explicit, operator-initiated action - never a de
    sensitive paths out of graphify's own scan in the first place.
 4. `graphify export {neo4j,falkordb}` is a separate, always-explicit, opt-in path that pushes an
    already-extracted graph to an operator-configured graph database — outside OMES's default
-   invocation path entirely ([docs/graphify.md §1.4](graphify.md#14-non-goals)).
+   invocation path entirely ([docs/graphify.md §1.5](graphify.md#15-non-goals)).
 
 ## 3. Ignored paths: `.gitignore` and `.graphifyignore`
 
@@ -128,12 +128,12 @@ Already implemented, linked here rather than re-specified:
 
 - **`omes graphify run`'s provenance sidecar** (`<out_dir>/omes-provenance.json`) — source path,
   timestamp, tool version, extraction mode, backend (if semantic), and the provider env var
-  **name** only — [docs/graphify.md §3.2](graphify.md#32-provenance-sidecar).
+  **name** only — [docs/graphify.md §3.3](graphify.md#33-provenance-sidecar).
 - **Every generated Obsidian note's YAML front matter** — `omes_generated: true`, source path,
   graphify version, extraction mode, generated-at timestamp, and the source `graph.json`'s
   sha256 — [docs/graphify.md §5.3](graphify.md#53-generated-note-front-matter-and-provenance).
 - **Graphify's own `EXTRACTED`/`INFERRED` edge tagging** is never duplicated or replaced by any
-  OMES-added provenance — [docs/graphify.md §1.6](graphify.md#16-provenance-model-use-graphifys-own-tags-do-not-reinvent-one).
+  OMES-added provenance — [docs/graphify.md §1.7](graphify.md#17-provenance-model-use-graphifys-own-tags-do-not-reinvent-one).
 
 ## 6. Deletion and re-index procedure
 

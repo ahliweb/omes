@@ -503,3 +503,72 @@ assert d['path'].endswith('/project')
   run grep -vc '^graphify-mcp --help$' "$SHIM_LOG"
   [ "$status" -ne 0 ] || true
 }
+
+# ---------------------------------------------------------------------------
+# Upstream delegation and capability gating (issue #180, ADR-0025)
+# ---------------------------------------------------------------------------
+
+@test "omes graphify query delegates exact fixed argv to upstream graphify" {
+  run "$OMES_BIN" graphify query "match (n) return n"
+  [ "$status" -eq 0 ]
+  run grep -c '^graphify query match (n) return n$' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+}
+
+@test "omes graphify hook delegates exact fixed argv to upstream graphify" {
+  run "$OMES_BIN" graphify hook install
+  [ "$status" -eq 0 ]
+  run grep -c '^graphify hook install$' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+}
+
+@test "omes graphify extract delegates to extraction runner and defaults to code-only" {
+  mkdir -p "${OMES_TEST_TMPDIR}/extract-project"
+  run "$OMES_BIN" graphify extract "${OMES_TEST_TMPDIR}/extract-project"
+  [ "$status" -eq 0 ]
+  run grep -c -- '--code-only' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+}
+
+@test "omes graphify refuses when upstream version is older than minimum supported baseline" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project-old-ver"
+  SHIM_GRAPHIFY_VERSION="0.9.50" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project-old-ver"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"older than minimum supported baseline"* ]]
+}
+
+@test "omes graphify warns when upstream version is candidate newer than baseline" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project-new-ver"
+  SHIM_GRAPHIFY_VERSION="0.9.65" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project-new-ver"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"candidate upstream capability"* ]]
+}
+
+@test "omes graphify refuses when installed version does not match pinned OMES_GRAPHIFY_VERSION" {
+  mkdir -p "${OMES_TEST_TMPDIR}/project-pin"
+  OMES_GRAPHIFY_VERSION="0.9.64" SHIM_GRAPHIFY_VERSION="0.9.65" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project-pin"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"does not match pinned OMES_GRAPHIFY_VERSION"* ]]
+}
+
+@test "omes graphify skill install delegates to upstream 'graphify install --platform hermes' when supported" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  SHIM_GRAPHIFY_UPSTREAM_INSTALL=1 run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  run grep -c '^graphify install --platform hermes$' "$SHIM_LOG"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 1 ]
+  [ -f "${OMES_HERMES_HOME}/skills/graphify/SKILL.md" ]
+}
+
+@test "omes graphify skill install uses bundled fallback with notice when upstream skill install is unavailable" {
+  export OMES_HERMES_HOME="${HOME}/.hermes"
+  SHIM_GRAPHIFY_UPSTREAM_INSTALL=0 run "$OMES_BIN" graphify skill install --yes
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bundled fallback"* ]]
+  [[ "$output" == *"bundled skill is deprecated"* ]]
+  [ -f "${OMES_HERMES_HOME}/skills/graphify/SKILL.md" ]
+}
