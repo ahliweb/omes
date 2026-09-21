@@ -463,8 +463,25 @@ which runs only read-only commands (`docker context show`,
 }
 ```
 
+`spec.compose.topology` (and `compose.topology` in RuntimeDeployment v2)
+defines the container topology:
+- `"shared"`: multiple profiles share a single container supervised by upstream
+  s6-overlay (the official upstream default for efficiency; profiles keep
+  independent data directories under `/opt/data`);
+- `"dedicated"`: an isolated container per profile for dedicated CPU/memory
+  cgroups, network segmentation, or compliance boundaries (default in v1 and
+  when `security.isolationClass: "rootless-container"` in v2).
+
+Persistent runtime data is mounted at `/opt/data` conforming to the official
+Hermes container layout (ADR-0021). When omitted from `volumes`, OMES
+automatically mounts `<state-dir>/agents/<name>/data` (dedicated) or
+`<state-dir>/shared-hermes/data` (shared) to `/opt/data:rw`. Containers with
+`readOnlyRootfs: true` configure standard tmpfs mounts for `/run` and `/tmp`
+to support in-container s6 supervision.
+
 `spec.compose.project` and `.network` default to `omes-agent-<name>` and
-`omes-agent-<name>-net` when omitted. `spec.compose.capDrop` defaults to
+`omes-agent-<name>-net` (or `omes-shared-hermes` and `omes-shared-hermes-net`
+in shared topology) when omitted. `spec.compose.capDrop` defaults to
 `["ALL"]` and, if given explicitly, must equal exactly `["ALL"]` - this
 backend never re-adds a capability. `spec.compose.readOnlyRootfs`
 defaults to `true`. `spec.compose.user` must be a non-root `uid:gid`

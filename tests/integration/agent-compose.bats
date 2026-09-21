@@ -168,3 +168,25 @@ teardown() {
   run "$OMES_BIN" agent logs compose-worker
   [ "$status" -ne 0 ]
 }
+
+@test "omes agent apply shared topology renders shared compose and mounts /opt/data" {
+  cp "${OMES_TEST_ROOT}/contracts/agent/v2/fixtures/runtime-deployment/valid-compose-shared.json" \
+    "${OMES_CONFIG_DIR}/agents/analyst-shared.json"
+  run "$OMES_BIN" agent apply analyst-shared --yes --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"state": "healthy"'* ]]
+  SHARED_FILE="${OMES_STATE_DIR}/shared-hermes/compose.yaml"
+  [ -f "$SHARED_FILE" ]
+  grep -q "/opt/data:rw" "$SHARED_FILE"
+  grep -q "tmpfs:" "$SHARED_FILE"
+  grep -q "hermes:" "$SHARED_FILE"
+}
+
+@test "omes agent status reports topology" {
+  cp "${OMES_TEST_ROOT}/contracts/agent/v2/fixtures/runtime-deployment/valid-compose-shared.json" \
+    "${OMES_CONFIG_DIR}/agents/analyst-shared.json"
+  "$OMES_BIN" agent apply analyst-shared --yes --json >/dev/null
+  run "$OMES_BIN" agent status analyst-shared --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"topology": "shared"'* ]]
+}

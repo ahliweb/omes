@@ -593,6 +593,12 @@ def _apply_compose(name: str, manifest: Dict[str, Any], args: argparse.Namespace
     prov["composeReapplyUnchanged"] = unchanged
     state_mod.advance(name, "applied", "docker compose up -d succeeded", managed_paths=managed_paths, provenance=prov)
 
+    if plan.get("topology") == "shared" and plan.get("profile"):
+        _run_docker(
+            ["compose", "-p", plan["project"], "-f", str(compose_file), "exec", "-T", plan["serviceName"], "hermes", "profile", "start", plan["profile"]],
+            timeout=30.0,
+        )
+
     health_result = _compose_health(plan, timeout=30.0)
     if not health_result.get("ready"):
         state_mod.advance(name, "failed", "container did not report running/healthy after apply", managed_paths=managed_paths)
@@ -807,6 +813,7 @@ def cmd_status(args: argparse.Namespace) -> int:
             result["containerRunning"] = proc.returncode == 0 and "running" in proc.stdout.lower()
             result["project"] = plan["project"]
             result["backend"] = "compose"
+            result["topology"] = plan.get("topology", "dedicated")
         else:
             plan = _build_systemd_plan(manifest, omes_root)
             name = manifest["metadata"]["name"]
@@ -863,11 +870,19 @@ def cmd_restart(args: argparse.Namespace) -> int:
 
     if _backend(manifest) == "compose":
         plan = compose_mod.build_plan(manifest)
-        proc = _run_docker(["compose", "-p", plan["project"], "-f", plan["composeFile"], "restart"], timeout=60.0)
+        if plan.get("topology") == "shared" and plan.get("profile"):
+            proc = _run_docker(
+                ["compose", "-p", plan["project"], "-f", plan["composeFile"], "exec", "-T", plan["serviceName"], "hermes", "profile", "restart", plan["profile"]],
+                timeout=60.0,
+            )
+            if proc.returncode != 0:
+                proc = _run_docker(["compose", "-p", plan["project"], "-f", plan["composeFile"], "restart"], timeout=60.0)
+        else:
+            proc = _run_docker(["compose", "-p", plan["project"], "-f", plan["composeFile"], "restart"], timeout=60.0)
         if proc.returncode != 0:
             print(f"error: restart failed: {proc.stderr}", file=sys.stderr)
             return EX_APPLY
-        _print({"ok": True, "project": plan["project"]}, args.json) if args.json else print(f"{args.name}: restarted")
+        _print({"ok": True, "project": plan["project"], "topology": plan.get("topology", "dedicated")}, args.json) if args.json else print(f"{args.name}: restarted")
         return EX_OK
 
     plan = _build_systemd_plan(manifest, omes_root)
@@ -1117,6 +1132,27 @@ def cmd_remove(args: argparse.Namespace) -> int:
     compose_file = Path(plan["composeFile"])
 
     if compose_file.is_file():
+        if plan.get("topology") == "shared" and plan.get("profile"):
+            _run_docker(
+                ["compose", "-p", plan["project"], "-f", str(compose_file), "exec", "-T", plan["serviceName"], "hermes", "profile", "stop", plan["profile"]],
+                timeout=30.0,
+            )
+
+    other_shared = False
+    if plan.get("topology") == "shared":
+        for cand in paths.agents_config_dir().glob("*.json"):
+            if cand.stem != args.name:
+                try:
+                    m = _load_manifest(cand.stem, omes_root)
+                    if _backend(m) == "compose":
+                        p = compose_mod.build_plan(m)
+                        if p.get("topology") == "shared" and p.get("project") == plan["project"]:
+                            other_shared = True
+                            break
+                except Exception:
+                    pass
+
+    if not other_shared and compose_file.is_file():
         down_proc = _run_docker(
             ["compose", "-p", plan["project"], "-f", str(compose_file), "down", "--volumes"], timeout=60.0
         )
@@ -1126,21 +1162,22 @@ def cmd_remove(args: argparse.Namespace) -> int:
             return EX_ROLLBACK
 
     removed = []
-    compose_dir = Path(plan["composeDir"])
-    if compose_dir.is_dir():
-        for child in sorted(compose_dir.glob("**/*"), reverse=True):
+    if not other_shared:
+        compose_dir = Path(plan["composeDir"])
+        if compose_dir.is_dir():
+            for child in sorted(compose_dir.glob("**/*"), reverse=True):
+                try:
+                    if child.is_file() or child.is_symlink():
+                        child.unlink()
+                    else:
+                        child.rmdir()
+                except OSError:
+                    pass
             try:
-                if child.is_file() or child.is_symlink():
-                    child.unlink()
-                else:
-                    child.rmdir()
+                compose_dir.rmdir()
+                removed.append(str(compose_dir))
             except OSError:
                 pass
-        try:
-            compose_dir.rmdir()
-            removed.append(str(compose_dir))
-        except OSError:
-            pass
 
     final_state = state_mod.advance(args.name, "rolled-back", "removed (compose down --volumes; OMES-managed paths deleted)", managed_paths=[])
     state_mod.remove(args.name)

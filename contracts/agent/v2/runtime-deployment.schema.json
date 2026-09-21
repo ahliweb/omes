@@ -144,6 +144,11 @@
       "additionalProperties": false,
       "required": ["image"],
       "properties": {
+        "topology": {
+          "type": "string",
+          "enum": ["shared", "dedicated"],
+          "description": "Container topology. 'shared' hosts multiple profiles in a shared s6-supervised container (upstream default for efficiency). 'dedicated' runs an isolated container per profile for dedicated resource limits, network segmentation, or compliance."
+        },
         "image": {
           "type": "string",
           "minLength": 1,

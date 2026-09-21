@@ -5,6 +5,7 @@ Mirrors tests/py/agent/test_cli.py's pattern for the systemd backend.
 """
 from __future__ import annotations
 
+import copy
 import json
 import os
 import shutil
@@ -231,6 +232,66 @@ class TestComposeResourceLimits(ComposeCliTestCase):
         self.assertIn("mem_limit: \"2g\"", content)
         self.assertIn("cpus: \"1.5\"", content)
         self.assertIn("pids_limit: 256", content)
+
+
+class TestComposeTopology(ComposeCliTestCase):
+    def test_apply_shared_topology(self):
+        v2_fixture = json.loads((OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment" / "valid-compose-shared.json").read_text(encoding="utf-8"))
+        self._write_manifest("analyst-shared", v2_fixture)
+        proc = self._run("apply", "analyst-shared", "--yes", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["state"], "healthy")
+        shared_compose_file = self.state_home / "shared-hermes" / "compose.yaml"
+        self.assertTrue(shared_compose_file.exists())
+        content = shared_compose_file.read_text(encoding="utf-8")
+        self.assertIn("/opt/data:rw", content)
+        self.assertIn("tmpfs:", content)
+        self.assertIn("hermes:", content)
+
+    def test_status_reports_topology(self):
+        v2_fixture = json.loads((OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment" / "valid-compose-shared.json").read_text(encoding="utf-8"))
+        self._write_manifest("analyst-shared", v2_fixture)
+        apply_proc = self._run("apply", "analyst-shared", "--yes", "--json")
+        self.assertEqual(apply_proc.returncode, 0, apply_proc.stderr)
+        proc = self._run("status", "analyst-shared", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        st = json.loads(proc.stdout)
+        self.assertEqual(st["backend"], "compose")
+        self.assertEqual(st["topology"], "shared")
+
+    def test_restart_shared_topology_targets_profile(self):
+        v2_fixture = json.loads((OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment" / "valid-compose-shared.json").read_text(encoding="utf-8"))
+        self._write_manifest("analyst-shared", v2_fixture)
+        apply_proc = self._run("apply", "analyst-shared", "--yes", "--json")
+        self.assertEqual(apply_proc.returncode, 0, apply_proc.stderr)
+        proc = self._run("restart", "analyst-shared", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertTrue(out["ok"])
+        self.assertEqual(out["topology"], "shared")
+
+    def test_remove_shared_topology_without_sibling_mutation(self):
+        v2_fixture1 = copy.deepcopy(json.loads((OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment" / "valid-compose-shared.json").read_text(encoding="utf-8")))
+        v2_fixture1["metadata"]["name"] = "analyst-shared-1"
+        self._write_manifest("analyst-shared-1", v2_fixture1)
+        v2_fixture2 = copy.deepcopy(v2_fixture1)
+        v2_fixture2["metadata"]["name"] = "analyst-shared-2"
+        v2_fixture2["runtime"] = {"kind": "hermes", "profileRef": "sysmon"}
+        self._write_manifest("analyst-shared-2", v2_fixture2)
+
+        proc1 = self._run("apply", "analyst-shared-1", "--yes", "--json")
+        self.assertEqual(proc1.returncode, 0, proc1.stderr)
+        proc2 = self._run("apply", "analyst-shared-2", "--yes", "--json")
+        self.assertEqual(proc2.returncode, 0, proc2.stderr)
+
+        shared_compose_file = self.state_home / "shared-hermes" / "compose.yaml"
+        self.assertTrue(shared_compose_file.exists())
+
+        # Remove agent 1; shared compose file should NOT be deleted because agent 2 exists
+        rem_proc = self._run("remove", "analyst-shared-1", "--yes", "--json")
+        self.assertEqual(rem_proc.returncode, 0, rem_proc.stderr)
+        self.assertTrue(shared_compose_file.exists())
 
 
 if __name__ == "__main__":

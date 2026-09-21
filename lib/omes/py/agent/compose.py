@@ -102,6 +102,14 @@ def _validate_network(network: Any) -> List[str]:
     return errors
 
 
+def _validate_topology(topology: Any) -> List[str]:
+    if topology is None:
+        return []
+    if topology not in ("shared", "dedicated"):
+        return ["spec.compose.topology: must be either 'shared' or 'dedicated'"]
+    return []
+
+
 def _agent_root_containment(agent_name: str) -> Path:
     """The only host directory tree bind-mount hostPaths may live under -
     this agent's own OMES-managed state directory (never another agent's,
@@ -109,7 +117,18 @@ def _agent_root_containment(agent_name: str) -> Path:
     return paths.agent_state_dir(agent_name).resolve()
 
 
-def _validate_host_path(host_path: Any, agent_root: Path) -> List[str]:
+def _allowed_host_roots(agent_name: str) -> List[Path]:
+    roots = [paths.agent_state_dir(agent_name).resolve()]
+    if agent_name:
+        roots.extend([
+            paths.hermes_home_for_agent(agent_name, "user").resolve(),
+            paths.hermes_home_for_agent(agent_name, "system").resolve(),
+            (paths.state_dir() / "shared-hermes").resolve(),
+        ])
+    return roots
+
+
+def _validate_host_path(host_path: Any, agent_root: Path, agent_name: str = "") -> List[str]:
     errors = []
     if not isinstance(host_path, str) or not host_path:
         return ["spec.compose.volumes[].hostPath: must be a non-empty string"]
@@ -131,9 +150,16 @@ def _validate_host_path(host_path: Any, agent_root: Path) -> List[str]:
         errors.append(f"spec.compose.volumes[].hostPath {host_path!r}: must not contain '..'")
         return errors
     normalized = Path(host_path)
-    try:
-        normalized.relative_to(agent_root)
-    except ValueError:
+    allowed_roots = _allowed_host_roots(agent_name) if agent_name else [agent_root]
+    is_contained = False
+    for root in allowed_roots:
+        try:
+            normalized.relative_to(root)
+            is_contained = True
+            break
+        except ValueError:
+            pass
+    if not is_contained:
         errors.append(
             f"spec.compose.volumes[].hostPath {host_path!r}: must be under this agent's own "
             f"state directory ({agent_root}) - absolute host paths outside it are rejected"
@@ -158,7 +184,7 @@ def _validate_volumes(volumes: Any, agent_name: str) -> List[str]:
         if not isinstance(volume, dict):
             errors.append("spec.compose.volumes[]: must be an object")
             continue
-        errors.extend(_validate_host_path(volume.get("hostPath"), agent_root))
+        errors.extend(_validate_host_path(volume.get("hostPath"), agent_root, agent_name))
         errors.extend(_validate_container_path(volume.get("containerPath")))
     return errors
 
@@ -180,6 +206,7 @@ def validate_compose_spec(compose_spec: Dict[str, Any], agent_name: str) -> List
     already passed manifest.py's NAME_RE check (manifest.py only calls
     this after both are true)."""
     errors: List[str] = []
+    errors.extend(_validate_topology(compose_spec.get("topology")))
     errors.extend(_validate_image(compose_spec.get("image")))
     project = compose_spec.get("project")
     if project is not None and not PROJECT_RE.match(project):
@@ -226,6 +253,10 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         env_file_ref = None
         role = None
         storage = {"memory": "delegated", "sessions": "delegated", "skills": "delegated"}
+        topology = compose_spec.get("topology")
+        if not topology:
+            isolation_class = manifest.get("security", {}).get("isolationClass")
+            topology = "shared" if isolation_class == "standard" else "dedicated"
     else:
         spec = manifest["spec"]
         compose_spec = spec["compose"]
@@ -239,18 +270,34 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         env_file_ref = str(hermes_home_tmp / ".env") if secret_refs else None
         role = spec["role"]
         storage = dict(spec["storage"])
+        topology = compose_spec.get("topology", "dedicated")
 
     hermes_home = paths.hermes_home_for_agent(name, service_mode)
     agent_state_dir = paths.agent_state_dir(name)
 
-    project = compose_spec.get("project") or default_project(name)
-    network = compose_spec.get("network") or default_network(name)
+    if topology == "shared":
+        project = compose_spec.get("project") or "omes-shared-hermes"
+        network = compose_spec.get("network") or "omes-shared-hermes-net"
+        service_name = "hermes"
+        container_name = f"{project}-hermes"
+        compose_dir = paths.state_dir() / "shared-hermes"
+        default_data_host_path = str(paths.state_dir() / "shared-hermes" / "data")
+    else:
+        project = compose_spec.get("project") or default_project(name)
+        network = compose_spec.get("network") or default_network(name)
+        service_name = name
+        container_name = f"{project}-{name}"
+        compose_dir = agent_state_dir / "compose"
+        default_data_host_path = str(agent_state_dir / "data")
+
     cap_drop = list(compose_spec.get("capDrop") or DEFAULT_CAP_DROP)
     read_only_rootfs = compose_spec.get("readOnlyRootfs", DEFAULT_READ_ONLY_ROOTFS)
     volumes = [dict(v) for v in compose_spec.get("volumes", [])]
+    if not any(v.get("containerPath") == "/opt/data" for v in volumes):
+        volumes.append({"hostPath": default_data_host_path, "containerPath": "/opt/data", "readOnly": False})
+
     ports = list(compose_spec.get("ports", []))
 
-    compose_dir = agent_state_dir / "compose"
     compose_file = compose_dir / "compose.yaml"
 
     return {
@@ -262,6 +309,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "profile": profile,
         "serviceMode": service_mode,
         "backend": "compose",
+        "topology": topology,
         "image": compose_spec["image"],
         "project": project,
         "network": network,
@@ -281,8 +329,8 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "backupClasses": ["config", "skills"],
         "composeDir": str(compose_dir),
         "composeFile": str(compose_file),
-        "serviceName": name,
-        "containerName": f"{project}-{name}",
+        "serviceName": service_name,
+        "containerName": container_name,
     }
 
 
@@ -332,6 +380,11 @@ def render_compose_yaml(plan: Dict[str, Any]) -> str:
             spec_str = f"{volume['hostPath']}:{volume['containerPath']}:{mode}"
             lines.append(f"      - {_yaml_str(spec_str)}")
 
+    if plan["readOnlyRootfs"]:
+        lines.append("    tmpfs:")
+        lines.append("      - \"/run:rw,noexec,nosuid,size=64k\"")
+        lines.append("      - \"/tmp:rw,noexec,nosuid,size=64k\"")
+
     if plan["ports"]:
         lines.append("    ports:")
         for port in plan["ports"]:
@@ -358,6 +411,7 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     by NAME only (never a secret value)."""
     return {
         "backend": "compose",
+        "topology": plan.get("topology", "dedicated"),
         "image": plan["image"],
         "project": plan["project"],
         "network": plan["network"],
