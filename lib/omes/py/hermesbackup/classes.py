@@ -17,8 +17,21 @@ docs/hermes-backup.md together; do not guess undocumented paths.
 """
 from __future__ import annotations
 
-# Every class name accepted by --class. Order here is the canonical
-# display/report order.
+# Recovery classes defined under ADR-0020 (issue #176):
+RECOVERY_CLASSES = ("portable-profile", "full-runtime-dr", "omes-host")
+DEFAULT_RECOVERY_CLASS = "portable-profile"
+
+
+def validate_recovery_class(name: str) -> str:
+    if name not in RECOVERY_CLASSES:
+        raise ValueError(
+            f"unknown recovery class '{name}' (valid: {', '.join(RECOVERY_CLASSES)})"
+        )
+    return name
+
+
+# Every class name accepted by --class (retained for legacy archive compatibility).
+# Order here is the canonical display/report order.
 CLASS_NAMES = ("config", "skills", "memory", "sessions", "runtime-state", "secrets")
 
 # Classes included in `omes agent-backup create` when --class is not

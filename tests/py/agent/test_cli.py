@@ -337,13 +337,15 @@ class TestCorruptedBackupIsSurfaced(AgentCliTestCase):
 
         old_hermes_home_env = os.environ.get("HERMES_HOME")
         old_state_dir_env = os.environ.get("OMES_STATE_DIR")
+        old_path_env = os.environ.get("PATH")
         os.environ["HERMES_HOME"] = str(hermes_home)
         os.environ["OMES_STATE_DIR"] = str(self.state_home)
+        os.environ["PATH"] = f"{SHIMS}{os.pathsep}{old_path_env or ''}"
         try:
             result = backup_mod.create(hermes_home, None, include_secrets=False, dry_run=False)
             timestamp = result["timestamp"]
             backups_root = backup_paths.backups_root()
-            archive_path = backups_root / timestamp / "archive.tar"
+            archive_path = backups_root / timestamp / (result.get("artifact") or "archive.tar")
             with open(archive_path, "r+b") as fh:
                 fh.seek(0)
                 fh.write(b"\x00" * 16)
@@ -359,6 +361,10 @@ class TestCorruptedBackupIsSurfaced(AgentCliTestCase):
                 os.environ.pop("OMES_STATE_DIR", None)
             else:
                 os.environ["OMES_STATE_DIR"] = old_state_dir_env
+            if old_path_env is None:
+                os.environ.pop("PATH", None)
+            else:
+                os.environ["PATH"] = old_path_env
 
 
 class TestDoctor(AgentCliTestCase):

@@ -31,6 +31,7 @@ architecture and state model."
 | [0017](0017-upstream-first-ownership-and-boundary-enforcement.md) | Upstream-first ownership and architecture boundary enforcement | Accepted |
 | [0018](0018-runtimedeployment-v2-and-hermes-profile-references.md) | RuntimeDeployment v2 contract and Hermes profile references | Accepted |
 | [0019](0019-delegate-native-hermes-gateway-lifecycle.md) | Delegate native agent deployment lifecycle to Hermes CLI | Accepted |
+| [0020](0020-delegate-hermes-backup-and-recovery.md) | Delegate profile and full-runtime backup to Hermes native commands | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -48,6 +49,10 @@ introduce RuntimeDeployment v2 with Hermes profile references."
 ADR 0019 was authored on 2026-09-21 as part of issue
 [#175](https://github.com/ahliweb/omes/issues/175), "refactor(hermes):
 delegate native agent deployment lifecycle to Hermes CLI."
+
+ADR 0020 was authored on 2026-09-21 as part of issue
+[#176](https://github.com/ahliweb/omes/issues/176), "refactor(hermes):
+delegate profile and full-runtime backup to Hermes native commands."
 
 
 ## Conventions

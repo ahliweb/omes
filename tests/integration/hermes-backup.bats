@@ -41,12 +41,26 @@ teardown() {
   [ "$status" -eq 2 ]
 }
 
-@test "omes agent-backup create defaults to config+skills and excludes .env" {
+@test "omes agent-backup create defaults to native portable-profile and excludes secrets" {
   run "$OMES_BIN" agent-backup create --json
   [ "$status" -eq 0 ]
-  [[ "$output" == *'"config"'* ]]
-  [[ "$output" == *'"skills"'* ]]
+  [[ "$output" == *'"format": "native-hermes-profile"'* ]]
+  [[ "$output" == *'"recovery_class": "portable-profile"'* ]]
   [[ "$output" != *"canary-secret-value"* ]]
+}
+
+@test "omes agent-backup create --recovery-class full-runtime-dr requires sensitive opt-in" {
+  run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"allow-sensitive-credentials"* ]]
+}
+
+@test "omes agent-backup create --recovery-class full-runtime-dr with --allow-sensitive-credentials succeeds" {
+  run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --allow-sensitive-credentials --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"format": "native-hermes-runtime"'* ]]
+  [[ "$output" == *'"recovery_class": "full-runtime-dr"'* ]]
+  [[ "$output" == *'"sensitive": true'* ]]
 }
 
 @test "omes agent-backup --json create honors the global --json flag placed right after the command word" {
@@ -62,20 +76,31 @@ teardown() {
   [ ! -d "${OMES_STATE_DIR}/backups/hermes" ] || [ -z "$(ls -A "${OMES_STATE_DIR}/backups/hermes" 2>/dev/null)" ]
 }
 
+@test "omes agent-backup create with legacy classes preserves backward compatibility" {
+  run "$OMES_BIN" agent-backup create --class config --class skills --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"config"'* ]]
+  [[ "$output" == *'"skills"'* ]]
+}
+
 @test "omes agent-backup create --class secrets without --include-secrets is refused" {
   run "$OMES_BIN" agent-backup create --class secrets --json
   [ "$status" -ne 0 ]
   [[ "$output" == *"include-secrets"* ]] || [[ "$output" == *"secrets"* ]]
 }
 
-@test "omes agent-backup list shows a created session" {
+@test "omes agent-backup list and inventory show created sessions" {
   "$OMES_BIN" agent-backup create --yes >/dev/null
   run "$OMES_BIN" agent-backup list --json
   [ "$status" -eq 0 ]
-  [[ "$output" == *"config"* ]]
+  [[ "$output" == *'"native-hermes-profile"'* ]]
+
+  run "$OMES_BIN" agent-backup inventory --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"native-hermes-profile"'* ]]
 }
 
-@test "omes agent-backup verify reports OK for a freshly created session" {
+@test "omes agent-backup verify reports OK for a freshly created native session" {
   run "$OMES_BIN" agent-backup create --json
   [ "$status" -eq 0 ]
   ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
@@ -94,8 +119,19 @@ teardown() {
   [ "$(cat "${HERMES_HOME}/config.yaml")" = "changed" ]
 }
 
-@test "omes agent-backup restore --yes restores config and creates a pre-restore backup" {
+@test "omes agent-backup restore --yes restores native profile and creates pre-restore backup" {
   run "$OMES_BIN" agent-backup create --json
+  ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
+  printf 'changed\n' >"${HERMES_HOME}/config.yaml"
+
+  run "$OMES_BIN" agent-backup restore "$ts" --yes --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"health_verified": true'* ]]
+  [[ "$output" == *"pre_restore_backup"* ]]
+}
+
+@test "omes agent-backup restore --yes restores legacy archive backup" {
+  run "$OMES_BIN" agent-backup create --class config --yes --json
   ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
   printf 'changed\n' >"${HERMES_HOME}/config.yaml"
 

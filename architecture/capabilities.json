@@ -64,9 +64,9 @@
       "maturity": "released_supported",
       "disposition": "delegate",
       "omes_module": "hermesbackup",
-      "duplication_allowed": true,
-      "adr_reference": "ADR-0013",
-      "removal_trigger": "issue #176 native hermes backup/export delegation",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0020",
+      "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/reference/cli-commands.md"
       ]

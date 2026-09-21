@@ -37,6 +37,9 @@ fi
 # bats tests can exercise `omes content notify`/`status --telegram` without
 # a real Telegram bot token or network access.
 if [[ "${1:-}" == "-K" ]] && [[ -n "${2:-}" ]] && [[ -r "${2:-}" ]]; then
+  if grep -q "127.0.0.1" "$2" 2>/dev/null && command -v /usr/bin/curl >/dev/null 2>&1; then
+    exec /usr/bin/curl "$@"
+  fi
   default_telegram_json='{"ok":true,"result":{"message_id":1}}'
   printf '%s' "${SHIM_CURL_TELEGRAM_OUTPUT:-$default_telegram_json}"
   exit "${SHIM_CURL_EXIT:-0}"
