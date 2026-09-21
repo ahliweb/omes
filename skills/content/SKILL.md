@@ -10,6 +10,11 @@ receives inbound Telegram messages directly** — see
 `lib/omes/py/content/telegram.py`'s module docstring and
 `docs/telegram-security.md`.
 
+> **MIGRATION NOTE (ADR-0024, issue #179)**: In alignment with ADR-0024, content approvals
+> and publishing jobs transition to AWCMS Control Center API and pull-worker jobs (#199)
+> rather than local OMES CLI shell commands. The shell mapping below is maintained as a
+> compatibility path during OMES v1.x.
+
 ## What this skill does
 
 Hermes's Telegram gateway already applies its own DM/group allowlists

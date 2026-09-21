@@ -1,19 +1,15 @@
 # Content distribution workflow — threat model
 
-> Status: describes the actual repository state as of issue [#70](https://github.com/ahliweb/omes/issues/70)
-> (test and threat-model pass for the content distribution epic,
-> [#63](https://github.com/ahliweb/omes/issues/63)). Cross-references
-> [docs/content-distribution.md](content-distribution.md) (design),
-> [ADR-0015](adr/0015-content-distribution-workflow.md) (why this shape),
-> [docs/threat-model.md](threat-model.md) row T40 and
-> [docs/security.md](security.md) §1 (the two required cross-links into the
-> repository-wide security documents), and [docs/telegram-security.md](telegram-security.md)
-> (the Telegram allowlist model this workflow's `--channel telegram` reuses).
+> Status: describes the historical design from issue [#70](https://github.com/ahliweb/omes/issues/70)
+> as updated by [ADR-0024](adr/0024-content-workflow-boundary-and-migration.md) (issue [#179](https://github.com/ahliweb/omes/issues/179)).
+> Content publishing domain ownership transitions to AWCMS Control Center and Hermes Agent.
+> Cross-references [docs/content-distribution.md](content-distribution.md) (design),
+> [ADR-0015](adr/0015-content-distribution-workflow.md), [ADR-0024](adr/0024-content-workflow-boundary-and-migration.md),
+> [docs/threat-model.md](threat-model.md) row T40, [docs/security.md](security.md) §1, and [docs/telegram-security.md](telegram-security.md).
 >
-> This workflow is optional, never referenced by any installer profile
-> (docs/content-distribution.md section 9), and this document does not certify
-> it as audited — it records the threats considered and the actual mitigation
-> in this repository today, same convention as `docs/threat-model.md`.
+> This workflow is optional and frozen. Browser session profiles and tokens on the host
+> are deprecated and scheduled for retirement in OMES v2.0. Export tooling (`omes content export --format awcms-v1`)
+> strictly excludes sessions and cookies.
 
 ## 1. Scope
 

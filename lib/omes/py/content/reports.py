@@ -350,6 +350,142 @@ def export_reports(root: Path | None, since: str, out_dir: Path) -> dict[str, An
     return {"exported_jobs": exported_jobs, "audit_lines": len(audit_lines), "out_dir": str(out_dir)}
 
 
+def export_awcms_v1(root: Path | None, since: str, out_dir: Path) -> dict[str, Any]:
+    """Exports content jobs, media metadata, and audit logs to the AWCMS
+    Control Center migration manifest format (schema: awcms-content-v1,
+    ADR-0024, issue #179).
+
+    Safety and Security Guarantees:
+    - Strictly excludes content/sessions/ (zero cookies, tokens, or browser profiles).
+    - Recursively redacts all secret patterns across job history and reports.
+    - Retains non-secret job state, SHA-256 artifact hashes, and publication evidence.
+    - Preserves duplicate publish protection (dedup references and published target records).
+    - Flags uncertain or partial publications with requires_manual_review: true.
+    - Completely non-destructive: existing job records, media, and audit trails remain untouched.
+    """
+    root = root or paths.content_root()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    since_dt = datetime.strptime(since, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    # 1. Export legacy reports and filtered audit log into out_dir
+    legacy_res = export_reports(root, since, out_dir)
+
+    # 2. Gather audit log lines indexed by job_id
+    audit_src = paths.audit_log_path(root)
+    job_audit_map: dict[str, list[dict[str, Any]]] = {}
+    if audit_src.is_file():
+        with audit_src.open("r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entry = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                jid = entry.get("job") or entry.get("job_id")
+                if jid:
+                    job_audit_map.setdefault(jid, []).append(redact_structure(entry))
+
+    # 3. Process jobs
+    all_jobs = jobs.list_jobs(root)
+    exported_records: list[dict[str, Any]] = []
+
+    for record in all_jobs:
+        ts_str = record.get("updated_at") or record.get("created_at")
+        if ts_str:
+            try:
+                rec_dt = datetime.strptime(ts_str, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                if rec_dt < since_dt:
+                    continue
+            except ValueError:
+                pass
+
+        redacted = redact_structure(record)
+        job_id = redacted["job_id"]
+        state = redacted.get("state", "unknown")
+
+        publish_info = redacted.get("publish", {})
+        attempts = publish_info.get("attempts", 0)
+        last_result = publish_info.get("last_result")
+
+        requires_manual_review = False
+        if state in ("manual-review", "retryable-failure", "failed", "cancelled"):
+            requires_manual_review = True
+        elif state == "succeeded":
+            requires_manual_review = False
+        elif attempts > 0 and last_result != "ok":
+            requires_manual_review = True
+        elif state in ("queued", "planning", "approval-required"):
+            requires_manual_review = True
+
+        publications = []
+        resulting_url = publish_info.get("resulting_url")
+        if resulting_url:
+            publications.append({
+                "platform": redacted.get("platform") or "unknown",
+                "url": resulting_url,
+                "verified": state in ("succeeded", "archived"),
+                "worker_version": publish_info.get("worker_version"),
+            })
+
+        source_info = redacted.get("source", {})
+        artifact_hash = source_info.get("sha256")
+        original_path = source_info.get("original_path", "")
+        original_filename = Path(original_path).name if original_path else ""
+
+        exported_item = {
+            "job_id": job_id,
+            "state": state,
+            "artifact_sha256": artifact_hash,
+            "size_bytes": source_info.get("size_bytes"),
+            "mime_guess": source_info.get("mime_guess"),
+            "original_filename": original_filename,
+            "created_at": redacted.get("created_at"),
+            "updated_at": redacted.get("updated_at"),
+            "duplicate_of": redacted.get("duplicate_of") or source_info.get("duplicate_of"),
+            "plan": {
+                "caption": redacted.get("plan", {}).get("caption", ""),
+                "targets": redacted.get("plan", {}).get("targets", []),
+            },
+            "approvals": redacted.get("approvals", []),
+            "publications": publications,
+            "requires_manual_review": requires_manual_review,
+            "audit_events": job_audit_map.get(job_id, []),
+        }
+        exported_records.append(exported_item)
+
+    manifest = {
+        "schema_version": "awcms-content-v1",
+        "source_system": "omes-content-v1",
+        "adr_reference": "ADR-0024",
+        "exported_at": jobs.now_iso(),
+        "since": since,
+        "total_jobs": len(exported_records),
+        "requires_manual_review_count": sum(1 for j in exported_records if j["requires_manual_review"]),
+        "sessions_excluded": True,
+        "secrets_redacted": True,
+        "jobs": exported_records,
+    }
+
+    manifest_path = out_dir / "awcms-content-migration-manifest.json"
+    jobs.atomic_write_json(manifest_path, manifest)
+    os.chmod(manifest_path, 0o600)
+
+    return {
+        "format": "awcms-v1",
+        "exported_jobs": [j["job_id"] for j in exported_records],
+        "audit_lines": legacy_res["audit_lines"],
+        "out_dir": str(out_dir),
+        "manifest": str(manifest_path),
+        "manifest_schema": "awcms-content-v1",
+        "sessions_untouched": True,
+        "requires_manual_review_count": manifest["requires_manual_review_count"],
+    }
+
+
+
 # ---------------------------------------------------------------------------
 # Prune (retention; never touches sessions/ or audit.jsonl)
 # ---------------------------------------------------------------------------

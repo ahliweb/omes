@@ -26,7 +26,7 @@ architecture and state model."
 | [0012](0012-python-stdlib-for-workflow-engines.md) | Python 3 stdlib only for workflow engines; bash stays the installer/CLI glue | Accepted |
 | [0013](0013-agent-runtime-boundary.md) | Agent-runtime abstraction boundary, with Hermes as the only implementation | Accepted |
 | [0014](0014-graphify-integration-boundary.md) | Graphify integration boundary | Accepted as design boundary |
-| [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Accepted as design boundary |
+| [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Superseded by ADR-0024 |
 | [0016](0016-herman-web-panel-reference.md) | Herman is a UX reference, not an OMES dependency | Accepted |
 | [0017](0017-upstream-first-ownership-and-boundary-enforcement.md) | Upstream-first ownership and architecture boundary enforcement | Accepted |
 | [0018](0018-runtimedeployment-v2-and-hermes-profile-references.md) | RuntimeDeployment v2 contract and Hermes profile references | Accepted |
@@ -35,6 +35,7 @@ architecture and state model."
 | [0021](0021-align-hermes-docker-topology.md) | Align Hermes container deployment with official Docker topology | Accepted |
 | [0022](0022-consume-hermes-native-health.md) | Consume Hermes-native health endpoints and retain OMES host aggregation | Accepted |
 | [0023](0023-control-center-ui-ux-design-system.md) | Adopt OMES Control Center UI/UX design system and screen architecture | Accepted |
+| [0024](0024-content-workflow-boundary-and-migration.md) | Content distribution workflow boundary and migration to AWCMS and Hermes | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -69,6 +70,10 @@ ADR 0023 was authored on 2026-09-21 as part of issue
 [#200](https://github.com/ahliweb/omes/issues/200) and epic
 [#195](https://github.com/ahliweb/omes/issues/195), "Adopt OMES Control
 Center UI/UX design system and screen architecture."
+
+ADR 0024 was authored on 2026-09-21 as part of issue
+[#179](https://github.com/ahliweb/omes/issues/179), "refactor(content):
+move domain-heavy content workflows out of OMES core to AWCMS module."
 
 
 ## Conventions

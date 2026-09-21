@@ -441,8 +441,8 @@
       "disposition": "defer",
       "omes_module": "content",
       "duplication_allowed": true,
-      "adr_reference": "ADR-0015",
-      "removal_trigger": "issue #179 move content orchestration into agent skill",
+      "adr_reference": "ADR-0024",
+      "removal_trigger": "issue #179 completed, retired in OMES v2.0 upon Control Center GA",
       "evidence_urls": [
         "https://specs.omes.ahliweb.com/control-center/v1/jobs.schema.json"
       ]
