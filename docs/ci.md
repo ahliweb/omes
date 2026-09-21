@@ -37,6 +37,9 @@ the repository, comment on pull requests, or write security-events.
 | `actionlint` | Runs `rhysd/actionlint` (via Docker, pinned by image digest) against `.github/workflows/*.yml`. | **Yes.** |
 | `supply-chain` | Runs `scripts/check-supply-chain.sh` (§4). | **Yes**, for the action-pinning and unsafe-pipe checks. The external-URL listing is informational only. |
 | `check-links` | Runs `scripts/check-links.py` (§5) over every tracked `*.md` file. | **Yes**, for a link whose *target file* does not exist. Anchor-only mismatches are printed as advisory warnings. |
+| `check-contracts` | Runs `scripts/check-contracts.py` over `contracts/**/fixtures` against their JSON Schema specifications. | **Yes.** |
+| `check-architecture` | Runs `scripts/check-architecture.py` to enforce ADR-0017 capability registry and layer boundaries. | **Yes.** |
+
 
 ### 1.2 `.github/workflows/compatibility.yml`
 

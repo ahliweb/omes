@@ -259,6 +259,8 @@ for the security baseline and threat model this project maintains.
   [docs/threat-model.md](docs/threat-model.md) — security baseline and threat
   model
 - [docs/scope.md](docs/scope.md) — product scope and non-goals
+- [docs/provenance.md](docs/provenance.md) — release provenance, SLSA attestation,
+  CycloneDX SBOM, and verification gates
 - [docs/research-and-implementation-plan.md](docs/research-and-implementation-plan.md) —
   research baseline and phased implementation plan
 - [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md) —

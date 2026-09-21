@@ -17,6 +17,8 @@
 #   --allow-non-main      Allow running on a non-main branch (for testing)
 #   --allow-dirty         Allow running on a dirty working tree (for testing)
 #   --skip-ci-check       Skip querying GitHub check-runs API
+#   --bundle-dir DIR      Directory to write release evidence bundle in (default: dist/release-vX.Y.Z)
+#   --skip-bundle         Skip generating SLSA provenance and SBOM evidence bundle
 #   --push                Push the created tag to origin
 #   --publish             Push tag, create GitHub Release, and verify read-back
 #   -h, --help            Show this help text
@@ -34,6 +36,8 @@ dry_run=0
 allow_non_main=0
 allow_dirty=0
 skip_ci_check=0
+bundle_dir=""
+skip_bundle=0
 do_push=0
 do_publish=0
 
@@ -43,6 +47,7 @@ err() { printf '[release] ERROR %s\n' "$*" >&2; }
 die() {
   err "$*"
   exit 1
+
 }
 
 usage() {
@@ -76,7 +81,17 @@ while [[ $# -gt 0 ]]; do
       skip_ci_check=1
       shift
       ;;
+    --bundle-dir)
+      [[ $# -ge 2 ]] || die "--bundle-dir requires an argument"
+      bundle_dir="$2"
+      shift 2
+      ;;
+    --skip-bundle)
+      skip_bundle=1
+      shift
+      ;;
     --push)
+
       do_push=1
       shift
       ;;
@@ -320,6 +335,25 @@ Compile changes/ fragments into CHANGELOG.md and bump VERSION."
     die "tag verification failure: tag ${tag_name} points to ${verified_tag_sha}, expected ${target_commit}"
   fi
   log "verified tag ${tag_name} matches release commit ${target_commit}"
+
+  # Generate and verify release evidence bundle (SLSA provenance, SBOM, SHA256SUMS)
+  if [[ "$skip_bundle" -eq 0 && -f "${repo_root}/scripts/generate-release-bundle.py" ]]; then
+    bundle_path="${bundle_dir:-${repo_root}/dist/release-${tag_name}}"
+
+    log "generating release evidence bundle in ${bundle_path}..."
+    python3 "${repo_root}/scripts/generate-release-bundle.py" \
+      --version "$version" \
+      --tag "$tag_name" \
+      --commit "$target_commit" \
+      --output "$bundle_path" \
+      --date "$date_str"
+    log "verifying release evidence bundle..."
+    python3 "${repo_root}/scripts/verify-release-bundle.py" \
+      --bundle-dir "$bundle_path" \
+      --version "$version" \
+      --commit "$target_commit"
+    log "evidence bundle verified: ${bundle_path}"
+  fi
 else
   log "staged release files (--no-commit); review before committing"
 fi
@@ -370,8 +404,18 @@ if start != -1:
   fi
   rm -f "$tmp_notes"
 
+  # Upload release bundle assets if present
+  if [[ "$skip_bundle" -eq 0 && -n "${bundle_path:-}" && -d "$bundle_path" ]]; then
+    log "uploading release bundle artifacts to GitHub Release ${tag_name}..."
+    mapfile -t bundle_files < <(find "$bundle_path" -type f | sort)
+    if [[ "${#bundle_files[@]}" -gt 0 ]]; then
+      gh release upload "${tag_name}" "${bundle_files[@]}" --clobber
+      log "uploaded ${#bundle_files[@]} release artifacts"
+    fi
+  fi
+
   # Read-back verification of GitHub Release
-  rel_view="$(gh release view "${tag_name}" --json tagName,name,publishedAt)"
+  rel_view="$(gh release view "${tag_name}" --json tagName,name,publishedAt,assets)"
   if [[ -z "$rel_view" ]]; then
     die "GitHub release read-back verification failed for ${tag_name}"
   fi

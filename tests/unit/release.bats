@@ -182,3 +182,34 @@ EOF
   # Tag not yet created
   ! git -C "$WORK_REPO" rev-parse -q --verify "refs/tags/v0.3.0" >/dev/null
 }
+
+@test "release generates and verifies SLSA provenance and SBOM evidence bundle" {
+  cp "${OMES_TEST_ROOT}/scripts/generate-release-bundle.py" "$WORK_REPO/scripts/"
+  cp "${OMES_TEST_ROOT}/scripts/verify-release-bundle.py" "$WORK_REPO/scripts/"
+  cp -r "${OMES_TEST_ROOT}/lib" "$WORK_REPO/"
+  cp -r "${OMES_TEST_ROOT}/contracts" "$WORK_REPO/"
+
+  cat > "$WORK_REPO/changes/100-test.md" <<'EOF'
+---
+issue: 100
+type: added
+---
+Evidence bundle test feature.
+EOF
+  git -C "$WORK_REPO" add -A
+  git -C "$WORK_REPO" commit -q -m "add change fragment and release bundle dependencies"
+
+  run bash "$WORK_REPO/scripts/release.sh" 0.3.0 --skip-ci-check --bundle-dir "$WORK_REPO/dist/bundle"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"evidence bundle verified"* ]]
+
+
+  [ -f "$WORK_REPO/dist/bundle/release-manifest.json" ]
+  [ -f "$WORK_REPO/dist/bundle/sbom.json" ]
+  [ -f "$WORK_REPO/dist/bundle/provenance.slsa.json" ]
+  [ -f "$WORK_REPO/dist/bundle/compatibility-evidence.json" ]
+  [ -f "$WORK_REPO/dist/bundle/recovery-evidence.json" ]
+  [ -f "$WORK_REPO/dist/bundle/security-checks.json" ]
+  [ -f "$WORK_REPO/dist/bundle/limitations.json" ]
+  [ -f "$WORK_REPO/dist/bundle/SHA256SUMS" ]
+}
