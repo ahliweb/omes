@@ -6,8 +6,8 @@ The prototype establishes the visual design system, screen architecture, role-ba
 
 ## Files
 
-- [index.html](file:///home/data/tools-coding/omes/ui/control-center/index.html): Full interactive single-file prototype containing all 9 core screens and 3 diagnostic views.
-- [support.js](file:///home/data/tools-coding/omes/ui/control-center/support.js): Standalone runtime supporting dynamic state rendering and interactive role switching.
+- [index.html](index.html): Full interactive single-file prototype containing all 9 core screens and 3 diagnostic views.
+- [support.js](support.js): Standalone runtime supporting dynamic state rendering and interactive role switching.
 
 ## How to View
 
