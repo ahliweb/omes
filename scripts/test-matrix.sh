@@ -4,7 +4,7 @@
 # scripts/test-matrix.sh - reproducible container installation/regression
 # test matrix for OMES (issue #15). Runs real `bin/omes` invocations inside
 # fresh Docker containers for every image in $OMES_MATRIX_IMAGES (default:
-# ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64), covering the scenarios
+# ubuntu:26.04 ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64), covering the scenarios
 # required by docs/testing.md and docs/business/release-gates.md:
 #
 #   fresh           first-ever check/dry-run/real install (root, no sudo)
@@ -96,7 +96,7 @@ err() { printf '[test-matrix] ERROR %s\n' "$*" >&2; }
 # Image list, tiers, and scenario list (all overridable)
 # ---------------------------------------------------------------------------
 
-DEFAULT_IMAGES="ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64"
+DEFAULT_IMAGES="ubuntu:26.04 ubuntu:24.04 ubuntu:22.04 linuxmintd/mint22-amd64"
 DEFAULT_SCENARIOS="fresh rerun offline partial-failure reboot rollback dr"
 
 # IFS is scoped to just this `read`, not the global $'\n\t' set above: the
@@ -110,9 +110,10 @@ IFS=' ' read -r -a MATRIX_SCENARIOS <<<"${OMES_MATRIX_SCENARIOS:-$DEFAULT_SCENAR
 # silently promoted to blocking.
 image_tier() {
   case "$1" in
-    ubuntu:24.04) printf 'tier1\n' ;;
+    ubuntu:26.04*) printf 'tier1\n' ;;
+    ubuntu:24.04*) printf 'tier1\n' ;;
     linuxmintd/mint22-amd64*) printf 'tier1\n' ;; # see the header note above
-    ubuntu:22.04) printf 'tier2\n' ;;
+    ubuntu:22.04*) printf 'tier2\n' ;;
     *) printf 'tier3\n' ;;
   esac
 }

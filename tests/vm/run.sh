@@ -96,10 +96,10 @@ VM_USER="omes"
 
 usage() {
   cat <<'EOF'
-Usage: tests/vm/run.sh --image <ubuntu-24.04-cloud-image> [options]
+Usage: tests/vm/run.sh --image <ubuntu-cloud-image> [options]
 
 Options:
-  --image <path>      Ubuntu Server 24.04 cloud image (.img/.qcow2). Required.
+  --image <path>      Ubuntu Server 26.04 or 24.04 cloud image (.img/.qcow2). Required.
   --mint-iso <path>   Linux Mint 22 ISO path (accepted for parity with the
                        issue's spec; NOT automated today - see checklist.md.
                        Passing this only prints a pointer to the manual

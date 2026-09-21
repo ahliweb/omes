@@ -10,7 +10,7 @@ issue/pilot artifact exists; where a threshold is itself an ASSUMPTION (inherite
 `docs/business/pilot-program.md` or `docs/business/unit-economics.md`), it is marked as such.
 
 OMES is an independent, MIT-licensed, Omarchy-inspired compatibility layer and deployment
-toolkit for Ubuntu Server 24.04 LTS and Linux Mint 22.x, with Hermes Agent as the automation
+toolkit for Ubuntu Server 26.04 LTS, Ubuntu Server 24.04 LTS, and Linux Mint 22.x, with Hermes Agent as the automation
 layer. It is not the official Omarchy project, and no release gate below waives that.
 
 ## 1. Release stages
@@ -19,8 +19,9 @@ layer. It is not the official Omarchy project, and no release gate below waives 
 
 **Technical gates** (all must pass before alpha):
 
-- Installation succeeds on the Tier-1 matrix: Ubuntu Server 24.04 LTS amd64 and Linux Mint
-  22.x amd64 (per the compatibility matrix), proven by the test matrix in #15.
+- Installation succeeds on the Tier-1 matrix: Ubuntu Server 26.04 LTS amd64, Ubuntu Server 24.04
+  LTS amd64, and Linux Mint 22.x amd64 (per the compatibility matrix), proven by the test matrix
+  in #15 and #167.
 - Re-run idempotency: running `omes install` a second time on an already-applied host makes
   no further changes and exits 0, proven by #15.
 - Reboot survival: after a reboot, all applied services (at minimum the `hermes-gateway`

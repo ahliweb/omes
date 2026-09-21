@@ -53,12 +53,13 @@ inside a `container:` job).
 
 | Job | What it does | Blocks merge? |
 |---|---|---|
-| `matrix` | For each of `ubuntu:24.04` (tier 1), `linuxmintd/mint22-amd64` (tier 1), and `ubuntu:22.04` (tier 2, `continue-on-error: true`): runs `scripts/test-matrix.sh` for that one image, covering all six scenarios (`fresh`, `rerun`, `offline`, `partial-failure`, `reboot`, `rollback`) against a **real** `apt-get`/`dpkg` inside a disposable container. Uploads `tests/matrix/results/` and `tests/matrix/logs/` as a build artifact per image. | **Yes** for the two tier-1 images; the tier-2 `ubuntu:22.04` row is advisory (`continue-on-error: true`). |
+| `matrix` | For each of `ubuntu:26.04` (tier 1), `ubuntu:24.04` (tier 1), `linuxmintd/mint22-amd64` (tier 1), and `ubuntu:22.04` (tier 2, `continue-on-error: true`): runs `scripts/test-matrix.sh` for that one image, covering all seven scenarios (`fresh`, `rerun`, `offline`, `partial-failure`, `reboot`, `rollback`, `dr`) against a **real** `apt-get`/`dpkg` inside a disposable container. Uploads `tests/matrix/results/` and `tests/matrix/logs/` as a build artifact per image. | **Yes** for the three tier-1 images; the tier-2 `ubuntu:22.04` row is advisory (`continue-on-error: true`). |
+| `real-install-ubuntu-26-04` | On `ubuntu:26.04` only, as root: `scripts/test-matrix.sh` restricted to `OMES_MATRIX_SCENARIOS="fresh rerun"` — a **real**, non-dry-run `apt-base` install run twice in a row to prove idempotency end to end. Uploads the same artifacts. | **Yes.** `continue-on-error: false` — blocking since issue #167. |
 | `real-install-ubuntu-24-04` | On `ubuntu:24.04` only, as root: `scripts/test-matrix.sh` restricted to `OMES_MATRIX_SCENARIOS="fresh rerun"` — a **real**, non-dry-run `apt-base` install run twice in a row to prove idempotency end to end. Uploads the same artifacts. | **Yes.** `continue-on-error: false` — blocking since issue #15, now that `apt-base` gives this job a real module to install. Kept as its own named job (duplicating part of the `matrix` job's ubuntu:24.04 coverage) so its pass/fail history stays visible on its own. |
 
 **Compatibility-matrix mapping.** `docs/compatibility-matrix.md` section 1
 defines four support tiers; this workflow covers exactly the **Tier 1**
-platforms for the `server` profile (`ubuntu:24.04`) and one representative of
+platforms for the `server` profile (`ubuntu:26.04`, `ubuntu:24.04`) and one representative of
 Tier 1 desktop (`linuxmintd/mint22-amd64`, standing in for Linux Mint 22.x —
 see `scripts/test-matrix.sh`'s own "known limitations" comment for why its
 `/etc/os-release` actually reports `ID=ubuntu`) plus the Tier 2

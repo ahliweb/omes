@@ -8,7 +8,7 @@ matrix is the first half, this directory is the second.
 
 | Path | What it is | Automated? |
 |---|---|---|
-| [`run.sh`](run.sh) | Boots Ubuntu Server 24.04 from an operator-supplied cloud image via `virt-install`, copies this exact repository over SSH, runs `omes check` → `omes install --profile server --yes` → a real `reboot` → post-reboot assertions (packages/state survive; Hermes/gateway present and enabled unless `OMES_VM_SKIP_HERMES=1`), and writes an evidence bundle. | Yes |
+| [`run.sh`](run.sh) | Boots Ubuntu Server (26.04 or 24.04) from an operator-supplied cloud image via `virt-install`, copies this exact repository over SSH, runs `omes check` → `omes install --profile server --yes` → a real `reboot` → post-reboot assertions (packages/state survive; Hermes/gateway present and enabled unless `OMES_VM_SKIP_HERMES=1`), and writes an evidence bundle. | Yes |
 | [`checklist.md`](checklist.md) | Linux Mint desktop verification (login/logout, Hyprland ↔ Cinnamon fallback, suspend, multi-monitor, screen sharing). | No — manual, by design (see checklist.md's header for why) |
 | [`cloud-init/`](cloud-init) | `user-data.tmpl`/`meta-data.tmpl` templates `run.sh` fills in (creates one sudo user with an SSH key; nothing else). | — |
 | `evidence/` | Timestamped evidence bundles from real runs. Gitignored (see the repository `.gitignore`); never committed. | — |
@@ -25,15 +25,16 @@ VM disk is an explicit, reviewed, operator action, matching
 ## Running it
 
 ```bash
-# One-time: get an Ubuntu Server 24.04 cloud image and verify its checksum
-# yourself (https://cloud-images.ubuntu.com/releases/24.04/release/), e.g.:
-#   curl -fsSL -o ubuntu-24.04-server-cloudimg-amd64.img \
-#     https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img
+# One-time: get an Ubuntu Server cloud image and verify its checksum
+# yourself (e.g. https://cloud-images.ubuntu.com/releases/26.04/release/ or 24.04), e.g.:
+#   curl -fsSL -o ubuntu-26.04-server-cloudimg-amd64.img \
+#     https://cloud-images.ubuntu.com/releases/26.04/release/ubuntu-26.04-server-cloudimg-amd64.img
 #   (compare against that release's published SHA256SUMS)
 
+tests/vm/run.sh --image ./ubuntu-26.04-server-cloudimg-amd64.img
 tests/vm/run.sh --image ./ubuntu-24.04-server-cloudimg-amd64.img
-OMES_VM_SKIP_HERMES=1 tests/vm/run.sh --image ./ubuntu-24.04-server-cloudimg-amd64.img
-tests/vm/run.sh --image ./ubuntu-24.04-server-cloudimg-amd64.img --keep   # leave the VM up for debugging
+OMES_VM_SKIP_HERMES=1 tests/vm/run.sh --image ./ubuntu-26.04-server-cloudimg-amd64.img
+tests/vm/run.sh --image ./ubuntu-26.04-server-cloudimg-amd64.img --keep   # leave the VM up for debugging
 ```
 
 For the Mint desktop side: follow [`checklist.md`](checklist.md) by hand.
