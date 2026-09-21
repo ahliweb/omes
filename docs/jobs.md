@@ -243,9 +243,7 @@ It does **not** ship, and issue #90 does not require it to ship:
 
 - an HTTP/API server, or any network listener;
 - a tenant database, RBAC/ABAC, or multi-tenant identity;
-- a transport (local socket / mTLS / pull worker) connecting a Control
-  Center process to this CLI — `omes job submit --file ...` is the
-  integration point a future transport would call;
+- a transport connecting a Control Center process to this CLI — implemented as an outbound-only pull-worker client via `omes worker` / `lib/omes/py/jobs/worker.py` (issue #192, ADR-0027);
 - a UI, approval workflow beyond the CLI actor string, or notification
   system;
 - `install`/`configure`/`update`/`start`/`stop`/`restart` execution

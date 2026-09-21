@@ -38,6 +38,7 @@ architecture and state model."
 | [0024](0024-content-workflow-boundary-and-migration.md) | Content distribution workflow boundary and migration to AWCMS and Hermes | Accepted |
 | [0025](0025-graphify-upstream-delegation.md) | Graphify upstream delegation and skill/MCP boundary | Accepted |
 | [0026](0026-upstream-drift-automation.md) | Automated upstream drift review and deprecation tracking | Accepted |
+| [0027](0027-control-center-pull-worker-transport.md) | Control Center secure pull-worker transport | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -84,6 +85,12 @@ delegate skill, MCP and workflow behavior to upstream Graphify and Hermes."
 ADR 0026 was authored on 2026-09-21 as part of issue
 [#181](https://github.com/ahliweb/omes/issues/181), "chore(upstream):
 automate upstream drift review and deprecation tracking."
+
+ADR 0027 was authored on 2026-09-21 as part of issue
+[#192](https://github.com/ahliweb/omes/issues/192) and epic
+[#195](https://github.com/ahliweb/omes/issues/195), "feat(control-center):
+add a secure pull-worker transport for the AWCMS-one web GUI."
+
 
 
 
