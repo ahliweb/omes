@@ -882,6 +882,25 @@ omes job expire [--json]
 cross-tenant rejection, missing approval, invalid state transition,
 exhausted retries, job failed), 2 (usage error).
 
+### 4.17 Control Center pull-worker: `omes worker`
+
+Control Center outbound-only pull-worker client (ADR-0027, issue #192). Communicates with the AWCMS-one Control Center over TLS via polling and heartbeat telemetry, receiving allowlisted job dispatches without opening inbound ports or running an unprivileged listening daemon.
+
+```bash
+omes worker enroll --endpoint <url> --tenant <id> --server <id> --challenge <token>
+omes worker poll [--once]
+omes worker heartbeat
+omes worker status
+```
+
+- `enroll` initiates single-use challenge verification against the Control Center, exchanges Ed25519 public keys, and persists worker credentials mode `0600` under `<state-dir>/worker/credentials.json`.
+- `poll` polls for queued jobs targeting this server, validates schema, tenant, and server scope, submits to `lib/omes/py/jobs/store.py`, executes through `lib/omes/py/jobs/runner.py`, and posts sanitized execution results back to the Control Center.
+- `heartbeat` transmits host telemetry (load, disk, memory, uptime, version) and confirms host liveness.
+- `status` displays current enrollment status, worker ID, and endpoint configuration.
+
+**Exit codes:** 0 (success), 1 (error / unenrolled), 2 (usage error).
+
+
 
 
 ## 5. Worked examples

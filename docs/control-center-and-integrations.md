@@ -126,6 +126,16 @@ Issue [#90](https://github.com/ahliweb/omes/issues/90) owns the job contract. Al
 
 A provider request that may already have been accepted must not be retried blindly. The adapter must first reconcile the provider-side operation or require an operator action.
 
+### 4.1 Outbound Pull-Worker Transport (ADR-0027, issue #192)
+
+Under [ADR-0027](adr/0027-control-center-pull-worker-transport.md) and issue [#192](https://github.com/ahliweb/omes/issues/192), OMES implements an outbound-only pull-worker transport (`omes worker` / `lib/omes/py/jobs/worker.py`) connecting managed nodes to the AWCMS Control Center.
+
+Key properties:
+- **Zero Inbound Attack Surface**: Nodes maintain zero listening ports for Control Center communication. All traffic is outbound TLS to the Control Center API.
+- **Mutual Authentication & Enrollment**: Challenge-based enrollment (`omes worker enroll`) establishes host credentials stored under `<state-dir>/worker/credentials.json` (mode `0600`).
+- **Fixed-Argv Execution**: Polled jobs pass through `lib/omes/py/jobs/store.py` and `lib/omes/py/jobs/runner.py`. Arbitrary commands and shell invocation are strictly prohibited.
+- **Sanitized Results & Liveness**: The worker posts sanitized results and telemetry heartbeats (`omes worker heartbeat`), validating payloads against `contracts/control-center/v1/worker-*.schema.json`.
+
 ## 5. Domain provider abstraction
 
 Issue [#98](https://github.com/ahliweb/omes/issues/98) owns the provider-neutral domain contract. Registrar and DNS are separate adapters:

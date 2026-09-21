@@ -60,6 +60,14 @@ Each has at least one valid and one invalid fixture under
 | Rollback request | `rollback.request.schema.json` | Control Center → OMES |
 | Operation request (issue #91) | `operation-request.schema.json` | Control Center → OMES |
 | Deployment view (issue #91) | `deployment-view.schema.json` | OMES → Control Center |
+| Worker enrollment request (issue #192, ADR-0027) | `worker-enrollment.request.schema.json` | OMES Worker → Control Center |
+| Worker enrollment response (issue #192, ADR-0027) | `worker-enrollment.response.schema.json` | Control Center → OMES Worker |
+| Worker poll request (issue #192, ADR-0027) | `worker-poll.request.schema.json` | OMES Worker → Control Center |
+| Worker poll response (issue #192, ADR-0027) | `worker-poll.response.schema.json` | Control Center → OMES Worker |
+| Worker heartbeat request (issue #192, ADR-0027) | `worker-heartbeat.request.schema.json` | OMES Worker → Control Center |
+| Worker heartbeat response (issue #192, ADR-0027) | `worker-heartbeat.response.schema.json` | Control Center → OMES Worker |
+| Worker result request (issue #192, ADR-0027) | `worker-result.request.schema.json` | OMES Worker → Control Center |
+| Worker result response (issue #192, ADR-0027) | `worker-result.response.schema.json` | Control Center → OMES Worker |
 
 ### 2.1 Mutating-request common fields
 
