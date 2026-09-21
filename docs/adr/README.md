@@ -34,6 +34,7 @@ architecture and state model."
 | [0020](0020-delegate-hermes-backup-and-recovery.md) | Delegate profile and full-runtime backup to Hermes native commands | Accepted |
 | [0021](0021-align-hermes-docker-topology.md) | Align Hermes container deployment with official Docker topology | Accepted |
 | [0022](0022-consume-hermes-native-health.md) | Consume Hermes-native health endpoints and retain OMES host aggregation | Accepted |
+| [0023](0023-control-center-ui-ux-design-system.md) | Adopt OMES Control Center UI/UX design system and screen architecture | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -63,6 +64,11 @@ align container deployment with official Hermes Docker topology."
 ADR 0022 was authored on 2026-09-21 as part of issue
 [#178](https://github.com/ahliweb/omes/issues/178), "refactor(health):
 consume Hermes-native runtime status and keep OMES host aggregation."
+
+ADR 0023 was authored on 2026-09-21 as part of issue
+[#200](https://github.com/ahliweb/omes/issues/200) and epic
+[#195](https://github.com/ahliweb/omes/issues/195), "Adopt OMES Control
+Center UI/UX design system and screen architecture."
 
 
 ## Conventions

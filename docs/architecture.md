@@ -1007,7 +1007,7 @@ current non-integration) with `lib/omes/runtime.sh`.
 
 The current OMES implementation remains a Bash CLI and host toolkit. A future AWCMS/awcms-one-based Control Center is a companion control plane, not a replacement for the CLI or a second Hermes runtime. Its design and issue mapping are authoritative in [docs/control-center-and-integrations.md](control-center-and-integrations.md) and [ADR-0011](adr/0011-control-center-and-provider-boundaries.md).
 
-The Control Center may own tenant, catalog, subscription, invoice, payment, entitlement, approval, support, and reporting state. OMES owns host and deployment state; Hermes owns agent runtime state. Web mutations reach OMES only through an authenticated, allowlisted, idempotent, audited job boundary. Arbitrary shell execution and public privileged listeners are prohibited by design.
+The Control Center may own tenant, catalog, subscription, invoice, payment, entitlement, approval, support, and reporting state. OMES owns host and deployment state; Hermes owns agent runtime state. Web mutations reach OMES only through an authenticated, allowlisted, idempotent, audited job boundary. Arbitrary shell execution and public privileged listeners are prohibited by design. Under [ADR-0023](adr/0023-control-center-ui-ux-design-system.md) and [docs/ui-ux-design-system.md](ui-ux-design-system.md), the Control Center UI/UX baseline is established across 9 canonical screens with an interactive prototype at [`ui/control-center/index.html`](../ui/control-center/index.html).
 
 Provider adapters are staged and not implemented in this CLI branch:
 

@@ -8,6 +8,8 @@
 
 **Decision: reference-only, with an optional future OMES Local Console interpretation. Herman is not an approved OMES dependency, runtime, control-plane executor, or source of truth.**
 
+> Note (ADR-0023): The native OMES Control Center UI/UX design baseline has been formally established in [docs/ui-ux-design-system.md](ui-ux-design-system.md) and [ADR-0023](adr/0023-control-center-ui-ux-design-system.md), with an interactive prototype at [`ui/control-center/index.html`](../ui/control-center/index.html). While Herman provided initial reference patterns, all subsequent Control Center screens conform directly to the native OMES design system.
+
 OMES may adopt interaction and information-architecture patterns from Herman after reimplementing them behind the existing OMES/AWCMS contracts. OMES must not import Herman's single-user/local security assumptions, direct host access model, internal Hermes database coupling, raw credential workflows, or arbitrary process/filesystem behavior into a public or multi-tenant panel.
 
 This decision does not claim that Herman is insecure. It states that a local operator panel and a tenant-scoped control plane have different trust models, failure modes, and authorities.

@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  body { margin:0; background:#0E1216; color:#E6EDF3; font-family:'Public Sans',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  a { color:#5FC8D6; text-decoration:none; }
+  a:hover { color:#8FE0EA; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
+  ::-webkit-scrollbar-thumb { background:#242C35; border-radius:6px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  @keyframes omesPulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
+  @keyframes omesSlide { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
+  @keyframes omesTravel { 0% { left:-14%; opacity:0 } 12% { opacity:1 } 88% { opacity:1 } 100% { left:100%; opacity:0 } }
+  @keyframes omesDash { to { background-position:-28px 0 } }
+  @keyframes omesShimmer { 0% { transform:translateX(-100%) } 100% { transform:translateX(320%) } }
+  @keyframes omesRing { 0% { transform:scale(.7); opacity:.75 } 100% { transform:scale(2.4); opacity:0 } }
+  @keyframes omesRise { from { opacity:0; transform:translateY(-4px) } to { opacity:1; transform:none } }
+  @keyframes omesFlowLine { to { stroke-dashoffset:-104 } }
+  @keyframes omesPop { 0% { opacity:0; transform:translate(-50%,4px) scale(.94) } 12% { opacity:1; transform:translate(-50%,0) scale(1) } 82% { opacity:1; transform:translate(-50%,0) scale(1) } 100% { opacity:0; transform:translate(-50%,-6px) scale(.98) } }
+  @keyframes omesFall { 0% { top:-30%; opacity:0 } 15% { opacity:1 } 85% { opacity:1 } 100% { top:100%; opacity:0 } }
+</style>
+</helmet>
+
+<div style="display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; background:#0E1216">
+
+  <aside style="background:#11161B; border-right:1px solid #1E262E; display:flex; flex-direction:column; gap:4px; padding:18px 12px; position:sticky; top:0; height:100vh; box-sizing:border-box">
+    <div style="display:flex; align-items:center; gap:10px; padding:4px 8px 18px">
+      <div style="width:28px; height:28px; border-radius:7px; background:linear-gradient(145deg,#5FC8D6,#2C7F8A); display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:#08171A">o</div>
+      <div style="display:flex; flex-direction:column; line-height:1.15">
+        <span style="font-size:14px; font-weight:650; letter-spacing:-.01em">OMES</span>
+        <span style="font-size:10.5px; color:#7A8894; letter-spacing:.06em; text-transform:uppercase">Control Center</span>
+      </div>
+    </div>
+
+    <sc-for list="{{ nav }}" as="item" hint-placeholder-count="9">
+      <button onClick="{{ item.go }}" style="{{ item.style }}">
+        <span style="width:18px; display:inline-flex; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:11px; opacity:.8">{{ item.glyph }}</span>
+        <span style="flex:1; text-align:left">{{ item.label }}</span>
+        <span style="{{ item.badgeStyle }}">{{ item.badge }}</span>
+      </button>
+    </sc-for>
+
+    <div style="flex:1"></div>
+    <div style="border-top:1px solid #1E262E; padding:14px 8px 4px; display:flex; flex-direction:column; gap:8px">
+      <div style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Peran sesi</div>
+      <div style="display:flex; gap:4px; background:#0E1216; border:1px solid #232B34; border-radius:8px; padding:3px">
+        <button onClick="{{ setOwner }}" style="{{ ownerBtn }}">Owner</button>
+        <button onClick="{{ setOperator }}" style="{{ operatorBtn }}">Operator</button>
+      </div>
+      <div style="font-size:11px; color:#8B99A6; line-height:1.45">{{ roleNote }}</div>
+    </div>
+  </aside>
+
+  <main style="display:flex; flex-direction:column; min-width:0">
+    <header style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:16px 28px; border-bottom:1px solid #1E262E; background:#0E1216; position:sticky; top:0; z-index:20">
+      <div style="display:flex; align-items:center; gap:9px; background:#151A20; border:1px solid #242C35; border-radius:9px; padding:7px 11px">
+        <span style="width:6px; height:6px; border-radius:50%; background:#5FC8D6"></span>
+        <span style="font-size:12.5px; font-weight:600">{{ tenant }}</span>
+        <span style="font-size:11px; color:#7A8894; font-family:'JetBrains Mono',monospace">{{ tenantId }}</span>
+      </div>
+      <h1 style="margin:0; font-size:17px; font-weight:650; letter-spacing:-.015em; white-space:nowrap">{{ title }}</h1>
+      <div style="flex:1; min-width:12px"></div>
+      <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#7A8894; border:1px solid #242C35; border-radius:8px; padding:7px 10px">
+        <span style="width:6px; height:6px; border-radius:50%; background:#6FD08C; animation:omesPulse 2.4s ease-in-out infinite"></span>
+        <span>{{ pollLabel }}</span>
+      </div>
+      <button onClick="{{ toggleDrawer }}" style="display:flex; align-items:center; gap:8px; background:#151A20; border:1px solid #242C35; color:#E6EDF3; border-radius:8px; padding:8px 12px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#1B222A; border-color:#313B46">
+        <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#5FC8D6">⌘K</span>
+        <span>Jalankan operasi</span>
+      </button>
+    </header>
+
+    <div style="padding:26px 28px 56px; display:flex; flex-direction:column; gap:22px; animation:omesSlide .22s ease-out" key="{{ screen }}">
+      <span style="font-size:12.5px; color:#7A8894; margin-top:-8px">{{ subtitle }}</span>
+
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex; flex-direction:column; gap:22px">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px">
+            <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="4">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; padding:16px 18px; display:flex; flex-direction:column; gap:6px">
+                <span style="font-size:11.5px; color:#8B99A6; letter-spacing:.03em">{{ k.label }}</span>
+                <span style="font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.05; color:{{ k.accent }}">{{ k.value }}</span>
+                <span style="font-size:11.5px; color:#8B99A6">{{ k.foot }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+            <div style="flex:999 1 440px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+              <div style="display:flex; align-items:center; gap:12px; padding:14px 18px; border-bottom:1px solid #1E262E">
+                <h2 style="margin:0; font-size:13.5px; font-weight:650">Fleet</h2>
+                <span style="font-size:11.5px; color:#8B99A6">diurut menurut risiko</span>
+              </div>
+              <div style="display:grid; grid-template-columns:minmax(0,1.6fr) 90px 90px 70px; gap:12px; padding:9px 18px; border-bottom:1px solid #1E262E; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:#8B99A6">
+                <span>Host</span><span>CPU</span><span>Memori</span><span style="text-align:right">Sync</span>
+              </div>
+              <sc-for list="{{ fleet }}" as="s" hint-placeholder-count="12">
+                <div onClick="{{ s.open }}" style="display:grid; grid-template-columns:minmax(0,1.6fr) 90px 90px 70px; gap:12px; padding:11px 18px; border-bottom:1px solid #191F26; cursor:pointer; align-items:center" style-hover="background:#1A2027">
+                  <div style="display:flex; align-items:center; gap:10px; min-width:0">
+                    <span style="{{ s.dot }}"></span>
+                    <div style="display:flex; flex-direction:column; min-width:0; gap:1px">
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:12px; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.id }}</span>
+                      <span style="font-size:11px; color:#8B99A6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.role }} · {{ s.os }}</span>
+                    </div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:4px">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6">{{ s.cpu }}</span>
+                    <div style="height:4px; background:#222A32; border-radius:3px; overflow:hidden"><div style="{{ s.barCpu }}"></div></div>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:4px">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6">{{ s.mem }}</span>
+                    <div style="height:4px; background:#222A32; border-radius:3px; overflow:hidden"><div style="{{ s.barMem }}"></div></div>
+                  </div>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6; text-align:right">{{ s.last }}</span>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="flex:1 1 280px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; padding:16px 18px; display:flex; flex-direction:column; gap:14px">
+              <h2 style="margin:0; font-size:13.5px; font-weight:650">Aktivitas</h2>
+              <sc-for list="{{ timeline }}" as="e" hint-placeholder-count="5">
+                <div style="display:grid; grid-template-columns:44px 1fr; gap:10px; align-items:start">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6; padding-top:2px">{{ e.t }}</span>
+                  <div style="display:flex; flex-direction:column; gap:3px; border-left:2px solid {{ e.c }}; padding-left:10px">
+                    <span style="font-size:12.5px; line-height:1.45; color:#D2DBE3">{{ e.txt }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ e.who }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isServers }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+          <div style="flex:1 1 260px; max-width:320px; background:#151A20; border:1px solid #242C35; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:2px">
+            <sc-for list="{{ serverList }}" as="s" hint-placeholder-count="12">
+              <div onClick="{{ s.pick }}" style="{{ s.rowStyle }}" style-hover="background:#1A2027">
+                <span style="{{ s.dot }}"></span>
+                <div style="display:flex; flex-direction:column; min-width:0; flex:1; gap:1px">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.id }}</span>
+                  <span style="font-size:10.5px; color:#8B99A6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.role }}</span>
+                </div>
+                <span style="{{ s.driftStyle }}">{{ s.driftLabel }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:16px; min-width:0; flex:999 1 380px">
+            <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:18px">
+              <div style="display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap">
+                <div style="display:flex; flex-direction:column; gap:4px; min-width:0; flex:1 1 240px">
+                  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+                    <h2 style="margin:0; font-family:'JetBrains Mono',monospace; font-size:17px; font-weight:600; letter-spacing:-.01em; white-space:nowrap">{{ sel.id }}</h2>
+                    <span style="{{ sel.pillStyle }}">{{ sel.stateLabel }}</span>
+                  </div>
+                  <span style="font-size:12.5px; color:#8B99A6">{{ sel.host }}</span>
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap">
+                  <button onClick="{{ toggleDrawer }}" style="background:#5FC8D6; border:none; color:#08171A; border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer" style-hover="background:#7BDAE6">Jalankan diff</button>
+                  <button style="background:transparent; border:1px solid #303A44; color:#C6D1DA; border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="border-color:#42505C">Buka SSH</button>
+                </div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:14px; border-top:1px solid #1E262E; padding-top:16px">
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">OS</span><span style="font-size:13px">{{ sel.os }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Peran</span><span style="font-size:13px">{{ sel.role }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Uptime</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px">{{ sel.uptime }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Agent</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px">v{{ sel.agent }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Modul</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px">{{ sel.modules }}</span></div>
+                <div style="display:flex; flex-direction:column; gap:3px"><span style="font-size:10.5px; color:#8B99A6; letter-spacing:.06em; text-transform:uppercase">Heartbeat</span><span style="font-family:'JetBrains Mono',monospace; font-size:13px">{{ sel.last }}</span></div>
+              </div>
+
+              <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:16px; border-top:1px solid #1E262E; padding-top:16px">
+                <sc-for list="{{ selStats }}" as="m" hint-placeholder-count="3">
+                  <div style="display:flex; flex-direction:column; gap:7px">
+                    <div style="display:flex; justify-content:space-between; align-items:baseline">
+                      <span style="font-size:11.5px; color:#8B99A6">{{ m.label }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:600">{{ m.v }}</span>
+                    </div>
+                    <div style="height:5px; background:#222A32; border-radius:3px; overflow:hidden"><div style="{{ m.bar }}"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+
+            <sc-if value="{{ hasDrift }}" hint-placeholder-val="{{ true }}">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+                <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:10px">
+                  <h3 style="margin:0; font-size:13.5px; font-weight:650">Drift terhadap desired state</h3>
+                  <span style="font-size:11.5px; color:#8B99A6">omes diff · pinned contract v1</span>
+                </div>
+                <sc-for list="{{ selDrift }}" as="d" hint-placeholder-count="3">
+                  <div style="padding:14px 18px; border-bottom:1px solid #191F26; display:flex; flex-direction:column; gap:8px">
+                    <div style="display:flex; align-items:center; gap:10px">
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:12.5px; font-weight:500">{{ d.mod }}</span>
+                      <span style="{{ d.sevStyle }}">{{ d.sev }}</span>
+                    </div>
+                    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:8px; font-family:'JetBrains Mono',monospace; font-size:11.5px">
+                      <div style="background:#1B1416; border:1px solid #3A2326; border-radius:7px; padding:8px 11px; color:#E9A9A0">− {{ d.got }}</div>
+                      <div style="background:#121D18; border:1px solid #1F3A2B; border-radius:7px; padding:8px 11px; color:#9FDDB4">+ {{ d.want }}</div>
+                    </div>
+                  </div>
+                </sc-for>
+                <div style="padding:14px 18px; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+                  <sc-if value="{{ owner }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ toggleDrawer }}" style="background:#5FC8D6; border:none; color:#08171A; border-radius:8px; padding:9px 16px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer">Apply 3 perubahan</button>
+                  </sc-if>
+                  <sc-if value="{{ notOwner }}" hint-placeholder-val="{{ false }}">
+                    <button onClick="{{ toggleDrawer }}" style="background:transparent; border:1px solid #303A44; color:#C6D1DA; border-radius:8px; padding:9px 16px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer">Ajukan apply untuk persetujuan</button>
+                  </sc-if>
+                  <span style="font-size:11.5px; color:#8B99A6">Snapshot rollback dibuat otomatis sebelum apply.</span>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ noDrift }}" hint-placeholder-val="{{ false }}">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; padding:22px; display:flex; align-items:center; gap:12px">
+                <span style="width:8px; height:8px; border-radius:50%; background:#6FD08C"></span>
+                <span style="font-size:13px; color:#C6D1DA">Host sesuai desired state. Check terakhir lulus tanpa drift.</span>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDeployments }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px">
+          <div style="display:flex; gap:10px; flex-wrap:wrap">
+            <sc-for list="{{ pipeline }}" as="p" hint-placeholder-count="6">
+              <div style="{{ p.style }}">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ p.n }}</span>
+                <span style="font-size:13px; font-weight:650">{{ p.name }}</span>
+                <span style="{{ p.statusStyle }}">{{ p.status }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:12px">
+              <h2 style="margin:0; font-size:13.5px; font-weight:650">Riwayat deployment</h2>
+              <span style="font-size:11.5px; color:#8B99A6">kontrak OMES v1 · validasi fail-closed</span>
+            </div>
+            <sc-for list="{{ deployments }}" as="d" hint-placeholder-count="5">
+              <div style="padding:14px 18px; border-bottom:1px solid #191F26; display:flex; flex-wrap:wrap; gap:10px 16px; align-items:center" style-hover="background:#1A2027">
+                <div style="display:flex; flex-direction:column; gap:4px; min-width:0; flex:2 1 280px">
+                  <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#8B99A6">{{ d.id }}</span>
+                    <span style="font-size:13px; font-weight:600">{{ d.mod }}</span>
+                    <span style="{{ d.pill }}">{{ d.label }}</span>
+                  </div>
+                  <span style="font-size:11.5px; color:#8B99A6">{{ d.env }} · {{ d.hosts }} · {{ d.who }}</span>
+                </div>
+                <div style="height:5px; background:#222A32; border-radius:3px; overflow:hidden; flex:1 1 140px"><div style="{{ d.bar }}"></div></div>
+                <span style="font-size:11.5px; color:#8B99A6; text-align:right; min-width:90px">{{ d.when }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isOperations }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+          <div style="flex:1.3 1 400px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:10px">
+              <h2 style="margin:0; font-size:13.5px; font-weight:650">Antrean persetujuan</h2>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; background:rgba(232,180,74,.16); color:#E8B44A; border-radius:5px; padding:1px 6px">3</span>
+            </div>
+            <sc-for list="{{ queue }}" as="o" hint-placeholder-count="3">
+              <div style="padding:15px 18px; border-bottom:1px solid #191F26; display:flex; flex-direction:column; gap:10px">
+                <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap">
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#8B99A6">{{ o.id }}</span>
+                  <span style="{{ o.riskStyle }}">{{ o.risk }}</span>
+                  <span style="font-size:11.5px; color:#8B99A6">{{ o.age }} menunggu</span>
+                </div>
+                <span style="font-size:13.5px; font-weight:600; line-height:1.4">{{ o.name }}</span>
+                <span style="font-size:11.5px; color:#8B99A6">diajukan oleh {{ o.by }}</span>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+                  <sc-if value="{{ owner }}" hint-placeholder-val="{{ true }}">
+                    <button style="background:#5FC8D6; border:none; color:#08171A; border-radius:7px; padding:7px 14px; font:inherit; font-size:12px; font-weight:700; cursor:pointer">Setujui</button>
+                  </sc-if>
+                  <sc-if value="{{ owner }}" hint-placeholder-val="{{ true }}">
+                    <button style="background:transparent; border:1px solid #3A2326; color:#E9A9A0; border-radius:7px; padding:7px 14px; font:inherit; font-size:12px; font-weight:600; cursor:pointer">Tolak</button>
+                  </sc-if>
+                  <sc-if value="{{ notOwner }}" hint-placeholder-val="{{ false }}">
+                    <span style="font-size:11.5px; color:#E8B44A">{{ o.need }}</span>
+                  </sc-if>
+                  <button onClick="{{ toggleDrawer }}" style="background:transparent; border:1px solid #303A44; color:#C6D1DA; border-radius:7px; padding:7px 14px; font:inherit; font-size:12px; font-weight:600; cursor:pointer">Lihat rencana</button>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:1 1 300px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E"><h2 style="margin:0; font-size:13.5px; font-weight:650">Job berjalan</h2></div>
+            <sc-for list="{{ jobsRunning }}" as="j" hint-placeholder-count="3">
+              <div style="padding:15px 18px; border-bottom:1px solid #191F26; display:flex; flex-direction:column; gap:9px">
+                <div style="display:flex; justify-content:space-between; gap:12px; align-items:baseline">
+                  <span style="font-size:13px; font-weight:600">{{ j.name }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#5FC8D6">{{ j.pct }}</span>
+                </div>
+                <div style="height:5px; background:#222A32; border-radius:3px; overflow:hidden"><div style="{{ j.bar }}"></div></div>
+                <div style="display:flex; justify-content:space-between; gap:12px">
+                  <span style="font-size:11.5px; color:#8B99A6">{{ j.line }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ j.host }}</span>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isHermes }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px">
+          <div style="background:#151A20; border:1px solid #2B4149; border-radius:12px; padding:20px; display:flex; flex-direction:column; gap:12px">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#5FC8D6">{{ hermesTask.id }}</span>
+              <span style="font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#8B99A6">delegated task</span>
+            </div>
+            <h2 style="margin:0; font-size:19px; font-weight:650; letter-spacing:-.015em; line-height:1.35; max-width:70ch; text-wrap:pretty">{{ hermesTask.goal }}</h2>
+            <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:11.5px; color:#8B99A6">
+              <span>{{ hermesTask.planner }}</span>
+              <span>mulai {{ hermesTask.started }}</span>
+              <span>anggaran langkah {{ hermesTask.budget }}</span>
+            </div>
+          </div>
+
+          <div style="background:#0B0F13; border:1px solid #242C35; border-radius:12px; padding:20px 18px; overflow:hidden">
+            <div style="display:flex; align-items:stretch; gap:0; flex-wrap:wrap">
+              <sc-for list="{{ flowNodes }}" as="f" hint-placeholder-count="5">
+                <div style="display:flex; align-items:center; gap:0; flex:1 1 150px; min-width:0">
+                  <sc-if value="{{ f.link }}" hint-placeholder-val="{{ false }}">
+                    <div style="position:relative; flex:0 1 26px; min-width:20px; height:2px; overflow:hidden; background:repeating-linear-gradient(90deg,#2A333D 0 6px,transparent 6px 14px); background-size:28px 2px; animation:omesDash 1.1s linear infinite">
+                      <span style="position:absolute; top:-2px; width:6px; height:6px; border-radius:50%; background:#5FC8D6; box-shadow:0 0 8px #5FC8D6; animation:omesTravel 1.8s linear infinite"></span>
+                    </div>
+                  </sc-if>
+                  <div style="{{ f.box }}">
+                    <div style="position:relative; display:flex; align-items:center; justify-content:center; width:26px; height:26px; flex:none">
+                      <span style="{{ f.ring }}"></span>
+                      <span style="{{ f.dot }}"></span>
+                    </div>
+                    <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+                      <span style="font-size:12.5px; font-weight:650; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ f.name }}</span>
+                      <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#8B99A6; white-space:nowrap; overflow:hidden; text-overflow:ellipsis">{{ f.meta }}</span>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+            <div style="display:flex; flex-direction:column; gap:12px; flex:1.25 1 380px; min-width:0">
+              <sc-for list="{{ subagents }}" as="s" hint-placeholder-count="4">
+                <div style="background:#151A20; border:1px solid #242C35; border-radius:11px; padding:15px 17px; display:flex; flex-direction:column; gap:10px">
+                  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+                    <span style="{{ s.dot }}"></span>
+                    <span style="font-size:13.5px; font-weight:650">{{ s.name }}</span>
+                    <span style="{{ s.pill }}">{{ s.label }}</span>
+                    <span style="flex:1"></span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ s.id }} · {{ s.host }}</span>
+                  </div>
+                  <span style="font-size:12.5px; color:#C6D1DA">{{ s.step }}</span>
+                  <div style="position:relative; height:4px; background:#222A32; border-radius:3px; overflow:hidden">
+                    <div style="{{ s.bar }}"></div>
+                    <sc-if value="{{ s.running }}" hint-placeholder-val="{{ true }}">
+                      <span style="position:absolute; inset:0; width:30%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent); animation:omesShimmer 1.6s linear infinite"></span>
+                    </sc-if>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; gap:10px">
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">tool: {{ s.tool }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ s.pctText }}</span>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+
+            <div style="flex:1 1 320px; min-width:0; background:#0B0F13; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+              <div style="padding:12px 16px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:9px">
+                <span style="width:6px; height:6px; border-radius:50%; background:#5FC8D6; animation:omesPulse 2s ease-in-out infinite"></span>
+                <span style="font-size:12.5px; font-weight:650">Jejak eksekusi</span>
+              </div>
+              <div style="padding:12px 16px; display:flex; flex-direction:column; gap:10px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.5">
+                <sc-for list="{{ hermesLog }}" as="l" hint-placeholder-count="5">
+                  <div style="display:flex; gap:10px; animation:omesRise .35s ease-out" key="{{ l.t }}">
+                    <span style="color:#4E5A66; flex:none">{{ l.t }}</span>
+                    <span style="color:#5FC8D6; flex:none">{{ l.a }}</span>
+                    <span style="color:#A9B6C2">{{ l.m }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:12px">
+            <sc-for list="{{ doctor }}" as="d" hint-placeholder-count="8">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:11px; padding:15px 17px; display:flex; flex-direction:column; gap:8px">
+                <div style="display:flex; align-items:center; gap:10px">
+                  <span style="{{ d.dot }}"></span>
+                  <span style="font-size:13px; font-weight:600; flex:1">{{ d.name }}</span>
+                  <span style="{{ d.pill }}">{{ d.res }}</span>
+                </div>
+                <span style="font-size:12px; color:#8B99A6; line-height:1.45">{{ d.detail }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="background:#0B0F13; border:1px solid #242C35; border-radius:12px; padding:16px 18px; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.7; color:#A9B6C2">
+            <div style="color:#4E5A66">$ omes doctor --tenant tnt_8f21c --format summary</div>
+            <div><span style="color:#6FD08C">PASS</span> 6 · <span style="color:#E8B44A">WARN</span> 2 · <span style="color:#E86D5B">FAIL</span> 1</div>
+            <div style="color:#4E5A66">remediasi tersedia untuk 2 temuan → omes doctor --fix --dry-run</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isBackup }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+          <div style="flex:1 1 260px; max-width:340px; background:#151A20; border:1px solid #242C35; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:14px">
+            <h2 style="margin:0; font-size:13.5px; font-weight:650">Kebijakan</h2>
+            <sc-for list="{{ backupPolicy }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex; flex-direction:column; gap:3px">
+                <span style="font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:#8B99A6">{{ p.k }}</span>
+                <span style="font-size:12.5px; color:#C6D1DA; line-height:1.45">{{ p.v }}</span>
+              </div>
+            </sc-for>
+            <button onClick="{{ toggleDrawer }}" style="margin-top:4px; background:transparent; border:1px solid #303A44; color:#C6D1DA; border-radius:8px; padding:9px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="border-color:#42505C">Uji pulih ke sandbox</button>
+          </div>
+          <div style="flex:999 1 380px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E"><h2 style="margin:0; font-size:13.5px; font-weight:650">Snapshot terbaru</h2></div>
+            <sc-for list="{{ snapshots }}" as="s" hint-placeholder-count="5">
+              <div style="padding:14px 18px; border-bottom:1px solid #191F26; display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center" style-hover="background:#1A2027">
+                <div style="display:flex; flex-direction:column; gap:3px; min-width:0; flex:1 1 220px">
+                  <span style="font-size:13px; font-weight:600">{{ s.scope }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ s.id }} · {{ s.when }}</span>
+                </div>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#8B99A6; min-width:60px">{{ s.size }}</span>
+                <span style="{{ s.pill }}">{{ s.label }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#8B99A6; min-width:60px; text-align:right">{{ s.dur }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isAudit }}" hint-placeholder-val="{{ false }}">
+        <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+          <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+            <h2 style="margin:0; font-size:13.5px; font-weight:650">Jejak audit</h2>
+            <span style="font-size:11.5px; color:#8B99A6">append-only · RLS tenant tnt_8f21c · retensi 400 hari</span>
+          </div>
+          <div style="overflow-x:auto"><div style="min-width:860px"><div style="display:grid; grid-template-columns:150px minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 110px; gap:14px; padding:9px 18px; border-bottom:1px solid #1E262E; font-size:10.5px; letter-spacing:.07em; text-transform:uppercase; color:#8B99A6">
+            <span>Waktu</span><span>Aktor</span><span>Aksi</span><span>Objek</span><span style="text-align:right">Sumber</span>
+          </div>
+          <sc-for list="{{ audit }}" as="a" hint-placeholder-count="6">
+            <div style="display:grid; grid-template-columns:150px minmax(0,1fr) minmax(0,1fr) minmax(0,1.1fr) 110px; gap:14px; padding:11px 18px; border-bottom:1px solid #191F26; align-items:center; font-size:12px" style-hover="background:#1A2027">
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6">{{ a.t }}</span>
+              <div style="display:flex; flex-direction:column; gap:1px; min-width:0">
+                <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ a.actor }}</span>
+                <span style="font-size:10.5px; color:#8B99A6">{{ a.role }}</span>
+              </div>
+              <span style="{{ a.actStyle }}">{{ a.act }}</span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ a.obj }}</span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6; text-align:right">{{ a.ip }}</span>
+            </div>
+          </sc-for>
+          </div></div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isWorkers }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+          <div style="flex:1 1 440px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:12px">
+              <h2 style="margin:0; font-size:13.5px; font-weight:650">Pull worker</h2>
+              <span style="font-size:11.5px; color:#8B99A6">worker menarik kerja; control plane tidak pernah menginisiasi koneksi masuk</span>
+            </div>
+            <sc-for list="{{ workers }}" as="w" hint-placeholder-count="5">
+              <div style="padding:14px 18px; border-bottom:1px solid #191F26; display:flex; flex-wrap:wrap; gap:10px 14px; align-items:center" style-hover="background:#1A2027">
+                <div style="display:flex; align-items:center; gap:10px; min-width:180px; flex:1 1 200px">
+                  <span style="{{ w.dot }}"></span>
+                  <div style="display:flex; flex-direction:column; gap:2px; min-width:0">
+                    <span style="font-size:13px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ w.host }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ w.id }}</span>
+                  </div>
+                </div>
+                <span style="{{ w.pill }}">{{ w.state }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:11.5px; color:#8B99A6; min-width:56px">{{ w.poll }}</span>
+                <span style="font-size:11.5px; color:#8B99A6; flex:1 1 220px; min-width:0">v{{ w.ver }} · token {{ w.token }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1 1 300px; min-width:0; background:#151A20; border:1px solid #242C35; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:12px">
+            <h2 style="margin:0; font-size:13.5px; font-weight:650">Daftarkan worker baru</h2>
+            <p style="margin:0; font-size:12.5px; color:#8B99A6; line-height:1.55">Jalankan di host target. Token enrollment sekali pakai, berlaku 15 menit, dan mengikat worker ke tenant ini.</p>
+            <div style="background:#0B0F13; border:1px solid #242C35; border-radius:9px; padding:12px 13px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.65; color:#A9B6C2; overflow:auto">
+              <div style="color:#4E5A66">$ curl -fsSL https://omes.sh/enroll | \</div>
+              <div>&nbsp;&nbsp;sudo bash -s -- \</div>
+              <div>&nbsp;&nbsp;--tenant <span style="color:#5FC8D6">tnt_8f21c</span> \</div>
+              <div>&nbsp;&nbsp;--token <span style="color:#5FC8D6">enr_9f2b…c41</span></div>
+            </div>
+            <button style="background:#5FC8D6; border:none; color:#08171A; border-radius:8px; padding:9px 14px; font:inherit; font-size:12.5px; font-weight:700; cursor:pointer" style-hover="background:#7BDAE6">Salin perintah</button>
+            <div style="border-top:1px solid #1E262E; padding-top:12px; display:flex; flex-direction:column; gap:7px">
+              <span style="font-size:12.5px; font-weight:650; color:#E8B44A">1 enrollment menunggu</span>
+              <span style="font-size:11.5px; color:#8B99A6; line-height:1.5">wk-12 dari 103.28.14.22 meminta bergabung. Sidik jari kunci belum diverifikasi.</span>
+              <div style="display:flex; gap:8px">
+                <button style="background:#5FC8D6; border:none; color:#08171A; border-radius:7px; padding:7px 13px; font:inherit; font-size:12px; font-weight:700; cursor:pointer">Setujui</button>
+                <button style="background:transparent; border:1px solid #3A2326; color:#E9A9A0; border-radius:7px; padding:7px 13px; font:inherit; font-size:12px; font-weight:600; cursor:pointer">Blokir</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isArch }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
+          <div style="flex:999 1 460px; min-width:0; display:flex; flex-direction:column; gap:0">
+            <sc-for list="{{ layers }}" as="l" hint-placeholder-count="6">
+              <div style="display:flex; flex-direction:column; align-items:stretch">
+                <div style="{{ l.card }}">
+                  <div style="display:flex; flex-direction:column; gap:3px; flex:1 1 220px; min-width:0">
+                    <span style="{{ l.num }}">{{ l.n }}</span>
+                    <span style="font-size:14px; font-weight:650; letter-spacing:-.01em">{{ l.name }}</span>
+                    <span style="font-size:11.5px; color:#8B99A6">{{ l.sub }}</span>
+                  </div>
+                  <div style="display:flex; flex-direction:column; gap:8px; flex:1 1 240px; min-width:0">
+                    <div style="display:flex; flex-wrap:wrap; gap:6px">
+                      <sc-for list="{{ l.parts }}" as="p" hint-placeholder-count="3">
+                        <span style="{{ l.chip }}">{{ p.p }}</span>
+                      </sc-for>
+                    </div>
+                    <span style="font-size:11.5px; color:#8B99A6; line-height:1.5; text-wrap:pretty">{{ l.note }}</span>
+                  </div>
+                </div>
+                <sc-if value="{{ l.arrow }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex; justify-content:center; padding:5px 0">
+                    <div style="position:relative; width:2px; height:20px; overflow:hidden; background:repeating-linear-gradient(180deg,#2A333D 0 5px,transparent 5px 11px)">
+                      <span style="position:absolute; left:-2px; width:6px; height:6px; border-radius:50%; background:#5FC8D6; box-shadow:0 0 7px #5FC8D6; animation:omesFall 2.2s linear infinite"></span>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:1 1 280px; min-width:0; position:sticky; top:96px; background:#151A20; border:1px solid #2B4149; border-radius:12px; padding:18px; display:flex; flex-direction:column; gap:12px">
+            <div style="display:flex; align-items:center; gap:9px">
+              <span style="width:7px; height:7px; border-radius:50%; background:#5FC8D6; animation:omesPulse 2s ease-in-out infinite"></span>
+              <h2 style="margin:0; font-size:14px; font-weight:650">{{ hermesLane.name }}</h2>
+            </div>
+            <p style="margin:0; font-size:12px; color:#8B99A6; line-height:1.55">Berjalan menyamping di seluruh lapisan 02–05, bukan di atasnya.</p>
+            <div style="display:flex; flex-direction:column; gap:6px">
+              <sc-for list="{{ hermesLaneParts }}" as="p" hint-placeholder-count="3">
+                <span style="font-size:11.5px; color:#C6D1DA; background:#1A2027; border:1px solid #2A333D; border-radius:6px; padding:6px 9px">{{ p.p }}</span>
+              </sc-for>
+            </div>
+            <span style="font-size:11.5px; color:#8B99A6; line-height:1.55; text-wrap:pretty">{{ hermesLane.note }}</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isProgress }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px">
+            <sc-for list="{{ milestones }}" as="m" hint-placeholder-count="4">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; padding:16px 18px; display:flex; flex-direction:column; gap:9px">
+                <span style="font-size:13px; font-weight:650; line-height:1.35">{{ m.name }}</span>
+                <div style="display:flex; justify-content:space-between; align-items:baseline">
+                  <span style="font-size:11.5px; color:#8B99A6">{{ m.counts }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:13px; font-weight:600; color:#5FC8D6">{{ m.pct }}</span>
+                </div>
+                <div style="height:6px; background:#222A32; border-radius:4px; overflow:hidden"><div style="{{ m.bar }}"></div></div>
+                <span style="font-size:11.5px; color:#8B99A6">{{ m.note }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:14px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:12px; flex-wrap:wrap">
+              <h2 style="margin:0; font-size:13.5px; font-weight:650">Issue Control Center</h2>
+              <span style="font-size:11.5px; color:#8B99A6">urutan ketergantungan: fondasi → API → UI → rilis</span>
+            </div>
+            <sc-for list="{{ issues }}" as="i" hint-placeholder-count="10">
+              <div style="padding:12px 18px; border-bottom:1px solid #191F26; display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center" style-hover="background:#1A2027">
+                <span style="font-family:'JetBrains Mono',monospace; font-size:12px; color:#5FC8D6; min-width:44px">{{ i.n }}</span>
+                <span style="font-size:12.5px; flex:1 1 300px; min-width:0; line-height:1.45">{{ i.t }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6; min-width:70px">{{ i.area }}</span>
+                <span style="{{ i.pill }}">{{ i.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </main>
+
+  <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ toggleDrawer }}" style="position:fixed; inset:0; background:rgba(6,9,12,.68); z-index:60; display:flex; justify-content:flex-end">
+      <div style="width:min(460px,92vw); height:100%; background:#11161B; border-left:1px solid #242C35; padding:24px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; overflow:auto">
+        <div style="display:flex; align-items:center; gap:10px">
+          <h2 style="margin:0; font-size:15px; font-weight:650; flex:1">Rencana operasi</h2>
+          <button onClick="{{ toggleDrawer }}" style="background:transparent; border:1px solid #2A333D; color:#8B99A6; border-radius:7px; width:28px; height:28px; font:inherit; font-size:14px; cursor:pointer">×</button>
+        </div>
+        <p style="margin:0; font-size:12.5px; color:#8B99A6; line-height:1.55">Dry-run pada kontrak OMES v1. Tidak ada perubahan diterapkan sampai disetujui owner.</p>
+        <div style="background:#0B0F13; border:1px solid #242C35; border-radius:10px; padding:14px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.7; color:#A9B6C2">
+          <div style="color:#4E5A66">$ omes apply --host omes-app-01 --dry-run</div>
+          <div><span style="color:#5FC8D6">plan</span> 3 perubahan · 0 destruktif</div>
+          <div style="color:#E9A9A0">− pm.max_children = 16</div>
+          <div style="color:#9FDDB4">+ pm.max_children = 48</div>
+          <div style="color:#E9A9A0">− allow 5432/tcp</div>
+          <div style="color:#9FDDB4">+ deny 5432/tcp from 0.0.0.0/0</div>
+          <div style="color:#E9A9A0">− Automatic-Reboot "true"</div>
+          <div style="color:#9FDDB4">+ Automatic-Reboot "false"</div>
+          <div style="color:#4E5A66">snapshot rollback: snap-9932 (otomatis)</div>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:9px; background:#151A20; border:1px solid #242C35; border-radius:10px; padding:14px">
+          <span style="font-size:12.5px; font-weight:650">Dampak</span>
+          <span style="font-size:12px; color:#8B99A6; line-height:1.55">php-fpm dimuat ulang (≈1,2 s tanpa drop koneksi). Aturan firewall memutus akses Postgres publik — pastikan klien memakai jaringan privat.</span>
+        </div>
+        <div style="flex:1"></div>
+        <div style="display:flex; gap:9px">
+          <sc-if value="{{ owner }}" hint-placeholder-val="{{ true }}">
+            <button onClick="{{ toggleDrawer }}" style="flex:1; background:#5FC8D6; border:none; color:#08171A; border-radius:8px; padding:11px; font:inherit; font-size:13px; font-weight:700; cursor:pointer">Setujui &amp; jalankan</button>
+          </sc-if>
+          <sc-if value="{{ notOwner }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ toggleDrawer }}" style="flex:1; background:#5FC8D6; border:none; color:#08171A; border-radius:8px; padding:11px; font:inherit; font-size:13px; font-weight:700; cursor:pointer">Kirim untuk persetujuan</button>
+          </sc-if>
+          <button onClick="{{ toggleDrawer }}" style="background:transparent; border:1px solid #303A44; color:#C6D1DA; border-radius:8px; padding:11px 16px; font:inherit; font-size:13px; font-weight:600; cursor:pointer">Batal</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;defaultScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;servers&quot;,&quot;deployments&quot;,&quot;operations&quot;,&quot;hermes&quot;,&quot;health&quot;,&quot;backup&quot;,&quot;audit&quot;,&quot;workers&quot;,&quot;arch&quot;,&quot;progress&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototipe&quot;},&quot;livePolling&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipe&quot;}}">
+const A = { cyan:'#5FC8D6', ok:'#6FD08C', warn:'#E8B44A', err:'#E86D5B', vio:'#8B9CF7' };
+const P = { bg:'#0E1216', panel:'#151A20', panel2:'#1A2027', line:'#242C35', line2:'#1E262E', ink:'#E6EDF3', mut:'#8B99A6', dim:'#8B99A6' };
+const mono = "'JetBrains Mono',ui-monospace,monospace";
+
+const SERVERS = [
+  { id:'omes-edge-01', host:'edge-01.jkt.ahliweb.net', os:'Ubuntu 26.04', role:'Edge / Caddy', state:'ok',    drift:0, modules:7, cpu:14, mem:38, disk:44, uptime:'41d 06:12', agent:'0.3.0', last:'12s' },
+  { id:'omes-edge-02', host:'edge-02.jkt.ahliweb.net', os:'Ubuntu 26.04', role:'Edge / Caddy', state:'ok',    drift:0, modules:7, cpu:11, mem:35, disk:41, uptime:'41d 06:10', agent:'0.3.0', last:'9s'  },
+  { id:'omes-app-01',  host:'app-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'AWCMS app',   state:'drift', drift:3, modules:12, cpu:52, mem:71, disk:63, uptime:'18d 22:41', agent:'0.3.0', last:'7s'  },
+  { id:'omes-app-02',  host:'app-02.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'AWCMS app',   state:'ok',    drift:0, modules:12, cpu:47, mem:66, disk:59, uptime:'18d 22:39', agent:'0.3.0', last:'11s' },
+  { id:'omes-app-03',  host:'app-03.sgp.ahliweb.net',  os:'Ubuntu 24.04', role:'AWCMS app',   state:'warn',  drift:1, modules:12, cpu:78, mem:84, disk:81, uptime:'6d 03:55',  agent:'0.3.0', last:'14s' },
+  { id:'omes-db-01',   host:'db-01.jkt.ahliweb.net',   os:'Ubuntu 26.04', role:'Postgres 17', state:'ok',    drift:0, modules:5, cpu:33, mem:62, disk:57, uptime:'93d 11:02', agent:'0.3.0', last:'6s'  },
+  { id:'omes-db-02',   host:'db-02.jkt.ahliweb.net',   os:'Ubuntu 26.04', role:'Postgres 17 replica', state:'ok', drift:0, modules:5, cpu:21, mem:58, disk:57, uptime:'93d 10:58', agent:'0.3.0', last:'8s' },
+  { id:'omes-job-01',  host:'job-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'Hermes worker', state:'ok',  drift:0, modules:9, cpu:64, mem:49, disk:38, uptime:'12d 04:30', agent:'0.3.0', last:'4s'  },
+  { id:'omes-job-02',  host:'job-02.sgp.ahliweb.net',  os:'Ubuntu 24.04', role:'Hermes worker', state:'ok',  drift:0, modules:9, cpu:58, mem:44, disk:36, uptime:'12d 04:28', agent:'0.3.0', last:'5s'  },
+  { id:'omes-mint-01', host:'build-01.lab.internal',   os:'Linux Mint 22', role:'Build / lab', state:'stale', drift:2, modules:6, cpu:0, mem:0, disk:29, uptime:'—', agent:'0.2.8', last:'2h 14m' },
+  { id:'omes-obs-01',  host:'obs-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'Observability', state:'ok',  drift:0, modules:8, cpu:29, mem:55, disk:72, uptime:'41d 05:44', agent:'0.3.0', last:'10s' },
+  { id:'omes-bak-01',  host:'bak-01.sgp.ahliweb.net',  os:'Ubuntu 26.04', role:'Backup vault', state:'ok',   drift:0, modules:4, cpu:8,  mem:22, disk:88, uptime:'120d 02:17', agent:'0.3.0', last:'13s' }
+];
+
+const NAV = [
+  { key:'overview',   label:'Overview',    glyph:'◉', title:'Fleet overview',        sub:'12 host · 2 region · siklus check 60s' },
+  { key:'servers',    label:'Servers',     glyph:'▤', title:'Servers',               sub:'Inventaris host, modul, dan drift' },
+  { key:'deployments',label:'Deployments', glyph:'▲', title:'Deployments',           sub:'Bootstrap → Check → Diff → Apply → Verify' },
+  { key:'operations', label:'Operations',  glyph:'⚙', title:'Operations & Jobs',     sub:'Antrean kerja, persetujuan, dan hasil', badge:'3' },
+  { key:'hermes',     label:'Hermes',      glyph:'✦', title:'Hermes orchestration',  sub:'Delegated task dan subagent langsung' },
+  { key:'health',     label:'Health',      glyph:'✚', title:'Health / doctor',       sub:'Hasil omes doctor per host' },
+  { key:'backup',     label:'Backup',      glyph:'⟲', title:'Backup & Restore',      sub:'Snapshot, retensi, dan uji pulih' },
+  { key:'audit',      label:'Audit log',   glyph:'≡', title:'Audit log',             sub:'Jejak append-only, RLS per tenant' },
+  { key:'workers',    label:'Workers',     glyph:'⌁', title:'Worker enrollment',     sub:'Pull-worker transport dan heartbeat', badge:'1' },
+  { key:'live',       label:'Orkestrasi langsung', glyph:'◈', title:'Orkestrasi langsung', sub:'Peta aktivitas planner dan subagent, diperbarui otomatis' },
+  { key:'arch',       label:'Arsitektur',  glyph:'⬡', title:'Arsitektur sistem',     sub:'Lapisan control plane, transport, agent, dan provider' },
+  { key:'progress',   label:'Progres Hermes', glyph:'▮', title:'Progres integrasi Hermes', sub:'Milestone dan issue terbuka di ahliweb/omes' }
+];
+
+const LAYERS = [
+  { n:'01', name:'Owner & Operator', sub:'Antarmuka web Control Center', c:'#5FC8D6',
+    parts:['Overview & fleet','Approval gate','Audit & entitlement'],
+    note:'RBAC dua peran. Operator mengajukan, owner menyetujui.' },
+  { n:'02', name:'AWCMS · modul omes_control', sub:'Control plane', c:'#8B9CF7',
+    parts:['Schema + RLS per tenant','Owner/operator API','Projection & antrean job'],
+    note:'Issue #196, #198. Satu modul di dalam AWCMS, bukan aplikasi terpisah.' },
+  { n:'03', name:'Kontrak OMES v1', sub:'Batas versi yang dipatok', c:'#E8B44A',
+    parts:['Skema desired state','Skema hasil & event','Pemeriksa drift kontrak'],
+    note:'Issue #197. Validasi fail-closed: payload tak dikenal ditolak.' },
+  { n:'04', name:'Pull-worker transport', sub:'Hanya keluar, tanpa port masuk', c:'#6FD08C',
+    parts:['Enroll (token sekali pakai)','Poll pekerjaan','Kirim hasil + heartbeat'],
+    note:'Issue #192, #199. Control plane tidak pernah membuka koneksi ke host.' },
+  { n:'05', name:'OMES CLI di host', sub:'Bash · Ubuntu 26.04 / 24.04 · Mint 22', c:'#E6EDF3',
+    parts:['bootstrap · check · diff','apply · verify · rollback','doctor'],
+    note:'Sumber kebenaran eksekusi. Web memanggil perintah yang sama.' },
+  { n:'06', name:'Provider & modul', sub:'Lapisan yang menyentuh sistem', c:'#8B99A6',
+    parts:['apt, systemd, ufw','caddy, php-fpm, postgres','snapshot & restore'],
+    note:'Setiap modul punya desired state, diff, dan jalur rollback.' }
+];
+
+const HERMES_LANE = {
+  name:'Hermes Agent', c:'#5FC8D6',
+  parts:['Planner (delegated task)','Subagent + allowlist tool','Bukti & jejak eksekusi'],
+  note:'Issue #183, #180, #181. Hermes memakai antrean dan approval gate yang sama dengan operator manusia.'
+};
+
+const LOG = [
+  { t:'14:20:48', a:'sa-03', m:'pause: gate persetujuan aktif' },
+  { t:'14:21:12', a:'planner', m:'menaikkan op-8842 ke owner: perubahan firewall kritis' },
+  { t:'14:21:55', a:'sa-02', m:'menolak tool fs.write di /etc — di luar allowlist' },
+  { t:'14:22:09', a:'planner', m:'delegasi subtask 4 ke sa-04 (pengumpulan bukti)' },
+  { t:'14:22:41', a:'sa-01', m:'ssh.exec app-01 "ufw status numbered" → 12 rule' },
+  { t:'14:23:04', a:'sa-04', m:'obs.query obs-01 → 42 baris log terarsip' },
+  { t:'14:23:27', a:'sa-02', m:'menyusun diff ufw-baseline 2.0.1 (3 hunk)' },
+  { t:'14:23:52', a:'planner', m:'anggaran langkah 19/40 · tidak ada eskalasi baru' }
+];
+
+const MILESTONES = [
+  { name:'Control Center and Entitlements', done:2, open:9, pct:18, note:'Epic #195 dan turunannya' },
+  { name:'Quality and Security', done:6, open:2, pct:75, note:'#180, #181 · drift review upstream' },
+  { name:'Core CLI (bootstrap → rollback)', done:14, open:0, pct:100, note:'Rilis pre-alpha v0.3.0' },
+  { name:'Provider coverage', done:9, open:4, pct:69, note:'apt, systemd, ufw, caddy, postgres' }
+];
+
+const ISSUES = [
+  { n:'#195', t:'Epic: implementasi penuh Control Center berbasis AWCMS', s:'open', a:'epic' },
+  { n:'#196', t:'Schema, RLS, permission, dan descriptor modul omes_control', s:'open', a:'foundation' },
+  { n:'#197', t:'Konsumsi kontrak OMES v1 dengan validasi fail-closed', s:'open', a:'foundation' },
+  { n:'#198', t:'API owner/operator untuk projeksi dan operasi aman', s:'open', a:'api' },
+  { n:'#199', t:'Ingestion enrollment, poll, result, dan heartbeat worker', s:'open', a:'api' },
+  { n:'#192', t:'Transport pull-worker aman untuk GUI web AWCMS-one', s:'open', a:'api' },
+  { n:'#200', t:'Layar admin: overview, servers, deployments, operations, jobs', s:'design', a:'ui' },
+  { n:'#201', t:'Layar health, backup/recovery, dan audit', s:'design', a:'ui' },
+  { n:'#183', t:'Visualisasi orkestrasi Hermes dan subagent langsung', s:'design', a:'ui' },
+  { n:'#202', t:'Verifikasi dan penutupan rilis Control Center', s:'open', a:'release' }
+];
+
+const STATE_META = {
+  ok:    { label:'Sehat',  c:A.ok },
+  drift: { label:'Drift',  c:A.warn },
+  warn:  { label:'Perhatian', c:A.warn },
+  stale: { label:'Stale',  c:A.err },
+  fail:  { label:'Gagal',  c:A.err }
+};
+
+class Component extends DCLogic {
+  state = { screen:'overview', role:'owner', drawerOpen:false, selected:'omes-app-01', tick:0, filter:'all' };
+
+  componentDidMount() {
+    if (this.props.defaultScreen && NAV.some(n => n.key === this.props.defaultScreen)) {
+      this.setState({ screen: this.props.defaultScreen });
+    }
+    if (this.props.livePolling ?? true) {
+      this._t = setInterval(() => this.setState(s => ({ tick: s.tick + 1 })), 1600);
+    }
+  }
+  componentWillUnmount() { clearInterval(this._t); }
+
+  go(key) { return () => this.setState({ screen:key, drawerOpen:false }); }
+
+  navStyle(active) {
+    return 'display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; padding:8px 10px; border-radius:8px; font:inherit; font-size:13px; font-weight:' + (active ? '650' : '500') +
+      '; cursor:pointer; border:1px solid ' + (active ? '#22323A' : 'transparent') +
+      '; background:' + (active ? 'rgba(95,200,214,.10)' : 'transparent') +
+      '; color:' + (active ? '#CFF3F8' : '#98A5B1') + '; text-align:left';
+  }
+
+  roleBtn(active) {
+    return 'flex:1; padding:5px 8px; border-radius:6px; border:none; font:inherit; font-size:11.5px; font-weight:650; cursor:pointer;' +
+      (active ? 'background:#5FC8D6; color:#08171A' : 'background:transparent; color:#7A8894');
+  }
+
+  renderVals() {
+    const cur = NAV.find(n => n.key === this.state.screen) || NAV[0];
+    const owner = this.state.role === 'owner';
+    const sel = SERVERS.find(s => s.id === this.state.selected) || SERVERS[0];
+
+    return {
+      screen: this.state.screen,
+      title: cur.title,
+      subtitle: cur.sub,
+      tenant: 'Ahliweb Production',
+      tenantId: 'tnt_8f21c',
+      pollLabel: 'poll 60s · sync ' + (3 + (this.state.tick % 9)) + 's lalu',
+      nav: NAV.map(n => ({
+        label: n.label, glyph: n.glyph, go: this.go(n.key),
+        style: this.navStyle(n.key === this.state.screen),
+        badge: n.badge || '',
+        badgeStyle: n.badge ? 'font-family:' + mono + '; font-size:10px; font-weight:600; background:rgba(232,180,74,.16); color:#E8B44A; border-radius:5px; padding:1px 5px' : 'display:none'
+      })),
+      ownerBtn: this.roleBtn(owner),
+      operatorBtn: this.roleBtn(!owner),
+      setOwner: () => this.setState({ role:'owner' }),
+      setOperator: () => this.setState({ role:'operator' }),
+      roleNote: owner ? 'Akses penuh: apply, rollback, kelola entitlement.' : 'Hanya baca + ajukan operasi. Apply butuh persetujuan owner.',
+      drawerOpen: this.state.drawerOpen,
+      toggleDrawer: () => this.setState(s => ({ drawerOpen: !s.drawerOpen })),
+      isOverview: this.state.screen === 'overview',
+      isServers: this.state.screen === 'servers',
+      isDeployments: this.state.screen === 'deployments',
+      isOperations: this.state.screen === 'operations',
+      isHermes: this.state.screen === 'hermes',
+      isHealth: this.state.screen === 'health',
+      isBackup: this.state.screen === 'backup',
+      isAudit: this.state.screen === 'audit',
+      isWorkers: this.state.screen === 'workers',
+      isArch: this.state.screen === 'arch',
+      isProgress: this.state.screen === 'progress',
+      layers: LAYERS.map((l, i) => ({
+        n: l.n, name: l.name, sub: l.sub, note: l.note, parts: l.parts.map(p => ({ p:p })),
+        card: 'display:flex; flex-wrap:wrap; gap:14px 18px; align-items:flex-start; background:#151A20; border:1px solid #242C35; border-left:3px solid ' + l.c + '; border-radius:11px; padding:16px 18px',
+        num: 'font-family:' + mono + '; font-size:11px; color:' + l.c,
+        chip: 'font-size:11.5px; color:#C6D1DA; background:#1A2027; border:1px solid #2A333D; border-radius:6px; padding:4px 9px',
+        arrow: i < LAYERS.length - 1
+      })),
+      hermesLane: HERMES_LANE,
+      hermesLaneParts: HERMES_LANE.parts.map(p => ({ p:p })),
+      milestones: MILESTONES.map(m => ({
+        name: m.name, note: m.note, pct: m.pct + '%',
+        counts: m.done + ' selesai · ' + m.open + ' terbuka',
+        bar: 'height:100%; border-radius:4px; width:' + m.pct + '%; background:' + (m.pct === 100 ? A.ok : A.cyan) + '; transition:width .6s ease'
+      })),
+      issues: ISSUES.map(it => {
+        const c = it.s === 'design' ? A.cyan : A.warn;
+        return { n: it.n, t: it.t, area: it.a,
+          label: it.s === 'design' ? 'desain siap' : 'terbuka',
+          pill: 'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c };
+      }),
+      owner: owner,
+      notOwner: !owner,
+      kpis: [
+        { label:'Host terkelola', value:'12', foot:'2 region · jkt, sgp', accent:'#E6EDF3' },
+        { label:'Drift terdeteksi', value:'6', foot:'3 host · 2 modul kritis', accent:'#E8B44A' },
+        { label:'Operasi menunggu', value:'3', foot:'menunggu persetujuan owner', accent:'#8B9CF7' },
+        { label:'Verify lulus 7h', value:'98.4%', foot:'124 dari 126 run', accent:'#6FD08C' }
+      ],
+      fleet: SERVERS.map(s => ({
+        id: s.id, host: s.host, role: s.role, os: s.os,
+        stateLabel: STATE_META[s.state].label,
+        dot: 'width:7px; height:7px; border-radius:50%; flex:none; background:' + STATE_META[s.state].c,
+        cpu: s.cpu + '%',
+        barCpu: 'height:100%; width:' + s.cpu + '%; background:' + (s.cpu > 75 ? A.err : s.cpu > 55 ? A.warn : A.cyan) + '; border-radius:3px',
+        mem: s.mem + '%',
+        barMem: 'height:100%; width:' + s.mem + '%; background:' + (s.mem > 80 ? A.err : s.mem > 60 ? A.warn : A.cyan) + '; border-radius:3px',
+        last: s.last,
+        open: () => this.setState({ screen:'servers', selected:s.id })
+      })),
+      backupPolicy: [
+        { k:'Jadwal', v:'Harian 02:00 WIB · mingguan Minggu 01:00' },
+        { k:'Retensi', v:'14 harian · 8 mingguan · 12 bulanan' },
+        { k:'Tujuan', v:'bak-01.sgp (primer) + object storage terenkripsi' },
+        { k:'Enkripsi', v:'age + kunci per tenant, rotasi 90 hari' }
+      ],
+      snapshots: [
+        { id:'snap-9931', scope:'db-01 · postgres full', size:'9.2 GB', when:'hari ini 02:04', verify:'ok', dur:'11m 22s' },
+        { id:'snap-9930', scope:'app-01..03 · config + state', size:'1.4 GB', when:'hari ini 02:01', verify:'ok', dur:'3m 08s' },
+        { id:'snap-9929', scope:'pre-apply d-2264', size:'1.5 GB', when:'hari ini 14:01', verify:'ok', dur:'2m 51s' },
+        { id:'snap-9928', scope:'db-01 · postgres full', size:'9.1 GB', when:'kemarin 02:04', verify:'ok', dur:'11m 04s' },
+        { id:'snap-9927', scope:'build-01 · config', size:'0.2 GB', when:'kemarin 02:00', verify:'fail', dur:'—' }
+      ].map(s => {
+        const c = s.verify === 'ok' ? A.ok : A.err;
+        return { id:s.id, scope:s.scope, size:s.size, when:s.when, dur:s.dur,
+          label: s.verify === 'ok' ? 'restore-test lulus' : 'restore-test gagal',
+          pill:'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c };
+      }),
+      audit: [
+        { t:'2026-09-21 14:19:03', actor:'rani@ahliweb', role:'owner', act:'operation.approve', obj:'op-8841', ip:'103.28.14.7', ok:true },
+        { t:'2026-09-21 14:06:44', actor:'svc/omes-check', role:'system', act:'drift.detect', obj:'omes-app-01', ip:'10.20.0.11', ok:true },
+        { t:'2026-09-21 13:52:10', actor:'hermes/subagent-02', role:'agent', act:'tool.deny', obj:'fs.write /etc', ip:'10.20.0.4', ok:false },
+        { t:'2026-09-21 13:48:02', actor:'svc/heartbeat', role:'system', act:'worker.stale', obj:'omes-mint-01', ip:'—', ok:false },
+        { t:'2026-09-21 13:30:19', actor:'agus@ahliweb', role:'operator', act:'deployment.verify', obj:'d-2261', ip:'103.28.14.9', ok:true },
+        { t:'2026-09-21 11:02:58', actor:'rani@ahliweb', role:'owner', act:'entitlement.grant', obj:'agus@ahliweb → apply:staging', ip:'103.28.14.7', ok:true }
+      ].map(a => ({ t:a.t, actor:a.actor, role:a.role, act:a.act, obj:a.obj, ip:a.ip,
+        actStyle:'font-family:' + mono + '; font-size:11.5px; color:' + (a.ok ? P.ink : A.err) })),
+      workers: [
+        { id:'wk-01', host:'omes-edge-01', state:'active', poll:'12s', ver:'0.3.0', token:'kedaluwarsa 74 hari' },
+        { id:'wk-03', host:'omes-app-01', state:'active', poll:'7s', ver:'0.3.0', token:'kedaluwarsa 74 hari' },
+        { id:'wk-08', host:'omes-job-01', state:'active', poll:'4s', ver:'0.3.0', token:'kedaluwarsa 61 hari' },
+        { id:'wk-10', host:'omes-mint-01', state:'stale', poll:'2j 14m', ver:'0.2.8', token:'lewat 14 hari' },
+        { id:'wk-12', host:'baru · belum terdaftar', state:'pending', poll:'—', ver:'0.3.0', token:'menunggu persetujuan enrollment' }
+      ].map(w => {
+        const c = w.state === 'active' ? A.ok : w.state === 'stale' ? A.err : A.warn;
+        return { id:w.id, host:w.host, poll:w.poll, ver:w.ver, token:w.token, state:w.state,
+          dot:'width:7px; height:7px; border-radius:50%; flex:none; background:' + c,
+          pill:'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c };
+      }),
+      flowNodes: [
+        { name:'Goal', meta:'task-4471', st:'done' },
+        { name:'Planner', meta:'18/40 langkah', st:'run' },
+        { name:'Subagent', meta:'2 aktif · 1 tunggu', st:'run' },
+        { name:'Approval gate', meta:'op-8842 tertahan', st:'wait' },
+        { name:'OMES CLI', meta:'apply → verify', st:'idle' }
+      ].map((f, i, arr) => {
+        const c = f.st === 'done' ? A.ok : f.st === 'run' ? A.cyan : f.st === 'wait' ? A.warn : P.dim;
+        const live = f.st === 'run';
+        return { name:f.name, meta:f.meta, link: i > 0,
+          box:'display:flex; align-items:center; gap:10px; min-width:0; flex:1 1 auto; background:#151A20; border:1px solid ' + (live ? '#2B4149' : '#242C35') + '; border-radius:10px; padding:11px 13px',
+          dot:'position:absolute; width:9px; height:9px; border-radius:50%; background:' + c,
+          ring: live ? 'position:absolute; width:9px; height:9px; border-radius:50%; border:1px solid ' + c + '; animation:omesRing 1.8s ease-out infinite' : 'display:none' };
+      }),
+      hermesTask: {
+        id:'task-4471', goal:'Pulihkan kepatuhan baseline keamanan di seluruh fleet produksi',
+        planner:'hermes-planner · claude-sonnet', started:'14:02', budget:'18 / 40 langkah'
+      },
+      subagents: [
+        { id:'sa-01', name:'Auditor firewall', host:'app-01', state:'run',  step:'membaca ufw status numbered', tool:'ssh.exec', pct:62 },
+        { id:'sa-02', name:'Penulis patch modul', host:'control', state:'run', step:'menyusun diff ufw-baseline 2.0.1', tool:'fs.write', pct:35 },
+        { id:'sa-03', name:'Verifikator', host:'app-03', state:'wait', step:'menunggu persetujuan op-8842', tool:'—', pct:0 },
+        { id:'sa-04', name:'Pengumpul bukti', host:'obs-01', state:'done', step:'42 log terarsip ke vault', tool:'obs.query', pct:100 }
+      ].map((s, i) => {
+        const c = s.state === 'run' ? A.cyan : s.state === 'done' ? A.ok : A.warn;
+        const lbl = s.state === 'run' ? 'berjalan' : s.state === 'done' ? 'selesai' : 'menunggu';
+        const pct = s.state === 'run'
+          ? Math.min(96, s.pct + ((this.state.tick * 2 + i * 5) % (97 - s.pct)))
+          : s.pct;
+        return { id:s.id, name:s.name, host:s.host, step:s.step, tool:s.tool, label:lbl,
+          pctText: s.state === 'wait' ? '—' : pct + '%',
+          dot:'width:7px; height:7px; border-radius:50%; flex:none; background:' + c + (s.state === 'run' ? '; animation:omesPulse 1.6s ease-in-out infinite' : ''),
+          pill:'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c,
+          running: s.state === 'run',
+          bar:'height:100%; border-radius:3px; width:' + pct + '%; background:' + c + '; transition:width 1s linear' };
+      }),
+      hermesLog: LOG.slice(0, 5 + (this.state.tick % 4)).slice(-6).slice().reverse(),
+      doctor: [
+        { name:'Kompatibilitas OS', res:'pass', detail:'12/12 host pada rilis yang didukung' },
+        { name:'Versi agent', res:'warn', detail:'build-01 masih 0.2.8, di bawah minimum 0.3.0' },
+        { name:'Ruang disk', res:'warn', detail:'bak-01 88% terpakai · ambang 85%' },
+        { name:'Sertifikat TLS', res:'pass', detail:'kedaluwarsa terdekat 47 hari (edge-02)' },
+        { name:'Rotasi kredensial', res:'fail', detail:'token worker build-01 lewat 14 hari' },
+        { name:'Waktu & NTP', res:'pass', detail:'deviasi maksimum 42 ms' },
+        { name:'Paket tertahan', res:'pass', detail:'tidak ada held package' },
+        { name:'Snapshot rollback', res:'pass', detail:'12/12 host punya snapshot < 24 jam' }
+      ].map(d => {
+        const c = d.res === 'pass' ? A.ok : d.res === 'warn' ? A.warn : A.err;
+        return { name:d.name, detail:d.detail, res:d.res,
+          dot:'width:8px; height:8px; border-radius:50%; flex:none; background:' + c,
+          pill:'font-family:' + mono + '; font-size:10.5px; font-weight:600; text-transform:uppercase; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c };
+      }),
+      pipeline: ['Bootstrap','Check','Diff','Apply','Verify','Rollback'].map((p, i) => ({
+        name: p, n: String(i + 1).padStart(2,'0'),
+        style: 'flex:1; min-width:120px; border:1px solid ' + (i < 4 ? '#1F3A2B' : i === 4 ? '#2B4149' : '#242C35') +
+          '; background:' + (i < 4 ? 'rgba(111,208,140,.07)' : i === 4 ? 'rgba(95,200,214,.08)' : '#151A20') +
+          '; border-radius:10px; padding:13px 15px; display:flex; flex-direction:column; gap:5px',
+        status: i < 4 ? 'selesai' : i === 4 ? 'berjalan · 9/12' : 'siaga',
+        statusStyle: 'font-size:11px; color:' + (i < 4 ? A.ok : i === 4 ? A.cyan : P.dim)
+      })),
+      deployments: [
+        { id:'d-2264', mod:'awcms-core 4.2.1', env:'production', hosts:'9 host', who:'agus@ahliweb', when:'berjalan', state:'run', pct:74 },
+        { id:'d-2263', mod:'caddy-tls 1.6.0', env:'production', hosts:'2 host', who:'hermes/auto', when:'22 menit lalu', state:'ok', pct:100 },
+        { id:'d-2262', mod:'postgres-tune 0.9.4', env:'production', hosts:'2 host', who:'rani@ahliweb', when:'1 jam lalu', state:'ok', pct:100 },
+        { id:'d-2261', mod:'ufw-baseline 2.0.0', env:'staging', hosts:'3 host', who:'agus@ahliweb', when:'3 jam lalu', state:'rollback', pct:100 },
+        { id:'d-2260', mod:'hermes-agent 0.3.0', env:'production', hosts:'12 host', who:'rani@ahliweb', when:'kemarin', state:'ok', pct:100 }
+      ].map(d => {
+        const c = d.state === 'ok' ? A.ok : d.state === 'run' ? A.cyan : A.err;
+        const lbl = d.state === 'ok' ? 'Verify lulus' : d.state === 'run' ? 'Apply berjalan' : 'Di-rollback';
+        return { id:d.id, mod:d.mod, env:d.env, hosts:d.hosts, who:d.who, when:d.when, label:lbl,
+          pill:'font-size:11px; font-weight:650; padding:3px 9px; border-radius:6px; background:' + c + '1F; color:' + c,
+          bar:'height:100%; border-radius:3px; width:' + d.pct + '%; background:' + c };
+      }),
+      queue: [
+        { id:'op-8844', name:'apply php-fpm.pool → app-01', by:'operator rani@ahliweb', risk:'high', need:'Butuh persetujuan owner', age:'4 menit' },
+        { id:'op-8843', name:'restart awcms-worker → job-01, job-02', by:'hermes/subagent-02', risk:'medium', need:'Butuh persetujuan owner', age:'11 menit' },
+        { id:'op-8842', name:'tutup 5432/tcp publik → app-01', by:'omes doctor', risk:'critical', need:'Butuh persetujuan owner', age:'26 menit' }
+      ].map(o => {
+        const c = o.risk === 'critical' ? A.err : o.risk === 'high' ? A.warn : A.vio;
+        return { id:o.id, name:o.name, by:o.by, risk:o.risk, need:o.need, age:o.age,
+          riskStyle:'font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:5px; background:' + c + '26; color:' + c };
+      }),
+      jobsRunning: [
+        { id:'job-51207', name:'verify · awcms-core 4.2.1', host:'app-02', pct:74, line:'menjalankan smoke test 14/19' },
+        { id:'job-51206', name:'backup · pg_dump harian', host:'db-01', pct:41, line:'kompresi 3.8 GB / 9.2 GB' },
+        { id:'job-51205', name:'check · baseline drift', host:'semua host', pct:88, line:'11 dari 12 host selesai' }
+      ].map(j => ({ id:j.id, name:j.name, host:j.host, line:j.line, pct:j.pct + '%',
+        bar:'height:100%; border-radius:3px; width:' + j.pct + '%; background:#5FC8D6' })),
+      serverList: SERVERS.map(s => ({
+        id: s.id, host: s.host, role: s.role,
+        dot: 'width:7px; height:7px; border-radius:50%; flex:none; background:' + STATE_META[s.state].c,
+        driftLabel: s.drift ? s.drift + ' drift' : 'in sync',
+        driftStyle: 'font-family:' + mono + '; font-size:10.5px; padding:1px 6px; border-radius:5px; background:' + (s.drift ? 'rgba(232,180,74,.14)' : 'rgba(111,208,140,.12)') + '; color:' + (s.drift ? A.warn : A.ok),
+        rowStyle: 'display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px; cursor:pointer; border:1px solid ' + (s.id === sel.id ? '#2B4149' : 'transparent') + '; background:' + (s.id === sel.id ? 'rgba(95,200,214,.08)' : 'transparent'),
+        pick: () => this.setState({ selected:s.id })
+      })),
+      sel: {
+        id: sel.id, host: sel.host, os: sel.os, role: sel.role, uptime: sel.uptime,
+        agent: sel.agent, modules: sel.modules, last: sel.last,
+        stateLabel: STATE_META[sel.state].label,
+        pillStyle: 'font-size:11.5px; font-weight:650; padding:3px 9px; border-radius:6px; background:' + STATE_META[sel.state].c + '22; color:' + STATE_META[sel.state].c
+      },
+      selStats: [
+        { label:'CPU', v: sel.cpu + '%', bar:'height:100%; border-radius:3px; width:' + sel.cpu + '%; background:' + (sel.cpu > 75 ? A.err : A.cyan) },
+        { label:'Memori', v: sel.mem + '%', bar:'height:100%; border-radius:3px; width:' + sel.mem + '%; background:' + (sel.mem > 80 ? A.err : A.cyan) },
+        { label:'Disk /', v: sel.disk + '%', bar:'height:100%; border-radius:3px; width:' + sel.disk + '%; background:' + (sel.disk > 80 ? A.warn : A.cyan) }
+      ],
+      selDrift: sel.drift ? [
+        { mod:'php-fpm.pool', want:'pm.max_children = 48', got:'pm.max_children = 16', sev:'high' },
+        { mod:'ufw.rules', want:'deny 5432/tcp from 0.0.0.0/0', got:'allow 5432/tcp', sev:'critical' },
+        { mod:'unattended-upgrades', want:'Automatic-Reboot "false"', got:'Automatic-Reboot "true"', sev:'medium' }
+      ].slice(0, sel.drift).map(d => ({
+        mod: d.mod, want: d.want, got: d.got, sev: d.sev,
+        sevStyle: 'font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:5px; background:' + (d.sev === 'critical' ? 'rgba(232,109,91,.16)' : d.sev === 'high' ? 'rgba(232,180,74,.16)' : 'rgba(139,156,247,.16)') + '; color:' + (d.sev === 'critical' ? A.err : d.sev === 'high' ? A.warn : A.vio)
+      })) : [],
+      hasDrift: sel.drift > 0,
+      noDrift: sel.drift === 0,
+      timeline: [
+        { t:'14:22', who:'hermes/subagent-04', txt:'apply modul caddy-tls di edge-01 selesai', c:A.ok },
+        { t:'14:19', who:'rani@ahliweb', txt:'menyetujui op #8841 restart awcms-worker', c:A.cyan },
+        { t:'14:06', who:'omes check', txt:'drift baru: app-01 · php-fpm.pool, ufw.rules, unattended-upgrades', c:A.warn },
+        { t:'13:48', who:'sistem', txt:'build-01 tidak mengirim heartbeat selama 2j 14m', c:A.err },
+        { t:'13:30', who:'agus@ahliweb', txt:'deployment d-2261 verify lulus di 9 host', c:A.ok }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
