@@ -1,0 +1,28 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "researcher-container",
+    "workspace": "ahliweb",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "researcher"
+  },
+  "placement": {
+    "backend": "compose",
+    "serviceScope": "user",
+    "restartPolicy": "on-failure"
+  },
+  "resources": {
+    "memory": "2G",
+    "cpu": "2.0",
+    "pids": 256
+  },
+  "compose": {
+    "image": "ghcr.io/nousresearch/hermes-agent@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+    "user": "1000:1000",
+    "capDrop": ["ALL"]
+  }
+}

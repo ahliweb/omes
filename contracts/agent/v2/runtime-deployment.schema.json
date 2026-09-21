@@ -1,0 +1,210 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://ahliweb.com/schemas/omes/runtime-deployment/v2",
+  "title": "OMES RuntimeDeployment manifest v2",
+  "description": "Versioned schema for the native OMES runtime deployment manifest (issue #174). References Hermes profile identity without duplicating runtime role, skills, model, memory, or session ownership.",
+  "type": "object",
+  "required": ["apiVersion", "kind", "metadata", "runtime", "placement"],
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": { "const": "omes.ahliweb.com/v2" },
+    "kind": { "enum": ["RuntimeDeployment", "AgentDeployment"] },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "environment"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,31}$",
+          "description": "Stable deployment identity, distinct from Hermes runtime profile identity."
+        },
+        "workspace": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "environment": { "type": "string", "enum": ["production", "staging", "development"] }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "required": ["kind", "profileRef"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": ["hermes"],
+          "description": "Agent runtime engine. MVP strictly supports 'hermes'."
+        },
+        "profileRef": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{0,63}$",
+          "description": "Canonical Hermes runtime profile identity, resolved through supported Hermes CLI behavior."
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "required": ["backend", "serviceScope"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "type": "string",
+          "enum": ["native", "systemd", "compose"],
+          "description": "Host execution backend. 'native' and 'systemd' run via host systemd user/system units. 'compose' isolates the agent in rootless Docker Compose."
+        },
+        "serviceScope": {
+          "type": "string",
+          "enum": ["user", "system"],
+          "description": "Execution privilege scope on the host."
+        },
+        "restartPolicy": {
+          "type": "string",
+          "enum": ["always", "on-failure", "no"],
+          "description": "Host service restart policy."
+        }
+      }
+    },
+    "resources": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "memory": {
+          "type": "string",
+          "pattern": "^[0-9]+[KMG]$",
+          "description": "Memory ceiling, e.g. '1G'."
+        },
+        "cpu": {
+          "type": "string",
+          "pattern": "^[0-9]+(\\.[0-9]+)?$",
+          "description": "CPU quota expressed as core count, e.g. '1.0'."
+        },
+        "pids": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000,
+          "description": "Process limit."
+        }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "hardeningProfile": {
+          "type": "string",
+          "enum": ["strict", "baseline", "disabled"],
+          "description": "Host systemd unit hardening profile."
+        },
+        "exposurePolicy": {
+          "type": "string",
+          "enum": ["loopback", "private", "public"],
+          "description": "Host network exposure boundary."
+        },
+        "isolationClass": {
+          "type": "string",
+          "enum": ["standard", "rootless-container"],
+          "description": "Host process containment class."
+        }
+      }
+    },
+    "recovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "policy": {
+          "type": "string",
+          "enum": ["production", "staging", "ephemeral"],
+          "description": "Deployment recovery and rollback policy."
+        }
+      }
+    },
+    "health": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": {
+          "type": "string",
+          "enum": ["hermes-native", "command", "http"],
+          "description": "Health verification adapter."
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "description": "Custom health check command when adapter is 'command'."
+        },
+        "timeout": {
+          "type": "string",
+          "pattern": "^[0-9]+s$",
+          "description": "Timeout in seconds, e.g. '10s'."
+        }
+      }
+    },
+    "compose": {
+      "type": "object",
+      "description": "Rootless Docker Compose isolation specification (required when placement.backend is 'compose').",
+      "additionalProperties": false,
+      "required": ["image"],
+      "properties": {
+        "image": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]*@sha256:[0-9a-f]{64}$",
+          "description": "Must be pinned by digest (@sha256:<64 hex>)."
+        },
+        "project": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "description": "Compose project name."
+        },
+        "network": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "description": "Isolated per-agent Docker network name."
+        },
+        "user": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*:[1-9][0-9]*$",
+          "description": "Non-root uid:gid the container runs as."
+        },
+        "capDrop": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[A-Z_]+$" },
+          "description": "Capabilities to drop. Must be ['ALL']."
+        },
+        "readOnlyRootfs": {
+          "type": "boolean"
+        },
+        "volumes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["hostPath", "containerPath"],
+            "properties": {
+              "hostPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "description": "Must resolve under this agent's OMES state dir; no ':' or docker socket."
+              },
+              "containerPath": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096,
+                "pattern": "^/[^:]*$"
+              },
+              "readOnly": { "type": "boolean" }
+            }
+          }
+        },
+        "ports": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^127\\.0\\.0\\.1:[0-9]{1,5}:[0-9]{1,5}$"
+          }
+        }
+      }
+    }
+  }
+}

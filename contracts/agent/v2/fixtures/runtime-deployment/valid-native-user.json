@@ -1,0 +1,34 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "researcher",
+    "workspace": "ahliweb",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "researcher"
+  },
+  "placement": {
+    "backend": "native",
+    "serviceScope": "user",
+    "restartPolicy": "always"
+  },
+  "resources": {
+    "memory": "1G",
+    "cpu": "1.0",
+    "pids": 128
+  },
+  "security": {
+    "hardeningProfile": "strict",
+    "exposurePolicy": "loopback",
+    "isolationClass": "standard"
+  },
+  "recovery": {
+    "policy": "production"
+  },
+  "health": {
+    "adapter": "hermes-native"
+  }
+}

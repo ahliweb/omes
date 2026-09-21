@@ -1,5 +1,5 @@
 """lib/omes/py/agent/plan.py - pure computation of the apply plan from a
-validated AgentDeployment manifest (issue #87).
+validated AgentDeployment (v1) or RuntimeDeployment (v2) manifest (issues #87, #174).
 
 No I/O: every path returned here is a *planned* path; lib/omes/cmd/agent.sh
 and lib/omes/py/agent/cli.py are responsible for actually reading/writing
@@ -16,6 +16,7 @@ from . import paths
 
 UNIT_PREFIX = "omes-agent-"
 UNIT_SUFFIX = ".service"
+
 
 # resources.cpu is a core-count string like "1.0"; systemd CPUQuota= wants
 # a percentage. 1 core == 100%.
@@ -63,20 +64,17 @@ def systemd_dirs(service_mode: str, home: Path) -> Dict[str, Path]:
 
 
 def resource_dropin_lines(resources: Dict[str, Any]) -> list:
-    """Numeric resource-limit lines derived directly from spec.resources.
+    """Numeric resource-limit lines derived directly from resources.
     Deliberately separate from modules/hermes-gateway/hardening.sh's
-    security-hardening directives (NoNewPrivileges, ProtectSystem, etc.) -
-    lib/omes/cmd/agent.sh sources that file and calls hardening_render()
-    to reuse those directives verbatim rather than duplicating them here;
-    this function only covers the per-agent numeric fields the manifest
-    schema uniquely declares (memory/cpu/pids), which hardening_render()
-    does not know about."""
-    lines = [
-        f"MemoryMax={resources['memory']}",
-        f"MemoryHigh={resources['memory']}",
-        f"CPUQuota={_cpu_quota_percent(resources['cpu'])}",
-        f"TasksMax={resources['pids']}",
-    ]
+    security-hardening directives (NoNewPrivileges, ProtectSystem, etc.)."""
+    lines = []
+    if "memory" in resources:
+        lines.append(f"MemoryMax={resources['memory']}")
+        lines.append(f"MemoryHigh={resources['memory']}")
+    if "cpu" in resources:
+        lines.append(f"CPUQuota={_cpu_quota_percent(resources['cpu'])}")
+    if "pids" in resources:
+        lines.append(f"TasksMax={resources['pids']}")
     return lines
 
 
@@ -92,16 +90,77 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
     secret NAMES (as references, e.g. `EnvironmentFile=` pointing at a
     path an operator manages, never a value).
 
-    `unit_name_override`, when given, is used verbatim instead of this
-    module's own `unit_name()` fallback - the caller (cli.py) resolves it
-    via lib/omes/py/agent/runtime_bridge.py against
-    lib/omes/runtime.sh's `runtime_agent_service_unit`, so unit naming has
-    one source of truth in the running system while this function stays a
-    pure, subprocess-free computation for tests that call it directly."""
+    Supports both v1 (AgentDeployment) and v2 (RuntimeDeployment) manifests.
+    For v2, runtime behavior (role, skills, storage, secrets) is delegated to
+    Hermes profiles, and host deployment concerns remain strictly OMES-owned."""
+    api_version = manifest.get("apiVersion", "omes.ahliweb.com/v1")
     metadata = manifest["metadata"]
-    spec = manifest["spec"]
     name = metadata["name"]
+
+    if api_version == "omes.ahliweb.com/v2":
+        runtime = manifest.get("runtime", {})
+        placement = manifest.get("placement", {})
+        profile_ref = runtime.get("profileRef", name)
+        backend = placement.get("backend", "native")
+        service_mode = placement.get("serviceScope", "user")
+        restart_policy = placement.get("restartPolicy", "always")
+        resources = dict(manifest.get("resources", {"memory": "1G", "cpu": "1.0", "pids": 128}))
+        health = dict(manifest.get("health", {"adapter": "hermes-native"}))
+        security = dict(manifest.get("security", {"hardeningProfile": "strict", "exposurePolicy": "loopback", "isolationClass": "standard"}))
+        recovery = dict(manifest.get("recovery", {"policy": "production"}))
+        compose_spec = dict(manifest["compose"]) if "compose" in manifest else None
+
+        home = paths.base_home(service_mode)
+        hermes_home = paths.hermes_home_for_agent(name, service_mode)
+        dirs = systemd_dirs(service_mode, home)
+        unit = unit_name_override or unit_name(name)
+        dropin_dir = str(dirs["dropin_dir"]).format(name=name)
+
+        return {
+            "apiVersion": "omes.ahliweb.com/v2",
+            "agent": name,
+            "workspace": metadata.get("workspace"),
+            "environment": metadata.get("environment", "production"),
+            "runtime": {
+                "kind": runtime.get("kind", "hermes"),
+                "profileRef": profile_ref,
+            },
+            "profile": profile_ref,
+            "profileRef": profile_ref,
+            "backend": backend,
+            "serviceMode": service_mode,
+            "unit": {
+                "name": unit,
+                "dir": str(dirs["unit_dir"]),
+                "path": str(dirs["unit_dir"] / unit),
+                "dropin_dir": dropin_dir,
+                "dropin_path": f"{dropin_dir}/{dropin_name()}",
+            },
+            "hermesHome": str(hermes_home),
+            "restartPolicy": restart_policy,
+            "resources": resources,
+            "resourceDropinLines": resource_dropin_lines(resources) + restart_lines(restart_policy),
+            "health": health,
+            "security": security,
+            "recovery": recovery,
+            "compose": compose_spec,
+            "storage": {
+                "memory": "delegated",
+                "sessions": "delegated",
+                "skills": "delegated",
+            },
+            "role": None,
+            "capabilities": [],
+            "deny": [],
+            "secretReferences": [],
+            "environmentFileReference": None,
+            "backupClasses": ["config", "skills"],
+        }
+
+    # v1 fallback
+    spec = manifest["spec"]
     service_mode = spec["serviceMode"]
+    backend = spec.get("backend", "systemd")
 
     home = paths.base_home(service_mode)
     hermes_home = paths.hermes_home_for_agent(name, service_mode)
@@ -109,19 +168,18 @@ def build_plan(manifest: Dict[str, Any], unit_name_override: "str | None" = None
     unit = unit_name_override or unit_name(name)
     dropin_dir = str(dirs["dropin_dir"]).format(name=name)
 
-    # Secret references are surfaced as *names* of an EnvironmentFile the
-    # operator is expected to maintain outside any OMES-managed path
-    # (never generated or written by this tool) - see docs/agent-
-    # deployment.md "Secrets".
     secret_refs = list(spec.get("secrets", []))
     env_file_ref = str(hermes_home / ".env") if secret_refs else None
 
     return {
+        "apiVersion": "omes.ahliweb.com/v1",
         "agent": name,
-        "workspace": metadata["workspace"],
-        "environment": metadata["environment"],
-        "role": spec["role"],
-        "profile": spec["profile"],
+        "workspace": metadata.get("workspace"),
+        "environment": metadata.get("environment"),
+        "role": spec.get("role"),
+        "profile": spec.get("profile"),
+        "profileRef": spec.get("profile"),
+        "backend": backend,
         "serviceMode": service_mode,
         "unit": {
             "name": unit,

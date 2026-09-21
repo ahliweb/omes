@@ -108,13 +108,62 @@ schema's regexes alone express:
 [`lib/omes/py/agent/compose.py`](../lib/omes/py/agent/compose.py), not
 described further here - see section 8.
 
+### 2.1 RuntimeDeployment v2 (ADR-0018, issue #174)
+
+Per [ADR-0018](adr/0018-runtimedeployment-v2-and-hermes-profile-references.md), OMES introduces **RuntimeDeployment v2** (`apiVersion: omes.ahliweb.com/v2`, `kind: RuntimeDeployment`) to enforce architectural separation between OMES host placement and Hermes agent runtime intelligence:
+
+- Validated against [`contracts/agent/v2/runtime-deployment.schema.json`](../contracts/agent/v2/runtime-deployment.schema.json) with fixtures in [`contracts/agent/v2/fixtures/runtime-deployment/`](../contracts/agent/v2/fixtures/runtime-deployment/).
+- Replaces `spec.profile` with `runtime.profileRef`, referencing an upstream profile verified via `hermes profile list`.
+- Moves host placement to `placement` (`backend`, `serviceScope`, `restartPolicy`).
+- Retains host resource quotas under `resources` (`memory`, `cpu`, `pids`).
+- Strictly prohibits smuggling runtime roles (`role`), capabilities (`capabilities`), deny rules (`deny`), storage semantics (`storage`), or secret payloads into the manifest (`additionalProperties: false`).
+- Upstream Hermes natively owns bot personas, skills, approval policies, memory backend, and API keys ($HERMES_HOME/.env) within the referenced profile.
+
+```json
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "researcher",
+    "workspace": "ahliweb",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "researcher"
+  },
+  "placement": {
+    "backend": "native",
+    "serviceScope": "user",
+    "restartPolicy": "always"
+  },
+  "resources": {
+    "memory": "1G",
+    "cpu": "1.0",
+    "pids": 128
+  },
+  "security": {
+    "hardeningProfile": "strict",
+    "exposurePolicy": "loopback",
+    "isolationClass": "standard"
+  },
+  "recovery": {
+    "policy": "production"
+  },
+  "health": {
+    "adapter": "hermes-native"
+  }
+}
+```
+
 ## 3. CLI
 
 ```text
 omes agent list                          # every declared/applied agent + state
-omes agent check <name>                  # preflight only: manifest + privilege, no mutation
+omes agent check <name>                  # preflight only: manifest + privilege + profileRef, no mutation
 omes agent plan <name>                   # prints the computed plan (unit, paths, limits), no mutation
 omes agent apply <name> [--dry-run] [--yes]
+omes agent migrate <name> [--dry-run] [--output <path>] [--json] # migrates v1 manifest to v2 with audit
 omes agent status <name> [--json]
 omes agent health <name> [--json]
 omes agent restart <name>

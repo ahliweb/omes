@@ -1,0 +1,16 @@
+{
+  "apiVersion": "omes.ahliweb.com/v2",
+  "kind": "RuntimeDeployment",
+  "metadata": {
+    "name": "../bad",
+    "environment": "production"
+  },
+  "runtime": {
+    "kind": "hermes",
+    "profileRef": "researcher"
+  },
+  "placement": {
+    "backend": "native",
+    "serviceScope": "user"
+  }
+}

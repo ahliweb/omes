@@ -211,10 +211,34 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
     secret NAMES (an `env_file` path an operator maintains, never
     generated or written by this tool)."""
     metadata = manifest["metadata"]
-    spec = manifest["spec"]
     name = metadata["name"]
-    compose_spec = spec["compose"]
-    service_mode = spec["serviceMode"]
+    api_version = manifest.get("apiVersion", "omes.ahliweb.com/v1")
+    if api_version == "omes.ahliweb.com/v2":
+        compose_spec = manifest.get("compose", {})
+        placement = manifest.get("placement", {})
+        service_mode = placement.get("serviceScope", "user")
+        restart_policy = placement.get("restartPolicy", "always")
+        runtime = manifest.get("runtime", {})
+        profile = runtime.get("profileRef", name)
+        resources = dict(manifest.get("resources", {"memory": "1G", "cpu": "1.0", "pids": 128}))
+        health = dict(manifest.get("health", {"adapter": "hermes-native"}))
+        secret_refs = []
+        env_file_ref = None
+        role = None
+        storage = {"memory": "delegated", "sessions": "delegated", "skills": "delegated"}
+    else:
+        spec = manifest["spec"]
+        compose_spec = spec["compose"]
+        service_mode = spec["serviceMode"]
+        restart_policy = spec["restartPolicy"]
+        profile = spec["profile"]
+        resources = dict(spec["resources"])
+        health = dict(spec["health"])
+        secret_refs = list(spec.get("secrets", []))
+        hermes_home_tmp = paths.hermes_home_for_agent(name, service_mode)
+        env_file_ref = str(hermes_home_tmp / ".env") if secret_refs else None
+        role = spec["role"]
+        storage = dict(spec["storage"])
 
     hermes_home = paths.hermes_home_for_agent(name, service_mode)
     agent_state_dir = paths.agent_state_dir(name)
@@ -226,20 +250,16 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
     volumes = [dict(v) for v in compose_spec.get("volumes", [])]
     ports = list(compose_spec.get("ports", []))
 
-    secret_refs = list(spec.get("secrets", []))
-    env_file_ref = str(hermes_home / ".env") if secret_refs else None
-
-    resources = dict(spec["resources"])
-
     compose_dir = agent_state_dir / "compose"
     compose_file = compose_dir / "compose.yaml"
 
     return {
+        "apiVersion": api_version,
         "agent": name,
-        "workspace": metadata["workspace"],
-        "environment": metadata["environment"],
-        "role": spec["role"],
-        "profile": spec["profile"],
+        "workspace": metadata.get("workspace"),
+        "environment": metadata.get("environment", "production"),
+        "role": role,
+        "profile": profile,
         "serviceMode": service_mode,
         "backend": "compose",
         "image": compose_spec["image"],
@@ -251,11 +271,11 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "volumes": volumes,
         "ports": ports,
         "hermesHome": str(hermes_home),
-        "restartPolicy": spec["restartPolicy"],
-        "composeRestart": _RESTART_MAP.get(spec["restartPolicy"], "no"),
+        "restartPolicy": restart_policy,
+        "composeRestart": _RESTART_MAP.get(restart_policy, "no"),
         "resources": resources,
-        "health": dict(spec["health"]),
-        "storage": dict(spec["storage"]),
+        "health": health,
+        "storage": storage,
         "secretReferences": secret_refs,
         "environmentFileReference": env_file_ref,
         "backupClasses": ["config", "skills"],
