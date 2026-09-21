@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0.0",
+  "precedence": ["delegate", "port", "adapt", "defer", "reject"],
+  "capabilities": [
+    {
+      "capability_id": "hermes.agent.reasoning",
+      "title": "Hermes Agent Core Reasoning and Tool Execution"
+    }
+  ]
+}

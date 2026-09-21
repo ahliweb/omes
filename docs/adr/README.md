@@ -28,11 +28,17 @@ architecture and state model."
 | [0014](0014-graphify-integration-boundary.md) | Graphify integration boundary | Accepted as design boundary |
 | [0015](0015-content-distribution-workflow.md) | Content distribution workflow architecture | Accepted as design boundary |
 | [0016](0016-herman-web-panel-reference.md) | Herman is a UX reference, not an OMES dependency | Accepted |
+| [0017](0017-upstream-first-ownership-and-boundary-enforcement.md) | Upstream-first ownership and architecture boundary enforcement | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
 agent-runtime abstraction boundary with Hermes as the first
 implementation."
+
+ADR 0017 was authored on 2026-09-21 as part of issue
+[#171](https://github.com/ahliweb/omes/issues/171), "ci(architecture):
+enforce upstream-first ownership across OMES, Hermes, Omarchy and AWCMS."
+
 
 ## Conventions
 

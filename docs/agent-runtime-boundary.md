@@ -1,24 +1,32 @@
 # Agent-runtime boundary
 
-> Implements [ADR-0013](adr/0013-agent-runtime-boundary.md) and issue
-> [#85](https://github.com/ahliweb/omes/issues/85). Hermes Agent is the
-> only supported runtime today. This document describes the interface
+> Implements [ADR-0013](adr/0013-agent-runtime-boundary.md), [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md),
+> and issues [#85](https://github.com/ahliweb/omes/issues/85), [#171](https://github.com/ahliweb/omes/issues/171). Hermes Agent is the
+> only supported runtime today (baseline `v2026.9.14`). This document describes the interface
 > OMES needs from *any* agent runtime, the Hermes implementation that
 > currently fulfils it, and the isolation bar a second runtime would have
 > to clear before OMES adds it. It does not announce a second runtime.
 
-## 1. Non-goals
+## 1. Non-goals and upstream-first ownership (ADR-0017)
 
-OMES does not, as part of this boundary:
+Per ADR-0017 and the upstream-first hierarchy (`DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT`), OMES strictly delegates agent runtime behavior to upstream Hermes:
 
-- become a second agent runtime, chat router, or reasoning engine;
-- reimplement Hermes's channels, memory, skills, sessions, browser
+- OMES does **not** become a second agent runtime, chat router, or reasoning engine;
+- OMES does **not** reimplement Hermes's channels, memory, skills, sessions, browser
   automation, cron/webhooks, or model/provider routing;
+- OMES does **not** access Hermes private databases (`messages.db`, `.hermes/`) directly;
+- Follow-up issues delegate specific runtime concerns natively to Hermes:
+  - [#174](https://github.com/ahliweb/omes/issues/174): RuntimeDeployment v2 / profile reference boundary.
+  - [#175](https://github.com/ahliweb/omes/issues/175): delegate native Hermes gateway/service lifecycle.
+  - [#176](https://github.com/ahliweb/omes/issues/176): delegate backup/export to native `hermes backup`/`hermes profile export`.
+  - [#177](https://github.com/ahliweb/omes/issues/177): align container deployments with official Hermes Docker topology.
+  - [#178](https://github.com/ahliweb/omes/issues/178): consume native Hermes health endpoints.
 - add a plugin-loading mechanism — `runtime_supported()` is a fixed
   allowlist of one name (`hermes`), not an extension point;
 - claim a second runtime is supported before its `runtime_supported`
   entry, `runtime_describe` fixture, and isolation requirements (§4) all
   exist and are reviewed.
+
 
 ## 2. The interface OMES needs
 

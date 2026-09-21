@@ -16,22 +16,25 @@
 >
 > This document describes the staged deployment boundary for generic and specialist agents beyond the implemented MVP. It does not claim that the backends in sections 2.3-2.5 are implemented on the current branch.
 
-## 1. Decision summary
+OMES will not become a second agent runtime, chat router, memory engine, skill marketplace, or full PaaS. Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171), Hermes Agent (baseline `v2026.9.14`) remains the authoritative agent runtime and owns reasoning, messaging, memory, skills, model/provider routing, delegation, approvals, and native service management.
 
-OMES will not become a second agent runtime, chat router, memory engine, skill marketplace, or full PaaS. Hermes Agent remains the first supported agent runtime and owns agent reasoning, messaging, memory, skills, model/provider routing, delegation, and approvals.
+OMES owns the host operational and assurance boundary:
 
-OMES owns the operational boundary:
+- host compatibility and installation;
+- placement backend selection (systemd / rootless Compose);
+- host-level resource limits and systemd sandbox hardening;
+- backup, restore, and rollback orchestration;
+- version and provenance records.
 
-- deployment and lifecycle;
-- host and service policy;
-- profile and state isolation;
-- readiness and health evidence;
-- resource limits;
-- backup and rollback classification;
-- version and provenance records;
-- placement backend selection.
+Specific migrations delegating runtime features upstream to Hermes are tracked in atomic issues:
+- [#174](https://github.com/ahliweb/omes/issues/174): RuntimeDeployment v2 / Hermes profile reference boundary.
+- [#175](https://github.com/ahliweb/omes/issues/175): delegate native Hermes gateway/service lifecycle.
+- [#176](https://github.com/ahliweb/omes/issues/176): delegate Hermes backup/export/import to native commands.
+- [#177](https://github.com/ahliweb/omes/issues/177): align container deployments with official Hermes Docker topology.
+- [#178](https://github.com/ahliweb/omes/issues/178): consume native Hermes health endpoints.
 
 The target is a small, auditable control layer that can manage generic and specialist agent deployments without forcing Coolify, Docker, Redis, PostgreSQL, Kubernetes, or a web dashboard onto the MVP.
+
 
 ## 2. Staged implementation
 
