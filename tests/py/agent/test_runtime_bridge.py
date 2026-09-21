@@ -31,7 +31,7 @@ def _load(name: str) -> dict:
 class RuntimeBridgeTestCase(unittest.TestCase):
     def test_agent_service_unit_matches_plan_pys_own_default_shape(self):
         got = runtime_bridge.agent_service_unit("researcher", "user", OMES_ROOT)
-        self.assertEqual(got, "omes-agent-researcher.service")
+        self.assertEqual(got, "hermes-gateway-researcher.service")
         # The bridge's output must equal plan.py's own fallback shape -
         # they must never silently diverge (that is the entire point of
         # having one source of truth).

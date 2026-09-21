@@ -86,20 +86,22 @@ JSON
 @test "omes agent plan prints the unit name and hermes home without mutating" {
   run "$OMES_BIN" agent plan researcher --json
   [ "$status" -eq 0 ]
-  [[ "$output" == *"omes-agent-researcher.service"* ]]
-  [ ! -f "${HOME}/.config/systemd/user/omes-agent-researcher.service" ]
+  [[ "$output" == *"hermes-gateway-researcher.service"* ]]
+  [ ! -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service" ]
 }
 
 @test "omes agent apply --dry-run mutates nothing" {
   run "$OMES_BIN" agent apply researcher --dry-run --json
   [ "$status" -eq 0 ]
-  [ ! -f "${HOME}/.config/systemd/user/omes-agent-researcher.service" ]
+  [ ! -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service" ]
+  [ ! -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service.d/10-omes-agent-resources.conf" ]
 }
 
 @test "omes agent apply --yes creates the unit and reaches ready/healthy" {
   run "$OMES_BIN" agent apply researcher --yes --json
   [ "$status" -eq 0 ]
-  [ -f "${HOME}/.config/systemd/user/omes-agent-researcher.service" ]
+  [ -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service" ]
+  [ -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service.d/10-omes-agent-resources.conf" ]
 }
 
 @test "omes agent status reports state after apply" {
@@ -113,7 +115,7 @@ JSON
   "$OMES_BIN" agent apply researcher --yes --json >/dev/null
   run "$OMES_BIN" agent rollback researcher --yes --json
   [ "$status" -eq 0 ]
-  [ ! -f "${HOME}/.config/systemd/user/omes-agent-researcher.service" ]
+  [ ! -f "${HOME}/.config/systemd/user/hermes-gateway-researcher.service.d/10-omes-agent-resources.conf" ]
 }
 
 @test "global --json flag right after the command word is passed through" {

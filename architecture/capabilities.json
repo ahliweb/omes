@@ -47,9 +47,9 @@
       "maturity": "released_supported",
       "disposition": "delegate",
       "omes_module": "agent",
-      "duplication_allowed": true,
-      "adr_reference": "ADR-0013",
-      "removal_trigger": "issue #175 native hermes gateway lifecycle delegation",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0019",
+      "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/NousResearch/hermes-agent/blob/v2026.9.14/website/docs/user-guide/multi-profile-gateways.md"
       ]

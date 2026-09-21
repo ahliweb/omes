@@ -130,8 +130,10 @@ class TestApplyLifecycle(AgentCliTestCase):
         self._write_manifest("researcher", self._fixture("valid-generic-user.json"))
         proc = self._run("apply", "researcher", "--dry-run", "--json")
         self.assertEqual(proc.returncode, 0)
-        unit_path = self.config_home / "systemd" / "user" / "omes-agent-researcher.service"
+        unit_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service"
+        dropin_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service.d" / "10-omes-agent-resources.conf"
         self.assertFalse(unit_path.exists())
+        self.assertFalse(dropin_path.exists())
         status = self._run("status", "researcher", "--json")
         self.assertEqual(json.loads(status.stdout)["state"], "declared")
 
@@ -150,18 +152,22 @@ class TestApplyLifecycle(AgentCliTestCase):
         self.assertEqual(proc.returncode, 0, proc.stderr)
         result = json.loads(proc.stdout)
         self.assertIn(result["state"], ("healthy", "degraded"))
-        unit_path = self.config_home / "systemd" / "user" / "omes-agent-researcher.service"
+        unit_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service"
+        dropin_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service.d" / "10-omes-agent-resources.conf"
         self.assertTrue(unit_path.exists())
+        self.assertTrue(dropin_path.exists())
 
     def test_apply_is_idempotent(self):
         first = self._apply()
         self.assertEqual(first.returncode, 0, first.stderr)
         second = self._apply()
         self.assertEqual(second.returncode, 0, second.stderr)
-        # Running apply twice must not error and must leave the unit in
+        # Running apply twice must not error and must leave the unit and drop-in in
         # place (not duplicated, not removed).
-        unit_path = self.config_home / "systemd" / "user" / "omes-agent-researcher.service"
+        unit_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service"
+        dropin_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service.d" / "10-omes-agent-resources.conf"
         self.assertTrue(unit_path.exists())
+        self.assertTrue(dropin_path.exists())
 
     def test_status_reflects_unit_active(self):
         self._apply()
@@ -178,7 +184,7 @@ class TestApplyLifecycle(AgentCliTestCase):
         # channel layer is not_applicable without TELEGRAM_BOT_TOKEN.
         self.assertEqual(result["layers"]["channel"]["status"], "not_applicable")
 
-    def test_rollback_removes_unit_but_preserves_hermes_home(self):
+    def test_rollback_removes_dropin_but_preserves_hermes_home(self):
         self._apply()
         hermes_home = self.home / "agents" / "researcher" / "hermes"
         hermes_home.mkdir(parents=True, exist_ok=True)
@@ -186,8 +192,8 @@ class TestApplyLifecycle(AgentCliTestCase):
 
         proc = self._run("rollback", "researcher", "--yes", "--json")
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        unit_path = self.config_home / "systemd" / "user" / "omes-agent-researcher.service"
-        self.assertFalse(unit_path.exists())
+        dropin_path = self.config_home / "systemd" / "user" / "hermes-gateway-researcher.service.d" / "10-omes-agent-resources.conf"
+        self.assertFalse(dropin_path.exists())
         self.assertTrue((hermes_home / "SOUL.md").exists())
 
         status = self._run("status", "researcher", "--json")

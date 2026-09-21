@@ -98,13 +98,111 @@ case "${1:-}" in
     shift || true
     case "${1:-}" in
       install)
-        exit "${SHIM_HERMES_GATEWAY_INSTALL_EXIT:-0}"
+        if [[ "${SHIM_HERMES_GATEWAY_INSTALL_EXIT:-0}" != "0" ]]; then
+          printf '%s\n' "${SHIM_HERMES_GATEWAY_INSTALL_OUTPUT:-FAIL: simulated gateway install failure}" >&2
+          exit "${SHIM_HERMES_GATEWAY_INSTALL_EXIT}"
+        fi
+        prof="default"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --profile)
+              prof="$2"
+              shift 2
+              ;;
+            *)
+              shift
+              ;;
+          esac
+        done
+        if [[ "${SHIM_HERMES_MULTIPLEXED:-0}" == "1" ]]; then
+          printf 'multiplexed gateway already active; secondary per-profile service not created\n'
+          exit 0
+        fi
+        unit_name="hermes-gateway.service"
+        if [[ "$prof" != "default" ]]; then
+          unit_name="hermes-gateway-${prof}.service"
+        fi
+        user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+        mkdir -p "$user_systemd_dir"
+        unit_file="${user_systemd_dir}/${unit_name}"
+        if [[ ! -f "$unit_file" ]]; then
+          printf '[Unit]\nDescription=Hermes Gateway (%s)\n\n[Service]\nExecStart=/usr/local/bin/hermes gateway start\n' "$prof" > "$unit_file"
+        fi
+        if [[ -n "${SHIM_USER_ENABLED_FILE:-}" ]]; then
+          mkdir -p "$(dirname "$SHIM_USER_ENABLED_FILE")"
+          grep -qx "$unit_name" "$SHIM_USER_ENABLED_FILE" 2>/dev/null || printf '%s\n' "$unit_name" >> "$SHIM_USER_ENABLED_FILE"
+        fi
+        exit 0
+        ;;
+      start)
+        prof="default"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --profile)
+              prof="$2"
+              shift 2
+              ;;
+            *)
+              shift
+              ;;
+          esac
+        done
+        unit_name="hermes-gateway.service"
+        if [[ "$prof" != "default" ]]; then
+          unit_name="hermes-gateway-${prof}.service"
+        fi
+        systemctl --user start "$unit_name"
+        exit $?
+        ;;
+      stop)
+        prof="default"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --profile)
+              prof="$2"
+              shift 2
+              ;;
+            *)
+              shift
+              ;;
+          esac
+        done
+        unit_name="hermes-gateway.service"
+        if [[ "$prof" != "default" ]]; then
+          unit_name="hermes-gateway-${prof}.service"
+        fi
+        systemctl --user stop "$unit_name"
+        exit $?
+        ;;
+      restart)
+        prof="default"
+        while [[ $# -gt 0 ]]; do
+          case "$1" in
+            --profile)
+              prof="$2"
+              shift 2
+              ;;
+            *)
+              shift
+              ;;
+          esac
+        done
+        unit_name="hermes-gateway.service"
+        if [[ "$prof" != "default" ]]; then
+          unit_name="hermes-gateway-${prof}.service"
+        fi
+        systemctl --user restart "$unit_name"
+        exit $?
         ;;
       status)
+        if [[ "${SHIM_HERMES_MULTIPLEXED:-0}" == "1" ]]; then
+          printf 'multiplexed gateway running (profiles: default, researcher)\n'
+          exit 0
+        fi
         printf '%s\n' "${SHIM_HERMES_GATEWAY_STATUS_OUTPUT:-running}"
         exit "${SHIM_HERMES_GATEWAY_STATUS_EXIT:-0}"
         ;;
-      setup | start | stop)
+      setup)
         exit 0
         ;;
       *)

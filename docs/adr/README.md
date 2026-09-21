@@ -30,6 +30,7 @@ architecture and state model."
 | [0016](0016-herman-web-panel-reference.md) | Herman is a UX reference, not an OMES dependency | Accepted |
 | [0017](0017-upstream-first-ownership-and-boundary-enforcement.md) | Upstream-first ownership and architecture boundary enforcement | Accepted |
 | [0018](0018-runtimedeployment-v2-and-hermes-profile-references.md) | RuntimeDeployment v2 contract and Hermes profile references | Accepted |
+| [0019](0019-delegate-native-hermes-gateway-lifecycle.md) | Delegate native agent deployment lifecycle to Hermes CLI | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -43,6 +44,10 @@ enforce upstream-first ownership across OMES, Hermes, Omarchy and AWCMS."
 ADR 0018 was authored on 2026-09-21 as part of issue
 [#174](https://github.com/ahliweb/omes/issues/174), "refactor(agent):
 introduce RuntimeDeployment v2 with Hermes profile references."
+
+ADR 0019 was authored on 2026-09-21 as part of issue
+[#175](https://github.com/ahliweb/omes/issues/175), "refactor(hermes):
+delegate native agent deployment lifecycle to Hermes CLI."
 
 
 ## Conventions

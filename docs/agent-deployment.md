@@ -194,9 +194,10 @@ A privilege mismatch fails with exit 5 before any mutation.
 ### 3.2 `apply`: check -> plan -> backup -> mutate -> verify
 
 1. **check**: load + validate the manifest; verify privilege matches
-   `serviceMode`; verify `systemctl` is on `PATH`.
-2. **plan**: pure computation (`lib/omes/py/agent/plan.py`) of the unit
-   name (`omes-agent-<name>.service`), the agent's isolated
+   `serviceMode`; verify `systemctl` and `hermes` are on `PATH`.
+2. **plan**: pure computation (`lib/omes/py/agent/plan.py`) of the upstream unit
+   name (`hermes-gateway[-<profile>].service`, ADR-0019), legacy unit name
+   (`omes-agent-<name>.service`), the agent's isolated
    `HERMES_HOME` (`~/agents/<name>/hermes` for `user` mode; a
    root-owned equivalent tree for `system` mode - never shared between
    agents), the resource-limit drop-in lines, and the secret
@@ -206,9 +207,12 @@ A privilege mismatch fails with exit 5 before any mutation.
    (issue #82's default classes: `config`, `skills`) scoped to that
    `HERMES_HOME`. A fresh agent with no prior `HERMES_HOME` has nothing
    to back up yet - not an error.
-4. **mutate**: writes the unit file and a resource/hardening drop-in
-   (`10-omes-agent-resources.conf`), reloads systemd, and
-   `enable --now`s the unit.
+4. **mutate**:
+   - detects and cleans up any legacy `omes-agent-<name>.service` unit or drop-ins (stopping and disabling them);
+   - delegates base unit file installation to upstream `hermes gateway install` (Hermes owns base unit lifecycle; in multiplexed mode, separate unit creation is skipped);
+   - writes *only* the OMES resource/hardening drop-in overlay (`10-omes-agent-resources.conf`);
+   - reloads systemd (`daemon-reload`);
+   - enables and starts the service via `hermes gateway start` / `systemctl enable --now`.
 5. **verify**: confirms the unit is active; then runs the health model
    once more and records `healthy` or `degraded` accordingly.
 
@@ -221,13 +225,16 @@ TTY nor `--yes` it refuses (matching every other OMES mutating command).
 Re-running `apply` against an already-`ready`/`healthy`/`degraded`
 deployment restarts the same cycle from `preflighted` rather than being
 rejected - this is what makes `apply` idempotent (issue #87's
-acceptance criterion): the unit/drop-in content is deterministic from
+acceptance criterion): the drop-in overlay content is deterministic from
 the manifest, and `systemctl enable --now`/`daemon-reload` are
 themselves idempotent.
 
-### 3.3 Unit and drop-in content
+### 3.3 Upstream base unit and OMES drop-in overlay
 
-The unit file's `ExecStart` runs Hermes's own gateway entrypoint
+Under ADR-0019, base service unit files are installed and owned exclusively
+by upstream Hermes (`hermes gateway install`). OMES never generates or
+overwrites the base service unit definition. Instead, OMES manages only
+the host resource/hardening drop-in overlay:
 (`hermes gateway start --home <agent HERMES_HOME>`) - OMES never
 reimplements the tool-execution loop or messaging. A secret reference,
 if any is declared, becomes `EnvironmentFile=-<HERMES_HOME>/.env` (the
@@ -310,8 +317,8 @@ for the full contract this implements
 
 ## 6. Isolation
 
-Every agent gets its own `HERMES_HOME`, its own systemd unit
-(`omes-agent-<name>.service`), and its own state directory. Nothing is
+Every agent gets its own `HERMES_HOME`, its own upstream systemd unit
+(`hermes-gateway[-<profile>].service`, ADR-0019), and its own state directory. Nothing is
 shared between two agents by default: not sessions, not memory, not
 browser profiles, not credentials, not the resource/hardening drop-in.
 Declaring a second manifest with a different `metadata.name` produces an
@@ -327,21 +334,19 @@ real values is an operator responsibility outside this tool's scope
 (the same boundary `omes agent-backup`/`hermesbackup` already draws -
 see [docs/hermes-backup.md](hermes-backup.md)).
 
-## 7a. Relationship to `lib/omes/runtime.sh` (issue #85)
+## 7a. Relationship to `lib/omes/runtime.sh` (issues #85, #175)
 
-[`lib/omes/runtime.sh`](../lib/omes/runtime.sh) (issue #85, ADR-0013)
+[`lib/omes/runtime.sh`](../lib/omes/runtime.sh) (issue #85, ADR-0013, ADR-0019)
 defines `runtime_supported`/`runtime_require`/`runtime_describe`/
 `runtime_home`/`runtime_service_unit` for the **shared** Hermes gateway
-service (`hermes-gateway`, one per user/system scope). A per-agent unit
-(`omes-agent-<name>.service`, one per declared agent) is a different
-shape than `runtime_service_unit` returns (a single fixed unit name per
-scope), so `lib/omes/runtime.sh` now defines a second, sibling function
-for it instead of overloading `runtime_service_unit`:
-**`runtime_agent_service_unit <name> <scope>`** prints
-`omes-agent-<name>.service` for a given agent name/scope, and is the one
+service (`hermes-gateway`, one per user/system scope). For individual
+profiles, `lib/omes/runtime.sh` defines:
+**`runtime_agent_service_unit <profile-ref> <scope>`** which prints
+`hermes-gateway[-<profile-ref>].service` (`hermes-gateway.service` for default profile,
+`hermes-gateway-<profile-ref>.service` otherwise; ADR-0019), and is the one
 source of truth for that naming shape (see
 [docs/agent-runtime-boundary.md](agent-runtime-boundary.md) section 2 and
-[ADR-0013](adr/0013-agent-runtime-boundary.md)'s "Consequences" update).
+[ADR-0019](adr/0019-delegate-native-hermes-gateway-lifecycle.md)).
 
 `lib/omes/py/agent/runtime_bridge.py` reads it via the same
 `bash -c 'source ...; <function> <argv>'` bridge pattern
