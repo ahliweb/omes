@@ -864,6 +864,7 @@ function leafCount(n) {
 }
 
 function radialLayout(node, depth, a0, a1, parent, out) {
+  if (!node) return out;
   const mid = (a0 + a1) / 2;
   const rad = [0, 19, 31, 43][Math.min(depth, 3)];
   const pos = {

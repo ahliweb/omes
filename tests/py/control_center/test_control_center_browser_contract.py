@@ -59,6 +59,7 @@ class ControlCenterBrowserContractTests(unittest.TestCase):
         self.assertIn('aria-modal="true"', self.html)
         self.assertIn('aria-live="polite"', self.html)
         self.assertIn('aria-labelledby="operation-drawer-title"', self.html)
+        self.assertIn("if (!node) return out;", self.html)
         self.assertNotIn('<div onClick="{{ toggleDrawer }}"', self.html)
 
     def test_generated_data_contains_expected_contract_sections(self) -> None:
