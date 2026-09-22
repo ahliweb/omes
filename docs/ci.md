@@ -39,6 +39,7 @@ the repository, comment on pull requests, or write security-events.
 | `check-links` | Runs `scripts/check-links.py` (§5) over every tracked `*.md` file. | **Yes**, for a link whose *target file* does not exist. Anchor-only mismatches are printed as advisory warnings. |
 | `check-contracts` | Runs `scripts/check-contracts.py` over `contracts/**/fixtures` against their JSON Schema specifications. | **Yes.** |
 | `check-architecture` | Runs `scripts/check-architecture.py` to enforce ADR-0017 capability registry and layer boundaries. | **Yes.** |
+| `check-control-center-data` | Runs `scripts/generate-control-center-data.py --check` to catch a stale `ui/control-center/data.js` (issue #211) — see [ui/control-center/README.md](../ui/control-center/README.md). | **Yes.** |
 
 
 ### 1.2 `.github/workflows/compatibility.yml`

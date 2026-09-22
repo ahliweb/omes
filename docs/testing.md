@@ -211,6 +211,29 @@ mapping/rollback validation, reconciliation's inability to overwrite an OMES log
 `urllib`, never a real Coolify instance - see [`docs/coolify-adapter.md`](coolify-adapter.md)
 section 7 for the opt-in `OMES_COOLIFY_LIVE=1` real-integration gap this leaves).
 
+### 2.6 Control Center UI prototype data (issue #211)
+
+```bash
+python3 scripts/generate-control-center-data.py          # regenerate ui/control-center/data.js
+python3 scripts/generate-control-center-data.py --check   # fails if it is stale
+```
+
+`ui/control-center/index.html` is a reference-only, presentation prototype
+(the functional Control Center screens are **not implemented yet** -
+tracked in [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201)).
+Its example data is generated - not hand-typed - from
+`contracts/control-center/v1/fixtures/*/valid-*.json` (the same fixtures
+§2.1a's `scripts/check-contracts.py` validates) plus
+`ui/control-center/sample-fleet.json`, a small supplementary sample for
+fleet telemetry that has no v1 contract fixture yet. `--check` is run by
+`tests/run.sh` and `scripts/lint.sh` (job `check-control-center-data` in
+CI, see [docs/ci.md](ci.md) §1.1) so a fixture change that isn't followed
+by regenerating `data.js` fails the build instead of silently drifting.
+`tests/py/control_center/test_generate_control_center_data.py` (run by
+§2.5's `python3 -m unittest discover -s tests/py -t .`) additionally
+asserts the generator's output is deterministic and that the committed
+`data.js` matches it.
+
 ## 3. Evidence and release gates
 
 `docs/business/release-gates.md` cites this test suite as the proof for several of its

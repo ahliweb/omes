@@ -1,8 +1,12 @@
 # OMES Control Center — UI/UX Design System and Screen Architecture
 
 > Status: normative UI/UX design baseline (adopted in [ADR-0023](adr/0023-control-center-ui-ux-design-system.md)).
-> Interactive prototype: [`ui/control-center/index.html`](../ui/control-center/index.html).
-> Target epics and issues: [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183).
+> Interactive prototype: [`ui/control-center/index.html`](../ui/control-center/index.html) — a
+> reference-only, presentation prototype. Its example data is generated from
+> [contracts/control-center/v1](../contracts/control-center/v1) fixtures (see §8). The functional
+> Control Center screens themselves are **not implemented yet** (tracked in
+> [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201)).
+> Target epics and issues: [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183), [#211](https://github.com/ahliweb/omes/issues/211) (redesign v2, data-driven prototype).
 
 ---
 
@@ -190,3 +194,44 @@ In addition to the 9 operational screens, the prototype provides 3 dedicated dia
 2. **Approval Enforcement**: The UI must prevent execution of destructive operations without explicit confirmation from an authenticated `Owner` role.
 3. **Fail-Closed Presentation**: If telemetry data is stale, corrupted, or unreachable, the UI must render an amber warning or red failure badge; it must never assume or fabricate a green healthy state.
 4. **Standard Admin Shell Reuse**: All screens implemented in `ahliweb/awcms` must reuse existing admin components (`AdminLayout`, `admin-screens.css`, `status-badge`, `stat-grid`, `data-table`) rather than introducing an unvetted third-party CSS/JS framework.
+
+---
+
+## 8. Data Provenance (issue #211)
+
+The prototype's domain data (fleet, deployments, jobs/operations, health checks, backups, audit
+events, workers, and the Hermes orchestration tree/events) is **not** hand-typed in
+`ui/control-center/index.html`. It is generated into `ui/control-center/data.js`
+(`window.OMES_CC_DATA`, loaded before the prototype's own script runs) by
+[`scripts/generate-control-center-data.py`](../scripts/generate-control-center-data.py) from:
+
+1. `contracts/control-center/v1/fixtures/*/valid-*.json` — the same fixtures
+   `scripts/check-contracts.py` validates against their JSON Schemas.
+2. `ui/control-center/sample-fleet.json` — a small, clearly-labelled supplementary sample for
+   fleet-level telemetry (CPU/memory/disk, OS, agent version, uptime) that has no v1 contract
+   fixture yet.
+
+The Progress screen's milestone/issue roadmap snapshot has no contract fixture at all (it
+describes GitHub issue backlog state, not a runtime contract), so it is kept as a small constant
+table inside that script instead. Generation is deterministic (sorted fixture paths, sorted JSON
+keys, no wall-clock timestamp); `--check` fails the build if a fixture changes without
+regenerating `data.js` (wired into `tests/run.sh`, `scripts/lint.sh`, and the
+`check-control-center-data` CI job — see [docs/ci.md](ci.md) and [docs/testing.md](testing.md)).
+See [`ui/control-center/README.md`](../ui/control-center/README.md) for the exact regenerate
+command.
+
+## 9. Accessibility (issue #211)
+
+- **Contrast**: every body/label text token in the palette in §2.1 (`#7A8894` and lighter against
+  the canvas/panel backgrounds in that same palette) meets or exceeds WCAG AA (4.5:1) for normal
+  text. A dimmer token (e.g. something around `#4E5A66` on `#0B0F13`) would fail and must not be
+  introduced without re-checking contrast.
+- **Keyboard focus**: `:focus-visible` renders a visible cyan outline on every interactive
+  element (nav buttons, role switcher, table rows, drawer controls).
+- **Keyboard reachability**: navigation items and clickable fleet/server rows are native
+  `<button>` elements (not click-only `<div>`s), so they are reachable and activatable via Tab
+  and Enter/Space without a custom key-handling layer.
+- **Reduced motion**: `@media (prefers-reduced-motion: reduce)` collapses all `omes*` animation
+  and transition durations to effectively zero for users who ask for it at the OS/browser level.
+- **Document metadata**: `<html lang="id">` (the prototype's UI copy is Indonesian) and a
+  `<title>` are both present.

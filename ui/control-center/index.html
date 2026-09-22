@@ -1,13 +1,15 @@
 <!DOCTYPE html>
-<html>
+<html lang="id">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <script src="./support.js"></script>
+<script src="./data.js"></script>
 </head>
 <body>
 <x-dc>
 <helmet>
+<title>OMES Control Center</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
 <link href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300..800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
@@ -18,6 +20,17 @@
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-thumb { background:#242C35; border-radius:6px; }
   ::-webkit-scrollbar-track { background:transparent; }
+  /* Accessibility (issue #211): visible keyboard focus on every interactive
+     element, and an opt-out from the omes* motion for users who ask for it. */
+  :focus-visible { outline:2px solid #5FC8D6; outline-offset:2px; border-radius:4px; }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration:.001ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:.001ms !important;
+      scroll-behavior:auto !important;
+    }
+  }
   @keyframes omesPulse { 0%,100% { opacity:1 } 50% { opacity:.35 } }
   @keyframes omesSlide { from { opacity:0; transform:translateY(6px) } to { opacity:1; transform:none } }
   @keyframes omesTravel { 0% { left:-14%; opacity:0 } 12% { opacity:1 } 88% { opacity:1 } 100% { left:100%; opacity:0 } }
@@ -26,7 +39,7 @@
   @keyframes omesRing { 0% { transform:scale(.7); opacity:.75 } 100% { transform:scale(2.4); opacity:0 } }
   @keyframes omesRise { from { opacity:0; transform:translateY(-4px) } to { opacity:1; transform:none } }
   @keyframes omesFlowLine { to { stroke-dashoffset:-104 } }
-  @keyframes omesPop { 0% { opacity:0; transform:translate(-50%,4px) scale(.94) } 12% { opacity:1; transform:translate(-50%,0) scale(1) } 82% { opacity:1; transform:translate(-50%,0) scale(1) } 100% { opacity:0; transform:translate(-50%,-6px) scale(.98) } }
+  @keyframes omesPop { 0% { opacity:0; transform:translateY(5px) scale(.96) } 100% { opacity:1; transform:none } }
   @keyframes omesFall { 0% { top:-30%; opacity:0 } 15% { opacity:1 } 85% { opacity:1 } 100% { top:100%; opacity:0 } }
 </style>
 </helmet>
@@ -105,7 +118,7 @@
                 <span>Host</span><span>CPU</span><span>Memori</span><span style="text-align:right">Sync</span>
               </div>
               <sc-for list="{{ fleet }}" as="s" hint-placeholder-count="12">
-                <div onClick="{{ s.open }}" style="display:grid; grid-template-columns:minmax(0,1.6fr) 90px 90px 70px; gap:12px; padding:11px 18px; border-bottom:1px solid #191F26; cursor:pointer; align-items:center" style-hover="background:#1A2027">
+                <button onClick="{{ s.open }}" style="all:unset; box-sizing:border-box; width:100%; font:inherit; color:inherit; text-align:left; display:grid; grid-template-columns:minmax(0,1.6fr) 90px 90px 70px; gap:12px; padding:11px 18px; border-bottom:1px solid #191F26; cursor:pointer; align-items:center" style-hover="background:#1A2027">
                   <div style="display:flex; align-items:center; gap:10px; min-width:0">
                     <span style="{{ s.dot }}"></span>
                     <div style="display:flex; flex-direction:column; min-width:0; gap:1px">
@@ -122,7 +135,7 @@
                     <div style="height:4px; background:#222A32; border-radius:3px; overflow:hidden"><div style="{{ s.barMem }}"></div></div>
                   </div>
                   <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6; text-align:right">{{ s.last }}</span>
-                </div>
+                </button>
               </sc-for>
             </div>
 
@@ -146,14 +159,14 @@
         <div style="display:flex; flex-wrap:wrap; gap:18px; align-items:flex-start">
           <div style="flex:1 1 260px; max-width:320px; background:#151A20; border:1px solid #242C35; border-radius:12px; padding:10px; display:flex; flex-direction:column; gap:2px">
             <sc-for list="{{ serverList }}" as="s" hint-placeholder-count="12">
-              <div onClick="{{ s.pick }}" style="{{ s.rowStyle }}" style-hover="background:#1A2027">
+              <button onClick="{{ s.pick }}" style="{{ s.rowStyle }}" style-hover="background:#1A2027">
                 <span style="{{ s.dot }}"></span>
                 <div style="display:flex; flex-direction:column; min-width:0; flex:1; gap:1px">
                   <span style="font-family:'JetBrains Mono',monospace; font-size:12px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.id }}</span>
                   <span style="font-size:10.5px; color:#8B99A6; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">{{ s.role }}</span>
                 </div>
                 <span style="{{ s.driftStyle }}">{{ s.driftLabel }}</span>
-              </div>
+              </button>
             </sc-for>
           </div>
 
@@ -394,7 +407,7 @@
               <div style="padding:12px 16px; display:flex; flex-direction:column; gap:10px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.5">
                 <sc-for list="{{ hermesLog }}" as="l" hint-placeholder-count="5">
                   <div style="display:flex; gap:10px; animation:omesRise .35s ease-out" key="{{ l.t }}">
-                    <span style="color:#4E5A66; flex:none">{{ l.t }}</span>
+                    <span style="color:#7A8894; flex:none">{{ l.t }}</span>
                     <span style="color:#5FC8D6; flex:none">{{ l.a }}</span>
                     <span style="color:#A9B6C2">{{ l.m }}</span>
                   </div>
@@ -420,9 +433,9 @@
             </sc-for>
           </div>
           <div style="background:#0B0F13; border:1px solid #242C35; border-radius:12px; padding:16px 18px; font-family:'JetBrains Mono',monospace; font-size:12px; line-height:1.7; color:#A9B6C2">
-            <div style="color:#4E5A66">$ omes doctor --tenant tnt_8f21c --format summary</div>
+            <div style="color:#7A8894">$ omes doctor --tenant tnt_8f21c --format summary</div>
             <div><span style="color:#6FD08C">PASS</span> 6 · <span style="color:#E8B44A">WARN</span> 2 · <span style="color:#E86D5B">FAIL</span> 1</div>
-            <div style="color:#4E5A66">remediasi tersedia untuk 2 temuan → omes doctor --fix --dry-run</div>
+            <div style="color:#7A8894">remediasi tersedia untuk 2 temuan → omes doctor --fix --dry-run</div>
           </div>
         </div>
       </sc-if>
@@ -507,7 +520,7 @@
             <h2 style="margin:0; font-size:13.5px; font-weight:650">Daftarkan worker baru</h2>
             <p style="margin:0; font-size:12.5px; color:#8B99A6; line-height:1.55">Jalankan di host target. Token enrollment sekali pakai, berlaku 15 menit, dan mengikat worker ke tenant ini.</p>
             <div style="background:#0B0F13; border:1px solid #242C35; border-radius:9px; padding:12px 13px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.65; color:#A9B6C2; overflow:auto">
-              <div style="color:#4E5A66">$ curl -fsSL https://omes.sh/enroll | \</div>
+              <div style="color:#7A8894">$ curl -fsSL https://omes.sh/enroll | \</div>
               <div>&nbsp;&nbsp;sudo bash -s -- \</div>
               <div>&nbsp;&nbsp;--tenant <span style="color:#5FC8D6">tnt_8f21c</span> \</div>
               <div>&nbsp;&nbsp;--token <span style="color:#5FC8D6">enr_9f2b…c41</span></div>
@@ -520,6 +533,122 @@
                 <button style="background:#5FC8D6; border:none; color:#08171A; border-radius:7px; padding:7px 13px; font:inherit; font-size:12px; font-weight:700; cursor:pointer">Setujui</button>
                 <button style="background:transparent; border:1px solid #3A2326; color:#E9A9A0; border-radius:7px; padding:7px 13px; font:inherit; font-size:12px; font-weight:600; cursor:pointer">Blokir</button>
               </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isLive }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex; flex-direction:column; gap:18px">
+          <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px">
+            <sc-for list="{{ liveStat }}" as="s" hint-placeholder-count="4">
+              <div style="background:#151A20; border:1px solid #242C35; border-radius:11px; padding:13px 16px; display:flex; flex-direction:column; gap:4px">
+                <span style="font-size:11px; color:#8B99A6; letter-spacing:.03em">{{ s.k }}</span>
+                <span style="font-family:'JetBrains Mono',monospace; font-size:19px; font-weight:600">{{ s.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="background:#0B0F13; border:1px solid #242C35; border-radius:14px; overflow:hidden">
+            <div style="padding:13px 16px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:10px; flex-wrap:wrap">
+              <span style="font-size:11.5px; color:#8B99A6">Kedalaman</span>
+              <div style="display:flex; gap:6px; flex-wrap:wrap">
+                <sc-for list="{{ depthChips }}" as="d" hint-placeholder-count="4">
+                  <button onClick="{{ d.pick }}" style="{{ d.style }}">{{ d.name }}</button>
+                </sc-for>
+              </div>
+              <span style="flex:1"></span>
+              <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#8B99A6">{{ depthNote }}</span>
+              <div style="display:flex; gap:3px; background:#12171D; border:1px solid #242C35; border-radius:8px; padding:3px">
+                <button onClick="{{ setViewTree }}" style="{{ viewTree }}">Pohon</button>
+                <button onClick="{{ setViewOmni }}" style="{{ viewOmni }}">Omni</button>
+              </div>
+            </div>
+
+            <sc-if value="{{ isOmniView }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex; flex-wrap:wrap; align-items:stretch">
+                <div style="display:flex; flex-direction:column; flex:1 1 340px; min-width:0; height:520px">
+                <div style="position:relative; flex:1 1 auto; min-height:0; overflow:hidden">
+                  <sc-for list="{{ orbitRings }}" as="r" hint-placeholder-count="3">
+                    <div style="{{ r.style }}"></div>
+                  </sc-for>
+                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style="position:absolute; inset:0; width:100%; height:100%">
+                    <sc-for list="{{ orbitEdges }}" as="e" hint-placeholder-count="10">
+                      <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" style="{{ e.base }}"></line>
+                    </sc-for>
+                    <sc-for list="{{ orbitEdges }}" as="e" hint-placeholder-count="10">
+                      <line x1="{{ e.x1 }}" y1="{{ e.y1 }}" x2="{{ e.x2 }}" y2="{{ e.y2 }}" style="{{ e.flow }}"></line>
+                    </sc-for>
+                  </svg>
+                  <sc-for list="{{ orbitNodes }}" as="n" hint-placeholder-count="11">
+                    <div style="{{ n.wrap }}">
+                      <div style="{{ n.disc }}">
+                        <span style="{{ n.ring }}"></span>
+                        <span>{{ n.initial }}</span>
+                      </div>
+                    </div>
+                  </sc-for>
+                </div>
+                  <div style="{{ omniActive.card }}" key="{{ omniActive.msg }}">
+                    <span style="{{ omniActive.kindStyle }}">{{ omniActive.kind }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10px; font-weight:600; color:#9FB0BE; background:#12171D; border:1px solid #2A333D; border-radius:5px; padding:1px 6px">{{ omniActive.code }}</span>
+                    <span style="font-size:12px; font-weight:650">{{ omniActive.name }}</span>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:10px; color:#8B99A6">{{ omniActive.level }}</span>
+                    <span style="flex:1 1 100%; font-size:11.5px; color:#C6D1DA; line-height:1.45; text-wrap:pretty">{{ omniActive.msg }}</span>
+                  </div>
+                </div>
+                <div style="flex:0 1 260px; min-width:210px; border-left:1px solid #1E262E; padding:12px 10px; display:flex; flex-direction:column; gap:2px; overflow:auto; max-height:520px">
+                  <sc-for list="{{ orbitLegend }}" as="l" hint-placeholder-count="13">
+                    <div style="{{ l.row }}">
+                      <span style="{{ l.dot }}"></span>
+                      <span style="{{ l.nameStyle }}">{{ l.name }}</span>
+                      <span style="{{ l.codeStyle }}">{{ l.code }}</span>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isTreeView }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex; flex-direction:column">
+            <sc-for list="{{ liveRows }}" as="n" hint-placeholder-count="11">
+              <div style="{{ n.row }}">
+                <span style="{{ n.rail }}"></span>
+                <span style="{{ n.elbow }}"></span>
+                <div style="{{ n.disc }}">
+                  <span style="{{ n.ring }}"></span>
+                  <span>{{ n.initial }}</span>
+                </div>
+                <div style="display:flex; flex-direction:column; gap:2px; min-width:0; flex:1 1 200px">
+                  <span style="{{ n.levelStyle }}">{{ n.level }} · {{ n.kidsLabel }}</span>
+                  <span style="{{ n.nameStyle }}">{{ n.name }}</span>
+                  <span style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#8B99A6">{{ n.role }}</span>
+                </div>
+                <sc-if value="{{ n.active }}" hint-placeholder-val="{{ false }}">
+                  <div style="{{ n.popup }}" key="{{ n.popupMsg }}">
+                    <span style="{{ n.popupKindStyle }}">{{ n.popupKind }}</span>
+                    <span style="font-size:11.5px; color:#E6EDF3; line-height:1.45; text-wrap:pretty">{{ n.popupMsg }}</span>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+              </div>
+            </sc-if>
+          </div>
+
+          <div style="background:#151A20; border:1px solid #242C35; border-radius:12px; overflow:hidden">
+            <div style="padding:13px 18px; border-bottom:1px solid #1E262E; display:flex; align-items:center; gap:9px">
+              <span style="width:6px; height:6px; border-radius:50%; background:#5FC8D6; animation:omesPulse 1.8s ease-in-out infinite"></span>
+              <h2 style="margin:0; font-size:13px; font-weight:650">Aliran aktivitas</h2>
+            </div>
+            <div style="padding:13px 18px; display:flex; flex-direction:column; gap:9px; font-size:12px">
+              <sc-for list="{{ liveFeed }}" as="f" hint-placeholder-count="6">
+                <div style="{{ f.row }}">
+                  <span style="{{ f.kindStyle }}">{{ f.kind }}</span>
+                  <span style="{{ f.agentStyle }}">{{ f.a }}</span>
+                  <span style="color:#C6D1DA; line-height:1.45">{{ f.m }}</span>
+                </div>
+              </sc-for>
             </div>
           </div>
         </div>
@@ -616,7 +745,7 @@
         </div>
         <p style="margin:0; font-size:12.5px; color:#8B99A6; line-height:1.55">Dry-run pada kontrak OMES v1. Tidak ada perubahan diterapkan sampai disetujui owner.</p>
         <div style="background:#0B0F13; border:1px solid #242C35; border-radius:10px; padding:14px; font-family:'JetBrains Mono',monospace; font-size:11.5px; line-height:1.7; color:#A9B6C2">
-          <div style="color:#4E5A66">$ omes apply --host omes-app-01 --dry-run</div>
+          <div style="color:#7A8894">$ omes apply --host omes-app-01 --dry-run</div>
           <div><span style="color:#5FC8D6">plan</span> 3 perubahan · 0 destruktif</div>
           <div style="color:#E9A9A0">− pm.max_children = 16</div>
           <div style="color:#9FDDB4">+ pm.max_children = 48</div>
@@ -624,7 +753,7 @@
           <div style="color:#9FDDB4">+ deny 5432/tcp from 0.0.0.0/0</div>
           <div style="color:#E9A9A0">− Automatic-Reboot "true"</div>
           <div style="color:#9FDDB4">+ Automatic-Reboot "false"</div>
-          <div style="color:#4E5A66">snapshot rollback: snap-9932 (otomatis)</div>
+          <div style="color:#7A8894">snapshot rollback: snap-9932 (otomatis)</div>
         </div>
         <div style="display:flex; flex-direction:column; gap:9px; background:#151A20; border:1px solid #242C35; border-radius:10px; padding:14px">
           <span style="font-size:12.5px; font-weight:650">Dampak</span>
@@ -646,25 +775,29 @@
 </div>
 
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;defaultScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;servers&quot;,&quot;deployments&quot;,&quot;operations&quot;,&quot;hermes&quot;,&quot;health&quot;,&quot;backup&quot;,&quot;audit&quot;,&quot;workers&quot;,&quot;arch&quot;,&quot;progress&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototipe&quot;},&quot;livePolling&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipe&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;defaultScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;servers&quot;,&quot;deployments&quot;,&quot;operations&quot;,&quot;hermes&quot;,&quot;live&quot;,&quot;health&quot;,&quot;backup&quot;,&quot;audit&quot;,&quot;workers&quot;,&quot;arch&quot;,&quot;progress&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Prototipe&quot;},&quot;livePolling&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Prototipe&quot;}}">
 const A = { cyan:'#5FC8D6', ok:'#6FD08C', warn:'#E8B44A', err:'#E86D5B', vio:'#8B9CF7' };
 const P = { bg:'#0E1216', panel:'#151A20', panel2:'#1A2027', line:'#242C35', line2:'#1E262E', ink:'#E6EDF3', mut:'#8B99A6', dim:'#8B99A6' };
 const mono = "'JetBrains Mono',ui-monospace,monospace";
 
-const SERVERS = [
-  { id:'omes-edge-01', host:'edge-01.jkt.ahliweb.net', os:'Ubuntu 26.04', role:'Edge / Caddy', state:'ok',    drift:0, modules:7, cpu:14, mem:38, disk:44, uptime:'41d 06:12', agent:'0.3.0', last:'12s' },
-  { id:'omes-edge-02', host:'edge-02.jkt.ahliweb.net', os:'Ubuntu 26.04', role:'Edge / Caddy', state:'ok',    drift:0, modules:7, cpu:11, mem:35, disk:41, uptime:'41d 06:10', agent:'0.3.0', last:'9s'  },
-  { id:'omes-app-01',  host:'app-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'AWCMS app',   state:'drift', drift:3, modules:12, cpu:52, mem:71, disk:63, uptime:'18d 22:41', agent:'0.3.0', last:'7s'  },
-  { id:'omes-app-02',  host:'app-02.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'AWCMS app',   state:'ok',    drift:0, modules:12, cpu:47, mem:66, disk:59, uptime:'18d 22:39', agent:'0.3.0', last:'11s' },
-  { id:'omes-app-03',  host:'app-03.sgp.ahliweb.net',  os:'Ubuntu 24.04', role:'AWCMS app',   state:'warn',  drift:1, modules:12, cpu:78, mem:84, disk:81, uptime:'6d 03:55',  agent:'0.3.0', last:'14s' },
-  { id:'omes-db-01',   host:'db-01.jkt.ahliweb.net',   os:'Ubuntu 26.04', role:'Postgres 17', state:'ok',    drift:0, modules:5, cpu:33, mem:62, disk:57, uptime:'93d 11:02', agent:'0.3.0', last:'6s'  },
-  { id:'omes-db-02',   host:'db-02.jkt.ahliweb.net',   os:'Ubuntu 26.04', role:'Postgres 17 replica', state:'ok', drift:0, modules:5, cpu:21, mem:58, disk:57, uptime:'93d 10:58', agent:'0.3.0', last:'8s' },
-  { id:'omes-job-01',  host:'job-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'Hermes worker', state:'ok',  drift:0, modules:9, cpu:64, mem:49, disk:38, uptime:'12d 04:30', agent:'0.3.0', last:'4s'  },
-  { id:'omes-job-02',  host:'job-02.sgp.ahliweb.net',  os:'Ubuntu 24.04', role:'Hermes worker', state:'ok',  drift:0, modules:9, cpu:58, mem:44, disk:36, uptime:'12d 04:28', agent:'0.3.0', last:'5s'  },
-  { id:'omes-mint-01', host:'build-01.lab.internal',   os:'Linux Mint 22', role:'Build / lab', state:'stale', drift:2, modules:6, cpu:0, mem:0, disk:29, uptime:'—', agent:'0.2.8', last:'2h 14m' },
-  { id:'omes-obs-01',  host:'obs-01.jkt.ahliweb.net',  os:'Ubuntu 26.04', role:'Observability', state:'ok',  drift:0, modules:8, cpu:29, mem:55, disk:72, uptime:'41d 05:44', agent:'0.3.0', last:'10s' },
-  { id:'omes-bak-01',  host:'bak-01.sgp.ahliweb.net',  os:'Ubuntu 26.04', role:'Backup vault', state:'ok',   drift:0, modules:4, cpu:8,  mem:22, disk:88, uptime:'120d 02:17', agent:'0.3.0', last:'13s' }
-];
+// Domain data (issue #211): every array below that used to be a literal
+// demo array is now read from window.OMES_CC_DATA, produced by
+// scripts/generate-control-center-data.py from the Control Center v1
+// contract fixtures (contracts/control-center/v1/fixtures/*/valid-*.json)
+// plus ui/control-center/sample-fleet.json and ui/control-center/data.js's
+// own generated header comment for exact provenance. This prototype is a
+// reference only - the functional screens are NOT implemented yet
+// (tracked in #200/#201). If data.js failed to load, DATA falls back to
+// empty arrays so the prototype still renders (with empty lists) instead
+// of throwing.
+const DATA = window.OMES_CC_DATA || {
+  servers: [], hermesTree: [], hermesMeta: { sessionId:'', generatedAt:'', activeCount:0, completedCount:0, failedCount:0 },
+  hermesEvents: [], deployments: [], jobsRunning: [],
+  queue: [], health: [], backupPolicy: [], snapshots: [], audit: [], workers: [],
+  timeline: [], kpis: [], milestones: [], issues: []
+};
+
+const SERVERS = DATA.servers;
 
 const NAV = [
   { key:'overview',   label:'Overview',    glyph:'◉', title:'Fleet overview',        sub:'12 host · 2 region · siklus check 60s' },
@@ -676,7 +809,7 @@ const NAV = [
   { key:'backup',     label:'Backup',      glyph:'⟲', title:'Backup & Restore',      sub:'Snapshot, retensi, dan uji pulih' },
   { key:'audit',      label:'Audit log',   glyph:'≡', title:'Audit log',             sub:'Jejak append-only, RLS per tenant' },
   { key:'workers',    label:'Workers',     glyph:'⌁', title:'Worker enrollment',     sub:'Pull-worker transport dan heartbeat', badge:'1' },
-  { key:'live',       label:'Orkestrasi langsung', glyph:'◈', title:'Orkestrasi langsung', sub:'Peta aktivitas planner dan subagent, diperbarui otomatis' },
+  { key:'live',       label:'Orkestrasi langsung', glyph:'◈', title:'Orkestrasi langsung', sub:'Pohon pelaksana dari manajer sampai sub-subagen, diperbarui otomatis' },
   { key:'arch',       label:'Arsitektur',  glyph:'⬡', title:'Arsitektur sistem',     sub:'Lapisan control plane, transport, agent, dan provider' },
   { key:'progress',   label:'Progres Hermes', glyph:'▮', title:'Progres integrasi Hermes', sub:'Milestone dan issue terbuka di ahliweb/omes' }
 ];
@@ -708,36 +841,85 @@ const HERMES_LANE = {
   note:'Issue #183, #180, #181. Hermes memakai antrean dan approval gate yang sama dengan operator manusia.'
 };
 
-const LOG = [
-  { t:'14:20:48', a:'sa-03', m:'pause: gate persetujuan aktif' },
-  { t:'14:21:12', a:'planner', m:'menaikkan op-8842 ke owner: perubahan firewall kritis' },
-  { t:'14:21:55', a:'sa-02', m:'menolak tool fs.write di /etc — di luar allowlist' },
-  { t:'14:22:09', a:'planner', m:'delegasi subtask 4 ke sa-04 (pengumpulan bukti)' },
-  { t:'14:22:41', a:'sa-01', m:'ssh.exec app-01 "ufw status numbered" → 12 rule' },
-  { t:'14:23:04', a:'sa-04', m:'obs.query obs-01 → 42 baris log terarsip' },
-  { t:'14:23:27', a:'sa-02', m:'menyusun diff ufw-baseline 2.0.1 (3 hunk)' },
-  { t:'14:23:52', a:'planner', m:'anggaran langkah 19/40 · tidak ada eskalasi baru' }
-];
+const LEVELS = ['Manajer','Agen','Subagen','Sub-subagen'];
 
-const MILESTONES = [
-  { name:'Control Center and Entitlements', done:2, open:9, pct:18, note:'Epic #195 dan turunannya' },
-  { name:'Quality and Security', done:6, open:2, pct:75, note:'#180, #181 · drift review upstream' },
-  { name:'Core CLI (bootstrap → rollback)', done:14, open:0, pct:100, note:'Rilis pre-alpha v0.3.0' },
-  { name:'Provider coverage', done:9, open:4, pct:69, note:'apt, systemd, ufw, caddy, postgres' }
-];
+// TREE (Hermes orchestration tree) is generated from
+// contracts/control-center/v1/fixtures/hermes-orchestration-tree/valid-*.json
+// by scripts/generate-control-center-data.py; see ui/control-center/data.js.
+const TREE = DATA.hermesTree;
 
-const ISSUES = [
-  { n:'#195', t:'Epic: implementasi penuh Control Center berbasis AWCMS', s:'open', a:'epic' },
-  { n:'#196', t:'Schema, RLS, permission, dan descriptor modul omes_control', s:'open', a:'foundation' },
-  { n:'#197', t:'Konsumsi kontrak OMES v1 dengan validasi fail-closed', s:'open', a:'foundation' },
-  { n:'#198', t:'API owner/operator untuk projeksi dan operasi aman', s:'open', a:'api' },
-  { n:'#199', t:'Ingestion enrollment, poll, result, dan heartbeat worker', s:'open', a:'api' },
-  { n:'#192', t:'Transport pull-worker aman untuk GUI web AWCMS-one', s:'open', a:'api' },
-  { n:'#200', t:'Layar admin: overview, servers, deployments, operations, jobs', s:'design', a:'ui' },
-  { n:'#201', t:'Layar health, backup/recovery, dan audit', s:'design', a:'ui' },
-  { n:'#183', t:'Visualisasi orkestrasi Hermes dan subagent langsung', s:'design', a:'ui' },
-  { n:'#202', t:'Verifikasi dan penutupan rilis Control Center', s:'open', a:'release' }
-];
+function flattenTree(nodes, depth, out) {
+  nodes.forEach((n, i) => {
+    out.push({ id:n.id, name:n.name, role:n.role, depth:depth, last: i === nodes.length - 1, kids: n.children ? n.children.length : 0 });
+    if (n.children) flattenTree(n.children, depth + 1, out);
+  });
+  return out;
+}
+
+const FLAT = flattenTree(TREE, 0, []);
+
+function leafCount(n) {
+  if (!n.children || !n.children.length) return 1;
+  return n.children.reduce((a, c) => a + leafCount(c), 0);
+}
+
+function radialLayout(node, depth, a0, a1, parent, out) {
+  const mid = (a0 + a1) / 2;
+  const rad = [0, 19, 31, 43][Math.min(depth, 3)];
+  const pos = {
+    id: node.id, name: node.name, role: node.role, depth: depth,
+    kids: node.children ? node.children.length : 0,
+    x: 50 + rad * Math.cos(mid), y: 50 + rad * Math.sin(mid) * 0.92,
+    px: parent ? parent.x : 50, py: parent ? parent.y : 50
+  };
+  out.push(pos);
+  if (node.children) {
+    const total = leafCount(node);
+    let a = a0;
+    node.children.forEach(c => {
+      const span = (a1 - a0) * (leafCount(c) / total);
+      radialLayout(c, depth + 1, a + span * 0.06, a + span * 0.94, pos, out);
+      a += span;
+    });
+  }
+  return out;
+}
+
+const ORBIT = radialLayout(TREE[0], 0, -Math.PI / 2, Math.PI * 1.5, null, []);
+
+const PREFIX = ['M', 'A', 'S', 'E'];
+const seen = {};
+ORBIT.forEach(n => {
+  seen[n.depth] = (seen[n.depth] || 0) + 1;
+  n.code = n.depth === 0 ? 'M' : PREFIX[n.depth] + seen[n.depth];
+});
+
+// EVENTS / LOG (Hermes execution trace) are generated from
+// contracts/.../fixtures/hermes-orchestration-tree and
+// contracts/.../fixtures/hermes-orchestration-event by
+// scripts/generate-control-center-data.py; see ui/control-center/data.js.
+// Falls back to a single "waiting for data" event if EVENTS is empty so
+// the tick/animation code below never divides by zero.
+const EVENTS = DATA.hermesEvents.length ? DATA.hermesEvents : [{ a:'', k:'wait', m:'menunggu data', t:'' }];
+
+const KIND = {
+  plan: { c:'#8B9CF7', t:'plan' },
+  tool: { c:'#5FC8D6', t:'tool' },
+  ok:   { c:'#6FD08C', t:'hasil' },
+  deny: { c:'#E86D5B', t:'ditolak' },
+  esc:  { c:'#E8B44A', t:'eskalasi' },
+  wait: { c:'#E8B44A', t:'menunggu' }
+};
+
+const LOG = EVENTS.map(e => ({ t: (e.t || '').slice(11, 19) || e.t, a: e.a, m: e.m }));
+
+// MILESTONES / ISSUES (Progress screen roadmap snapshot) have no v1
+// contract fixture - they describe GitHub issue backlog state, not a
+// runtime contract - so they come from a small hand-maintained constant
+// table in scripts/generate-control-center-data.py (ROADMAP_MILESTONES /
+// ROADMAP_ISSUES). See that script's module docstring.
+const MILESTONES = DATA.milestones;
+const ISSUES = DATA.issues;
 
 const STATE_META = {
   ok:    { label:'Sehat',  c:A.ok },
@@ -748,7 +930,7 @@ const STATE_META = {
 };
 
 class Component extends DCLogic {
-  state = { screen:'overview', role:'owner', drawerOpen:false, selected:'omes-app-01', tick:0, filter:'all' };
+  state = { screen:'overview', role:'owner', drawerOpen:false, selected:'omes-app-01', tick:0, filter:'all', depth:3, view:'tree' };
 
   componentDidMount() {
     if (this.props.defaultScreen && NAV.some(n => n.key === this.props.defaultScreen)) {
@@ -761,6 +943,11 @@ class Component extends DCLogic {
   componentWillUnmount() { clearInterval(this._t); }
 
   go(key) { return () => this.setState({ screen:key, drawerOpen:false }); }
+
+  viewBtn(active) {
+    return 'padding:5px 13px; border-radius:6px; border:none; font:inherit; font-size:11.5px; font-weight:650; cursor:pointer;' +
+      (active ? 'background:#5FC8D6; color:#08171A' : 'background:transparent; color:#8B99A6');
+  }
 
   navStyle(active) {
     return 'display:flex; align-items:center; gap:10px; width:100%; box-sizing:border-box; padding:8px 10px; border-radius:8px; font:inherit; font-size:13px; font-weight:' + (active ? '650' : '500') +
@@ -778,6 +965,10 @@ class Component extends DCLogic {
     const cur = NAV.find(n => n.key === this.state.screen) || NAV[0];
     const owner = this.state.role === 'owner';
     const sel = SERVERS.find(s => s.id === this.state.selected) || SERVERS[0];
+    const evIdx = this.state.tick % EVENTS.length;
+    const curEv = EVENTS[evIdx];
+    const maxDepth = this.state.depth ?? 3;
+    const rows = FLAT.filter(n => n.depth <= maxDepth);
 
     return {
       screen: this.state.screen,
@@ -808,6 +999,103 @@ class Component extends DCLogic {
       isBackup: this.state.screen === 'backup',
       isAudit: this.state.screen === 'audit',
       isWorkers: this.state.screen === 'workers',
+      isLive: this.state.screen === 'live',
+      depthChips: LEVELS.map((name, i) => ({
+        name: name + (i === 0 ? '' : ''),
+        pick: () => this.setState({ depth: i }),
+        style: 'padding:6px 12px; border-radius:7px; font:inherit; font-size:12px; font-weight:650; cursor:pointer; border:1px solid ' +
+          (i <= maxDepth ? '#2B4149' : '#242C35') + '; background:' + (i <= maxDepth ? 'rgba(95,200,214,.10)' : 'transparent') +
+          '; color:' + (i <= maxDepth ? '#CFF3F8' : '#8B99A6')
+      })),
+      depthNote: 'Menampilkan ' + (maxDepth + 1) + ' dari ' + LEVELS.length + ' level · ' + rows.length + ' simpul aktif',
+      liveRows: rows.map(n => {
+        const ev = curEv.a === n.id ? curEv : null;
+        const k = ev ? KIND[ev.k] : null;
+        const c = k ? k.c : A.cyan;
+        return {
+          name: n.name, role: n.role,
+          level: LEVELS[n.depth],
+          row: 'position:relative; display:flex; align-items:center; gap:12px; padding:11px 16px 11px ' + (16 + n.depth * 30) + 'px; border-bottom:1px solid #191F26; background:' + (ev ? 'rgba(95,200,214,.05)' : 'transparent') + '; transition:background .5s ease',
+          rail: n.depth > 0 ? 'position:absolute; left:' + (n.depth * 30) + 'px; top:0; bottom:0; width:1px; background:#242C35' : 'display:none',
+          elbow: n.depth > 0 ? 'position:absolute; left:' + (n.depth * 30) + 'px; top:50%; width:14px; height:1px; background:' + (ev ? c : '#242C35') + '; transition:background .5s ease' : 'display:none',
+          disc: 'position:relative; width:' + (n.depth === 0 ? 34 : 26) + 'px; height:' + (n.depth === 0 ? 34 : 26) + 'px; flex:none; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:' + mono + '; font-size:10px; font-weight:600; color:' + (ev ? '#08171A' : '#8B99A6') +
+            '; background:' + (ev ? c : '#151A20') + '; border:1px solid ' + (ev ? c : '#2A333D') + '; transition:background .4s ease, color .4s ease',
+          ring: ev ? 'position:absolute; inset:-1px; border-radius:50%; border:1px solid ' + c + '; animation:omesRing 1.6s ease-out infinite' : 'display:none',
+          initial: String(n.depth + 1),
+          levelStyle: 'font-family:' + mono + '; font-size:9.5px; letter-spacing:.08em; text-transform:uppercase; color:#8B99A6',
+          nameStyle: 'font-size:' + (n.depth === 0 ? 14 : 13) + 'px; font-weight:' + (n.depth === 0 ? 700 : 600) + '; line-height:1.35',
+          kidsLabel: n.kids ? n.kids + ' turunan' : 'eksekutor',
+          active: !!ev,
+          popup: 'display:flex; flex-direction:column; gap:3px; margin-left:auto; flex:0 1 340px; min-width:0; background:#1A2027; border:1px solid ' + c + '; border-radius:9px; padding:8px 11px; box-shadow:0 8px 22px rgba(0,0,0,.4); animation:omesPop .4s ease-out both',
+          popupKind: k ? k.t : '',
+          popupKindStyle: 'font-family:' + mono + '; font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:' + c,
+          popupMsg: ev ? ev.m : ''
+        };
+      }),
+      isTreeView: this.state.view !== 'omni',
+      isOmniView: this.state.view === 'omni',
+      viewTree: this.viewBtn(this.state.view !== 'omni'),
+      viewOmni: this.viewBtn(this.state.view === 'omni'),
+      setViewTree: () => this.setState({ view:'tree' }),
+      setViewOmni: () => this.setState({ view:'omni' }),
+      orbitRings: [19, 31, 43].slice(0, maxDepth).map(r => ({
+        style: 'position:absolute; left:50%; top:50%; width:' + (r * 2) + '%; height:' + (r * 2 * 0.92) + '%; transform:translate(-50%,-50%); border:1px dashed #1F2831; border-radius:50%'
+      })),
+      orbitEdges: ORBIT.filter(n => n.depth > 0 && n.depth <= maxDepth).map(n => ({
+        x1: n.px, y1: n.py, x2: n.x, y2: n.y,
+        base: 'stroke:#222A32; stroke-width:1; vector-effect:non-scaling-stroke',
+        flow: 'stroke:' + (curEv.a === n.id ? (KIND[curEv.k] || {}).c || A.cyan : '#5FC8D6') +
+          '; stroke-width:1.5; stroke-dasharray:4 96; vector-effect:non-scaling-stroke; animation:omesFlowLine 2.4s linear infinite; animation-delay:' + (n.depth * 0.3) + 's'
+      })),
+      orbitNodes: ORBIT.filter(n => n.depth <= maxDepth).map(n => {
+        const ev = curEv.a === n.id ? curEv : null;
+        const k = ev ? KIND[ev.k] : null;
+        const c = k ? k.c : A.cyan;
+        const size = n.depth === 0 ? 44 : n.depth === 1 ? 34 : 26;
+        return {
+          code: n.id, active: !!ev,
+          wrap: 'position:absolute; left:' + n.x + '%; top:' + n.y + '%; transform:translate(-50%,-50%); z-index:' + (ev ? 4 : 2),
+          disc: 'position:relative; width:' + size + 'px; height:' + size + 'px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:' + mono + '; font-size:' + (n.depth === 0 ? 11 : 9.5) + 'px; font-weight:600; color:' + (ev ? '#08171A' : '#9FB0BE') +
+            '; background:' + (ev ? c : '#151A20') + '; border:1px solid ' + (ev ? c : '#2A333D') + '; transition:background .4s ease, color .4s ease',
+          ring: ev ? 'position:absolute; inset:-1px; border-radius:50%; border:1px solid ' + c + '; animation:omesRing 1.6s ease-out infinite' : 'display:none',
+          initial: n.code
+        };
+      }),
+      orbitLegend: ORBIT.filter(n => n.depth <= maxDepth).map(n => {
+        const ev = curEv.a === n.id ? curEv : null;
+        const k = ev ? KIND[ev.k] : null;
+        const c = k ? k.c : A.cyan;
+        return {
+          code: n.code, name: n.name, level: LEVELS[n.depth],
+          row: 'display:flex; align-items:center; gap:9px; padding:6px 9px 6px ' + (9 + n.depth * 11) + 'px; border-radius:7px; background:' + (ev ? 'rgba(95,200,214,.08)' : 'transparent') + '; border:1px solid ' + (ev ? c : 'transparent') + '; transition:background .4s ease',
+          dot: 'width:6px; height:6px; border-radius:50%; flex:none; background:' + (ev ? c : '#2F3A45'),
+          nameStyle: 'font-size:11.5px; font-weight:' + (n.depth === 0 ? 700 : 500) + '; color:' + (ev ? '#E6EDF3' : '#9FB0BE') + '; overflow:hidden; text-overflow:ellipsis; white-space:nowrap',
+          codeStyle: 'font-family:' + mono + '; font-size:9.5px; font-weight:600; color:' + (ev ? c : '#9FB0BE') + '; margin-left:auto; flex:none; background:#12171D; border:1px solid ' + (ev ? c : '#2A333D') + '; border-radius:5px; padding:1px 6px'
+        };
+      }),
+      omniActive: {
+        name: (ORBIT.find(n => n.id === curEv.a) || {}).name || '',
+        level: LEVELS[(ORBIT.find(n => n.id === curEv.a) || {}).depth || 0],
+        kind: (KIND[curEv.k] || {}).t,
+        msg: curEv.m,
+        code: (ORBIT.find(n => n.id === curEv.a) || {}).code || '',
+        card: 'flex:none; margin:0 14px 14px; background:#1A2027; border:1px solid ' + ((KIND[curEv.k] || {}).c || A.cyan) + '; border-radius:10px; padding:11px 14px; display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline',
+        kindStyle: 'font-family:' + mono + '; font-size:9.5px; font-weight:600; letter-spacing:.08em; text-transform:uppercase; color:' + ((KIND[curEv.k] || {}).c || A.cyan)
+      },
+      liveFeed: Array.from({ length: 6 }, (_, j) => {
+        const e = EVENTS[(evIdx - j + EVENTS.length * 2) % EVENTS.length];
+        const k = KIND[e.k];
+        return { m: e.m, a: e.a, kind: k.t,
+          row: 'display:flex; gap:10px; align-items:baseline; opacity:' + Math.max(0.85, 1 - j * 0.05),
+          kindStyle: 'font-family:' + mono + '; font-size:10px; font-weight:600; text-transform:uppercase; color:' + k.c + '; min-width:58px',
+          agentStyle: 'font-family:' + mono + '; font-size:10.5px; color:#8B99A6; min-width:52px' };
+      }),
+      liveStat: [
+        { k:'Langkah', v: (evIdx + 8) + ' / 40' },
+        { k:'Simpul aktif', v: String(rows.length) },
+        { k:'Level kedalaman', v: (maxDepth + 1) + ' / ' + LEVELS.length },
+        { k:'Eskalasi owner', v:'1' }
+      ],
       isArch: this.state.screen === 'arch',
       isProgress: this.state.screen === 'progress',
       layers: LAYERS.map((l, i) => ({
@@ -832,12 +1120,10 @@ class Component extends DCLogic {
       }),
       owner: owner,
       notOwner: !owner,
-      kpis: [
-        { label:'Host terkelola', value:'12', foot:'2 region · jkt, sgp', accent:'#E6EDF3' },
-        { label:'Drift terdeteksi', value:'6', foot:'3 host · 2 modul kritis', accent:'#E8B44A' },
-        { label:'Operasi menunggu', value:'3', foot:'menunggu persetujuan owner', accent:'#8B9CF7' },
-        { label:'Verify lulus 7h', value:'98.4%', foot:'124 dari 126 run', accent:'#6FD08C' }
-      ],
+      kpis: DATA.kpis.map(k => ({
+        label: k.label, value: k.value, foot: k.foot,
+        accent: k.accent === 'ok' ? A.ok : k.accent === 'warn' ? A.warn : k.accent === 'violet' ? A.vio : P.ink
+      })),
       fleet: SERVERS.map(s => ({
         id: s.id, host: s.host, role: s.role, os: s.os,
         stateLabel: STATE_META[s.state].label,
@@ -849,40 +1135,16 @@ class Component extends DCLogic {
         last: s.last,
         open: () => this.setState({ screen:'servers', selected:s.id })
       })),
-      backupPolicy: [
-        { k:'Jadwal', v:'Harian 02:00 WIB · mingguan Minggu 01:00' },
-        { k:'Retensi', v:'14 harian · 8 mingguan · 12 bulanan' },
-        { k:'Tujuan', v:'bak-01.sgp (primer) + object storage terenkripsi' },
-        { k:'Enkripsi', v:'age + kunci per tenant, rotasi 90 hari' }
-      ],
-      snapshots: [
-        { id:'snap-9931', scope:'db-01 · postgres full', size:'9.2 GB', when:'hari ini 02:04', verify:'ok', dur:'11m 22s' },
-        { id:'snap-9930', scope:'app-01..03 · config + state', size:'1.4 GB', when:'hari ini 02:01', verify:'ok', dur:'3m 08s' },
-        { id:'snap-9929', scope:'pre-apply d-2264', size:'1.5 GB', when:'hari ini 14:01', verify:'ok', dur:'2m 51s' },
-        { id:'snap-9928', scope:'db-01 · postgres full', size:'9.1 GB', when:'kemarin 02:04', verify:'ok', dur:'11m 04s' },
-        { id:'snap-9927', scope:'build-01 · config', size:'0.2 GB', when:'kemarin 02:00', verify:'fail', dur:'—' }
-      ].map(s => {
+      backupPolicy: DATA.backupPolicy,
+      snapshots: DATA.snapshots.map(s => {
         const c = s.verify === 'ok' ? A.ok : A.err;
         return { id:s.id, scope:s.scope, size:s.size, when:s.when, dur:s.dur,
           label: s.verify === 'ok' ? 'restore-test lulus' : 'restore-test gagal',
           pill:'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c };
       }),
-      audit: [
-        { t:'2026-09-21 14:19:03', actor:'rani@ahliweb', role:'owner', act:'operation.approve', obj:'op-8841', ip:'103.28.14.7', ok:true },
-        { t:'2026-09-21 14:06:44', actor:'svc/omes-check', role:'system', act:'drift.detect', obj:'omes-app-01', ip:'10.20.0.11', ok:true },
-        { t:'2026-09-21 13:52:10', actor:'hermes/subagent-02', role:'agent', act:'tool.deny', obj:'fs.write /etc', ip:'10.20.0.4', ok:false },
-        { t:'2026-09-21 13:48:02', actor:'svc/heartbeat', role:'system', act:'worker.stale', obj:'omes-mint-01', ip:'—', ok:false },
-        { t:'2026-09-21 13:30:19', actor:'agus@ahliweb', role:'operator', act:'deployment.verify', obj:'d-2261', ip:'103.28.14.9', ok:true },
-        { t:'2026-09-21 11:02:58', actor:'rani@ahliweb', role:'owner', act:'entitlement.grant', obj:'agus@ahliweb → apply:staging', ip:'103.28.14.7', ok:true }
-      ].map(a => ({ t:a.t, actor:a.actor, role:a.role, act:a.act, obj:a.obj, ip:a.ip,
+      audit: DATA.audit.map(a => ({ t:a.t, actor:a.actor, role:a.role, act:a.act, obj:a.obj, ip:a.ip,
         actStyle:'font-family:' + mono + '; font-size:11.5px; color:' + (a.ok ? P.ink : A.err) })),
-      workers: [
-        { id:'wk-01', host:'omes-edge-01', state:'active', poll:'12s', ver:'0.3.0', token:'kedaluwarsa 74 hari' },
-        { id:'wk-03', host:'omes-app-01', state:'active', poll:'7s', ver:'0.3.0', token:'kedaluwarsa 74 hari' },
-        { id:'wk-08', host:'omes-job-01', state:'active', poll:'4s', ver:'0.3.0', token:'kedaluwarsa 61 hari' },
-        { id:'wk-10', host:'omes-mint-01', state:'stale', poll:'2j 14m', ver:'0.2.8', token:'lewat 14 hari' },
-        { id:'wk-12', host:'baru · belum terdaftar', state:'pending', poll:'—', ver:'0.3.0', token:'menunggu persetujuan enrollment' }
-      ].map(w => {
+      workers: DATA.workers.map(w => {
         const c = w.state === 'active' ? A.ok : w.state === 'stale' ? A.err : A.warn;
         return { id:w.id, host:w.host, poll:w.poll, ver:w.ver, token:w.token, state:w.state,
           dot:'width:7px; height:7px; border-radius:50%; flex:none; background:' + c,
@@ -903,38 +1165,32 @@ class Component extends DCLogic {
           ring: live ? 'position:absolute; width:9px; height:9px; border-radius:50%; border:1px solid ' + c + '; animation:omesRing 1.8s ease-out infinite' : 'display:none' };
       }),
       hermesTask: {
-        id:'task-4471', goal:'Pulihkan kepatuhan baseline keamanan di seluruh fleet produksi',
-        planner:'hermes-planner · claude-sonnet', started:'14:02', budget:'18 / 40 langkah'
+        id: DATA.hermesMeta.sessionId || '—',
+        goal: (TREE[0] && TREE[0].role) || 'menunggu data orkestrasi',
+        planner: (TREE[0] && TREE[0].name) || '—',
+        started: (DATA.hermesMeta.generatedAt || '').slice(11, 16) || '—',
+        budget: DATA.hermesMeta.activeCount + ' aktif / ' + (DATA.hermesMeta.activeCount + DATA.hermesMeta.completedCount + DATA.hermesMeta.failedCount) + ' node'
       },
-      subagents: [
-        { id:'sa-01', name:'Auditor firewall', host:'app-01', state:'run',  step:'membaca ufw status numbered', tool:'ssh.exec', pct:62 },
-        { id:'sa-02', name:'Penulis patch modul', host:'control', state:'run', step:'menyusun diff ufw-baseline 2.0.1', tool:'fs.write', pct:35 },
-        { id:'sa-03', name:'Verifikator', host:'app-03', state:'wait', step:'menunggu persetujuan op-8842', tool:'—', pct:0 },
-        { id:'sa-04', name:'Pengumpul bukti', host:'obs-01', state:'done', step:'42 log terarsip ke vault', tool:'obs.query', pct:100 }
-      ].map((s, i) => {
-        const c = s.state === 'run' ? A.cyan : s.state === 'done' ? A.ok : A.warn;
-        const lbl = s.state === 'run' ? 'berjalan' : s.state === 'done' ? 'selesai' : 'menunggu';
-        const pct = s.state === 'run'
-          ? Math.min(96, s.pct + ((this.state.tick * 2 + i * 5) % (97 - s.pct)))
-          : s.pct;
-        return { id:s.id, name:s.name, host:s.host, step:s.step, tool:s.tool, label:lbl,
-          pctText: s.state === 'wait' ? '—' : pct + '%',
-          dot:'width:7px; height:7px; border-radius:50%; flex:none; background:' + c + (s.state === 'run' ? '; animation:omesPulse 1.6s ease-in-out infinite' : ''),
+      // Subagent rows come straight from the Hermes orchestration tree's
+      // first level of children (contracts/.../hermes-orchestration-tree),
+      // via TREE (see DATA/TREE above).
+      subagents: ((TREE[0] && TREE[0].children) || []).map((s, i) => {
+        const runState = s.state === 'RUNNING' ? 'run' : s.state === 'SUCCEEDED' ? 'done' : s.state === 'FAILED' ? 'fail' : 'wait';
+        const c = runState === 'run' ? A.cyan : runState === 'done' ? A.ok : runState === 'fail' ? A.err : A.warn;
+        const lbl = runState === 'run' ? 'berjalan' : runState === 'done' ? 'selesai' : runState === 'fail' ? 'gagal' : 'menunggu';
+        const basePct = runState === 'done' || runState === 'fail' ? 100 : runState === 'run' ? 40 : 0;
+        const pct = runState === 'run'
+          ? Math.min(96, basePct + ((this.state.tick * 2 + i * 5) % (97 - basePct)))
+          : basePct;
+        return { id:s.id, name:s.name, host: s.active_tool || '—', step:s.role, tool: s.active_tool || '—', label:lbl,
+          pctText: runState === 'wait' ? '—' : pct + '%',
+          dot:'width:7px; height:7px; border-radius:50%; flex:none; background:' + c + (runState === 'run' ? '; animation:omesPulse 1.6s ease-in-out infinite' : ''),
           pill:'font-size:10.5px; font-weight:650; padding:2px 8px; border-radius:5px; background:' + c + '1F; color:' + c,
-          running: s.state === 'run',
+          running: runState === 'run',
           bar:'height:100%; border-radius:3px; width:' + pct + '%; background:' + c + '; transition:width 1s linear' };
       }),
       hermesLog: LOG.slice(0, 5 + (this.state.tick % 4)).slice(-6).slice().reverse(),
-      doctor: [
-        { name:'Kompatibilitas OS', res:'pass', detail:'12/12 host pada rilis yang didukung' },
-        { name:'Versi agent', res:'warn', detail:'build-01 masih 0.2.8, di bawah minimum 0.3.0' },
-        { name:'Ruang disk', res:'warn', detail:'bak-01 88% terpakai · ambang 85%' },
-        { name:'Sertifikat TLS', res:'pass', detail:'kedaluwarsa terdekat 47 hari (edge-02)' },
-        { name:'Rotasi kredensial', res:'fail', detail:'token worker build-01 lewat 14 hari' },
-        { name:'Waktu & NTP', res:'pass', detail:'deviasi maksimum 42 ms' },
-        { name:'Paket tertahan', res:'pass', detail:'tidak ada held package' },
-        { name:'Snapshot rollback', res:'pass', detail:'12/12 host punya snapshot < 24 jam' }
-      ].map(d => {
+      doctor: DATA.health.map(d => {
         const c = d.res === 'pass' ? A.ok : d.res === 'warn' ? A.warn : A.err;
         return { name:d.name, detail:d.detail, res:d.res,
           dot:'width:8px; height:8px; border-radius:50%; flex:none; background:' + c,
@@ -948,40 +1204,26 @@ class Component extends DCLogic {
         status: i < 4 ? 'selesai' : i === 4 ? 'berjalan · 9/12' : 'siaga',
         statusStyle: 'font-size:11px; color:' + (i < 4 ? A.ok : i === 4 ? A.cyan : P.dim)
       })),
-      deployments: [
-        { id:'d-2264', mod:'awcms-core 4.2.1', env:'production', hosts:'9 host', who:'agus@ahliweb', when:'berjalan', state:'run', pct:74 },
-        { id:'d-2263', mod:'caddy-tls 1.6.0', env:'production', hosts:'2 host', who:'hermes/auto', when:'22 menit lalu', state:'ok', pct:100 },
-        { id:'d-2262', mod:'postgres-tune 0.9.4', env:'production', hosts:'2 host', who:'rani@ahliweb', when:'1 jam lalu', state:'ok', pct:100 },
-        { id:'d-2261', mod:'ufw-baseline 2.0.0', env:'staging', hosts:'3 host', who:'agus@ahliweb', when:'3 jam lalu', state:'rollback', pct:100 },
-        { id:'d-2260', mod:'hermes-agent 0.3.0', env:'production', hosts:'12 host', who:'rani@ahliweb', when:'kemarin', state:'ok', pct:100 }
-      ].map(d => {
+      deployments: DATA.deployments.map(d => {
         const c = d.state === 'ok' ? A.ok : d.state === 'run' ? A.cyan : A.err;
         const lbl = d.state === 'ok' ? 'Verify lulus' : d.state === 'run' ? 'Apply berjalan' : 'Di-rollback';
         return { id:d.id, mod:d.mod, env:d.env, hosts:d.hosts, who:d.who, when:d.when, label:lbl,
           pill:'font-size:11px; font-weight:650; padding:3px 9px; border-radius:6px; background:' + c + '1F; color:' + c,
           bar:'height:100%; border-radius:3px; width:' + d.pct + '%; background:' + c };
       }),
-      queue: [
-        { id:'op-8844', name:'apply php-fpm.pool → app-01', by:'operator rani@ahliweb', risk:'high', need:'Butuh persetujuan owner', age:'4 menit' },
-        { id:'op-8843', name:'restart awcms-worker → job-01, job-02', by:'hermes/subagent-02', risk:'medium', need:'Butuh persetujuan owner', age:'11 menit' },
-        { id:'op-8842', name:'tutup 5432/tcp publik → app-01', by:'omes doctor', risk:'critical', need:'Butuh persetujuan owner', age:'26 menit' }
-      ].map(o => {
+      queue: DATA.queue.map(o => {
         const c = o.risk === 'critical' ? A.err : o.risk === 'high' ? A.warn : A.vio;
         return { id:o.id, name:o.name, by:o.by, risk:o.risk, need:o.need, age:o.age,
           riskStyle:'font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:2px 7px; border-radius:5px; background:' + c + '26; color:' + c };
       }),
-      jobsRunning: [
-        { id:'job-51207', name:'verify · awcms-core 4.2.1', host:'app-02', pct:74, line:'menjalankan smoke test 14/19' },
-        { id:'job-51206', name:'backup · pg_dump harian', host:'db-01', pct:41, line:'kompresi 3.8 GB / 9.2 GB' },
-        { id:'job-51205', name:'check · baseline drift', host:'semua host', pct:88, line:'11 dari 12 host selesai' }
-      ].map(j => ({ id:j.id, name:j.name, host:j.host, line:j.line, pct:j.pct + '%',
+      jobsRunning: DATA.jobsRunning.map(j => ({ id:j.id, name:j.name, host:j.host, line:j.line, pct:j.pct + '%',
         bar:'height:100%; border-radius:3px; width:' + j.pct + '%; background:#5FC8D6' })),
       serverList: SERVERS.map(s => ({
         id: s.id, host: s.host, role: s.role,
         dot: 'width:7px; height:7px; border-radius:50%; flex:none; background:' + STATE_META[s.state].c,
         driftLabel: s.drift ? s.drift + ' drift' : 'in sync',
         driftStyle: 'font-family:' + mono + '; font-size:10.5px; padding:1px 6px; border-radius:5px; background:' + (s.drift ? 'rgba(232,180,74,.14)' : 'rgba(111,208,140,.12)') + '; color:' + (s.drift ? A.warn : A.ok),
-        rowStyle: 'display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px; cursor:pointer; border:1px solid ' + (s.id === sel.id ? '#2B4149' : 'transparent') + '; background:' + (s.id === sel.id ? 'rgba(95,200,214,.08)' : 'transparent'),
+        rowStyle: 'all:unset; box-sizing:border-box; width:100%; font:inherit; color:inherit; text-align:left; display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:9px; cursor:pointer; border:1px solid ' + (s.id === sel.id ? '#2B4149' : 'transparent') + '; background:' + (s.id === sel.id ? 'rgba(95,200,214,.08)' : 'transparent'),
         pick: () => this.setState({ selected:s.id })
       })),
       sel: {
@@ -1005,13 +1247,10 @@ class Component extends DCLogic {
       })) : [],
       hasDrift: sel.drift > 0,
       noDrift: sel.drift === 0,
-      timeline: [
-        { t:'14:22', who:'hermes/subagent-04', txt:'apply modul caddy-tls di edge-01 selesai', c:A.ok },
-        { t:'14:19', who:'rani@ahliweb', txt:'menyetujui op #8841 restart awcms-worker', c:A.cyan },
-        { t:'14:06', who:'omes check', txt:'drift baru: app-01 · php-fpm.pool, ufw.rules, unattended-upgrades', c:A.warn },
-        { t:'13:48', who:'sistem', txt:'build-01 tidak mengirim heartbeat selama 2j 14m', c:A.err },
-        { t:'13:30', who:'agus@ahliweb', txt:'deployment d-2261 verify lulus di 9 host', c:A.ok }
-      ]
+      timeline: DATA.timeline.map(e => ({
+        t: e.t, who: e.who, txt: e.txt,
+        c: e.kind === 'ok' ? A.ok : e.kind === 'warn' ? A.warn : e.kind === 'err' ? A.err : A.cyan
+      }))
     };
   }
 }
