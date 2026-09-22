@@ -85,7 +85,7 @@
       <div style="flex:1; min-width:12px"></div>
       <div style="display:flex; align-items:center; gap:7px; font-family:'JetBrains Mono',monospace; font-size:11px; color:#7A8894; border:1px solid #242C35; border-radius:8px; padding:7px 10px">
         <span style="width:6px; height:6px; border-radius:50%; background:#6FD08C; animation:omesPulse 2.4s ease-in-out infinite"></span>
-        <span>{{ pollLabel }}</span>
+        <span aria-live="polite" aria-atomic="true">{{ pollLabel }}</span>
       </div>
       <button onClick="{{ toggleDrawer }}" style="display:flex; align-items:center; gap:8px; background:#151A20; border:1px solid #242C35; color:#E6EDF3; border-radius:8px; padding:8px 12px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer" style-hover="background:#1B222A; border-color:#313B46">
         <span style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#5FC8D6">⌘K</span>
@@ -737,10 +737,10 @@
   </main>
 
   <sc-if value="{{ drawerOpen }}" hint-placeholder-val="{{ false }}">
-    <div onClick="{{ toggleDrawer }}" style="position:fixed; inset:0; background:rgba(6,9,12,.68); z-index:60; display:flex; justify-content:flex-end">
-      <div style="width:min(460px,92vw); height:100%; background:#11161B; border-left:1px solid #242C35; padding:24px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; overflow:auto">
+    <div style="position:fixed; inset:0; background:rgba(6,9,12,.68); z-index:60; display:flex; justify-content:flex-end">
+      <div role="dialog" aria-modal="true" aria-labelledby="operation-drawer-title" tabindex="-1" style="width:min(460px,92vw); height:100%; background:#11161B; border-left:1px solid #242C35; padding:24px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; overflow:auto">
         <div style="display:flex; align-items:center; gap:10px">
-          <h2 style="margin:0; font-size:15px; font-weight:650; flex:1">Rencana operasi</h2>
+          <h2 id="operation-drawer-title" style="margin:0; font-size:15px; font-weight:650; flex:1">Rencana operasi</h2>
           <button onClick="{{ toggleDrawer }}" style="background:transparent; border:1px solid #2A333D; color:#8B99A6; border-radius:7px; width:28px; height:28px; font:inherit; font-size:14px; cursor:pointer">×</button>
         </div>
         <p style="margin:0; font-size:12.5px; color:#8B99A6; line-height:1.55">Dry-run pada kontrak OMES v1. Tidak ada perubahan diterapkan sampai disetujui owner.</p>

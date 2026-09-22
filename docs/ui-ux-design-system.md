@@ -233,5 +233,5 @@ command.
   and Enter/Space without a custom key-handling layer.
 - **Reduced motion**: `@media (prefers-reduced-motion: reduce)` collapses all `omes*` animation
   and transition durations to effectively zero for users who ask for it at the OS/browser level.
-- **Document metadata**: `<html lang="id">` (the prototype's UI copy is Indonesian) and a
-  `<title>` are both present.
+- **Document metadata**: `<html lang="id">` (the prototype's UI copy is Indonesian) and a `<title>` are both present.
+- **Dialog/status semantics**: the operation drawer is a labelled modal dialog with a keyboard-focusable surface, and the polling status is exposed through a polite live region. The reference prototype does not yet implement an interactive ARIA tree or live event stream; that remains part of the functional Control Center work tracked by #198/#201.

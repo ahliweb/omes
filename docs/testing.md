@@ -110,6 +110,21 @@ daemon is available in this implementation environment) - see
 [docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)
 "Left for follow-up".
 
+### 2.6 Control Center prototype contract (issue #211)
+
+The stdlib-only test `tests/py/control_center/test_control_center_browser_contract.py`
+keeps the reference prototype's twelve declared views, render guards, metadata,
+dialog/status accessibility hooks, and generated-data sections in sync. It runs
+automatically through `python3 -m unittest discover -s tests/py -t .` and does
+**not** claim to render a browser DOM or prove absence of runtime console errors.
+
+The actual browser smoke check remains a manual/opt-in release gate because this
+repository intentionally has no browser dependency or bundled browser runtime.
+When performing it, serve `ui/control-center/` with `python3 -m http.server`,
+open all twelve views in a supported browser, record console/page errors, and
+retain the evidence with the release review. The prototype remains reference-only;
+functional authenticated screens are tracked by #198/#200/#201.
+
 `tests/py/provenance/` (issue #173) covers release SLSA provenance and
 SBOM artifact generation: `test_release_bundle.py` exercises deterministic
 manifest/SBOM/SLSA provenance/SHA256SUMS generation, checksum tamper
