@@ -61,6 +61,17 @@ verified against
 - `model.provider`
 - `model.name`
 - `gateway.mode`
+- `fallback_model`
+- `fallback_providers`
+
+The last two are the legacy scalar and the newer list-valued
+automatic-provider-fallback keys documented at
+[hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers);
+both name a provider/model selection and cannot hold a credential. They
+are also the detection source for `omes health ai-privacy`'s
+`cloud_fallback_enabled` field (see `docs/cli.md` §4.13), which reads
+`fallback_providers` for presence only and never parses its undocumented
+list rendering.
 
 This allowlist lives in `lib/omes/py/provenance/versions.py`
 (`ALLOWED_HERMES_CONFIG_KEYS`). It is the single place that decides what

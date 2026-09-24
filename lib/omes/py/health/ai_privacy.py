@@ -6,7 +6,9 @@ Standard library only (ADR-0012). This module collects a bounded
 observation through supported, read-only interfaces only - `hermes
 --version` and `hermes config get <allowlisted key>` (the exact same
 allowlist lib/omes/py/provenance/versions.py already vetted as non-secret,
-imported from there rather than duplicated), plus this package's own
+imported from there rather than duplicated: `model.provider` for the
+destination class, and `fallback_model`/`fallback_providers` for the
+cloud-fallback signal), plus this package's own
 lib/omes/py/health/exposure.py listener/firewall audit (also reused, not
 duplicated) - and then hands that observation to the pure evaluator in
 lib/omes/py/privacy/posture_evidence.py. It never reads `$HERMES_HOME/.env`
@@ -112,17 +114,97 @@ def _collect_hermes_version(timeout: float) -> Optional[str]:
     return line or None
 
 
-def _collect_provider_value(timeout: float) -> Optional[str]:
-    """Reads `model.provider` only - the one already-vetted, non-secret
-    key in ALLOWED_HERMES_CONFIG_KEYS this module needs. Reusing the same
-    frozenset provenance/versions.py already vetted (rather than declaring
-    a second, possibly-diverging allowlist) is deliberate."""
-    if "model.provider" not in ALLOWED_HERMES_CONFIG_KEYS or shutil.which("hermes") is None:
-        return None
-    rc, out, _err = _run(["hermes", "config", "get", "model.provider"], timeout)
+#: Outcome of one allowlisted `hermes config get <key>` read. The three
+#: states are deliberately distinct: "the key is confirmed unset" is NOT
+#: the same fact as "the key could not be read", and collapsing them would
+#: turn an unreadable Hermes install into a healthy-looking "disabled".
+_CONFIG_VALUE = "value"
+_CONFIG_ABSENT = "absent"
+_CONFIG_UNAVAILABLE = "unavailable"
+
+
+def _config_get(key: str, timeout: float) -> tuple:
+    """Reads one key through the supported, read-only `hermes config get`
+    interface, gated on the already-vetted non-secret allowlist in
+    provenance/versions.py (reusing that frozenset rather than declaring a
+    second, possibly-diverging allowlist is deliberate). Returns
+    (state, first_line_or_None)."""
+    if key not in ALLOWED_HERMES_CONFIG_KEYS or shutil.which("hermes") is None:
+        return _CONFIG_UNAVAILABLE, None
+    rc, out, _err = _run(["hermes", "config", "get", key], timeout)
     if rc != 0:
+        return _CONFIG_UNAVAILABLE, None
+    line = _first_line(out)
+    if not line:
+        return _CONFIG_ABSENT, None
+    return _CONFIG_VALUE, line
+
+
+def _collect_provider_value(timeout: float) -> Optional[str]:
+    """Reads `model.provider` only - one already-vetted, non-secret key in
+    ALLOWED_HERMES_CONFIG_KEYS."""
+    _state, value = _config_get("model.provider", timeout)
+    return value
+
+
+def classify_fallback_model(value: Optional[str]) -> str:
+    """Classifies a legacy `fallback_model` config value ("provider/model",
+    the same shape as Hermes' `model` key) into the same bounded
+    local/cloud/unknown destination vocabulary as `classify_destination`.
+
+    A value with no `provider/` prefix names no provider at all and
+    therefore cannot be classified without guessing, so it is "unknown" -
+    never optimistically "local"."""
+    if not isinstance(value, str) or not value.strip():
+        return "unknown"
+    raw = value.strip()
+    if "/" not in raw:
+        return "unknown"
+    return classify_destination(raw.split("/", 1)[0])
+
+
+def collect_cloud_fallback_enabled(timeout: float) -> Optional[bool]:
+    """Detects whether Hermes has a cloud-destined automatic fallback
+    configured, using only the two allowlisted, non-secret config keys
+    documented at
+    https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers
+    and the same read mechanism `modules/hermes-restricted/module.sh`
+    (issue #215) already uses.
+
+    Returns True ("enabled"), False ("disabled"), or None ("unknown").
+    Ambiguity is always None - never False:
+
+    - `fallback_model` holds a cloud-provider selection -> True.
+    - `fallback_model` is confirmed unset (or names a provider that
+      classifies as local) AND `fallback_providers` is confirmed unset
+      -> False.
+    - `fallback_model` names a provider outside the bounded
+      local/cloud vocabulary, or either key could not be read (no
+      `hermes` binary, non-zero exit, unrecognized subcommand, timeout)
+      -> None.
+    - `fallback_providers` is present and non-empty -> None. Its value is
+      an undocumented list rendering that #215 deliberately does not
+      parse, so its presence means "a fallback may be configured and OMES
+      cannot tell what it points at", which is unknown, not disabled.
+    """
+    state, value = _config_get("fallback_model", timeout)
+    if state == _CONFIG_UNAVAILABLE:
         return None
-    return _first_line(out) or None
+    if state == _CONFIG_VALUE:
+        destination = classify_fallback_model(value)
+        if destination == "cloud":
+            return True
+        if destination != "local":
+            return None
+
+    # Either `fallback_model` is confirmed unset, or it is demonstrably
+    # local. Neither conclusion survives an unresolved `fallback_providers`
+    # list, so that key must be confirmed absent before reporting
+    # "disabled".
+    providers_state, _providers_value = _config_get("fallback_providers", timeout)
+    if providers_state != _CONFIG_ABSENT:
+        return None
+    return False
 
 
 def classify_destination(provider_value: Optional[str]) -> str:
@@ -174,6 +256,7 @@ def build_observation(state_facts: dict, timeout: float) -> dict:
     destination_class = classify_destination(provider_value)
     local_endpoint_classification = collect_local_endpoint_classification(destination_class, timeout)
     network_isolation_active = collect_network_isolation_active(timeout)
+    cloud_fallback_enabled = collect_cloud_fallback_enabled(timeout)
     hermes_version = _collect_hermes_version(timeout)
 
     expected_posture = state_facts.get("expected_posture")
@@ -183,11 +266,11 @@ def build_observation(state_facts: dict, timeout: float) -> dict:
         "policy_version": "v1",
         "destination_class": destination_class,
         "local_endpoint": {"classification": local_endpoint_classification},
-        # Not implemented yet (tracked in #216 follow-on / #215): OMES has
-        # no supported interface today to read whether Hermes cloud
-        # fallback is enabled, so this is honestly reported as unknown
-        # rather than guessed.
-        "cloud_fallback_enabled": None,
+        # Derived from the allowlisted, non-secret `fallback_model` /
+        # `fallback_providers` config keys (see
+        # collect_cloud_fallback_enabled). None means genuinely
+        # undeterminable and is rendered as "unknown" - never "disabled".
+        "cloud_fallback_enabled": cloud_fallback_enabled,
         "network_isolation_active": network_isolation_active,
         "expected_posture": expected_posture if isinstance(expected_posture, str) else "unknown",
         "evidence_source": "hermes-cli:hermes config get" if provider_value else "omes-host:network-classification",

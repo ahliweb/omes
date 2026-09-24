@@ -62,10 +62,21 @@ _TIMEOUT_SECONDS = 5.0
 # NEVER add a key here that could hold a credential/token/secret value -
 # this allowlist is the single place that decides what `hermes config
 # get` is allowed to be asked for on behalf of `omes health versions`.
+# `fallback_model` and `fallback_providers` are the legacy scalar and the
+# newer list-valued automatic-provider-fallback keys documented at
+# https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers.
+# Both name a provider/model selection, never a credential. OMES reads
+# `fallback_providers` for PRESENCE ONLY (see
+# lib/omes/py/health/ai_privacy.py): upstream does not document what
+# `hermes config get` prints for a list-valued path, so its value is never
+# parsed or interpreted - a non-empty value degrades a derived signal to
+# "unknown" rather than being guessed at.
 ALLOWED_HERMES_CONFIG_KEYS = (
     "model.provider",
     "model.name",
     "gateway.mode",
+    "fallback_model",
+    "fallback_providers",
 )
 
 
