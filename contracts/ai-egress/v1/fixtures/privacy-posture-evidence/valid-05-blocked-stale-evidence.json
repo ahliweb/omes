@@ -1,0 +1,20 @@
+{
+  "policy_version": "v1",
+  "classification_mode": "unknown",
+  "destination_class": "local",
+  "local_endpoint_classification": "loopback",
+  "cloud_fallback_enabled": "unknown",
+  "network_isolation_active": "unknown",
+  "last_verified_at": "2026-09-20T12:00:00Z",
+  "evidence_source": "hermes-cli:hermes config get",
+  "local_only_posture": {
+    "available": true,
+    "status": "pass",
+    "source": "local-only-posture-source:issue-215"
+  },
+  "hermes_version_reference": null,
+  "status": "BLOCKED",
+  "reason_codes": [
+    "AI_PRIVACY_POSTURE_BLOCKED_EVIDENCE_STALE"
+  ]
+}

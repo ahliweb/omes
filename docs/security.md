@@ -311,10 +311,19 @@ Security requirements:
 classification/egress-policy contract and its deterministic evaluator are implemented
 ([#214](https://github.com/ahliweb/omes/issues/214); see
 [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
-[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). Restricted
-local-only runtime enforcement, privacy-posture evidence, Control Center projection, and
-regression gates are **Not implemented yet** (tracked in
-[#215](https://github.com/ahliweb/omes/issues/215)–[#218](https://github.com/ahliweb/omes/issues/218)).
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). A read-only AI
+privacy posture/egress evidence surface — `omes health ai-privacy`, backed by
+[lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py) and
+[contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
+— is also implemented ([#216](https://github.com/ahliweb/omes/issues/216)): it reports bounded
+policy/destination/isolation metadata and a PASS/FAIL/WARN/BLOCKED status with stable reason
+codes, never raw prompt/response content or credentials, and reads the #215 local-only posture
+source only when that issue has landed (a missing source degrades to `BLOCKED`, never a healthy
+default, under a declared restricted-local-only posture). Restricted local-only runtime
+enforcement itself, Control Center projection, and regression gates are **Not implemented yet**
+(tracked in [#215](https://github.com/ahliweb/omes/issues/215),
+[#217](https://github.com/ahliweb/omes/issues/217), and
+[#218](https://github.com/ahliweb/omes/issues/218)).
 
 ## 9. What OMES does NOT claim
 
