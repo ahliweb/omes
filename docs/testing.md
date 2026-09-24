@@ -260,6 +260,15 @@ renamed/removed schema directory fails the generator - and its `--check`
 gate - instead of silently zeroing out a UI section; this is also covered
 by `test_generate_control_center_data.py`.
 
+`tests/py/control_center/test_color_contrast.py` (also run by
+§2.5's `python3 -m unittest discover -s tests/py -t .`) computes WCAG 2.x
+relative luminance/contrast ratio, in pure Python stdlib, for every
+text-on-background pair in the §2.1 palette documented in
+[docs/ui-ux-design-system.md](ui-ux-design-system.md) §9, parsing the hex
+values directly out of that document. It fails if any pair drops below the
+WCAG-AA 4.5:1 threshold for normal text, so the accessibility claim in
+that document is enforced rather than a one-time manual check.
+
 ## 3. Evidence and release gates
 
 `docs/business/release-gates.md` cites this test suite as the proof for several of its

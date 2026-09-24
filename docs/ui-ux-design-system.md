@@ -224,8 +224,14 @@ command.
 
 - **Contrast**: every body/label text token in the palette in §2.1 (`#7A8894` and lighter against
   the canvas/panel backgrounds in that same palette) meets or exceeds WCAG AA (4.5:1) for normal
-  text. A dimmer token (e.g. something around `#4E5A66` on `#0B0F13`) would fail and must not be
-  introduced without re-checking contrast.
+  text. This is verified programmatically — not just checked once by hand — by
+  [`tests/py/control_center/test_color_contrast.py`](../tests/py/control_center/test_color_contrast.py),
+  which parses the §2.1 palette hex values straight out of this document and computes the WCAG 2.x
+  relative-luminance contrast ratio for every text-on-background pair the design uses; it runs as
+  part of `tests/run.sh` (`python3 -m unittest discover -s tests/py -t .`). The tightest pair,
+  Text Dim `#7A8894` on Panel Hover/Alt `#1A2027`, is `~4.51:1` — a narrow margin above the `4.5:1`
+  threshold. A dimmer token (e.g. something around `#4E5A66` on `#0B0F13`) would fail that test and
+  must not be introduced without it passing.
 - **Keyboard focus**: `:focus-visible` renders a visible cyan outline on every interactive
   element (nav buttons, role switcher, table rows, drawer controls).
 - **Keyboard reachability**: navigation items and clickable fleet/server rows are native
