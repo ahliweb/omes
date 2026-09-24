@@ -2,8 +2,12 @@
 
 > Status: **authoritative design and policy; runtime enforcement is not fully implemented yet**.
 > The architecture decision is recorded in [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md).
-> Machine-readable policy, restricted local-only enforcement, privacy evidence, Control Center projection,
-> and regression coverage are tracked in [#214](https://github.com/ahliweb/omes/issues/214),
+> The machine-readable data-classification and egress-policy contract and its deterministic
+> evaluator are implemented ([#214](https://github.com/ahliweb/omes/issues/214)); see
+> [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
+> [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py). Restricted
+> local-only runtime enforcement, privacy evidence, Control Center projection, and negative
+> regression coverage are **Not implemented yet**, tracked in
 > [#215](https://github.com/ahliweb/omes/issues/215),
 > [#216](https://github.com/ahliweb/omes/issues/216),
 > [#217](https://github.com/ahliweb/omes/issues/217), and
@@ -110,7 +114,12 @@ not inspect private Hermes databases or introduce a second agent runtime.
 ## 4. Data classification
 
 The initial OMES policy uses four classes. Machine-readable classification and egress policy is
-**not implemented yet (tracked in #214)**.
+implemented as [contracts/ai-egress/v1/egress-decision-request.schema.json](../contracts/ai-egress/v1/egress-decision-request.schema.json),
+[contracts/ai-egress/v1/egress-decision-response.schema.json](../contracts/ai-egress/v1/egress-decision-response.schema.json),
+and the deterministic evaluator in
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py) (#214). The
+evaluator is metadata-only: it never receives, logs, or persists prompt text, response text,
+embeddings, retrieved documents, or credential values, and it performs no network I/O.
 
 | Class | Typical examples | Cloud-model default |
 |---|---|---|
@@ -462,7 +471,9 @@ seen only on upstream development branches is not treated as supported release e
 
 ## 18. Implementation sequence
 
-1. **#214** — machine-readable data classification and egress policy.
+1. **#214** — machine-readable data classification and egress policy. Implemented: see
+   [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
+   [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py).
 2. **#215** — Restricted local-only inference deployment posture.
 3. **#216** — privacy posture, drift and egress evidence without prompt capture.
 4. **#217** — sanitized Control Center projection and policy-decision contracts.

@@ -1,0 +1,11 @@
+{
+  "policy_version": "v1",
+  "classification": "PUBLIC",
+  "destination": "local_only",
+  "purpose": "code_generation",
+  "provider_posture": {
+    "status": "approved"
+  },
+  "contains_authentication_material": false,
+  "raw_prompt_preview": "this field must never exist on this contract"
+}

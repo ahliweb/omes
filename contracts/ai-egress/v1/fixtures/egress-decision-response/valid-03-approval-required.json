@@ -1,0 +1,8 @@
+{
+  "policy_version": "v1",
+  "classification": "CONFIDENTIAL",
+  "destination": "private_endpoint",
+  "decision": "approval_required",
+  "reason_codes": ["AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_PRIVATE_ENDPOINT"],
+  "resource_scope": "server-fixture-001"
+}
