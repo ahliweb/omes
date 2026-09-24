@@ -1,0 +1,22 @@
+{
+  "policy_version": "v1",
+  "classification_mode": "fail_closed_v1",
+  "destination_class": "unknown",
+  "local_endpoint_classification": "unknown",
+  "cloud_fallback_enabled": "unknown",
+  "network_isolation_active": "unknown",
+  "last_verified_at": "2026-09-24T12:00:00Z",
+  "evidence_source": "unknown",
+  "local_only_posture": {
+    "available": false,
+    "status": "unknown",
+    "source": "local-only-posture-source:unavailable"
+  },
+  "hermes_version_reference": null,
+  "status": "BLOCKED",
+  "reason_codes": [
+    "AI_PRIVACY_POSTURE_WARN_EVIDENCE_SOURCE_REJECTED",
+    "AI_PRIVACY_POSTURE_BLOCKED_UNKNOWN_DESTINATION_CLASS",
+    "AI_PRIVACY_POSTURE_WARN_EXPECTED_POSTURE_UNKNOWN"
+  ]
+}

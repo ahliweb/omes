@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/ai-egress/v1/privacy-posture-evidence.schema.json",
+  "title": "privacy-posture-evidence",
+  "description": "Bounded, read-only AI privacy posture/egress evidence produced by `omes health ai-privacy` and lib/omes/py/privacy/posture_evidence.py (issue #216, ADR-0029). Every property is closed metadata - an enum, a bounded pattern, a boolean, or a timestamp. This shape MUST NEVER carry prompt text, response text, embeddings, retrieved documents, chain-of-thought, secrets/credentials, or a raw provider response; `evidence_source` and `hermes_version_reference.source` are drawn from a closed vocabulary (never free text) specifically so this contract cannot become a place to smuggle unbounded content.",
+  "type": "object",
+  "required": [
+    "policy_version",
+    "classification_mode",
+    "destination_class",
+    "local_endpoint_classification",
+    "cloud_fallback_enabled",
+    "network_isolation_active",
+    "last_verified_at",
+    "evidence_source",
+    "local_only_posture",
+    "hermes_version_reference",
+    "status",
+    "reason_codes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy_version": {
+      "type": "string",
+      "description": "'unknown' when the evaluator did not recognize the policy version supplied to it - the evidence is then unconditionally BLOCKED.",
+      "pattern": "^[A-Za-z0-9_.-]{1,32}$"
+    },
+    "classification_mode": {
+      "type": "string",
+      "enum": ["fail_closed_v1", "unknown"]
+    },
+    "destination_class": {
+      "type": "string",
+      "description": "Effective provider destination class per issue #216 scope.",
+      "enum": ["local", "private", "cloud", "unknown"]
+    },
+    "local_endpoint_classification": {
+      "type": "string",
+      "enum": ["loopback", "private_network", "public", "not_applicable", "unknown"]
+    },
+    "cloud_fallback_enabled": {
+      "type": "string",
+      "description": "Tri-state: only an explicit boolean observation resolves to 'enabled'/'disabled'; a missing or malformed observation is 'unknown', never assumed disabled.",
+      "enum": ["enabled", "disabled", "unknown"]
+    },
+    "network_isolation_active": {
+      "type": "string",
+      "enum": ["active", "inactive", "unknown"]
+    },
+    "last_verified_at": {
+      "type": ["string", "null"],
+      "description": "ISO-8601 timestamp of the observation this evidence was built from, or null when no timestamp was supplied (which forces BLOCKED).",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    },
+    "evidence_source": {
+      "type": "string",
+      "description": "Closed vocabulary, never free text - the structural control that makes it impossible for this field to carry a secret or prompt fragment.",
+      "enum": [
+        "hermes-cli:hermes --version",
+        "hermes-cli:hermes config get",
+        "hermes-cli:hermes doctor",
+        "omes-host:network-classification",
+        "omes-host:state",
+        "local-only-posture-source:issue-215",
+        "local-only-posture-source:unavailable",
+        "unknown"
+      ]
+    },
+    "local_only_posture": {
+      "type": "object",
+      "description": "The #215 restricted local-only posture integration point. `available: false` (including when #215 has not landed yet) must never be treated as a healthy default by any consumer of this evidence.",
+      "required": ["available", "status", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "available": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pass", "fail", "warn", "unknown"] },
+        "source": {
+          "type": "string",
+          "enum": [
+            "hermes-cli:hermes --version",
+            "hermes-cli:hermes config get",
+            "hermes-cli:hermes doctor",
+            "omes-host:network-classification",
+            "omes-host:state",
+            "local-only-posture-source:issue-215",
+            "local-only-posture-source:unavailable",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "hermes_version_reference": {
+      "type": ["object", "null"],
+      "description": "Upstream Hermes version/provenance reference where available, or null. `value` is bounded to a short version-banner shape - not arbitrary text - and a value that fails that bound is reported as null with a WARN reason code rather than echoed.",
+      "required": ["value", "source"],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": ["string", "null"],
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,63}$"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "hermes-cli:hermes --version",
+            "hermes-cli:hermes config get",
+            "hermes-cli:hermes doctor",
+            "omes-host:network-classification",
+            "omes-host:state",
+            "local-only-posture-source:issue-215",
+            "local-only-posture-source:unavailable",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "status": {
+      "type": "string",
+      "description": "PASS/FAIL/WARN/BLOCKED. Unknown or stale evidence is always BLOCKED, never PASS. Drift from a restricted-local-only expected posture to an observed cloud destination is always FAIL.",
+      "enum": ["PASS", "FAIL", "WARN", "BLOCKED"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "description": "Stable, machine-readable reason codes. Always non-empty. Distinct from (and never overloaded with) lib/omes/py/privacy/egress_policy.py's AI_EGRESS_* decision codes.",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "AI_PRIVACY_POSTURE_PASS_CONSISTENT",
+          "AI_PRIVACY_POSTURE_BLOCKED_UNKNOWN_POLICY_VERSION",
+          "AI_PRIVACY_POSTURE_BLOCKED_UNKNOWN_DESTINATION_CLASS",
+          "AI_PRIVACY_POSTURE_BLOCKED_EVIDENCE_MISSING_TIMESTAMP",
+          "AI_PRIVACY_POSTURE_BLOCKED_EVIDENCE_STALE",
+          "AI_PRIVACY_POSTURE_BLOCKED_LOCAL_ONLY_SOURCE_UNAVAILABLE",
+          "AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD",
+          "AI_PRIVACY_POSTURE_FAIL_LOCAL_ENDPOINT_PUBLICLY_EXPOSED",
+          "AI_PRIVACY_POSTURE_FAIL_CLOUD_FALLBACK_ENABLED_UNDER_RESTRICTED_POSTURE",
+          "AI_PRIVACY_POSTURE_FAIL_NETWORK_ISOLATION_INACTIVE_UNDER_RESTRICTED_POSTURE",
+          "AI_PRIVACY_POSTURE_FAIL_LOCAL_ONLY_SOURCE_REPORTS_FAIL",
+          "AI_PRIVACY_POSTURE_WARN_DRIFT_LOCAL_ONLY_TO_PRIVATE_ENDPOINT",
+          "AI_PRIVACY_POSTURE_WARN_LOCAL_ENDPOINT_CLASSIFICATION_UNKNOWN",
+          "AI_PRIVACY_POSTURE_WARN_CLOUD_FALLBACK_STATE_UNKNOWN",
+          "AI_PRIVACY_POSTURE_WARN_NETWORK_ISOLATION_STATE_UNKNOWN",
+          "AI_PRIVACY_POSTURE_WARN_LOCAL_ONLY_SOURCE_REPORTS_WARN",
+          "AI_PRIVACY_POSTURE_WARN_LOCAL_ONLY_SOURCE_REPORTS_UNKNOWN",
+          "AI_PRIVACY_POSTURE_WARN_EXPECTED_POSTURE_UNKNOWN",
+          "AI_PRIVACY_POSTURE_WARN_EVIDENCE_SOURCE_REJECTED",
+          "AI_PRIVACY_POSTURE_WARN_HERMES_VERSION_REFERENCE_REJECTED"
+        ]
+      }
+    }
+  }
+}

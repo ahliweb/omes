@@ -419,6 +419,32 @@ omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 ```
 
+`omes health ai-privacy [--json]` (issue
+[#216](https://github.com/ahliweb/omes/issues/216), via
+[`lib/omes/py/health/ai_privacy.py`](../lib/omes/py/health/ai_privacy.py) and the deterministic
+evaluator in [`lib/omes/py/privacy/posture_evidence.py`](../lib/omes/py/privacy/posture_evidence.py))
+reports a read-only AI privacy posture/egress evidence snapshot: policy version and
+classification mode, the effective provider destination class (`local`/`private`/`cloud`/`unknown`,
+derived from the non-secret `model.provider` Hermes config key already vetted by `omes health
+versions`), local endpoint network classification (loopback/private/public, reusing [`lib/omes/py/health/exposure.py`](../lib/omes/py/health/exposure.py)'s
+existing listener audit rather than a second implementation), cloud-fallback and
+network-isolation tri-state (`enabled`/`disabled`/`unknown` — a missing signal is always
+`unknown`, never assumed safe), a `last_verified_at` timestamp, and the #215 local-only posture
+source when that issue's evidence has landed. Returns `PASS`/`FAIL`/`WARN`/`BLOCKED` with stable
+`AI_PRIVACY_POSTURE_*` reason codes (see
+[contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)).
+Unknown or stale evidence is always `BLOCKED`; drift from a declared restricted-local-only
+posture (`OMES_AI_PRIVACY_EXPECTED_POSTURE=restricted_local_only`, or `state_set
+ai.privacy.expected_posture restricted_local_only`) to an observed `cloud` destination is always
+`FAIL`. NEVER prints prompt text, response text, transcripts, or credential values — see
+[docs/ai-data-privacy-and-model-security.md §11](ai-data-privacy-and-model-security.md#11-audit-and-evidence).
+Exit codes: 0 status is `PASS`/`WARN`, 7 status is `FAIL`/`BLOCKED`.
+
+```bash
+omes health ai-privacy
+omes health ai-privacy --json | jq -r '.status'
+```
+
 ## 4.14 `omes audit` (security audits)
 
 **Synopsis:** `omes audit exposure [--json]` / `omes audit provenance [--profile <name>] [--json]`
