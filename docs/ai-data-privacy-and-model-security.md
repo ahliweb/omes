@@ -417,18 +417,29 @@ restore of AI-adjacent data.
 AWCMS/Control Center may display privacy posture and policy decisions, but must not become a prompt
 archive or secret store.
 
-This projection is **not implemented yet (tracked in #217)**. When implemented, it may show:
+The OMES-side wire contracts and pure evaluation logic for this projection are delivered (issue
+#217): [`contracts/control-center/v1/ai-privacy-posture-view.schema.json`](../contracts/control-center/v1/ai-privacy-posture-view.schema.json),
+[`ai-egress-approval.request.schema.json`](../contracts/control-center/v1/ai-egress-approval.request.schema.json)/[`.response.schema.json`](../contracts/control-center/v1/ai-egress-approval.response.schema.json),
+and `lib/omes/py/privacy/posture_projection.py`; see
+[docs/control-center-contracts.md](control-center-contracts.md) section 2.10 for the full field set
+and authority split. They show:
 
-- current privacy mode;
-- data class;
-- local/private/cloud destination class;
-- allow/deny/approval-required decision;
-- reason code;
-- evidence authority and freshness;
-- drift and remediation status.
+- current privacy mode (`classification_mode`);
+- data class (`latest_decision.classification`);
+- local/private/cloud destination class (`destination_class`, `latest_decision.destination`);
+- allow/deny/approval-required decision (`latest_decision.decision`);
+- reason code (`reason_codes`, `latest_decision.reason_codes`);
+- evidence authority and freshness (`authority`, `evidence_freshness`);
+- drift and remediation status (`status`, e.g. `AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD`).
 
-Tenant/RBAC/ABAC/RLS authorization remains server-side. OMES nodes continue using the outbound
-pull-worker model rather than exposing a new privileged listener.
+**The AWCMS-side screen, API, and database that would consume these contracts are not implemented
+yet (tracked in #217)** - this repository only fixes the projection's wire shape and the OMES-side
+authorization backstop (cross-tenant denial, the RESTRICTED-cloud approval block).
+
+Tenant/RBAC/ABAC/RLS authorization remains server-side in AWCMS; UI hiding of a field is never a
+substitute for that check. OMES nodes continue using the outbound pull-worker model
+(`ai-privacy-posture.changed`/`ai-egress-approval.recorded` events) rather than exposing a new
+privileged listener.
 
 ## 14. Threats addressed
 
