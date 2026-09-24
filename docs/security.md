@@ -282,6 +282,36 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Registrar, invoice, entitlement, and DNS state are named as distinct state domains; a reconciliation rule cannot claim a state domain is reconciled against itself | `lib/omes/py/domains/billing.py`'s `build_reconciliation_rule()` |
 
 
+### 8.7 AI model data-egress and privacy boundary (issue #213)
+
+[ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) and
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
+define the canonical trust boundary for local/private and cloud AI inference.
+
+Security requirements:
+
+- `RESTRICTED` data, credentials, API tokens, private keys, authentication material, and
+  other secret values default to local/private processing and are denied for cloud-model egress.
+- Missing or unknown classification fails closed for model egress.
+- Hermes remains authoritative for model/provider routing; OMES must not implement a second LLM
+  router or inspect private Hermes runtime databases.
+- Model output is untrusted input and never becomes authorization. Host/API mutations continue
+  through deterministic, typed, allowlisted OMES operations.
+- Application/data owners remain responsible for domain-specific minimization, tokenization,
+  aggregation, and lawful processing; generic OMES redaction is not treated as proof that arbitrary
+  data is safe to disclose.
+- RAG chunks, embeddings, vector retrieval, reranking, and assembled context inherit the source
+  data classification.
+- Audit and Control Center evidence records policy/posture metadata, not raw Restricted prompts,
+  full transcripts, chain-of-thought, credentials, or protected records.
+- Provider statements such as "not used for training" are not treated as equivalent to zero
+  retention, no human/subprocessor access, or no cross-border processing.
+
+**Current implementation status:** the policy is authoritative, but machine-readable enforcement,
+Restricted local-only runtime enforcement, privacy-posture evidence, Control Center projection, and
+regression gates are **Not implemented yet** (tracked in
+[#214](https://github.com/ahliweb/omes/issues/214)–[#218](https://github.com/ahliweb/omes/issues/218)).
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
