@@ -945,6 +945,17 @@ hardening.sh`), and #82's data-class backup engine
 (`lib/omes/py/hermesbackup/`). See section 12.4 for its relationship (and
 current non-integration) with `lib/omes/runtime.sh`.
 
+
+### AI data privacy and model-security boundary
+
+AI model/provider routing remains a Hermes responsibility. OMES owns only the host-side
+policy, hardening, verification, evidence, recovery, and allowlisted execution boundary.
+The canonical classification/egress architecture is
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) and
+ADR-0029. RESTRICTED data defaults to local-only/deny-cloud, model output is untrusted, and
+unknown policy state fails closed. Runtime enforcement is **not implemented yet (tracked in
+#214-#218)**.
+
 ## 13. Non-goals and known limitations
 
 **Non-goals:**
