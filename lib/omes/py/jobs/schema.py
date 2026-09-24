@@ -104,8 +104,14 @@ def validate_schema(schema: Any, path: str = "$") -> None:
 # fixture/request and a leaked secret.
 # ---------------------------------------------------------------------------
 
+# `private[_-]?key`/`signing[_-]?key` were added in issue #218: `api_key`
+# alone did not cover a field literally named `private_key`, so a raw
+# private-key value could sit under a secret-like field name without this
+# gate rejecting it.
 _SECRET_NAME_RE = re.compile(
-    r"(token|password|secret|credential|api[_-]?key|passphrase|cookie|authorization)", re.IGNORECASE
+    r"(token|password|secret|credential|api[_-]?key|private[_-]?key|signing[_-]?key"
+    r"|passphrase|cookie|authorization)",
+    re.IGNORECASE,
 )
 
 # Identifier shape allowed as an element of a list under a secret-like key
