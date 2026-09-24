@@ -1,19 +1,25 @@
 # AI Data Privacy and Model Security
 
-> Status: **authoritative design and policy; runtime enforcement is not fully implemented yet**.
+> Status: **authoritative design and policy; runtime enforcement is partially implemented**.
 > The architecture decision is recorded in [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md).
 > The machine-readable data-classification and egress-policy contract and its deterministic
 > evaluator are implemented ([#214](https://github.com/ahliweb/omes/issues/214)); see
 > [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
-> [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py). A read-only AI
-> privacy posture/egress evidence surface is also implemented
+> [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py). The Restricted
+> local-only deployment posture ([#215](https://github.com/ahliweb/omes/issues/215)) is implemented
+> for the Hermes SYSTEM gateway: `modules/hermes-restricted/module.sh` verifies (via
+> [lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py), which
+> delegates the actual decision to `egress_policy.py` rather than duplicating it) that the
+> configured Hermes model endpoint is local/private before allowing apply, and denies outbound
+> network access from the gateway unit by default when applied. A read-only AI privacy
+> posture/egress evidence surface is also implemented
 > ([#216](https://github.com/ahliweb/omes/issues/216)); see `omes health ai-privacy`,
 > [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json),
-> and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py).
-> Restricted local-only runtime enforcement, Control Center projection, and negative regression
-> coverage are **Not implemented yet**, tracked in
-> [#215](https://github.com/ahliweb/omes/issues/215),
-> [#217](https://github.com/ahliweb/omes/issues/217), and
+> and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py), as is
+> its sanitized Control Center projection
+> ([#217](https://github.com/ahliweb/omes/issues/217); see
+> [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
+> Negative regression coverage is **Not implemented yet**, tracked in
 > [#218](https://github.com/ahliweb/omes/issues/218).
 >
 > This document is engineering guidance for OMES. It does **not** claim legal compliance,
@@ -256,60 +262,84 @@ orchestration projection from #183.
 
 ## 10. Local-only runtime posture
 
-The target Restricted posture tracked in [#215](https://github.com/ahliweb/omes/issues/215) is:
+The target Restricted posture, tracked in [#215](https://github.com/ahliweb/omes/issues/215) and
+implemented by `modules/hermes-restricted/module.sh` (opt-in; requires
+`modules/hermes-gateway-system` to already be applied), is:
 
-- Hermes uses a supported local/self-hosted endpoint;
-- no silent cloud fallback;
-- local inference service runs non-root;
-- endpoint binds to loopback/private interface by default;
-- service/network egress is denied or narrowly allowlisted where technically compatible;
-- model/runtime artifacts have provenance and integrity evidence;
-- GPU/CPU compatibility is checked before mutation;
-- logs avoid prompt bodies and secret values;
-- reinstallation is idempotent;
-- backup/restore follows classification and ownership rules;
-- drift from local-only to cloud-capable is reported as failure/action-required.
+| Requirement | Status |
+|---|---|
+| Hermes uses a supported local/self-hosted endpoint | **Implemented.** `module_check`/`module_apply`/`module_verify` all read only the documented `hermes config get model` / `hermes config get providers.<id>.base_url` keys (via the supported `HERMES_HOME` redirection, never `sudo -u`, never a second provider router) and classify the endpoint's network locality without any network I/O of its own. |
+| No silent cloud fallback | **Implemented.** A non-`allow` decision (deny or approval_required) is a hard `module_check`/`module_apply`/`module_verify` failure. OMES never substitutes, retries against, or defaults to a cloud endpoint. |
+| Local inference service runs non-root | **Partially implemented / scope boundary.** OMES does not install, select, or run a model server itself (non-goal: no custom model scheduler). The Hermes gateway process this module hardens already runs under `hermes-gateway-system`'s dedicated non-root service account; verifying the non-root identity of an operator's own separately-managed local inference server (e.g. Ollama) is **not implemented yet**. |
+| Endpoint binds to loopback/private interface by default | **Verified, not configured.** This module verifies the endpoint classifies as local/private; it does not itself configure or bind a model server's listen address (that server is not OMES-owned - see scope boundary above). |
+| Service/network egress is denied or narrowly allowlisted where technically compatible | **Implemented for the gateway unit.** `module_apply` writes a `40-omes-restricted-network.conf` systemd drop-in (`IPAddressDeny=any` / `IPAddressAllow=localhost link-local` plus any operator-approved ranges) on the `hermes-gateway` system unit. This is an **all-or-nothing, whole-unit** policy - every process in that unit's cgroup loses outbound network access, not just model calls; see the module's own `module_apply` confirmation prompt for this trade-off (a gateway that also needs internet access for browser automation or other MCP tools is not compatible with this policy). Requires systemd >= 235; older systemd is logged as an advisory warning, not enforced. |
+| Model/runtime artifacts have provenance and integrity evidence | **Not implemented yet** (tracked in #215 follow-on work; existing host-level provenance in `docs/compatibility-evidence.md` does not yet cover model/runtime artifact hashes). |
+| GPU/CPU compatibility is checked before mutation | **Implemented, advisory only.** `module_check` reports CPU core count, total memory, and GPU tooling presence (`nvidia-smi`/`rocm-smi`/`/dev/dri`) read-only; it warns below a configurable memory threshold but never blocks on hardware alone (only the endpoint-locality check blocks). |
+| Logs avoid prompt bodies and secret values | **Implemented.** Only the bounded evidence fields section 11 allows (endpoint-locality bucket, destination class, decision, reason codes) are logged or persisted to state - never a raw endpoint URL, model name, or credential. |
+| Reinstallation is idempotent | **Implemented.** A repeated `module_apply` re-evaluates the posture and rewrites the same drop-in content; no new resources are created. |
+| Backup/restore follows classification and ownership rules | **Implemented for this module's own state; not yet extended repository-wide.** `module_rollback` removes only the OMES-managed `40-omes-restricted-network.conf` drop-in and this module's own state keys - never `hermes-gateway-system`'s own drop-ins, the Hermes account, or its data. Broader Restricted-classified backup/restore policy (section 12) is **not implemented yet**. |
+| Drift from local-only to cloud-capable is reported as failure/action-required | **Implemented.** `module_verify` re-runs the same endpoint-locality check on every verification pass; a decision change away from `allow` is reported as a hard failure ("DRIFT DETECTED"), never a silent pass-through. |
 
-Until #215 lands, this is **not implemented yet** and must not be advertised as an enforced OMES
-guarantee.
+This table reflects `modules/hermes-restricted/module.sh` and
+[lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py) as of
+#215; it must be updated in the same change as any behavior change to either.
 
-**Integration point for #216's evidence surface:** `omes health ai-privacy`
-(`lib/omes/py/health/ai_privacy.py`) reads two pieces of OMES's own state — never a Hermes
-internal file — to project this posture into evidence:
+**Integration point between #215 and #216's evidence surface (implemented):**
+`modules/hermes-restricted/module.sh` writes exactly the two state keys `omes health ai-privacy`
+([lib/omes/py/health/ai_privacy.py](../lib/omes/py/health/ai_privacy.py), issue #216) reads. Both
+sides use the same closed vocabulary (`lib/omes/py/privacy/posture_evidence.py`'s
+`LOCAL_ONLY_SOURCE_STATUSES`), and the reader only ever touches OMES's own state — never a Hermes
+internal file:
 
+- `ai.local_only_posture.available` (`"true"`/`"false"`) and `ai.local_only_posture.status`
+  (`pass`/`fail`/`warn`/`unknown`) — written by `module_apply` and refreshed by every
+  `module_verify` run (so drift is visible to `omes health ai-privacy` without waiting for the
+  next apply), mapping `egress_policy.py`'s `allow`/`deny`/`approval_required` decision onto
+  `pass`/`fail`/`warn` respectively. A configured legacy Hermes `fallback_model` (see below) always
+  forces `status=fail`, independent of the primary endpoint's own decision. When the keys are
+  absent (the module was never applied), `omes health ai-privacy` reports
+  `local_only_posture.available = false`, which — combined with a declared `restricted_local_only`
+  expected posture — is evaluated as `BLOCKED`, never as a healthy default (see
+  `lib/omes/py/privacy/posture_evidence.py`).
 - `ai.privacy.expected_posture` — the operator-declared target posture
   (`restricted_local_only`/`unrestricted`), settable via `OMES_AI_PRIVACY_EXPECTED_POSTURE` or
-  `state_set ai.privacy.expected_posture <value>`. Absent/unset reads as `unknown` and never
-  upgrades a report to a healthy status on its own.
-- `ai.local_only_posture.available` / `ai.local_only_posture.status` — the seam #215 is expected
-  to populate once it lands (`available=true` plus a `pass`/`fail`/`warn`/`unknown` status). Until
-  #215 writes these keys, `omes health ai-privacy` reports
-  `local_only_posture.available = false`, which — combined with a declared
-  `restricted_local_only` expected posture — is evaluated as `BLOCKED`, never as a healthy
-  default (see `lib/omes/py/privacy/posture_evidence.py`).
+  `state_set ai.privacy.expected_posture <value>`, and set to `restricted_local_only` by
+  `module_apply` (applying that module is the explicit operator declaration of that intent).
+  `module_rollback` clears it, but only when the value is still exactly what the module set — an
+  operator's own independent declaration is never clobbered. Absent/unset reads as `unknown` and
+  never upgrades a report to a healthy status on its own.
 
-**Cloud-fallback detection (implemented, honestly bounded):** `omes health ai-privacy` derives
-`cloud_fallback_enabled` from two non-secret Hermes config keys read through the same supported,
-read-only `hermes config get` interface and the same vetted allowlist
-(`lib/omes/py/provenance/versions.py`'s `ALLOWED_HERMES_CONFIG_KEYS`) the rest of OMES's evidence
-machinery uses — never `$HERMES_HOME/.env`, never a file under `.hermes/`, never `messages.db`.
-The keys are documented at
-[hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers):
+**Cloud-fallback detection (implemented, honestly bounded):** both surfaces read the same two
+non-secret Hermes config keys, documented at
+[hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers),
+through the same supported, read-only `hermes config get` interface — never `$HERMES_HOME/.env`,
+never a file under `.hermes/`, never `messages.db`. `modules/hermes-restricted/module.sh` reads
+them the same safe way it reads `model`/`providers.<id>.base_url`; `omes health ai-privacy` reads
+them through the vetted allowlist in `lib/omes/py/provenance/versions.py`
+(`ALLOWED_HERMES_CONFIG_KEYS`).
 
-- **`fallback_model`** — the legacy scalar, in the same `provider/model` shape as `model`. A value
+- **`fallback_model`** — the legacy scalar, in the same `provider/model` shape as `model`. For
+  #215, a non-empty value means "fallback configured": it fails `module_check`/`module_apply` and
+  drifts `module_verify` even when the primary endpoint is otherwise local. For #216, a value
   whose provider classifies as cloud reports `cloud_fallback_enabled = "enabled"`, which under a
   declared `restricted_local_only` posture is a `FAIL`
   (`AI_PRIVACY_POSTURE_FAIL_CLOUD_FALLBACK_ENABLED_UNDER_RESTRICTED_POSTURE`).
-- **`fallback_providers`** — the newer **list**-valued key. Upstream does not document what
-  `hermes config get` prints for a list-valued path, so OMES reads it for **presence only** and
-  deliberately does not parse it (the same decision `modules/hermes-restricted/module.sh` made for
-  #215). A present, non-empty value therefore reports `"unknown"`, never `"disabled"`.
+- **`fallback_providers`** — the newer **list**-valued key. Neither Hermes's fallback nor
+  configuration documentation specifies what `hermes config get fallback_providers` actually prints
+  for a list-valued path (the configuration docs note that `hermes config get` on some paths
+  "prints the value from your file together with a stderr notice that Hermes may not read it"), so
+  neither surface parses it, rather than guess at an undocumented, possibly multi-line format.
+  `omes health ai-privacy` reads it for **presence only**: a present, non-empty value reports
+  `"unknown"`, never `"disabled"`. `modules/hermes-restricted/module.sh` does not read it at all,
+  so a fallback configured *only* via `fallback_providers` (and never via the legacy
+  `fallback_model`) is not detected by that module's check — a real, documented gap.
 
-`"disabled"` is reported only when `fallback_model` is confirmed unset (or names a provider that
-classifies as local) **and** `fallback_providers` is confirmed unset. Every other outcome — a
-provider outside the bounded local/cloud vocabulary, a bare model name with no provider prefix, a
-missing `hermes` binary, a non-zero exit, an unrecognized `config get` subcommand, or a timeout —
-is `"unknown"`. Ambiguity is never reported as `"disabled"`.
+For `omes health ai-privacy`, `"disabled"` is reported only when `fallback_model` is confirmed
+unset (or names a provider that classifies as local) **and** `fallback_providers` is confirmed
+unset. Every other outcome — a provider outside the bounded local/cloud vocabulary, a bare model
+name with no provider prefix, a missing `hermes` binary, a non-zero exit, an unrecognized
+`config get` subcommand, or a timeout — is `"unknown"`. Ambiguity is never reported as
+`"disabled"`.
 
 ## 11. Audit and evidence
 
@@ -562,13 +592,15 @@ seen only on upstream development branches is not treated as supported release e
 1. **#214** — machine-readable data classification and egress policy. Implemented: see
    [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
    [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py).
-2. **#215** — Restricted local-only inference deployment posture.
+2. **#215** — Restricted local-only inference deployment posture. Implemented: see
+   `modules/hermes-restricted/module.sh` and
+   [lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py)
+   (section 10's table has the per-requirement detail).
 3. **#216** — privacy posture, drift and egress evidence without prompt capture. Implemented: see
    `omes health ai-privacy`,
    [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json),
    and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py). The
-   #215 local-only posture source is integrated when available (section 10) and degrades to
-   `BLOCKED` — never a healthy default — while #215 has not landed.
+   #215 local-only posture source is integrated via the two state keys section 10 documents.
 4. **#217** — sanitized Control Center projection and policy-decision contracts.
 5. **#218** — negative/regression tests for disclosure and policy bypass.
 

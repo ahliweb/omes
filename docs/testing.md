@@ -328,3 +328,82 @@ script's own comments for the same notes, cross-referenced here):
   a container-based harness. `tests/vm/run.sh` does install and verify them for real (skippable
   via `OMES_VM_SKIP_HERMES=1`), so that VM run is currently the only automated, real (non-shim)
   proof of the Hermes/gateway install path end-to-end.
+
+## 7. AI privacy boundary regression gate (issue #218)
+
+`tests/py/privacy/test_privacy_boundary_regression.py` is a **cross-cutting** negative-test
+suite, run by `./tests/run.sh` like every other Python suite (section 2.1a), and therefore
+blocking (section 4). It is deliberately not a second copy of the per-unit suites
+(`test_egress_policy.py` #214, `test_restricted_posture.py` #215, `test_posture_evidence.py`
+#216, `test_posture_projection.py` #217, `tests/py/health/test_ai_privacy.py` #216) — those
+prove each unit's own behavior. This suite proves the invariants that must hold across all of
+them **at once**, so a later provider, agent, Control Center, logging, backup, or observability
+change cannot reintroduce sensitive-data egress or raw-prompt persistence through a seam
+between two units that each still pass their own tests.
+
+| Required case (issue #218) | Where it is asserted |
+|---|---|
+| Restricted classification cannot target a cloud destination | `TestRestrictedNeverReachesCloud` — an exhaustive cartesian sweep (144 combinations) over provider posture × sanitization evidence × authentication-material flag × purpose, plus #215's endpoint classifier, #217's approval gate, #216's drift evidence, and the #216→#217 projection |
+| Unknown classification/provider posture fails closed | `TestUnknownInputsFailClosedAcrossEveryModule` — every classification × destination × posture combination, in all four modules, including a sweep asserting no module ever emits a reason code outside its published vocabulary |
+| Credentials/private keys/token-like fixtures rejected or redacted | `TestCredentialMaterialIsRejectedOrRedacted` — the real `jobs.schema.scan_for_raw_secrets` gate, `jobs.audit` redaction, the `contains_authentication_material` deny path, and a canary sweep across every evaluator input field |
+| Prompt/transcript fields rejected from audit and Control Center evidence schemas | `TestPromptAndTranscriptFieldsCannotEnterTheContracts` — each AI schema's own published `valid-*` fixture is poisoned with `prompt`/`transcript`/`messages`/`api_key` and re-validated with the same validator `scripts/check-contracts.py` uses |
+| Local-only posture rejects silent cloud fallback | `TestLocalOnlyPostureRejectsSilentCloudFallback` — a configured fallback is FAIL even when the *active* endpoint is local, and the finding survives the Control Center projection |
+| Stale or missing evidence is not treated as success | `TestStaleOrMissingEvidenceIsNeverSuccess` — stale, missing, malformed, and future-dated timestamps, and a missing #215 posture source, across #216→#217 |
+| Logs/state/backups contain no synthetic secret canary | `TestNoCanarySurvivesIntoLogsStateOrBackups` — runs the real `jobs.store.submit` + `jobs.audit.append` workflow against a throwaway `OMES_STATE_DIR` (the directory `omes backup` archives, per `lib/omes/backup.sh`) and greps every byte written |
+| Prompt-injection text cannot alter the deterministic decision | `TestInjectionTextCannotAlterADeterministicDecision` — injection strings are fed through *metadata* fields and the decision must be byte-identical (`json.dumps(..., sort_keys=True)`) to the clean-input decision |
+| Model output cannot create an arbitrary shell/job operation | `TestModelOutputCannotCreateAnArbitraryOperation` — asserted against the real allowlist mechanism (`jobs.store.OPERATIONS`, `jobs.store.require_safe_argv_value`, `jobs.runner.build_argv`, `jobs.runner._reject_option_like_argv`) and the published `deployment.request` enum, never a mock |
+| RAG/embedding metadata follows the same classification rules | `TestRagAndEmbeddingMetadataFollowTheSameRules` — see the honest scope note below |
+
+### 7.1 Fixtures
+
+Every fixture value in this suite is synthetic. Secret-*shaped* canaries (for example the
+`sk_live_` shape) are assembled at runtime, following `tests/py/contracts/test_schema.py`, so no
+secret-shaped literal is ever committed and no `.gitleaks.toml` allowlist entry is needed. No
+value here is a real, revoked, or ever-valid credential.
+
+### 7.2 Proving the gate can fail
+
+The restricted-to-cloud invariant was verified by temporarily introducing the exact regression
+it exists to catch (making `RESTRICTED` + `cloud_sanitized` return `allow` when the provider is
+approved and sanitization evidence is present) in `lib/omes/py/privacy/egress_policy.py`. Three
+tests in this suite failed (`test_no_combination_of_inputs_lets_restricted_reach_cloud_sanitized`,
+`test_a_restricted_source_document_can_never_be_embedded_to_a_cloud_endpoint`,
+`test_egress_decision_is_byte_identical_under_injection_in_non_echoed_fields`), alongside one
+pre-existing #214 test, and the whole `tests/py` run went from `OK` to
+`FAILED (failures=4)`. The regression was then reverted and the suite returned to green. Repeat
+that experiment before trusting any future edit to this suite.
+
+### 7.3 Not implemented yet
+
+**RAG/embeddings/vector stores.** [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
+section 8 states that RAG, embedding generation, and vector retrieval inherit the source data's
+classification and create no exemption — but **no RAG, retrieval, chunking, embedding, or
+vector-store pipeline is implemented in this repository yet**, so there is no such pipeline to
+test end-to-end. Not implemented yet (tracked in [#218](https://github.com/ahliweb/omes/issues/218)'s
+follow-up scope, to be re-opened as its own issue when such a pipeline is proposed). What this
+suite tests today instead is the property that makes the documented rule enforceable the moment
+one lands: the egress evaluator is **purpose-invariant** (asserted over all 96
+classification × destination × posture × sanitization combinations for four RAG-shaped purposes),
+so a future `embedding_generation` or `rag_retrieval` call cannot be granted a quieter decision
+than the same classification/destination pair gets anywhere else. A tripwire test additionally
+fails if any module whose filename contains `embedding`/`vector`/`retrieval`/`rag_` lands under
+`lib/omes/py/` without this coverage being extended.
+
+### 7.4 Governance vocabulary mapping
+
+This mapping exists for **navigation and review**, so a reader can find which test corresponds to
+a control vocabulary they already use. OMES claims **no certification, attestation, audit
+result, or compliance status** against any framework or standard listed here, and a passing test
+run is evidence about this repository's code only.
+
+| Reference | Covered by |
+|---|---|
+| [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) | The whole suite; the restricted-to-cloud and local-only-fallback invariants specifically |
+| NIST AI RMF (GOVERN/MAP/MEASURE/MANAGE) and NIST AI 600-1 (GAI profile: Data Privacy, Information Security) | Fail-closed unknown handling (MAP/GOVERN), evidence freshness (MEASURE), drift and fallback findings (MANAGE) |
+| OWASP Top 10 for LLM/GenAI 2025 — LLM01 Prompt Injection | `TestInjectionTextCannotAlterADeterministicDecision` |
+| OWASP LLM02 Sensitive Information Disclosure | `TestCredentialMaterialIsRejectedOrRedacted`, `TestPromptAndTranscriptFieldsCannotEnterTheContracts`, `TestNoCanarySurvivesIntoLogsStateOrBackups` |
+| OWASP LLM06 Excessive Agency | `TestModelOutputCannotCreateAnArbitraryOperation` |
+| OWASP LLM08 Vector and Embedding Weaknesses | `TestRagAndEmbeddingMetadataFollowTheSameRules` (purpose-invariance and the tripwire; see section 7.3 for what is *not* implemented) |
+| ISO/IEC 42001, ISO/IEC 23894 | Fail-closed posture evidence and the documented decision matrix under test |
+| ISO/IEC 27001 A.5.15/A.8.10-A.8.12, ISO/IEC 27002 | Credential rejection/redaction, information deletion/masking, and data-leakage-prevention shaped assertions |
+| ISO/IEC 27017, ISO/IEC 27018, ISO/IEC 27701 | Cloud-egress refusal for restricted data and the no-prompt/no-transcript contract surface |

@@ -25,8 +25,14 @@ from . import paths
 
 GENESIS_HASH = "0" * 64
 
+# `private[_-]?key`/`signing[_-]?key` were added in issue #218 for the same
+# reason as in lib/omes/py/jobs/schema.py: a field literally named
+# `private_key` was not covered by `api[_-]?key`, so its value would have
+# been written to the audit log unredacted.
 _SECRET_KEY_RE = re.compile(
-    r"(token|password|secret|credential|api[_-]?key|passphrase|cookie)", re.IGNORECASE
+    r"(token|password|secret|credential|api[_-]?key|private[_-]?key|signing[_-]?key"
+    r"|passphrase|cookie)",
+    re.IGNORECASE,
 )
 # The [A-Za-z_] runs on either side of the secret-like word are bounded
 # ({0,32}) rather than unbounded (*) on purpose: an unbounded run made of
