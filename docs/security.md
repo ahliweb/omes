@@ -282,6 +282,54 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Registrar, invoice, entitlement, and DNS state are named as distinct state domains; a reconciliation rule cannot claim a state domain is reconciled against itself | `lib/omes/py/domains/billing.py`'s `build_reconciliation_rule()` |
 
 
+### 8.7 AI model data-egress and privacy boundary (issue #213)
+
+[ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) and
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
+define the canonical trust boundary for local/private and cloud AI inference.
+
+Security requirements:
+
+- `RESTRICTED` data, credentials, API tokens, private keys, authentication material, and
+  other secret values default to local/private processing and are denied for cloud-model egress.
+- Missing or unknown classification fails closed for model egress.
+- Hermes remains authoritative for model/provider routing; OMES must not implement a second LLM
+  router or inspect private Hermes runtime databases.
+- Model output is untrusted input and never becomes authorization. Host/API mutations continue
+  through deterministic, typed, allowlisted OMES operations.
+- Application/data owners remain responsible for domain-specific minimization, tokenization,
+  aggregation, and lawful processing; generic OMES redaction is not treated as proof that arbitrary
+  data is safe to disclose.
+- RAG chunks, embeddings, vector retrieval, reranking, and assembled context inherit the source
+  data classification.
+- Audit and Control Center evidence records policy/posture metadata, not raw Restricted prompts,
+  full transcripts, chain-of-thought, credentials, or protected records.
+- Provider statements such as "not used for training" are not treated as equivalent to zero
+  retention, no human/subprocessor access, or no cross-border processing.
+
+**Current implementation status:** the policy is authoritative, and the machine-readable
+classification/egress-policy contract and its deterministic evaluator are implemented
+([#214](https://github.com/ahliweb/omes/issues/214); see
+[contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). A read-only AI
+privacy posture/egress evidence surface — `omes health ai-privacy`, backed by
+[lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py) and
+[contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
+— is also implemented ([#216](https://github.com/ahliweb/omes/issues/216)): it reports bounded
+policy/destination/isolation metadata and a PASS/FAIL/WARN/BLOCKED status with stable reason
+codes, never raw prompt/response content or credentials, and reads the #215 local-only posture
+source (a missing source degrades to `BLOCKED`, never a healthy default, under a declared
+restricted-local-only posture). The Restricted local-only deployment posture for the Hermes system
+gateway is implemented ([#215](https://github.com/ahliweb/omes/issues/215); see
+`modules/hermes-restricted/module.sh` and
+[lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py),
+[docs/ai-data-privacy-and-model-security.md section 10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture)
+for the per-requirement status), and the read-only Control Center projection of that evidence is
+implemented ([#217](https://github.com/ahliweb/omes/issues/217); see
+[lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
+Security regression gates for this boundary are **Not implemented yet** (tracked in
+[#218](https://github.com/ahliweb/omes/issues/218)).
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

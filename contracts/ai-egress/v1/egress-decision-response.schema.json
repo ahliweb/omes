@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/ai-egress/v1/egress-decision-response.schema.json",
+  "title": "egress-decision-response",
+  "description": "Bounded decision output of the OMES AI data-classification and model-egress policy evaluator (issue #214, ADR-0029). `decision` is closed to allow/deny/approval_required and `reason_codes` is a closed, stable vocabulary - this response never carries a command, path, or anything executable, and never echoes prompt/response content.",
+  "type": "object",
+  "required": [
+    "policy_version",
+    "classification",
+    "destination",
+    "decision",
+    "reason_codes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.-]{1,32}$"
+    },
+    "classification": {
+      "type": "string",
+      "description": "Echoed from the request. 'unknown' when the request's classification was missing/unrecognized and the decision is therefore a fail-closed deny.",
+      "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED", "unknown"]
+    },
+    "destination": {
+      "type": "string",
+      "description": "Echoed from the request. 'unknown' when the request's destination was missing/unrecognized and the decision is therefore a fail-closed deny.",
+      "enum": ["local_only", "private_endpoint", "cloud_sanitized", "deny", "unknown"]
+    },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "approval_required"]
+    },
+    "reason_codes": {
+      "type": "array",
+      "description": "Stable, machine-readable reason codes, most-specific first. Always non-empty.",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "enum": [
+          "AI_EGRESS_ALLOW_LOCAL_ONLY",
+          "AI_EGRESS_ALLOW_PRIVATE_ENDPOINT_APPROVED",
+          "AI_EGRESS_ALLOW_CLOUD_SANITIZED_APPROVED",
+          "AI_EGRESS_ALLOW_PUBLIC_CLOUD_POLICY",
+          "AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_PRIVATE_ENDPOINT",
+          "AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_CLOUD_SANITIZED",
+          "AI_EGRESS_APPROVAL_REQUIRED_RESTRICTED_PRIVATE_ENDPOINT",
+          "AI_EGRESS_DENY_UNKNOWN_POLICY_VERSION",
+          "AI_EGRESS_DENY_UNKNOWN_CLASSIFICATION",
+          "AI_EGRESS_DENY_UNKNOWN_DESTINATION",
+          "AI_EGRESS_DENY_UNKNOWN_PROVIDER_POSTURE",
+          "AI_EGRESS_DENY_DESTINATION_EXPLICITLY_DENIED",
+          "AI_EGRESS_DENY_AUTHENTICATION_MATERIAL",
+          "AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED",
+          "AI_EGRESS_DENY_RESTRICTED_PROVIDER_NOT_APPROVED",
+          "AI_EGRESS_DENY_PROVIDER_NOT_APPROVED",
+          "AI_EGRESS_DENY_MISSING_SANITIZATION_EVIDENCE"
+        ]
+      }
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "resource_scope": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    }
+  }
+}

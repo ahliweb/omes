@@ -20,7 +20,7 @@ Grouped index of every document in this repository. See the top-level
 |---|---|
 | [ubuntu-server.md](ubuntu-server.md) | The `server` profile end to end: modules, firewall/SSH, update policy, Docker, troubleshooting. |
 | [linux-mint.md](linux-mint.md) | The `desktop` profile end to end: package availability, the Cinnamon-fallback guarantee, recovery. |
-| [hermes-integration.md](hermes-integration.md) | The `hermes`/`hermes-gateway`/`hermes-gateway-system` modules: install model, secrets boundary, user-vs-system gateway, health, exposure audit, backup. |
+| [hermes-integration.md](hermes-integration.md) | The `hermes`/`hermes-gateway`/`hermes-gateway-system`/`hermes-restricted` modules: install model, secrets boundary, user-vs-system gateway, restricted/local-only posture, health, exposure audit, backup. |
 | [agent-deployment.md](agent-deployment.md) | `omes agent`: per-agent manifest schema, lifecycle, systemd MVP, and the rootless Docker Compose isolation backend. |
 | [agent-runtime-boundary.md](agent-runtime-boundary.md) | The runtime-neutral contract OMES needs from any agent runtime, and how Hermes fulfils it today. |
 | [hermes-hardening.md](hermes-hardening.md) | Opt-in systemd hardening profiles (`off`/`conservative`/`strict`) for the Hermes gateway unit. |
@@ -45,6 +45,7 @@ Grouped index of every document in this repository. See the top-level
 |---|---|
 | [architecture.md](architecture.md) | The module contract, execution model, state/backup model, exit codes, privilege model. |
 | [security.md](security.md) | The security baseline: least-privilege defaults, Telegram/firewall/update policy, secret handling. |
+| [ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) | AI data classification, local/private vs cloud-model boundary, model egress rules, RAG/embedding privacy, and governance references. |
 | [threat-model.md](threat-model.md) | Trust boundaries, assets, the full STRIDE threat table and mitigations. |
 | [compatibility-matrix.md](compatibility-matrix.md) | Supported OS/hardware matrix, tiers, detection contract. |
 | [scope.md](scope.md) | What OMES is and is not, non-goals, the destructive-operation policy. |

@@ -1,0 +1,20 @@
+{
+  "policy_version": "v1",
+  "classification_mode": "fail_closed_v1",
+  "destination_class": "local",
+  "local_endpoint_classification": "loopback",
+  "cloud_fallback_enabled": "disabled",
+  "network_isolation_active": "active",
+  "last_verified_at": "2026-09-24T12:00:00Z",
+  "evidence_source": "hermes-cli:hermes config get",
+  "local_only_posture": {
+    "available": true,
+    "status": "pass",
+    "source": "local-only-posture-source:issue-215"
+  },
+  "hermes_version_reference": null,
+  "status": "HEALTHY",
+  "reason_codes": [
+    "AI_PRIVACY_POSTURE_PASS_CONSISTENT"
+  ]
+}

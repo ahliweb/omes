@@ -1,0 +1,10 @@
+{
+  "policy_version": "v1",
+  "classification": "RESTRICTED",
+  "destination": "deny",
+  "purpose": "incident_response",
+  "provider_posture": {
+    "status": "unknown"
+  },
+  "contains_authentication_material": true
+}

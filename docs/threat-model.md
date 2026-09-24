@@ -180,6 +180,25 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 
 
 
+### 5.x AI model and data-egress threat delta (issue #213)
+
+The following threats are governed by
+[ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) and
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
+They use a separate `AI-` identifier namespace because the historical STRIDE table above already
+contains repeated numeric identifiers from independently landed implementation sections.
+
+| ID | Threat | STRIDE | Primary control | Implementation status |
+|---|---|---|---|---|
+| AI-01 | Raw Restricted data, credentials, or secrets are included in a cloud-model request | Information Disclosure | Default-deny classification/egress policy; Restricted is local/private by default | Evaluator implemented (#214); enforced for the Hermes system gateway deployment posture (#215, `modules/hermes-restricted`); not yet wired into every AI-invoking path — #216–#218 |
+| AI-02 | Prompt injection or model output changes the security/egress decision | Tampering, Elevation of Privilege | Deterministic policy and authorization outside the model; typed allowlisted operations | Policy enforcement not implemented yet — #214, #218; fixed-argv job boundary already exists |
+| AI-03 | A Restricted local workload silently falls back to a cloud provider | Information Disclosure | Local-only deployment posture, no automatic fallback, drift verification | Implemented for the Hermes system gateway (#215): `module_check`/`module_apply` refuse on a non-local endpoint and `module_verify` reports drift as a hard failure; `omes health ai-privacy` additionally reports `FAIL` for a restricted-local-only→cloud drift and detects a cloud-destined `fallback_model` as `cloud_fallback_enabled=enabled` (#216); regression coverage not implemented yet — #218 |
+| AI-04 | RAG, embedding, reranking, or retrieval exports protected source content through a different provider path | Information Disclosure | Propagate source classification through the full retrieval/embedding pipeline | Not implemented yet — #214, #218 |
+| AI-05 | Raw prompts, transcripts, embeddings, or protected records are persisted in audit/Control Center evidence | Information Disclosure, Repudiation | Bounded metadata-only evidence; schema rejection of raw-content fields | Implemented for the host evidence surface (#216: `lib/omes/py/privacy/posture_evidence.py`, `contracts/ai-egress/v1/privacy-posture-evidence.schema.json`) and for the Control Center projection (#217: `lib/omes/py/privacy/posture_projection.py`, `contracts/control-center/v1/ai-privacy-posture-view.schema.json`); regression gates not implemented yet — #218 |
+| AI-06 | A local model is trusted solely because it is local despite compromised model/runtime/dependency provenance | Tampering, Elevation of Privilege | Non-root runtime, supply-chain/provenance evidence, network hardening, integrity checks | Partially implemented: #215 verifies the Hermes gateway's non-root system-service identity and denies outbound network access from that unit by default; model/runtime artifact provenance/integrity evidence is not implemented yet — #215 follow-on |
+| AI-07 | A provider claim such as "not used for training" is treated as a complete privacy guarantee | Information Disclosure | Separate assurance for retention, human access, subprocessors, residency/transfer, deletion and incident terms | Governance requirement; provider-assurance evidence fields not implemented yet — #217 follow-on |
+| AI-08 | Model-generated text is executed as arbitrary shell/API action | Tampering, Elevation of Privilege | Existing typed/fixed-argv job runner and pull-worker; negative regression tests | Existing boundary #90/#192; additional AI regression coverage not implemented yet — #218 |
+
 ## 6. Residual risk summary
 
 Even with every mitigation above implemented, the following risks remain and are the

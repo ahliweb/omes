@@ -516,6 +516,79 @@
       "evidence_urls": [
         "https://specs.omes.ahliweb.com/domains/v1/registrar.schema.json"
       ]
+    },
+    {
+      "capability_id": "omes.privacy.egress_policy",
+      "title": "OMES AI Data-Classification and Model-Egress Policy Evaluator",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "privacy",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
+        "https://github.com/ahliweb/omes/blob/main/docs/adr/0029-ai-data-boundary-and-private-inference.md"
+      ]
+    },
+    {
+      "capability_id": "omes.privacy.posture_evidence",
+      "title": "OMES AI Privacy Posture and Egress Evidence (read-only)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "privacy",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
+        "https://github.com/ahliweb/omes/blob/main/docs/adr/0029-ai-data-boundary-and-private-inference.md"
+      ]
+    },
+    {
+      "capability_id": "omes.privacy.posture_projection",
+      "title": "OMES Control Center Projection of AI Privacy Posture and Policy Decisions (read-only)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "privacy",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/control-center-contracts.md",
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
+        "https://github.com/ahliweb/omes/blob/main/docs/adr/0029-ai-data-boundary-and-private-inference.md"
+      ]
+    },
+    {
+      "capability_id": "omes.privacy.restricted_local_inference",
+      "title": "OMES Restricted Local-Only Inference Deployment Posture",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "v0.3.0",
+      "observed_upstream_revision": "v0.3.0",
+      "maturity": "released_supported",
+      "disposition": "adapt",
+      "omes_module": "privacy",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
+        "https://github.com/ahliweb/omes/issues/215"
+      ]
     }
   ]
 }

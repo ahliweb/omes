@@ -40,6 +40,7 @@ architecture and state model."
 | [0026](0026-upstream-drift-automation.md) | Automated upstream drift review and deprecation tracking | Accepted |
 | [0027](0027-control-center-pull-worker-transport.md) | Control Center secure pull-worker transport | Accepted |
 | [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
+| [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -96,6 +97,10 @@ ADR 0028 was authored on 2026-09-21 as part of issue
 [#183](https://github.com/ahliweb/omes/issues/183) and epic
 [#195](https://github.com/ahliweb/omes/issues/195), "feat(control-center):
 visualize Hermes delegated-task orchestration and live subagent processes."
+
+ADR 0029 was authored on 2026-09-24 as part of issue
+[#213](https://github.com/ahliweb/omes/issues/213), "docs(security):
+define AI data privacy boundary and local/cloud model policy."
 
 
 

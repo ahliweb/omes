@@ -37,6 +37,7 @@
 14. [Control Center and provider boundary](#14-control-center-and-provider-boundary)
 15. [Web-panel reference boundary](#15-web-panel-reference-boundary)
 16. [Upstream-first ownership and architecture boundaries](#16-upstream-first-ownership-and-architecture-boundaries)
+17. [AI data privacy and model-boundary architecture](#17-ai-data-privacy-and-model-boundary-architecture)
 
 ---
 
@@ -1084,6 +1085,70 @@ Boundary rules:
 - **Zero Raw Secrets & Privacy**: Goals and summaries are bounded to 512 characters with HTML escaping. Raw prompts, chain-of-thought transcripts, shell commands, and credentials are prohibited.
 - **Tree Projection**: `lib/omes/py/agent/orchestration.py` reconstructs nested process hierarchies (`hermes-orchestration-tree.schema.json`), tracks active step counts, reconciles staleness, and displays live trees in Control Center Screen 6.
 
+
+## 17. AI data privacy and model-boundary architecture
+
+Per [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) and issue
+[#213](https://github.com/ahliweb/omes/issues/213), AI data handling follows a split-authority
+architecture rather than adding an OMES model router.
+
+```text
+                    Hermes Agent
+        reasoning / tools / model-provider routing
+                         |
+             +-----------+-----------+
+             |                       |
+             v                       v
+      local/private model       approved cloud model
+             ^                       ^
+             |                       |
+             +----------+------------+
+                        |
+             deterministic policy
+             and egress decision
+                        ^
+                        |
+            application-owned data
+        classification/minimization
+                        ^
+                        |
+               sensitive data plane
+```
+
+**Authority and contracts:**
+
+- **Hermes Agent** owns reasoning and model/provider routing, including supported local/self-hosted
+  OpenAI-compatible endpoints.
+- **OMES** owns host lifecycle/hardening, service and network posture, deterministic policy/evidence
+  that belongs at the host/deployment boundary, drift detection, provenance, and rollback.
+- **The owning application/data controller** owns the actual sensitive records and domain-specific
+  minimization/tokenization/aggregation semantics.
+- **AWCMS/Control Center**, when implemented, owns tenant/business policy, approvals, and a sanitized
+  projection of OMES evidence.
+- Model output is data, not authorization. Mutations continue through the existing typed,
+  allowlisted OMES job boundary; no architecture path grants arbitrary shell/API execution.
+
+The initial data classes are `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, and `RESTRICTED`.
+Restricted data defaults to local/private inference; unknown classification fails closed for model
+egress. RAG/embedding/retrieval stages inherit source-data classification.
+
+**Implementation status:** design accepted. The machine-readable data-classification and
+egress-policy contract and its deterministic evaluator are implemented
+([#214](https://github.com/ahliweb/omes/issues/214); see
+[contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). The Restricted
+local-only deployment posture for the Hermes system gateway is implemented
+([#215](https://github.com/ahliweb/omes/issues/215); see `modules/hermes-restricted/module.sh` and
+[lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py)), as are
+the read-only privacy-posture evidence surface `omes health ai-privacy`
+([#216](https://github.com/ahliweb/omes/issues/216); see
+[lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py)) and its
+sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issues/217); see
+[lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
+Security regression gates are **Not implemented yet** (tracked in
+[#218](https://github.com/ahliweb/omes/issues/218)).
+The full policy, regulatory context, standards mapping, and examples are in
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
 <!-- OMES-MERMAID: docs/architecture.md -->
 

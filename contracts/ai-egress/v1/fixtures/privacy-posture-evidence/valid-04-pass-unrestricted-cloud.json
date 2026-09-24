@@ -1,0 +1,20 @@
+{
+  "policy_version": "v1",
+  "classification_mode": "fail_closed_v1",
+  "destination_class": "cloud",
+  "local_endpoint_classification": "not_applicable",
+  "cloud_fallback_enabled": "enabled",
+  "network_isolation_active": "active",
+  "last_verified_at": "2026-09-24T12:00:00Z",
+  "evidence_source": "hermes-cli:hermes config get",
+  "local_only_posture": {
+    "available": false,
+    "status": "unknown",
+    "source": "local-only-posture-source:unavailable"
+  },
+  "hermes_version_reference": null,
+  "status": "PASS",
+  "reason_codes": [
+    "AI_PRIVACY_POSTURE_PASS_CONSISTENT"
+  ]
+}

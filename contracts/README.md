@@ -141,3 +141,4 @@ fragment.
 | Area | Owner | Status |
 |---|---|---|
 | `control-center/v1` | issue #89 | Contracts defined; no implementation of the AWCMS producer/OMES consumer sides exists in this repository yet, except the OMES-side job runner (`lib/omes/py/jobs/`, issue #90), which validates `deployment.request` against this contract before running an operation. |
+| `ai-egress/v1` | issue #214 (ADR-0029) | Metadata-only AI data-classification and model-egress decision request/response contracts. Implemented and consumed by the deterministic evaluator `lib/omes/py/privacy/egress_policy.py`. Restricted local-only runtime enforcement, privacy evidence, and Control Center projection of these decisions are tracked separately in #215-#218 and are not implemented yet. |
