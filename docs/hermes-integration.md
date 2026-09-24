@@ -504,6 +504,11 @@ itself.
 | `OMES_HERMES_GATEWAY_EXTRA_PATH` | Colon-separated extra directories prepended into the managed `PATH=` drop-in | unset | both |
 | `OMES_HERMES_GATEWAY_SYSTEM_USER` | The non-root account the system gateway serves; required, no default | unset (module_check fails without it) | `hermes-gateway-system` |
 | `OMES_HERMES_GATEWAY_SYSTEM_DROPIN_DIR` | Overrides the system drop-in directory | `/etc/systemd/system` (testing-only override; not a documented operator knob) | `hermes-gateway-system` |
+| `OMES_HERMES_RESTRICTED_SYSTEM_USER` | The non-root account whose Hermes system gateway the restricted posture applies to; falls back to `OMES_HERMES_GATEWAY_SYSTEM_USER` | unset (module_check fails without it) | `hermes-restricted` |
+| `OMES_HERMES_RESTRICTED_PRIVATE_ENDPOINT_APPROVED` | Explicit operator acknowledgement that a reviewed `private_endpoint` destination is intended (still only reaches `approval_required`, never a silent `allow` - docs/ai-data-privacy-and-model-security.md §6) | `0` | `hermes-restricted` |
+| `OMES_HERMES_RESTRICTED_ALLOW_CIDRS` | Colon-separated extra `IPAddressAllow=` entries (CIDRs/hostnames) for an approved private network | unset | `hermes-restricted` |
+| `OMES_HERMES_RESTRICTED_MIN_MEM_GB` | Advisory-only minimum memory (GiB) the preflight report warns below | `8` | `hermes-restricted` |
+| `OMES_HERMES_RESTRICTED_TIMEOUT` | Seconds to wait for the gateway unit to become active after writing the restricted-network drop-in before auto-rollback | `15` | `hermes-restricted` |
 
 ## 16. Status and known limitations (part 2)
 
@@ -527,6 +532,25 @@ directive-by-directive rationale, compatibility notes, and the
 env-var/`module_check`/`module_apply`/`module_verify`/`module_doctor`/
 `module_rollback` wiring (`modules/hermes-gateway/hardening.sh`, shared
 by both modules).
+
+## 16b. Restricted/local-only deployment posture (issue #215)
+
+`modules/hermes-restricted/module.sh` is a separate, opt-in, root-scope module
+(`MODULE_REQUIRES=(hermes-gateway-system)`) that hardens an already-applied
+`hermes-gateway-system` installation for RESTRICTED-classified workloads:
+`sudo omes install --module hermes-gateway-system && sudo omes install --module hermes-restricted`.
+It verifies the target user's configured Hermes model endpoint is local/private
+(via `hermes config get model` / `hermes config get providers.<id>.base_url`,
+delegating the actual allow/deny decision to
+[lib/omes/py/privacy/egress_policy.py](ai-data-privacy-and-model-security.md) through
+`lib/omes/py/privacy/restricted_posture.py`) before allowing `module_apply`, and
+writes an additional `40-omes-restricted-network.conf` drop-in that denies all
+outbound network access from the `hermes-gateway` unit's cgroup by default. See
+[docs/ai-data-privacy-and-model-security.md §10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture)
+for the full per-requirement implementation-status table, including the
+important trade-off that this is a whole-unit, all-or-nothing network policy
+(any browser-automation or internet-dependent MCP tool in the same gateway
+process loses network access too).
 
 ## 17. Health and readiness (issue #79)
 
