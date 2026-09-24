@@ -311,6 +311,8 @@ Anyone changing this integration must, in addition to `AGENTS.md`:
 
 ## 8. Release and changelog metadata
 
+> **Outcome:** the release anticipated below was cut as **`v0.4.0`**, compiling all 32 accumulated fragments into [CHANGELOG.md](../CHANGELOG.md). Unlike `v0.3.0`, whose tag points at a release-branch commit that never reached `main` (see [ADR-0010](adr/0010-versioning-and-change-fragments.md)), `v0.4.0` is tagged on the release commit as it landed on `main`. The text below is retained as the close-out's record of its own scope at the time it merged.
+
 This change adds `changes/202-control-center-closeout.md`. No version bump and
 no tag are part of it.
 

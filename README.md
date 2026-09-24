@@ -36,7 +36,7 @@ profiles (`apt-base`, `security-baseline`, `containers`, `hermes`,
 `hermes-gateway`, `hermes-gateway-system`, `desktop-preflight`,
 `hyprland-session`, `desktop-config`), the bootstrap installer, and the bats
 unit/integration test suite are all implemented and tested against shimmed
-commands in CI. The project is pre-alpha despite the `v0.3.0` tag: the
+commands in CI. The project is pre-alpha despite the `v0.4.0` tag: the
 container/VM compatibility matrix (`scripts/test-matrix.sh`, `tests/vm/`) is
 still building out real-host coverage for every scenario — see
 [docs/architecture.md §13](docs/architecture.md#13-non-goals-and-known-limitations)
@@ -101,13 +101,13 @@ unsupported configurations): [docs/installation.md](docs/installation.md).
 
 ```bash
 # 1. Bootstrap: installs immutable stable release and symlinks ~/.local/bin/omes
-curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.4.0/install/bootstrap.sh | bash
 
 # Alternatively, select an explicit release channel:
-#   stable (default): curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel stable
-#   rc:               curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel rc --ref v0.4.0-rc1
-#   edge:             curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel edge
-#   dev:              curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.3.0/install/bootstrap.sh | bash -s -- --channel dev
+#   stable (default): curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.4.0/install/bootstrap.sh | bash -s -- --channel stable
+#   rc:               curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.4.0/install/bootstrap.sh | bash -s -- --channel rc --ref v0.5.0-rc1
+#   edge:             curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.4.0/install/bootstrap.sh | bash -s -- --channel edge
+#   dev:              curl -fsSL https://raw.githubusercontent.com/ahliweb/omes/v0.4.0/install/bootstrap.sh | bash -s -- --channel dev
 
 # 2. Preflight: read-only checks, safe to run any time, as any user
 omes check --profile server        # or --profile desktop
@@ -125,7 +125,7 @@ omes doctor
 sudo omes doctor
 ```
 
-`install/bootstrap.sh` defaults to the immutable `stable` release channel (`v0.3.0`),
+`install/bootstrap.sh` defaults to the immutable `stable` release channel (`v0.4.0`),
 validates origin remote URL, protects against clobbering dirty working trees,
 and records verification metadata in `~/.local/share/omes/.omes-channel.json`.
 It never mutates the system beyond installing `git` (via apt, with an explicit
