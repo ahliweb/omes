@@ -110,6 +110,8 @@ visualize Hermes delegated-task orchestration and live subagent processes."
 - An ADR records why a decision was made, not the full implementation —
   implementation details belong in `docs/architecture.md` and in code.
 
+- [ADR-0029: AI data privacy boundary and local/cloud inference policy](0029-ai-data-privacy-and-model-security.md)
+
 <!-- OMES-MERMAID: docs/adr/README.md -->
 
 ## Visual summary
