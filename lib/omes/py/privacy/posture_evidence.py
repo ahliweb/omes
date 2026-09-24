@@ -21,9 +21,11 @@ Hard boundaries (do not weaken these):
   make it appear in the evidence output.
 - Every free-text-shaped field this module DOES echo back
   (`evidence_source`, `hermes_version_reference.value`) is validated
-  against a closed vocabulary or a strict bounded pattern before being
-  echoed; a value that fails validation is replaced with a fixed
-  "rejected" placeholder rather than passed through. This module never
+  against a closed vocabulary or a strict bounded pattern - and, for
+  `hermes_version_reference.value`, additionally against a set of
+  well-known secret-value shapes (issue #218) - before being echoed; a
+  value that fails validation is replaced with a fixed "rejected"
+  placeholder rather than passed through. This module never
   hashes a value as a substitute for validating it - hashing a low-entropy
   secret and calling it "anonymized" is explicitly out of scope (see
   docs/ai-data-privacy-and-model-security.md section 7).
@@ -106,6 +108,28 @@ EVIDENCE_SOURCES: frozenset[str] = frozenset({
 #: prompt fragment, or provider response.
 _VERSION_VALUE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 ._+-]{0,63}$")
 
+#: Well-known secret-value shapes, rejected in `hermes_version_reference.value`
+#: even when they satisfy _VERSION_VALUE_PATTERN's character class (issue
+#: #218: a `sk_live_...`-shaped token is made only of characters a version
+#: banner may legitimately contain, so the pattern alone does not stop it).
+#: Deliberately a small COPY of lib/omes/py/jobs/schema.py's
+#: `_SECRET_VALUE_SHAPE_RE` rather than an import - packages under
+#: lib/omes/py/<pkg>/ do not import across each other (see
+#: lib/omes/py/jobs/audit.py's module docstring for the same convention).
+#: `observed_at` is echoed back as `last_verified_at`, whose published
+#: contract (contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
+#: pins it to an ISO-8601 UTC instant. Issue #218: the evaluator used to
+#: accept ANY non-empty string here and echo it verbatim, which both
+#: produced output that failed its own schema and turned an unvalidated
+#: free-text field into an echo path. A value that does not match is now
+#: treated exactly like a missing timestamp: BLOCKED, `last_verified_at`
+#: null.
+_OBSERVED_AT_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+_SECRET_VALUE_SHAPE_PATTERN = re.compile(
+    r"(sk_live_|sk_test_|gh[pousr]_[A-Za-z0-9]|AKIA[0-9A-Z]{12,}|xox[baprs]-|Bearer [A-Za-z0-9._-]{10,})"
+)
+
 STATUS_PASS = "PASS"
 STATUS_FAIL = "FAIL"
 STATUS_WARN = "WARN"
@@ -178,7 +202,11 @@ def _validate_version_reference(ref: Any) -> tuple[Optional[dict], Optional[str]
     if raw_value is None:
         return {"value": None, "source": source}, source_reason
 
-    if isinstance(raw_value, str) and _VERSION_VALUE_PATTERN.match(raw_value):
+    if (
+        isinstance(raw_value, str)
+        and _VERSION_VALUE_PATTERN.match(raw_value)
+        and not _SECRET_VALUE_SHAPE_PATTERN.search(raw_value)
+    ):
         return {"value": raw_value, "source": source}, source_reason
 
     return (
@@ -331,8 +359,11 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
     if not isinstance(max_age, (int, float)) or max_age <= 0:
         max_age = DEFAULT_MAX_EVIDENCE_AGE_SECONDS
 
+    if not isinstance(observed_at, str) or not _OBSERVED_AT_PATTERN.match(observed_at):
+        observed_at = None
+
     stale = False
-    if not isinstance(observed_at, str) or not observed_at:
+    if observed_at is None:
         stale = True
         reasons.append("AI_PRIVACY_POSTURE_BLOCKED_EVIDENCE_MISSING_TIMESTAMP")
     else:
