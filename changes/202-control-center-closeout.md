@@ -23,3 +23,5 @@ summary: record the AWCMS-based OMES Control Center release close-out, with ship
    - `docs/control-center-foundation.md`, `docs/README.md`, `AGENTS.md` — unchanged in substance from the prior version of this close-out; still accurate.
 
 3. **Nothing in this change bumps `VERSION`, runs `scripts/release.sh`, or creates a tag.**
+
+- Every deferred item this release surfaced now has an owning issue, so none is left untracked (AGENTS.md §4.5): #232 (AWCMS-side consumption of the AI-privacy contracts), #233 (enrollment-token management screen), #234 (AI-privacy evidence retention/rotation), #235 (backup-scope enforcement for Restricted data), #236 (model/runtime artifact provenance evidence), #237 (provider-assurance evidence fields). RAG/embedding classification propagation stays deliberately untracked: #218's regression canary fails the build the day such a pipeline lands without coverage.

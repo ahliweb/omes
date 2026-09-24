@@ -516,8 +516,8 @@ prompts, transcripts, restricted data, or provider credentials. #217's
 own scope was the OMES-side wire contracts and the pure
 projection/authorization logic (`lib/omes/py/privacy/posture_projection.py`),
 which are implemented. **No AWCMS-side screen, API, or database consumes
-these contracts yet** - that AWCMS-side consumption work has no OMES
-issue of its own; this repository only owns the wire shapes and the pure
+these contracts yet** - that AWCMS-side consumption work is not implemented yet
+(tracked in [#232](https://github.com/ahliweb/omes/issues/232)); this repository only owns the wire shapes and the pure
 OMES-side evaluation logic.
 
 **Authority split** (this is this issue's documentation acceptance

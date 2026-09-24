@@ -187,9 +187,9 @@ stack.
 
 | Capability | State |
 |---|---|
-| AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts | Not implemented yet. No OMES issue owns this AWCMS-side work; see [control-center-contracts.md](control-center-contracts.md) §2.10. |
+| AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts | Not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)); see [control-center-contracts.md](control-center-contracts.md) §2.10. |
 | Live Cloudflare, SRS-X and GitHub provider clients | Not implemented yet (tracked in [#99](https://github.com/ahliweb/omes/issues/99), [#100](https://github.com/ahliweb/omes/issues/100), [#101](https://github.com/ahliweb/omes/issues/101)); only contracts, capability profiles as data, and fake-provider tests exist here. See [control-center-and-integrations.md](control-center-and-integrations.md) §11. |
-| A dedicated enrollment-token management screen (`enrollments.manage`) | Not implemented yet (no owning OMES issue exists; #201 deliberately left it without a navigation entry). Servers renders read-only enrollment/trust evidence today. |
+| A dedicated enrollment-token management screen (`enrollments.manage`) | Not implemented yet (tracked in [#233](https://github.com/ahliweb/omes/issues/233); #201 deliberately left it without a navigation entry). Servers renders read-only enrollment/trust evidence today. |
 | `#199`, `#200`, `#201` present in `awcms-one/apps/cms` | Not yet synced; see §5.1. Owned by `ahliweb/awcms-one`, not by an OMES issue. |
 
 ## 7. Operating the integration
