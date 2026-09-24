@@ -32,6 +32,7 @@ concrete per entity, with actual JSON Schemas and fixtures under
 | Agent reasoning, sessions, memory, skills, channels, model/provider routing | no knowledge | no knowledge (never reimplements this) | **owns** |
 | Approvals for destructive operations | records the approval decision and actor | enforces the approval gate before executing (issue #90) | no knowledge |
 | Secrets (tokens, passwords, credentials) | never stores raw values; stores `secret_ref` pointers only | resolves `secret_ref` locally (env/file/vault/os-keyring); never returns raw values | resolves its own secrets from its own `.env`, unrelated to Control Center secrets |
+| AI privacy posture / egress policy-decision evidence (issue #217) | displays the projection; owns which tenant/actor may read it and who may approve an approval_required decision (RBAC/ABAC) | **owns** the evidence and the pure evaluation/projection logic (`lib/omes/py/privacy/`); never selects or calls a model provider | **owns** agent reasoning and model/provider routing; OMES only reads bounded facts through supported interfaces, never Hermes's private databases |
 
 This matrix is the concrete instantiation of
 [docs/control-center-and-integrations.md](control-center-and-integrations.md)
@@ -503,6 +504,105 @@ only back to the oldest retained source event, a limitation this
 document records rather than resolves (no retention policy or purge job
 exists in this repository yet).
 
+### 2.10 AI privacy posture and policy-decision projection (issue #217)
+
+Issue #217 extends this contract set so a Control Center screen can
+display and govern AI privacy posture and AI egress policy decisions
+using only SANITIZED metadata from issue #214
+(`lib/omes/py/privacy/egress_policy.py`) and issue #216
+(`lib/omes/py/privacy/posture_evidence.py`) - never raw prompts,
+transcripts, restricted data, or provider credentials. No AWCMS-side
+screen, API, or database consumes these contracts yet: **not implemented
+yet (tracked in #217)** on the AWCMS side; this repository only fixes
+the wire shapes and the pure OMES-side evaluation logic.
+
+**Authority split** (this is this issue's documentation acceptance
+criterion, stated explicitly, not merely implied by the ownership
+matrix in §1):
+
+- **Hermes** remains authoritative for agent runtime, reasoning, and
+  model/provider routing. Nothing in this section, or in
+  `lib/omes/py/privacy/`, selects, calls, or routes to a model provider.
+- **OMES** owns host/deployment evidence collection and the pure
+  evaluation/projection logic: `egress_policy.py` (issue #214, one
+  decision), `posture_evidence.py` (issue #216, ongoing posture), and
+  `posture_projection.py` (issue #217, the Control Center-scoped view
+  and the owner-approval authorization gate). OMES does not read or
+  modify Hermes's private databases; it only reads bounded facts through
+  supported interfaces (`hermes --version`, `hermes config get`,
+  `hermes doctor`, OMES's own host/network classification).
+- **AWCMS** owns business/tenant policy: which tenant/actor may read a
+  given `ai-privacy-posture-view`, which actor holds the owner-approval
+  role, and the RBAC/ABAC decision behind every read and every approval
+  request. **UI hiding of a field is never a substitute for that
+  server-side check** - `lib/omes/py/privacy/posture_projection.py`'s
+  `project_posture_view()`/`authorize_approval()` cross-tenant checks are
+  a second, independent backstop behind AWCMS's own authorization, the
+  same pattern §2.6's `entitlement.evaluate()` uses
+  (`tests/py/privacy/test_posture_projection.py::TestCrossTenant`).
+
+| Contract | Schema file |
+|---|---|
+| Tenant-scoped posture + latest-decision read projection | `ai-privacy-posture-view.schema.json` |
+| Owner-approval request (issue #90 job-runner-adjacent, not a job) | `ai-egress-approval.request.schema.json` |
+| Owner-approval response | `ai-egress-approval.response.schema.json` |
+
+`ai-privacy-posture-view` surfaces exactly what issue #217's acceptance
+criteria name: `classification_mode`/`destination_class` (posture),
+`latest_decision.decision`/`latest_decision.reason_codes` (the most
+recent egress decision for this target, or `null` if none has been
+recorded), `evidence_freshness` (`fresh`/`stale`/`unknown`, computed at
+projection time from `last_verified_at` against
+`posture_evidence.DEFAULT_MAX_EVIDENCE_AGE_SECONDS`), and `authority`
+(which system asserted the fact - never inferred from the reader).
+**Stale or unknown evidence is never rendered as healthy**:
+`evidence_freshness: unknown` on a missing/unparsable timestamp is
+structural (never `fresh`), and `status` falls back to `BLOCKED` whenever
+no recognized `AI_PRIVACY_POSTURE_*` reason code survives projection
+(`tests/py/privacy/test_posture_projection.py::TestFreshness`).
+
+**Owner-approval path is intentionally narrow.** `ai-egress-approval.request`
+can only reference one of the three decisions `egress_policy.py` already
+marks `approval_required`
+(`AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_PRIVATE_ENDPOINT`,
+`AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_CLOUD_SANITIZED`,
+`AI_EGRESS_APPROVAL_REQUIRED_RESTRICTED_PRIVATE_ENDPOINT`) -
+`decision_ref.reason_code` is a closed 3-value enum. **`RESTRICTED` ->
+`cloud_sanitized` has no approval path and stays denied, full stop**,
+matching `egress_policy.py`'s own unconditional
+`AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED` deny; this repository's
+fail-closed stdlib schema validator (issue #172) validates fields
+independently and has no cross-field keyword, so the actual unconditional
+block on that combination is enforced by value, independent of
+`reason_code`, in `posture_projection.py`'s `authorize_approval()`
+(`tests/py/privacy/test_posture_projection.py::TestRestrictedCloudNeverApprovable`)
+- not merely by the schema's enum. Changing this would require a future
+ADR and a lawful policy change (issue #217 scope), not a code change
+alone.
+
+**No raw prompt/transcript/credential field exists in any of these
+schemas - structurally, not merely unpopulated.** Every object schema in
+this section sets `additionalProperties: false`, and
+`tests/py/privacy/test_posture_projection.py::TestSchemasHaveNoPromptTranscriptCredentialFields`
+walks each schema's declared property names and asserts none of them
+matches a raw-content-shaped name (`prompt`, `transcript`,
+`response_text`, `chain_of_thought`, `raw_provider_response`);
+`fixtures/ai-privacy-posture-view/invalid-additional-property-raw-prompt.json`
+and `fixtures/ai-egress-approval.request/invalid-credential-field-added.json`
+are the schema-level fixtures proving `additionalProperties: false`
+itself rejects an attempted `prompt`/`credential` field. `justification`
+on the approval request is a bounded (`maxLength: 500`) short operator
+note only; the length bound is a structural discouragement against
+pasting a transcript, not a content filter - reviewer discipline and
+this document remain the actual control on what an operator types there.
+
+Two events (§3) accompany this section:
+`ai-privacy-posture.changed` (drift or freshness change) and
+`ai-egress-approval.recorded` (an approval decision was recorded - never
+carries the request's `justification` text). Both are delivered over the
+existing pull-worker/outbox transport (§5, ADR-0027, issue #192); neither
+introduces a new privileged inbound listener.
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
@@ -525,6 +625,8 @@ which system emitted the event (`omes`, `hermes`, or `control-center`).
 | Deployment healthy | `deployment.healthy` | OMES (health layer) | A post-mutation reconciliation pass observed `ready=true`. |
 | Backup completed | `backup.completed` | OMES (backup) | A backup finished with a recorded manifest hash. |
 | Entitlement changed | `entitlement.changed` | Control Center (AWCMS) | An entitlement's state changed; OMES only *consumes* this — see the ownership matrix. |
+| AI privacy posture changed | `ai-privacy-posture.changed` | OMES (health/posture layer) | An `ai-privacy-posture-view` projection's `status` or `evidence_freshness` changed (issue #217) — see §2.10. |
+| AI egress approval recorded | `ai-egress-approval.recorded` | Control Center (AWCMS) | An owner-approval decision on an approval_required AI egress decision was recorded (issue #217) — see §2.10. |
 
 ## 4. Authentication and secret-reference rules
 
@@ -597,6 +699,14 @@ This document defines the contract; it does not redefine or duplicate:
 - **#87** (agent deployment MVP) — the `target.deployment_id` field
   identifies an `AgentDeployment` (docs/agent-orchestration-roadmap.md);
   this document does not redefine that manifest's lifecycle states.
+- **#213/#214/#216** (AI data-privacy boundary, egress policy, posture
+  evidence) — §2.10's contracts project, and never redefine,
+  `lib/omes/py/privacy/egress_policy.py`'s `AI_EGRESS_*` reason codes and
+  `lib/omes/py/privacy/posture_evidence.py`'s `AI_PRIVACY_POSTURE_*`
+  reason codes; see
+  [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
+  and [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) for
+  the underlying policy.
 
 See [docs/control-center-threat-model.md](control-center-threat-model.md)
 for the STRIDE analysis of this boundary.
