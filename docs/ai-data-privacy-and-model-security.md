@@ -109,8 +109,8 @@ not inspect private Hermes databases or introduce a second agent runtime.
 
 ## 4. Data classification
 
-The initial OMES policy uses four classes. [#214](https://github.com/ahliweb/omes/issues/214) will
-make this machine-readable.
+The initial OMES policy uses four classes. Machine-readable classification and egress policy is
+**not implemented yet (tracked in #214)**.
 
 | Class | Typical examples | Cloud-model default |
 |---|---|---|
@@ -137,19 +137,36 @@ A policy decision distinguishes model destinations rather than merely naming a v
 
 The existence of TLS, a private API key, a paid enterprise account, or a statement that data is
 “not used for training” does not by itself make a destination equivalent to local-only processing.
+Specifically, a provider's "not used for training" claim does **not** by itself imply:
 
-For every external model service, assurance should separately record, where applicable:
+- zero retention;
+- no abuse-monitoring copy;
+- no human access;
+- no subprocessors;
+- no cross-border transfer;
+- no provider-side logging;
+- no lawful-access exposure.
 
-1. use for training/model improvement;
-2. prompt/output retention and retention period;
-3. human/operations access;
-4. subprocessors;
-5. geographic processing and data residency;
-6. cross-border transfer terms;
-7. encryption in transit/at rest;
-8. incident notification;
-9. deletion/termination behavior;
-10. contract/DPA and applicable legal basis.
+Each of these must be assessed and recorded as a separate property; none may be inferred from
+another.
+
+Before approving any external model service as a destination, and before treating a
+`cloud_sanitized`/`private_endpoint` decision as durable, operators must separately record, where
+applicable:
+
+1. data categories and purpose;
+2. controller/processor (or equivalent) roles;
+3. retention and deletion behavior;
+4. use for training/model improvement;
+5. abuse-monitoring and human/operations access conditions;
+6. subprocessors and transfer/geographic processing locations;
+7. encryption in transit/at rest and tenant isolation;
+8. contractual/DPA terms and applicable legal basis;
+9. incident notification and audit evidence;
+10. private-networking/zero-retention options, where available.
+
+Provider marketing language is not evidence of an OMES security control. This checklist is the
+single canonical provider-assurance list for this document; do not create a second one elsewhere.
 
 ## 6. Decision matrix
 
@@ -273,14 +290,48 @@ Prohibited evidence:
 - raw medical/personnel/financial records;
 - raw provider responses that may contain credentials or personal data.
 
-[#216](https://github.com/ahliweb/omes/issues/216) owns this implementation.
+This evidence pipeline is **not implemented yet (tracked in #216)**.
 
-## 12. Control Center projection
+## 12. Backup, recovery, and incident response
+
+Backup and incident-response handling for AI-adjacent data follows the same classification rules
+as the data itself; a backup or recovery path is not a separate trust boundary that resets
+classification.
+
+- **Backup classification follows source classification.** A backup, snapshot, or replica of
+  Restricted or Confidential prompt/session/context data inherits that same classification; it
+  does not become less sensitive because it is stored as a backup artifact.
+- **Restricted prompt/session data must not silently enter default backups.** OMES-owned backup
+  jobs must not sweep up Restricted-class prompt, session, transcript, or context data as a side
+  effect of a general/default backup scope. Inclusion requires an explicit, reviewed policy
+  decision, not an accidental glob match.
+- Restoration must preserve the access controls, ownership, retention, and encryption assumptions
+  that applied to the original data — a restore must not weaken protection relative to the source.
+- **Incident evidence must be preserved without copying sensitive payloads into tickets, PRs, or
+  chat.** When an incident may involve AI data egress (for example, a suspected Restricted-class
+  prompt reaching a cloud destination), responders preserve evidence by reference — policy/version,
+  destination class, timestamps, correlation/idempotency identifiers, affected scope, and
+  provider/runtime versions, with secrets and sensitive content redacted — rather than pasting raw
+  prompts, transcripts, or credentials into an issue, pull request, or chat message.
+- **Rotate affected credentials on exposure.** If a credential, API key, or other authentication
+  material cannot be excluded from having been exposed to a model, log, backup, or unauthorized
+  party, rotate it. Do not treat "we deleted the record" as equivalent to rotation.
+- **Provider-side retention/deletion is reconciled separately from local deletion.** Deleting or
+  purging local copies of prompt/session data does not delete any provider-side copy, cache, log,
+  or abuse-monitoring retention. Provider-side retention and deletion obligations must be verified
+  against that provider's stated terms and, where required, an explicit deletion request — never
+  assumed to have completed because the local OMES/Hermes state was cleared.
+
+Implementation of automated backup-scope enforcement and incident-evidence tooling for this section
+is **not implemented yet (tracked in #216)**; today this section is operating guidance for anyone
+handling an incident or a backup/restore of AI-adjacent data.
+
+## 13. Control Center projection
 
 AWCMS/Control Center may display privacy posture and policy decisions, but must not become a prompt
 archive or secret store.
 
-The projection tracked in [#217](https://github.com/ahliweb/omes/issues/217) may show:
+This projection is **not implemented yet (tracked in #217)**. When implemented, it may show:
 
 - current privacy mode;
 - data class;
@@ -293,7 +344,7 @@ The projection tracked in [#217](https://github.com/ahliweb/omes/issues/217) may
 Tenant/RBAC/ABAC/RLS authorization remains server-side. OMES nodes continue using the outbound
 pull-worker model rather than exposing a new privileged listener.
 
-## 13. Threats addressed
+## 14. Threats addressed
 
 | Threat | Primary control |
 |---|---|
@@ -305,10 +356,12 @@ pull-worker model rather than exposing a new privileged listener.
 | RAG/embedding silently exports Restricted documents | Same classification propagated through the RAG pipeline |
 | Local model is assumed safe despite compromised host/model | Host hardening, provenance, non-root execution, supply-chain checks |
 | Provider marketing claim is treated as a full privacy guarantee | Separate provider-assurance fields for training, retention, access, subprocessors, transfer |
+| Restricted prompt/session data silently swept into a default backup | Backup classification follows source classification; explicit inclusion policy required |
+| Sensitive payload pasted into an incident ticket/PR/chat as "evidence" | Evidence preserved by reference (policy, destination, timestamps, correlation ID), never raw payload |
 
 Regression coverage is tracked in [#218](https://github.com/ahliweb/omes/issues/218).
 
-## 14. Indonesia legal/privacy context
+## 15. Indonesia legal/privacy context
 
 This is an engineering mapping, not legal advice.
 
@@ -352,7 +405,7 @@ Sector-specific rules remain the responsibility of the deploying organization an
 owner. Health, financial, government, education, and other regulated workloads may require
 additional controls beyond this baseline.
 
-## 15. International standards and security frameworks
+## 16. International standards and security frameworks
 
 The mapping below guides engineering; it does not imply certification.
 
@@ -385,7 +438,7 @@ Authoritative references:
 - https://csrc.nist.gov/pubs/sp/800/207/final
 - https://genai.owasp.org/llm-top-10/
 
-## 16. Hermes upstream compatibility
+## 17. Hermes upstream compatibility
 
 Validated upstream capabilities at the time of this decision:
 
@@ -407,7 +460,7 @@ References:
 Upstream changes must be revalidated through the existing OMES upstream-drift process. A feature
 seen only on upstream development branches is not treated as supported release evidence.
 
-## 17. Implementation sequence
+## 18. Implementation sequence
 
 1. **#214** — machine-readable data classification and egress policy.
 2. **#215** — Restricted local-only inference deployment posture.
@@ -418,7 +471,7 @@ seen only on upstream development branches is not treated as supported release e
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.
 
-## 18. Practical examples
+## 19. Practical examples
 
 ### Example 1 — coding against a patient database
 
@@ -447,7 +500,7 @@ Incident secrets, forensic credentials, private keys, raw authentication logs co
 identifiers, and exploit evidence classified Restricted are processed only with a local/private
 model posture; cloud fallback fails closed.
 
-## 19. Security invariants
+## 20. Security invariants
 
 The following are non-negotiable:
 
@@ -458,6 +511,11 @@ The following are non-negotiable:
 - no model-generated arbitrary shell/API execution;
 - no raw Restricted prompt/transcript storage as audit evidence;
 - RAG/embedding follows source-data classification;
-- provider trust is explicitly assessed rather than inferred from “not used for training”;
+- provider trust is explicitly assessed rather than inferred from “not used for training” (which
+  does not by itself imply zero retention, no abuse-monitoring copy, no human access, no
+  subprocessors, no cross-border transfer, no provider-side logging, or no lawful-access exposure);
+- backups and restores follow source-data classification and never silently widen Restricted-data
+  exposure;
+- provider-side retention/deletion is reconciled separately from local deletion, never assumed;
 - OMES does not duplicate Hermes model/provider routing;
 - implementation claims require tests and repository evidence.
