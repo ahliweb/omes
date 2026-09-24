@@ -85,6 +85,82 @@ class TestGenerateControlCenterData(unittest.TestCase):
         self.assertIn("children", root)
         self.assertIsInstance(root["children"], list)
 
+    # -- Finding 1: build_deployments() must not fabricate actor causality --
+
+    def test_deployments_never_attribute_an_actor_to_an_unlinked_deployment(self):
+        """The real fixtures currently have no genuine overlap between
+        deployment.request and deployment-view targets (requests target
+        srv-0001/dep-0001; views target server-acme-01/
+        deployment-acme-hermes-01), so every generated row must fall back
+        to the neutral placeholder "-" rather than an unrelated actor such
+        as "user:operator-1"."""
+        rows = gen.build_deployments()
+        self.assertTrue(rows, "expected at least one deployment row")
+        requests = gen.load_fixtures("deployment.request")
+        real_targets = {
+            (req["target"]["server_id"], req["target"]["deployment_id"])
+            for req in requests
+        }
+        views = gen.load_fixtures("deployment-view")
+        view_targets = {
+            (view["target"]["server_id"], view["target"]["deployment_id"])
+            for view in views
+        }
+        # Sanity: today's fixtures genuinely do not correlate. If this ever
+        # trips, the fixtures gained real overlap and the "-" assertion
+        # below should be revisited alongside it.
+        self.assertEqual(real_targets & view_targets, set())
+        for row in rows:
+            self.assertEqual(
+                row["who"], "-",
+                f"deployment {row['id']!r} has no matching deployment.request "
+                f"fixture but was attributed to {row['who']!r}",
+            )
+
+    def test_deployments_only_attribute_an_actor_that_shares_the_real_target_key(self):
+        """Synthetic fixtures: a request and a view that share
+        (server_id, deployment_id) must be correlated; a request for a
+        different target must never leak onto an unrelated view, even when
+        list/sort order would previously have paired them by index."""
+        real_load_fixtures = gen.load_fixtures
+
+        def fake_load_fixtures(schema_name):
+            if schema_name == "deployment.request":
+                return [
+                    {
+                        "actor": {"type": "user", "id": "operator-1"},
+                        "target": {"server_id": "srv-unrelated", "deployment_id": "dep-unrelated"},
+                    },
+                    {
+                        "actor": {"type": "service", "id": "control-center"},
+                        "target": {"server_id": "server-acme-01", "deployment_id": "deployment-acme-hermes-01"},
+                    },
+                ]
+            if schema_name == "deployment-view":
+                return [
+                    {
+                        "tenant_id": "tenant-acme",
+                        "target": {"server_id": "server-acme-01", "deployment_id": "deployment-acme-hermes-01"},
+                        "desired_state": {"status": "running", "version": "1.5.0"},
+                        "observed_state": {"status": "running", "version": "1.5.0"},
+                        "last_reconciled_at": "2026-09-19T09:00:05Z",
+                        "error_evidence": None,
+                    },
+                ]
+            return real_load_fixtures(schema_name)
+
+        gen.load_fixtures = fake_load_fixtures
+        try:
+            rows = gen.build_deployments()
+        finally:
+            gen.load_fixtures = real_load_fixtures
+
+        self.assertEqual(len(rows), 1)
+        # Correlated on the shared (server_id, deployment_id) key, not on
+        # sorted-filename/list index position (which would have attributed
+        # the first, unrelated "operator-1" request instead).
+        self.assertEqual(rows[0]["who"], "service:control-center")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -247,7 +247,12 @@ by regenerating `data.js` fails the build instead of silently drifting.
 `tests/py/control_center/test_generate_control_center_data.py` (run by
 §2.5's `python3 -m unittest discover -s tests/py -t .`) additionally
 asserts the generator's output is deterministic and that the committed
-`data.js` matches it.
+`data.js` matches it. It also guards that the deployments section only
+attributes a `deployment.request` actor to a `deployment-view` row when
+they share the same `(server_id, deployment_id)` target - never by
+sorted-filename/list-index position, which would fabricate actor causality
+between unrelated fixtures; today's fixtures do not correlate, so every
+row currently renders `"who": "-"` rather than an invented actor.
 
 ## 3. Evidence and release gates
 

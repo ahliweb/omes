@@ -183,13 +183,29 @@ def build_hermes_events(tree_fixture_nodes: list[dict[str, Any]]) -> list[dict[s
 
 def build_deployments() -> list[dict[str, Any]]:
     """Pairs contracts/.../deployment.request/valid-*.json (who/operation)
-    with contracts/.../deployment-view/valid-*.json (state) by sorted
-    filename order."""
+    with contracts/.../deployment-view/valid-*.json (state) on their real
+    shared key: (target.server_id, target.deployment_id).
+
+    The two fixture families are independently authored and, at present,
+    describe entirely different deployments (deployment.request targets
+    srv-0001/dep-0001; deployment-view targets server-acme-01/
+    deployment-acme-hermes-01) - there is no genuine causal link between
+    them. Pairing by sorted-filename index position would therefore
+    fabricate actor -> deployment causality (e.g. attributing operator-1's
+    restore request to an unrelated rollback view). Instead, only requests
+    that share both server_id and deployment_id with a view are attributed
+    to it; when no request matches, "who" is the neutral placeholder "-"
+    rather than an invented or overly generic actor."""
     requests = load_fixtures("deployment.request")
     views = load_fixtures("deployment-view")
+    requests_by_target = {
+        (req["target"]["server_id"], req["target"]["deployment_id"]): req
+        for req in requests
+    }
     rows = []
-    for i, view in enumerate(views):
-        req = requests[i] if i < len(requests) else None
+    for view in views:
+        target_key = (view["target"]["server_id"], view["target"]["deployment_id"])
+        req = requests_by_target.get(target_key)
         desired = view["desired_state"]
         observed = view["observed_state"]
         in_sync = desired.get("status") == observed.get("status") and desired.get("version") == observed.get("version")
@@ -199,7 +215,7 @@ def build_deployments() -> list[dict[str, Any]]:
             "mod": "version " + str(desired.get("version")),
             "env": view.get("tenant_id", ""),
             "hosts": view["target"]["server_id"],
-            "who": (req["actor"]["type"] + ":" + req["actor"]["id"]) if req else "system",
+            "who": (req["actor"]["type"] + ":" + req["actor"]["id"]) if req else "-",
             "when": view.get("last_reconciled_at", ""),
             "state": state,
             "pct": 100 if in_sync else 60,

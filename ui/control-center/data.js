@@ -58,7 +58,7 @@ window.OMES_CC_DATA = {
       "pct": 100,
       "state": "ok",
       "when": "2026-09-19T08:00:05Z",
-      "who": "service:control-center"
+      "who": "-"
     },
     {
       "env": "tenant-acme",
@@ -68,7 +68,7 @@ window.OMES_CC_DATA = {
       "pct": 60,
       "state": "rollback",
       "when": "2026-09-19T09:00:05Z",
-      "who": "user:operator-1"
+      "who": "-"
     }
   ],
   "health": [
