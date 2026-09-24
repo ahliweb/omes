@@ -1,12 +1,15 @@
 # OMES Control Center — UI/UX Design System and Screen Architecture
 
-> Status: normative UI/UX design baseline (adopted in [ADR-0023](adr/0023-control-center-ui-ux-design-system.md)).
 > Interactive prototype: [`ui/control-center/index.html`](../ui/control-center/index.html) — a
-> reference-only, presentation prototype. Its example data is generated from
-> [contracts/control-center/v1](../contracts/control-center/v1) fixtures (see §8). The functional
-> Control Center screens themselves are **not implemented yet** (tracked in
-> [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201)).
-> Target epics and issues: [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183), [#211](https://github.com/ahliweb/omes/issues/211) (redesign v2, data-driven prototype).
+> reference-only, presentation prototype in this repository, not a shipping interface. Its
+> example data is **generated**, not hand-typed, by `scripts/generate-control-center-data.py`
+> from [contracts/control-center/v1](../contracts/control-center/v1) fixtures (see §8); the
+> committed `ui/control-center/data.js` is freshness-checked in CI.
+> Target epics and issues: [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183), [#211](https://github.com/ahliweb/omes/issues/211).
+>
+> **Implementation status.** Eight `/admin/omes/*` screens are implemented in `ahliweb/awcms` under [#200](https://github.com/ahliweb/omes/issues/200) and [#201](https://github.com/ahliweb/omes/issues/201); the `omes_control` module is `active` there. A dedicated enrollment-token management screen (Screen 9 here) is not among them — Servers renders read-only enrollment/trust evidence instead. Merge evidence: [control-center-and-integrations.md](control-center-and-integrations.md) §11.1 and [control-center-release-closeout.md](control-center-release-closeout.md).
+>
+> The redesign v2 of this in-repository prototype, driven by v1 contract fixtures, **shipped** in commit `0820e6e` (PR [#212](https://github.com/ahliweb/omes/pull/212), closing [#211](https://github.com/ahliweb/omes/issues/211)): generated fixture-backed data, a `live` Hermes orchestration-tree screen, and WCAG-AA contrast/focus-visible/keyboard-reachability fixes. Everything below describes the v2 prototype now on `main`.
 
 ---
 

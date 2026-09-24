@@ -1,8 +1,10 @@
 # OMES Control Center and External Integrations
 
-> Status: proposed architecture; implementation is tracked in [milestone `Domain and Integration Services`](https://github.com/ahliweb/omes/milestone/8) and issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102).
+> Status: normative for the web control-plane and provider integrations, tracked in [milestone `Domain and Integration Services`](https://github.com/ahliweb/omes/milestone/8), issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102), and epic [#195](https://github.com/ahliweb/omes/issues/195).
 >
-> This document is normative for the planned web control-plane and provider integrations. It does **not** claim that the web GUI, billing service, registrar adapters, or GitHub adapter exist in the current OMES CLI branch. Every unimplemented capability is explicitly tracked below.
+> The **web Control Center now exists**, but not in this repository: the `omes_control` module, its owner/operator API and its eight `/admin/omes/*` screens are implemented canonically in `ahliweb/awcms` and were merged there under epic #195 (see §11.1 and [control-center-release-closeout.md](control-center-release-closeout.md)). This repository still contains no web GUI code — it owns the versioned contracts, the job runner, and the outbound pull worker.
+>
+> This document does **not** claim that the billing service, registrar adapters, or GitHub adapter exist anywhere. Every unimplemented capability is explicitly tracked in §11 and §11.2.
 
 ## 1. Purpose and boundary
 
@@ -38,6 +40,8 @@ Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) 
 
 ### 1.1 UI/UX Design System and Screen Architecture
 Under [ADR-0023](adr/0023-control-center-ui-ux-design-system.md) and [docs/ui-ux-design-system.md](ui-ux-design-system.md), the Control Center UI/UX baseline is governed by a canonical 9-screen architecture and interactive prototype in [`ui/control-center/index.html`](../ui/control-center/index.html). The interface establishes two-role RBAC (`Owner` approval gate vs `Operator` proposal), allowlisted operation runner drawer (`Cmd+K`), dark high-density styling (`#0E1216`), and dedicated screens for fleet overview, servers/drift, deployments, operations/jobs, Hermes orchestration, health, backup, audit, and pull-worker enrollment.
+
+The prototype in this repository is a non-functional design reference. Eight of these screens are implemented upstream in `ahliweb/awcms` under [#200](https://github.com/ahliweb/omes/issues/200) and [#201](https://github.com/ahliweb/omes/issues/201) (§11.1); a dedicated enrollment-token management screen is not among them. The redesign of the prototype driven by v1 contract fixtures **shipped** in commit `0820e6e` (PR [`ahliweb/omes#212`](https://github.com/ahliweb/omes/pull/212), closing [#211](https://github.com/ahliweb/omes/issues/211)); `ui/control-center/index.html` on `main` is now the v2, fixture-generated prototype (see [docs/ui-ux-design-system.md](ui-ux-design-system.md)).
 
 
 ## 2. Component model
@@ -135,6 +139,8 @@ Key properties:
 - **Mutual Authentication & Enrollment**: Challenge-based enrollment (`omes worker enroll`) establishes host credentials stored under `<state-dir>/worker/credentials.json` (mode `0600`).
 - **Fixed-Argv Execution**: Polled jobs pass through `lib/omes/py/jobs/store.py` and `lib/omes/py/jobs/runner.py`. Arbitrary commands and shell invocation are strictly prohibited.
 - **Sanitized Results & Liveness**: The worker posts sanitized results and telemetry heartbeats (`omes worker heartbeat`), validating payloads against `contracts/control-center/v1/worker-*.schema.json`.
+
+The former defect in the v1 worker contracts — `worker-result.request` requiring a `job_id` the v1 contract never supplied, and `worker-poll.response.job` having no declared shape — is **fixed** as of commit `62c3b01` (PR [`ahliweb/omes#222`](https://github.com/ahliweb/omes/pull/222), closing [#221](https://github.com/ahliweb/omes/issues/221)): `job_id` was removed from `worker-result.request`, `worker-poll.response.job` now has a closed schema (`tenant_id`, `correlation_id`, `idempotency_key`, `actor`, `operation`, `target`, `permission`, plus optional `backup_id`/`rollback_ref`/`parameters`), and `lib/omes/py/jobs/worker.py` no longer fabricates a `job_id`. Correlation binds on `idempotency_key`. This was applied as a v1-in-place amendment, not a v2 cut, since v1 has exactly one known consumer (AWCMS) pinned by commit hash with a CI drift gate (#197).
 
 ### 4.2 Hermes Subagent Orchestration & Process Observability (ADR-0028, issue #183)
 
@@ -368,16 +374,49 @@ The Control Center adds a new network-facing trust boundary. It must be added to
 | D3 | domain billing and reconciliation | #102 | Product/checkout/reminder/dedupe/refund/reconciliation/report contracts and a stdlib billing-rules module delivered: [docs/domain-providers.md](domain-providers.md) section 5, `lib/omes/py/domains/billing.py`, with Cloudflare and SRS-X end-to-end fake-provider tests. No live payment/registrar integration in this repository. |
 | Foundation | Control Center boundary | #89 | Contracts and threat model delivered: [docs/control-center-contracts.md](control-center-contracts.md), [docs/control-center-threat-model.md](control-center-threat-model.md), [`contracts/control-center/v1/`](../contracts/control-center/v1/). No AWCMS producer/consumer implementation in this repository. |
 | Foundation | idempotent audited jobs | #90 | Implemented: job runner, atomic store, approval policy, and read-back reconciliation delivered in [docs/jobs.md](jobs.md), `lib/omes/py/jobs/runner.py`, `lib/omes/py/jobs/store.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
-| Foundation | AWCMS Control Center | #91 | OMES wire contracts delivered: `operation-request.schema.json`, `deployment-view.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), [docs/control-center-foundation.md](control-center-foundation.md). Web GUI and tenant DB remain in AWCMS/awcms-one. |
+| Foundation | AWCMS Control Center | #91 | OMES wire contracts delivered: `operation-request.schema.json`, `deployment-view.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), [docs/control-center-foundation.md](control-center-foundation.md). The web GUI and tenant DB are implemented in `ahliweb/awcms`, not here — see §11.1. |
 | Foundation | service catalog/entitlements | #92 | Implemented: pure `evaluate()` policy, backend eligibility enforcement, and subscription/entitlement contracts delivered in `lib/omes/py/jobs/entitlement.py`, `lib/omes/py/jobs/states.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
-| Security | AI privacy posture and policy-decision projection | #217 | OMES-side wire contracts and pure projection/authorization logic delivered: [docs/control-center-contracts.md](control-center-contracts.md) section 2.10, `ai-privacy-posture-view.schema.json`, `ai-egress-approval.request/response.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), `lib/omes/py/privacy/posture_projection.py`. AWCMS-side screen/API/database consumption not implemented yet (tracked in #217). |
+| Security | AI privacy posture and policy-decision projection | #217 (closed, commit `ce44b0a`, PR #231) | OMES-side wire contracts and pure projection/authorization logic delivered: [docs/control-center-contracts.md](control-center-contracts.md) section 2.10, `ai-privacy-posture-view.schema.json`, `ai-egress-approval.request/response.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), `lib/omes/py/privacy/posture_projection.py`. AWCMS-side screen/API/database consumption is not implemented yet; not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)). |
 | Billing | manual billing ledger | #93 | Implemented: immutable price snapshots, integer-minor currency arithmetic, and reconciliation helpers delivered in `lib/omes/py/jobs/ledger.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Rendering/email remain in awcms-one. |
 | Billing | recurring billing and webhooks | #94 | Implemented: webhook signature verification, replay protection, grace periods, and suspension policy delivered in `lib/omes/py/jobs/recurring.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Gateway adapters remain external. |
 | Billing | reporting projections | #95 | Implemented: pure fixture-based usage, billing, and revenue projection contracts delivered in `lib/omes/py/jobs/projections.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
 | Isolation | rootless Docker Compose | #96 | Implemented: rootless Compose isolation backend, manifest schema, and doctor integration delivered in `lib/omes/py/compose/`, [docs/agent-deployment.md](agent-deployment.md), `bin/omes agent`. |
 | Multi-server | optional Coolify adapter | #97 | Implemented: contracts, API client, instance registry persistence, and audit logging delivered in `lib/omes/py/coolify/`, [docs/coolify-adapter.md](coolify-adapter.md), [`contracts/coolify/v1/`](../contracts/coolify/v1/). Live provider HTTP integration is external. |
 
-The current OMES repository remains a Bash CLI and host toolkit. This document is a design and traceability artifact, not evidence that the web or provider features have landed.
+The current OMES repository remains a Bash CLI and host toolkit. For the provider rows above (#98–#102) this document remains a design and traceability artifact, not evidence that those features have landed. For the web control plane, see §11.1.
+
+### 11.1 AWCMS-side Control Center implementation (epic #195)
+
+Epic [#195](https://github.com/ahliweb/omes/issues/195) tracks the web Control Center. Its owning issues live in this repository; the implementation landed in `ahliweb/awcms`. All six implementation children are closed and merged:
+
+| OMES issue | Scope | Upstream PR | Merge commit |
+|---|---|---|---|
+| [#196](https://github.com/ahliweb/omes/issues/196) | `omes_control` module schema, FORCE RLS, 13 default-deny permissions, descriptor | `ahliweb/awcms#814` | `34c7ea69` |
+| [#197](https://github.com/ahliweb/omes/issues/197) | Pinned OMES v1 contract consumption, fail-closed validator, drift gate | `ahliweb/awcms#816` | `a82d8e60` |
+| [#198](https://github.com/ahliweb/omes/issues/198) | Owner/operator API for servers, deployments, jobs, health, backups, audit | `ahliweb/awcms#815` | `64506d65` |
+| [#199](https://github.com/ahliweb/omes/issues/199) | Worker enrollment, poll, result, heartbeat ingestion | `ahliweb/awcms#823` | `a43f7268` |
+| [#200](https://github.com/ahliweb/omes/issues/200) | Overview, Servers, Deployments, Operations, Jobs screens | `ahliweb/awcms#822` | `6bb6d491` |
+| [#201](https://github.com/ahliweb/omes/issues/201) | Health, Backup/recovery, Audit screens; module promoted to `active` | `ahliweb/awcms#824` | `52e8f8b4` |
+
+The two OMES-side dependencies are merged on this repository's `main`: the outbound pull-worker transport ([#192](https://github.com/ahliweb/omes/issues/192), commit `18129dd`) and the Hermes orchestration visualization ([#183](https://github.com/ahliweb/omes/issues/183), commit `0824f98`). Neither is blocked or pending.
+
+`ahliweb/awcms-one` is an integration/reference deployment whose `apps/cms` directory is a `git subtree` of `ahliweb/awcms`. Its last sync (`awcms-one#216`, to `2d29a446`) predates `a43f7268`, `6bb6d491` and `52e8f8b4`, so #199, #200 and #201 are **not yet present in `awcms-one`**. That sync is owned by that repository.
+
+The close-out record — verification gates, ownership-boundary checks, operator flow, permissions, recovery guidance and release metadata — is [docs/control-center-release-closeout.md](control-center-release-closeout.md) (issue [#202](https://github.com/ahliweb/omes/issues/202)).
+
+### 11.2 Deferred Control Center work
+
+All of the following, previously deferred, have shipped and are removed from this list:
+
+- Prototype redesign v2 driven by v1 contract fixtures — **shipped**, commit `0820e6e` (PR [`ahliweb/omes#212`](https://github.com/ahliweb/omes/pull/212), closing #211).
+- v1 worker contract fix (`worker-result.request` `job_id`, `worker-poll.response.job` shape) — **shipped**, commit `62c3b01` (PR [`ahliweb/omes#222`](https://github.com/ahliweb/omes/pull/222), closing #221).
+- AI data-privacy boundary, machine-readable egress policy, restricted local-only inference posture, privacy-posture evidence and projection, and the matching regression coverage — **shipped**, commit `ce44b0a` (PR [`ahliweb/omes#231`](https://github.com/ahliweb/omes/pull/231), closing #213, #214, #215, #216, #217, #218). See [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
+
+Genuinely still deferred:
+
+- AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts (§2.10 of [docs/control-center-contracts.md](control-center-contracts.md)) — not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)).
+- A dedicated enrollment-token management screen (`omes_control.enrollments.manage`) — not implemented yet (tracked in [#233](https://github.com/ahliweb/omes/issues/233)).
+- Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
 
 ## 12. Related documents
 
@@ -392,6 +431,7 @@ The current OMES repository remains a Bash CLI and host toolkit. This document i
 - [ADR-0011](adr/0011-control-center-and-provider-boundaries.md)
 - [Web-panel reference evaluation](web-panel-reference-evaluation.md)
 - [ADR-0016](adr/0016-herman-web-panel-reference.md)
+- [Control Center release close-out](control-center-release-closeout.md) (#202 / epic #195)
 - [Control Center contracts](control-center-contracts.md) (#89)
 - [Control Center threat model](control-center-threat-model.md) (#89)
 - [`contracts/control-center/v1/`](../contracts/control-center/v1/) — JSON Schema contracts and fixtures (#89)

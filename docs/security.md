@@ -327,8 +327,9 @@ gateway is implemented ([#215](https://github.com/ahliweb/omes/issues/215); see
 for the per-requirement status), and the read-only Control Center projection of that evidence is
 implemented ([#217](https://github.com/ahliweb/omes/issues/217); see
 [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
-Security regression gates for this boundary are **Not implemented yet** (tracked in
-[#218](https://github.com/ahliweb/omes/issues/218)).
+Security regression gates for this boundary are implemented
+([#218](https://github.com/ahliweb/omes/issues/218), closed; commit `ce44b0a`, PR #231; see
+`tests/py/privacy/test_privacy_boundary_regression.py`).
 
 ## 9. What OMES does NOT claim
 

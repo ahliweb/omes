@@ -506,15 +506,19 @@ exists in this repository yet).
 
 ### 2.10 AI privacy posture and policy-decision projection (issue #217)
 
-Issue #217 extends this contract set so a Control Center screen can
-display and govern AI privacy posture and AI egress policy decisions
-using only SANITIZED metadata from issue #214
-(`lib/omes/py/privacy/egress_policy.py`) and issue #216
-(`lib/omes/py/privacy/posture_evidence.py`) - never raw prompts,
-transcripts, restricted data, or provider credentials. No AWCMS-side
-screen, API, or database consumes these contracts yet: **not implemented
-yet (tracked in #217)** on the AWCMS side; this repository only fixes
-the wire shapes and the pure OMES-side evaluation logic.
+Issue #217 (closed; commit `ce44b0a`, PR
+[`ahliweb/omes#231`](https://github.com/ahliweb/omes/pull/231)) extended
+this contract set so a Control Center screen can display and govern AI
+privacy posture and AI egress policy decisions using only SANITIZED
+metadata from issue #214 (`lib/omes/py/privacy/egress_policy.py`) and
+issue #216 (`lib/omes/py/privacy/posture_evidence.py`) - never raw
+prompts, transcripts, restricted data, or provider credentials. #217's
+own scope was the OMES-side wire contracts and the pure
+projection/authorization logic (`lib/omes/py/privacy/posture_projection.py`),
+which are implemented. **No AWCMS-side screen, API, or database consumes
+these contracts yet** - that AWCMS-side consumption work is not implemented yet
+(tracked in [#232](https://github.com/ahliweb/omes/issues/232)); this repository only owns the wire shapes and the pure
+OMES-side evaluation logic.
 
 **Authority split** (this is this issue's documentation acceptance
 criterion, stated explicitly, not merely implied by the ownership

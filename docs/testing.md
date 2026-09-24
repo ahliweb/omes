@@ -233,10 +233,12 @@ python3 scripts/generate-control-center-data.py          # regenerate ui/control
 python3 scripts/generate-control-center-data.py --check   # fails if it is stale
 ```
 
-`ui/control-center/index.html` is a reference-only, presentation prototype
-(the functional Control Center screens are **not implemented yet** -
-tracked in [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201)).
-Its example data is generated - not hand-typed - from
+`ui/control-center/index.html` is a reference-only, presentation prototype in
+this repository, not a shipping interface. Eight of the functional Control
+Center screens **are implemented**, upstream in `ahliweb/awcms`
+([#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201),
+closed) - not in this repository, and not as this prototype. Its example
+data is generated - not hand-typed - from
 `contracts/control-center/v1/fixtures/*/valid-*.json` (the same fixtures
 §2.1a's `scripts/check-contracts.py` validates) plus
 `ui/control-center/sample-fleet.json`, a small supplementary sample for
@@ -437,10 +439,10 @@ that experiment before trusting any future edit to this suite.
 section 8 states that RAG, embedding generation, and vector retrieval inherit the source data's
 classification and create no exemption — but **no RAG, retrieval, chunking, embedding, or
 vector-store pipeline is implemented in this repository yet**, so there is no such pipeline to
-test end-to-end. Not implemented yet (tracked in [#218](https://github.com/ahliweb/omes/issues/218)'s
-follow-up scope, to be re-opened as its own issue when such a pipeline is proposed). What this
-suite tests today instead is the property that makes the documented rule enforceable the moment
-one lands: the egress evaluator is **purpose-invariant** (asserted over all 96
+test end-to-end. Not implemented yet, and no OMES issue owns it - a new issue should be opened
+when such a pipeline is proposed. What this suite tests today instead is the property that makes
+the documented rule enforceable the moment one lands: the egress evaluator is **purpose-invariant**
+(asserted over all 96
 classification × destination × posture × sanitization combinations for four RAG-shaped purposes),
 so a future `embedding_generation` or `rag_retrieval` call cannot be granted a quieter decision
 than the same classification/destination pair gets anywhere else. A tripwire test additionally
