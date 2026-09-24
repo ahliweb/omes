@@ -247,7 +247,9 @@ class TestNoSecretOrPromptLeakage(unittest.TestCase):
     prompt/response text) through evaluate() and prove they never surface
     anywhere in the output - not verbatim, not truncated, not hashed."""
 
-    CANARY_SECRET = "sk_live_CANARY_1234567890ABCDEFGHIJ"
+    # gitleaks:allow - synthetic, never-valid canary used ONLY to prove the
+    # evaluator cannot echo a secret; not a real or revoked credential.
+    CANARY_SECRET = "sk_live_CANARY_1234567890ABCDEFGHIJ"  # gitleaks:allow
     CANARY_PROMPT = "CANARY_PROMPT: the patient's full name is Jane Doe and her SSN is 123-45-6789"
     CANARY_TOKEN = "Bearer CANARY_TOKEN_abcdef0123456789"
 
