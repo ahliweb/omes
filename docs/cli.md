@@ -430,7 +430,7 @@ versions`), local endpoint network classification (loopback/private/public, reus
 existing listener audit rather than a second implementation), cloud-fallback and
 network-isolation tri-state (`enabled`/`disabled`/`unknown` — a missing signal is always
 `unknown`, never assumed safe), a `last_verified_at` timestamp, and the #215 local-only posture
-source when that issue's evidence has landed. `cloud_fallback_enabled` is derived from the
+source (implemented; `modules/hermes-restricted`). `cloud_fallback_enabled` is derived from the
 non-secret `fallback_model` and `fallback_providers` Hermes config keys (same allowlist as
 `model.provider`): a cloud-provider `fallback_model` is `enabled`; both keys confirmed unset (or a
 demonstrably local `fallback_model` with `fallback_providers` unset) is `disabled`; a present but

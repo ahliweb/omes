@@ -19,8 +19,9 @@
 > its sanitized Control Center projection
 > ([#217](https://github.com/ahliweb/omes/issues/217); see
 > [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
-> Negative regression coverage is **Not implemented yet**, tracked in
-> [#218](https://github.com/ahliweb/omes/issues/218).
+> Negative regression and exfiltration-resistance coverage is also implemented
+> ([#218](https://github.com/ahliweb/omes/issues/218); see
+> `tests/py/privacy/test_privacy_boundary_regression.py`).
 >
 > This document is engineering guidance for OMES. It does **not** claim legal compliance,
 > regulatory approval, ISO certification, Common Criteria certification, or that a local model is
@@ -390,7 +391,7 @@ piping `omes health ai-privacy --json` into an operator-controlled log or ticket
 retention rules as any other bounded evidence apply: keep only what is operationally useful,
 apply an explicit retention/deletion period, and never widen it into a place raw prompt/response
 content could later be pasted "for context." Automated evidence retention/rotation tooling is
-**Not implemented yet** (tracked in #217).
+**Not implemented yet** — no OMES issue owns it today.
 
 **Incident-response use:** when investigating a suspected AI privacy-posture incident (for
 example, a report that a Restricted-local-only workload may have reached a cloud destination),
@@ -438,7 +439,9 @@ classification.
 Section 11's `omes health ai-privacy` evidence surface (#216) supports the incident-evidence
 practice above (preserve the bounded JSON report by reference, never raw content). Automated
 backup-scope *enforcement* (actively preventing a default backup job from sweeping up
-Restricted-class prompt/session data) is **not implemented yet (tracked in #215)**; today the
+Restricted-class prompt/session data) is **not implemented yet** — no OMES issue owns it (it is
+out of #215's scope, which covers the Hermes gateway's local-only inference posture, not backup
+enforcement); today the
 backup-scope guidance in this section remains operating guidance for anyone handling a backup or
 restore of AI-adjacent data.
 
@@ -463,8 +466,9 @@ and authority split. They show:
 - drift and remediation status (`status`, e.g. `AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD`).
 
 **The AWCMS-side screen, API, and database that would consume these contracts are not implemented
-yet (tracked in #217)** - this repository only fixes the projection's wire shape and the OMES-side
-authorization backstop (cross-tenant denial, the RESTRICTED-cloud approval block).
+yet — no OMES issue owns that AWCMS-side work** - this repository only fixes the projection's wire
+shape and the OMES-side authorization backstop (cross-tenant denial, the RESTRICTED-cloud approval
+block), both implemented under #217 (closed; commit `ce44b0a`, PR #231).
 
 Tenant/RBAC/ABAC/RLS authorization remains server-side in AWCMS; UI hiding of a field is never a
 substitute for that check. OMES nodes continue using the outbound pull-worker model
@@ -486,7 +490,8 @@ privileged listener.
 | Restricted prompt/session data silently swept into a default backup | Backup classification follows source classification; explicit inclusion policy required |
 | Sensitive payload pasted into an incident ticket/PR/chat as "evidence" | Evidence preserved by reference (policy, destination, timestamps, correlation ID), never raw payload |
 
-Regression coverage is tracked in [#218](https://github.com/ahliweb/omes/issues/218).
+Regression coverage is implemented ([#218](https://github.com/ahliweb/omes/issues/218), closed;
+commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
 
 ## 15. Indonesia legal/privacy context
 
@@ -601,8 +606,11 @@ seen only on upstream development branches is not treated as supported release e
    [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json),
    and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py). The
    #215 local-only posture source is integrated via the two state keys section 10 documents.
-4. **#217** — sanitized Control Center projection and policy-decision contracts.
-5. **#218** — negative/regression tests for disclosure and policy bypass.
+4. **#217** — sanitized Control Center projection and policy-decision contracts. Implemented
+   (OMES side): see [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py).
+   AWCMS-side consumption remains not implemented, with no owning OMES issue.
+5. **#218** — negative/regression tests for disclosure and policy bypass. Implemented: see
+   `tests/py/privacy/test_privacy_boundary_regression.py`.
 
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.

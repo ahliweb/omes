@@ -1145,8 +1145,8 @@ the read-only privacy-posture evidence surface `omes health ai-privacy`
 [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py)) and its
 sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issues/217); see
 [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
-Security regression gates are **Not implemented yet** (tracked in
-[#218](https://github.com/ahliweb/omes/issues/218)).
+Security regression gates are implemented ([#218](https://github.com/ahliweb/omes/issues/218),
+closed; commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
