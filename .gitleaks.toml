@@ -26,4 +26,13 @@ regexes = [
   # documented example doesn't need a new PR to adjust gitleaks config.
   '''TELEGRAM_BOT_TOKEN=changeme''',
   '''123456789:ABC[A-Za-z0-9_-]*''',
+  # Issue #216's adversarial privacy tests deliberately feed a synthetic,
+  # never-valid "canary" credential through the evidence evaluators to prove
+  # those evaluators cannot echo a secret (see
+  # tests/py/privacy/test_posture_evidence.py and
+  # tests/py/health/test_ai_privacy.py). The literal below is not a real,
+  # revoked, or ever-valid credential; it exists only so the test can assert
+  # its ABSENCE from the output. The pattern is pinned to the CANARY marker so
+  # it cannot allowlist a genuine `sk_live_` secret.
+  '''sk_live_CANARY_[A-Za-z0-9]+''',
 ]
