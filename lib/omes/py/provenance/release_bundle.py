@@ -301,7 +301,7 @@ def generate_security_checks() -> dict[str, Any]:
     }
 
 
-def generate_limitations() -> dict[str, Any]:
+def generate_limitations(version: str) -> dict[str, Any]:
     return {
         "schema_version": "1.0.0",
         "limitations": [
@@ -318,7 +318,7 @@ def generate_limitations() -> dict[str, Any]:
             {
                 "id": "staged_features_not_in_cli",
                 "description": "Control Center web UI, billing automation, and registrar adapters are staged design contracts (#89–#102); not present in CLI release.",
-                "scope": "release v0.3.0",
+                "scope": f"release v{version}",
             },
             {
                 "id": "upstream_main_candidates",
@@ -394,7 +394,7 @@ def generate_bundle(
 
     # 6. limitations.json
     lim_path = output_dir / "limitations.json"
-    lim_data = generate_limitations()
+    lim_data = generate_limitations(version)
     lim_path.write_text(json.dumps(lim_data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     files["limitations.json"] = lim_path
 

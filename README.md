@@ -30,7 +30,7 @@ automation layer.
 
 ## Status
 
-**Pre-alpha, version `0.3.0`.** The CLI (`bin/omes`), the shared library
+**Pre-alpha, version `0.4.0`.** The CLI (`bin/omes`), the shared library
 (`lib/omes/*.sh`), every module referenced by the `server`/`desktop`/`hermes`
 profiles (`apt-base`, `security-baseline`, `containers`, `hermes`,
 `hermes-gateway`, `hermes-gateway-system`, `desktop-preflight`,

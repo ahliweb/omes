@@ -6,6 +6,58 @@ All notable changes to OMES are documented here. The format follows
 `changes/*.md` fragments by `scripts/release.sh` (see
 `docs/adr/0010-versioning-and-change-fragments.md`); do not edit by hand.
 
+## [0.4.0](https://github.com/ahliweb/omes/releases/tag/v0.4.0) - 2026-09-24
+
+### Security
+
+- Pin installer dependencies and remove unverified fetch paths: `install/bootstrap.sh` enforces explicit release channels (stable by default, pinned to an immutable tag), validates the origin URL, refuses destructive overwrites, fails closed on git errors, and records verified checkout provenance. ([#169](https://github.com/ahliweb/omes/issues/169))
+- Enforce verified SHA-256 installer digest by default for supported upstream Hermes Agent baselines (v2026.9.14), failing closed on mismatch or unmapped baselines unless explicitly overridden via OMES_HERMES_ALLOW_UNVERIFIED_INSTALLER=1. ([#170](https://github.com/ahliweb/omes/issues/170))
+- Enforce fail-closed JSON Schema validation across contracts and agent manifests by rejecting unsupported keywords with SchemaError, strictly allowlisting metadata annotations, and reconciling validator subsets. ([#172](https://github.com/ahliweb/omes/issues/172))
+- Add a cross-cutting AI privacy boundary regression and exfiltration-resistance suite (`tests/py/privacy/test_privacy_boundary_regression.py`, 50 negative tests) covering restricted-to-cloud denial, fail-closed unknowns, credential rejection/redaction, prompt/transcript fields being refused by the AI contracts, silent cloud fallback, stale evidence, canary-free logs/state/backups, prompt-injection invariance, and the jobs operation allowlist; the suite found and this change fixes three real gaps it exposed — a `sk_live_`-shaped value could be echoed through `hermes_version_reference.value`, a malformed `observed_at` was echoed verbatim as a healthy `last_verified_at` (violating the evidence schema's own pattern), and a field literally named `private_key` was not covered by the secret name gate in `lib/omes/py/jobs/schema.py`/`audit.py`. Documented in `docs/testing.md` section 7, including the RAG/embedding coverage that is not implemented yet. ([#218](https://github.com/ahliweb/omes/issues/218))
+
+### Added
+
+- Add explicit support, test fixtures, unit tests, and compatibility documentation for Linux Mint 22.3 (codename Zena, Ubuntu 24.04 noble base). ([#162](https://github.com/ahliweb/omes/issues/162))
+- Add explicit support, test fixtures, unit tests, provenance verification, and compatibility documentation for Ubuntu Server 26.04.1 LTS (Resolute Raccoon). ([#163](https://github.com/ahliweb/omes/issues/163))
+- Produce and verify release SLSA provenance, CycloneDX 1.5 SBOM, release manifest, and compatibility/recovery/security evidence bundles during release compilation with tamper detection and fail-closed gates. ([#173](https://github.com/ahliweb/omes/issues/173))
+- Introduce RuntimeDeployment v2 contract (`omes.ahliweb.com/v2`, ADR-0018) with Hermes profile references (`runtime.profileRef`), strict schema anti-smuggling enforcement, multi-version coexistence, preflight profile verification, and safe migration tooling (`omes agent migrate`). ([#174](https://github.com/ahliweb/omes/issues/174))
+- Add a read-only Control Center projection of Hermes delegated-task orchestration and live subagent processes: versioned `hermes-orchestration-event`/`-tree` contracts, `omes agent orchestration <stream|snapshot|prune>`, and state-tree reconstruction with XSS sanitization, secret stripping and stale-task detection (ADR-0028). ([#183](https://github.com/ahliweb/omes/issues/183))
+- Add a secure outbound pull-worker transport (enrollment, job poll/result, heartbeat) connecting OMES hosts to the AWCMS Control Center, with no inbound privileged listener (ADR-0027). ([#192](https://github.com/ahliweb/omes/issues/192))
+- Add a machine-readable AI data-classification and model-egress policy contract and evaluator. ([#214](https://github.com/ahliweb/omes/issues/214))
+- Add an opt-in `hermes-restricted` OMES module that enforces a restricted/local-only Hermes deployment posture: `module_check`/`module_apply` refuse before execution if the configured model endpoint is not local/private (per the #214 egress-policy contract, evaluated via `lib/omes/py/privacy/restricted_posture.py`, never a second decision matrix), `module_apply` denies outbound network access from the Hermes system-gateway unit by default, and `module_verify` reports drift toward a cloud endpoint as a hard failure rather than a silent fallback. Also detects a configured legacy Hermes `fallback_model` as an independent restricted- posture violation, and writes exactly the `ai.local_only_posture.*`/`ai.privacy.expected_posture` state keys and vocabulary issue #216's evidence surface (`omes health ai-privacy`) expects. ([#215](https://github.com/ahliweb/omes/issues/215))
+- Add `omes health ai-privacy`, a read-only AI privacy posture/egress evidence report (bounded policy/destination/isolation metadata, PASS/FAIL/WARN/BLOCKED with stable reason codes) that never captures raw prompts, responses, or credentials, and reports FAIL on drift from a restricted local-only posture to a cloud-capable destination. `cloud_fallback_enabled` is detected from the non-secret `fallback_model` / `fallback_providers` Hermes config keys via the existing vetted `hermes config get` allowlist: a cloud-destined `fallback_model` reports `enabled`, both keys confirmed unset reports `disabled`, and anything ambiguous — including a present but deliberately unparsed `fallback_providers` list — reports `unknown`, never `disabled`. ([#216](https://github.com/ahliweb/omes/issues/216))
+- Add Control Center contracts (`ai-privacy-posture-view`, `ai-egress-approval.request/response`, and two events) and `lib/omes/py/privacy/posture_projection.py` so AWCMS can display and govern AI privacy posture and policy decisions from sanitized #214/#216 evidence — classification mode, destination class, decision, reason code, evidence freshness, and authority — without raw prompts, transcripts, restricted data, or provider credentials. Cross-tenant reads and the one owner-approval path are gated by a pure, independent authorization backstop; `RESTRICTED -> cloud_sanitized` has no approval path. AWCMS-side consumption is not implemented yet (tracked in #217). ([#217](https://github.com/ahliweb/omes/issues/217))
+
+### Changed
+
+- Update upstream baselines for Omarchy (v4.0.4) and Hermes Agent (v2026.9.14 / v0.21.3), including compatibility inventory evaluation for bespoke kernel, installer SHA-256 verification, and branch pinning. ([#164](https://github.com/ahliweb/omes/issues/164))
+- Enforce upstream-first architecture boundaries and capability registry across OMES, Hermes, Omarchy, Graphify, and AWCMS per ADR-0017 with machine-checkable contracts, module coverage checks, and CI layer guards. ([#171](https://github.com/ahliweb/omes/issues/171))
+- Delegate native agent deployment lifecycle to Hermes CLI (`hermes gateway`, ADR-0019). Hermes owns base unit creation (`hermes-gateway[-<profile>].service`), while OMES attaches resource quotas and hardening via drop-in overlays (`10-omes-agent-resources.conf`), with automatic legacy unit migration and multiplexed mode awareness. ([#175](https://github.com/ahliweb/omes/issues/175))
+- Delegate profile and full-runtime backup to Hermes native commands (`hermes profile export/import`, `hermes backup/import`, ADR-0020). Support recovery classes (`portable-profile`, `full-runtime-dr`, `omes-host`), sensitive credential opt-in enforcement (`--allow-sensitive-credentials`), pre-restore recovery point snapshotting, SHA-256 integrity verification, post-restore health verification via `hermes doctor`, and backward compatibility for legacy archives. ([#176](https://github.com/ahliweb/omes/issues/176))
+- Align container deployment with official Hermes Docker topology (ADR-0021). Support explicit `shared` and `dedicated` container topologies, map persistent storage to the canonical `/opt/data` layout, configure s6 tmpfs mounts (`/run`, `/tmp`), delegate in-container supervision to s6 and Hermes commands (`hermes profile start/stop/restart`), and preserve rootless host containment, resource limits, and rollback safety. ([#177](https://github.com/ahliweb/omes/issues/177))
+- Consume native Hermes health endpoints and doctor diagnostics while retaining OMES host aggregation. ([#178](https://github.com/ahliweb/omes/issues/178))
+- Move domain-heavy content workflows out of OMES core to AWCMS and Hermes boundaries (ADR-0024). ([#179](https://github.com/ahliweb/omes/issues/179))
+- Delegate skill, MCP and workflow behavior to upstream Graphify and Hermes (ADR-0025). ([#180](https://github.com/ahliweb/omes/issues/180))
+- Replaced the Control Center UI prototype (`ui/control-center/`) with redesign v2 and made its example data generated from the `contracts/control-center/v1` fixtures (plus a new `sample-fleet.json` supplement) via `scripts/generate-control-center-data.py`, instead of hand-typed in `index.html`; added accessibility fixes (contrast, focus-visible, reduced-motion, keyboard-reachable rows, `lang="id"`/`<title>`) and a `--check` freshness gate wired into `tests/run.sh`, `scripts/lint.sh`, and CI. ([#211](https://github.com/ahliweb/omes/issues/211))
+
+### Fixed
+
+- Verify rollback completion with post-operation read-backs before reporting success, failing closed to 'failed' lifecycle state when service stop, disable, unlinking, or daemon-reload fails. ([#166](https://github.com/ahliweb/omes/issues/166))
+- Remove the unimplementable job_id from worker-result.request and give worker-poll.response.job a real schema. ([#221](https://github.com/ahliweb/omes/issues/221))
+
+### Documentation
+
+- Adopt OMES Control Center UI/UX design system and canonical 9-screen architecture. ([#200](https://github.com/ahliweb/omes/issues/200))
+- Record the AWCMS-based OMES Control Center release close-out, with shipped-versus-deferred evidence (epic #195). ([#202](https://github.com/ahliweb/omes/issues/202))
+- Define the OMES AI data privacy and model-security boundary: Restricted data defaults to local/private inference, cloud use requires explicit classification and minimization policy, Hermes retains model/provider routing authority, backup/incident-response and provider due-diligence expectations for AI-adjacent data are documented, and follow-up implementation is tracked in #214–#218. ([#213](https://github.com/ahliweb/omes/issues/213))
+
+### CI and tooling
+
+- Format all shell scripts with shfmt -i 2 -ci -bn so the shfmt lint check passes with zero differences. ([#161](https://github.com/ahliweb/omes/issues/161))
+- Add Ubuntu 26.04 LTS (Resolute Raccoon) to Tier 1 blocking CI container compatibility matrix, add dedicated real-install and idempotency job, update test-matrix defaults, and expand VM matrix documentation. ([#167](https://github.com/ahliweb/omes/issues/167))
+- Enforce linear, verified release provenance: `scripts/release.sh` now requires a clean `main`, green CI on the release commit, exact commit-to-tag binding and a dry-run mode, and publishes GitHub Releases with read-back verification. ([#168](https://github.com/ahliweb/omes/issues/168))
+- Automate upstream drift review and deprecation tracking (ADR-0026). ([#181](https://github.com/ahliweb/omes/issues/181))
+
 ## [0.3.0](https://github.com/ahliweb/omes/releases/tag/v0.3.0) - 2026-09-20
 
 ### Added
