@@ -54,9 +54,10 @@ Grouped index of every document in this repository. See the top-level
 | [adr/](adr/README.md) | Architecture Decision Records. |
 | [research-and-implementation-plan.md](research-and-implementation-plan.md) | The original research baseline and phased implementation plan. |
 | [agent-orchestration-roadmap.md](agent-orchestration-roadmap.md) | Staged agent deployment roadmap: native systemd MVP, rootless Compose isolation, optional Coolify backend, and evidence-gated Nomad/Kubernetes evaluation. |
-| [control-center-and-integrations.md](control-center-and-integrations.md) | Proposed AWCMS-based Control Center boundary, idempotent jobs, billing, Cloudflare, SRS-X, GitHub, DNS, and provider reconciliation. |
-| [control-center-contracts.md](control-center-contracts.md) | Versioned wire contract between an AWCMS/awcms-one-based Control Center, OMES, and Hermes. |
-| [control-center-foundation.md](control-center-foundation.md) | OMES-side contract deliverable for the Control Center foundation issue; the web GUI/tenant/RBAC layers stay in AWCMS/awcms-one. |
+| [control-center-and-integrations.md](control-center-and-integrations.md) | AWCMS-based Control Center boundary, idempotent jobs, billing, Cloudflare, SRS-X, GitHub, DNS, provider reconciliation, and the shipped-versus-deferred delivery status. |
+| [control-center-release-closeout.md](control-center-release-closeout.md) | Evidence record for the Control Center release (epic #195, issue #202): verification gates, ownership-boundary checks, operator flow, recovery guidance, and deferred work. |
+| [control-center-contracts.md](control-center-contracts.md) | Versioned wire contract between an AWCMS-based Control Center, OMES, and Hermes. |
+| [control-center-foundation.md](control-center-foundation.md) | OMES-side contract deliverable for the Control Center foundation issue; the web GUI/tenant/RBAC layers are implemented in `ahliweb/awcms`. |
 | [control-center-threat-model.md](control-center-threat-model.md) | Design-stage threat model for the Control Center boundary, ahead of a running implementation. |
 | [coolify-adapter.md](coolify-adapter.md) | The optional Coolify deployment adapter: fake-provider contracts, what is and isn't wired up yet. |
 | [domain-providers.md](domain-providers.md) | Domain registrar/DNS provider abstraction, capabilities, and provider profiles (issues #98-#102). |

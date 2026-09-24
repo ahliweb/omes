@@ -5,10 +5,26 @@
 > [AGENTS.md](../AGENTS.md) §2 and the AWCMS boundary rule, the web GUI,
 > tenant/RLS tables, RBAC/ABAC enforcement, browser/API tests, and the
 > authentication/audit/workflow-approval/reporting primitives it uses are
-> implemented in the **awcms-one** repository, not here. This document
-> states precisely what belongs where so neither repository re-implements
-> the other's responsibility, and lists which of issue #91's acceptance
-> criteria this repository does and does not satisfy.
+> implemented outside this repository. This document states precisely what
+> belongs where so neither repository re-implements the other's
+> responsibility, and lists which of issue #91's acceptance criteria this
+> repository does and does not satisfy.
+>
+> **Repository correction (validated 2026-09-21, executed under epic #195).**
+> Earlier revisions of this document named `awcms-one` as the web
+> implementation repository. That is no longer accurate. The canonical
+> implementation repository is
+> **`ahliweb/awcms`**: the `omes_control` module, its owner/operator API,
+> its permissions/RLS and all system-admin `/admin/omes/*` screens live
+> there. **`ahliweb/awcms-one`** is an integration/reference deployment
+> whose `apps/cms` directory is a `git subtree` of `ahliweb/awcms`; it is
+> not a second canonical source and must not be edited as one. The
+> boundary this document draws between OMES and the web side is unchanged
+> by that correction — only the repository name is. Delivery evidence is in
+> [control-center-release-closeout.md](control-center-release-closeout.md)
+> (issue #202) and
+> [control-center-and-integrations.md](control-center-and-integrations.md)
+> §11.1.
 
 ## 1. What this repository (OMES) provides for issue #91
 
@@ -39,10 +55,19 @@
 - This document, cross-referenced from
   [docs/control-center-contracts.md](control-center-contracts.md) §2.5.
 
-## 2. What awcms-one must provide (not this repository)
+## 2. What the web side must provide (not this repository)
 
 Issue #91's acceptance criteria that are **entirely out of scope** for
-this repository and must be satisfied in awcms-one:
+this repository and must be satisfied on the web side:
+
+> Delivery status: these criteria were satisfied in `ahliweb/awcms` under
+> epic #195 — tenant-scoped screens by
+> [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201),
+> the owner/operator API by [#198](https://github.com/ahliweb/omes/issues/198),
+> and schema/RLS/permissions by [#196](https://github.com/ahliweb/omes/issues/196).
+> Merge evidence is in
+> [control-center-and-integrations.md](control-center-and-integrations.md) §11.1.
+> The split described below still governs; nothing moved into this repository.
 
 - "Provide tenant-scoped screens for servers, logical agents, deployments,
   health/readiness, jobs, backups, and audit activity." — a web GUI;
@@ -50,7 +75,7 @@ this repository and must be satisfied in awcms-one:
 - "Support server registration and preflight request without accepting raw
   SSH/API/provider secrets in the browser or database." — the browser
   form, its client/server validation, and the database that must never
-  store a raw secret are all awcms-one components. OMES's contribution is
+  store a raw secret are all web-side components. OMES's contribution is
   only that `server-registration.request.schema.json` and every other
   contract reject a raw secret value if one is ever produced
   (`lib/omes/py/jobs/schema.py`'s `scan_for_raw_secrets()`).
@@ -81,11 +106,11 @@ this repository and must be satisfied in awcms-one:
   `tests/py/jobs/` validating idempotent submission/duplicate rejection at
   the job-runner layer those screens would call into.
 
-## 3. How awcms-one is expected to consume this repository
+## 3. How the AWCMS Control Center is expected to consume this repository
 
 1. A Control Center screen builds an `operation-request` (this repository's
    schema) after its own RBAC/ABAC/RLS layer has decided `permission`.
-2. awcms-one translates an approved `operation-request` into a
+2. The Control Center translates an approved `operation-request` into a
    `deployment.request` (issue #89's broader, job-runner-facing contract)
    and calls `omes job submit` (issue #90) over whatever transport
    [docs/control-center-contracts.md](control-center-contracts.md) §5
@@ -105,6 +130,6 @@ This document does not redefine
 (§1–§4, authoritative design) or
 [docs/control-center-contracts.md](control-center-contracts.md) (§1
 ownership matrix, §2 contract catalog). It exists because issue #91 is
-specifically the web-GUI issue, and the "what belongs in awcms-one" split
+specifically the web-GUI issue, and the "what belongs on the web side" split
 needed a single, issue-scoped answer rather than being inferred from the
 general documents above.

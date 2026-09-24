@@ -95,6 +95,10 @@ One issue, one branch, and one PR is the default. A cross-cutting documentation 
 ### Control Center and providers
 
 - Treat issues #89–#102 as staged design/implementation work, not evidence that the features already exist.
+- The AWCMS Control Center (`omes_control` module, owner/operator API, `/admin/omes/*` screens) is implemented canonically in `ahliweb/awcms`, **not** in this repository and **not** in `ahliweb/awcms-one` — that repository is an integration/reference deployment whose `apps/cms` is a `git subtree` of `ahliweb/awcms`. Keep the owning issue here, link the upstream PR back to it, and record the upstream merge commit.
+- Change a Control Center contract in `contracts/control-center/v1/` here first, then re-vendor it upstream. AWCMS pins these files by SHA-256; editing its vendored copy is drift, not a fix.
+- Never add an operation to the safe-operation allowlist without updating `operation-request.schema.json`, its fixtures, and the upstream enum test together.
+- Read [docs/control-center-release-closeout.md](docs/control-center-release-closeout.md) before claiming any Control Center capability is shipped; it records what landed and what is still only an open pull request.
 - Keep `RegistrarAdapter` and `DnsAdapter` separate.
 - Resolve provider capability by account, extension, operation, and current provider configuration; suffix-only routing is insufficient.
 - Keep registrar, billing, entitlement, DNS, and deployment states separate.
@@ -138,6 +142,7 @@ Canonical documents:
 - Threat model: [docs/threat-model.md](docs/threat-model.md)
 - Agent deployment roadmap: [docs/agent-orchestration-roadmap.md](docs/agent-orchestration-roadmap.md)
 - Control Center and providers: [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md)
+- Control Center release close-out (shipped vs deferred): [docs/control-center-release-closeout.md](docs/control-center-release-closeout.md)
 - ADR index: [docs/adr/README.md](docs/adr/README.md)
 - Release gates: [docs/business/release-gates.md](docs/business/release-gates.md)
 
