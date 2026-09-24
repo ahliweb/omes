@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama|versions] [options]
+Usage: omes health [agent|gateway|ollama|versions|ai-privacy] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -35,6 +35,15 @@ Targets:
             Hermes, gateway mode, python3, node, browser, ffmpeg, docker
             (client only), Ollama, and non-secret Hermes config keys
             (issue #83; see docs/compatibility-evidence.md). Options: --json
+  ai-privacy  Read-only AI privacy posture/egress evidence: policy
+            version, effective provider destination class
+            (local/private/cloud/unknown), local endpoint network
+            classification, cloud-fallback/network-isolation state,
+            PASS/FAIL/WARN/BLOCKED with stable reason codes, and the #215
+            local-only posture source when available (issue #216; see
+            docs/ai-data-privacy-and-model-security.md section 11). NEVER
+            prints prompt text, response text, or credential values.
+            Options: --json
 
 Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.md):
   OMES_HEALTH_TIMEOUT           per-probe timeout in seconds (default 10)
@@ -49,8 +58,11 @@ Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.
   OMES_OLLAMA_ALLOW_REMOTE=1    explicitly accept a non-loopback endpoint
   OMES_OLLAMA_EXPECT_PLACEMENT  expected runtime placement: gpu|cpu|any (default any)
   OMES_OLLAMA_LOAD_TIMEOUT      bounded model-load timeout in seconds (default 30)
+  OMES_AI_PRIVACY_EXPECTED_POSTURE  override for ai.privacy.expected_posture state
+                                 (restricted_local_only|unrestricted|unknown)
 
 Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4 service missing.
+            ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
 EOF
 }
 
@@ -335,6 +347,136 @@ _health_run_versions() {
 # END omes health versions (issue #83)
 # =============================================================================
 
+# =============================================================================
+# BEGIN omes health ai-privacy (issue #216) - see
+# docs/ai-data-privacy-and-model-security.md section 11
+# =============================================================================
+#
+# `omes health ai-privacy` reports read-only AI privacy posture/egress
+# evidence without ever reading prompt/response content, credentials, or
+# internal Hermes databases. It reuses lib/omes/py/health/exposure.py's
+# listener/firewall audit and lib/omes/py/provenance/versions.py's
+# non-secret Hermes config-key allowlist rather than duplicating either,
+# and hands the collected (bounded) observation to the pure evaluator in
+# lib/omes/py/privacy/posture_evidence.py.
+#
+# This block is deliberately self-contained (own state-facts collector,
+# own runner) so it can be extended or lifted out without touching the
+# agent/gateway/ollama/versions targets above.
+
+# _health_ai_privacy_state_facts_json
+# Prints a small JSON object carrying OMES's OWN state (never a Hermes
+# internal file) that lib/omes/py/health/ai_privacy.py needs: the
+# operator-declared expected posture, and the #215 local-only-posture
+# integration point (present only once #215 lands and writes these keys;
+# absent today, which the evaluator treats as "unavailable", never as a
+# healthy default - see posture_evidence.py's module docstring).
+_health_ai_privacy_state_facts_json() {
+  local expected_posture
+  expected_posture="${OMES_AI_PRIVACY_EXPECTED_POSTURE:-}"
+  if [[ -z "$expected_posture" ]]; then
+    expected_posture="$(state_get "ai.privacy.expected_posture" 2>/dev/null || printf '')"
+  fi
+
+  local local_only_available="false"
+  local local_only_status="unknown"
+  if state_get "ai.local_only_posture.available" >/dev/null 2>&1; then
+    local raw_available
+    raw_available="$(state_get "ai.local_only_posture.available" 2>/dev/null || printf 'false')"
+    [[ "$raw_available" == "true" ]] && local_only_available="true"
+    local_only_status="$(state_get "ai.local_only_posture.status" 2>/dev/null || printf 'unknown')"
+  fi
+
+  local local_only_obj
+  local_only_obj="$(json_obj \
+    "$(json_kv available "$local_only_available" --raw)" \
+    "$(json_kv status "$local_only_status")" \
+    "$(json_kv source "local-only-posture-source:issue-215")")"
+
+  json_obj \
+    "$(json_kv expected_posture "${expected_posture:-unknown}")" \
+    "$(json_kv local_only_posture_source "$local_only_obj" --raw)"
+}
+
+# _health_print_ai_privacy_human <json>
+# Prints a short human-readable summary, never echoing anything beyond the
+# already-bounded fields the evidence JSON itself contains.
+_health_print_ai_privacy_human() {
+  OMES_HEALTH_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_JSON"])
+except ValueError:
+    print("[omes] health ai-privacy: the evidence collector did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] health ai-privacy: status=%s destination_class=%s" % (d.get("status"), d.get("destination_class")))
+print("[omes]   policy_version=%s classification_mode=%s" % (d.get("policy_version"), d.get("classification_mode")))
+print("[omes]   local_endpoint=%s cloud_fallback=%s network_isolation=%s" % (
+    d.get("local_endpoint_classification"), d.get("cloud_fallback_enabled"), d.get("network_isolation_active")
+))
+lop = d.get("local_only_posture", {})
+print("[omes]   local_only_posture: available=%s status=%s" % (lop.get("available"), lop.get("status")))
+for code in d.get("reason_codes", []):
+    print("[omes]   reason: %s" % code)
+'
+}
+
+# _health_run_ai_privacy [--json]
+_health_run_ai_privacy() {
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health ai-privacy: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health ai-privacy: python3 not found (required for lib/omes/py/health/ai_privacy.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_py_script ai_privacy.py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health ai-privacy: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local output rc=0
+  output="$(_health_ai_privacy_state_facts_json | python3 "$script" 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    log_error "health ai-privacy: the evidence collector produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_ai_privacy_human "$output"
+  fi
+
+  exit "$rc"
+}
+# =============================================================================
+# END omes health ai-privacy (issue #216)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
@@ -344,6 +486,12 @@ cmd_health() {
   if [[ "${1:-}" == "versions" ]]; then
     shift
     _health_run_versions "$@"
+    return 0
+  fi
+
+  if [[ "${1:-}" == "ai-privacy" ]]; then
+    shift
+    _health_run_ai_privacy "$@"
     return 0
   fi
 

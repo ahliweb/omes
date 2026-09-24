@@ -5,11 +5,14 @@
 > The machine-readable data-classification and egress-policy contract and its deterministic
 > evaluator are implemented ([#214](https://github.com/ahliweb/omes/issues/214)); see
 > [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
-> [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py). Restricted
-> local-only runtime enforcement, privacy evidence, Control Center projection, and negative
-> regression coverage are **Not implemented yet**, tracked in
+> [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py). A read-only AI
+> privacy posture/egress evidence surface is also implemented
+> ([#216](https://github.com/ahliweb/omes/issues/216)); see `omes health ai-privacy`,
+> [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json),
+> and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py).
+> Restricted local-only runtime enforcement, Control Center projection, and negative regression
+> coverage are **Not implemented yet**, tracked in
 > [#215](https://github.com/ahliweb/omes/issues/215),
-> [#216](https://github.com/ahliweb/omes/issues/216),
 > [#217](https://github.com/ahliweb/omes/issues/217), and
 > [#218](https://github.com/ahliweb/omes/issues/218).
 >
@@ -270,6 +273,21 @@ The target Restricted posture tracked in [#215](https://github.com/ahliweb/omes/
 Until #215 lands, this is **not implemented yet** and must not be advertised as an enforced OMES
 guarantee.
 
+**Integration point for #216's evidence surface:** `omes health ai-privacy`
+(`lib/omes/py/health/ai_privacy.py`) reads two pieces of OMES's own state — never a Hermes
+internal file — to project this posture into evidence:
+
+- `ai.privacy.expected_posture` — the operator-declared target posture
+  (`restricted_local_only`/`unrestricted`), settable via `OMES_AI_PRIVACY_EXPECTED_POSTURE` or
+  `state_set ai.privacy.expected_posture <value>`. Absent/unset reads as `unknown` and never
+  upgrades a report to a healthy status on its own.
+- `ai.local_only_posture.available` / `ai.local_only_posture.status` — the seam #215 is expected
+  to populate once it lands (`available=true` plus a `pass`/`fail`/`warn`/`unknown` status). Until
+  #215 writes these keys, `omes health ai-privacy` reports
+  `local_only_posture.available = false`, which — combined with a declared
+  `restricted_local_only` expected posture — is evaluated as `BLOCKED`, never as a healthy
+  default (see `lib/omes/py/privacy/posture_evidence.py`).
+
 ## 11. Audit and evidence
 
 Privacy evidence should prove policy/posture without retaining the protected content.
@@ -299,7 +317,40 @@ Prohibited evidence:
 - raw medical/personnel/financial records;
 - raw provider responses that may contain credentials or personal data.
 
-This evidence pipeline is **not implemented yet (tracked in #216)**.
+**Implemented ([#216](https://github.com/ahliweb/omes/issues/216)):** `omes health ai-privacy`
+reports exactly this bounded evidence shape — see
+[contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
+and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py). Every
+free-text-shaped field (`evidence_source`, `hermes_version_reference.source`,
+`local_only_posture.source`) is drawn from a closed vocabulary rather than accepting arbitrary
+text, and any unexpected/unrecognized input key is silently dropped rather than echoed — this is
+the structural control that keeps a caller from smuggling prompt/secret content through this
+surface, proven by adversarial canary-value tests in `tests/py/privacy/test_posture_evidence.py`
+and `tests/py/health/test_ai_privacy.py`. Unknown or stale evidence (a missing/too-old
+`observed_at`) is reported `BLOCKED`, never a healthy status, and a drift from a declared
+`restricted_local_only` posture to an observed `cloud` destination is always `FAIL`.
+
+**Retention:** this evidence is intentionally NOT persisted by OMES today — `omes health
+ai-privacy` is a point-in-time read-only report (matching the existing `omes health`/`omes health
+versions` pattern), not a stored log. If a caller chooses to persist the JSON output (for example,
+piping `omes health ai-privacy --json` into an operator-controlled log or ticket), the same
+retention rules as any other bounded evidence apply: keep only what is operationally useful,
+apply an explicit retention/deletion period, and never widen it into a place raw prompt/response
+content could later be pasted "for context." Automated evidence retention/rotation tooling is
+**Not implemented yet** (tracked in #217).
+
+**Incident-response use:** when investigating a suspected AI privacy-posture incident (for
+example, a report that a Restricted-local-only workload may have reached a cloud destination),
+responders should run `omes health ai-privacy --json` and preserve ONLY that JSON evidence object
+— `status`, `reason_codes`, `destination_class`, `local_endpoint_classification`,
+`cloud_fallback_enabled`, `network_isolation_active`, `last_verified_at`, `evidence_source`, and
+`local_only_posture` — as evidence in the ticket/PR/incident record. Consistent with section 12
+below, responders must NOT paste prompt/response text, `hermes doctor` raw output, `.env`
+contents, or any other unbounded artifact into the same record; if a `FAIL` (especially
+`AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD`) is observed, treat it as signal to rotate any
+credential that may have been exposed to the unexpected destination (section 12) and to re-run
+`omes health ai-privacy` after remediation to confirm the evidence returns to `PASS` with a fresh
+`last_verified_at`.
 
 ## 12. Backup, recovery, and incident response
 
@@ -331,9 +382,12 @@ classification.
   against that provider's stated terms and, where required, an explicit deletion request — never
   assumed to have completed because the local OMES/Hermes state was cleared.
 
-Implementation of automated backup-scope enforcement and incident-evidence tooling for this section
-is **not implemented yet (tracked in #216)**; today this section is operating guidance for anyone
-handling an incident or a backup/restore of AI-adjacent data.
+Section 11's `omes health ai-privacy` evidence surface (#216) supports the incident-evidence
+practice above (preserve the bounded JSON report by reference, never raw content). Automated
+backup-scope *enforcement* (actively preventing a default backup job from sweeping up
+Restricted-class prompt/session data) is **not implemented yet (tracked in #215)**; today the
+backup-scope guidance in this section remains operating guidance for anyone handling a backup or
+restore of AI-adjacent data.
 
 ## 13. Control Center projection
 
@@ -475,7 +529,12 @@ seen only on upstream development branches is not treated as supported release e
    [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
    [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py).
 2. **#215** — Restricted local-only inference deployment posture.
-3. **#216** — privacy posture, drift and egress evidence without prompt capture.
+3. **#216** — privacy posture, drift and egress evidence without prompt capture. Implemented: see
+   `omes health ai-privacy`,
+   [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json),
+   and [lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py). The
+   #215 local-only posture source is integrated when available (section 10) and degrades to
+   `BLOCKED` — never a healthy default — while #215 has not landed.
 4. **#217** — sanitized Control Center projection and policy-decision contracts.
 5. **#218** — negative/regression tests for disclosure and policy bypass.
 
