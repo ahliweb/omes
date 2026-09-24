@@ -7,7 +7,7 @@ This file is the operating contract for coding agents, documentation agents, and
 1. Read [README.md](README.md) for the product boundary and supported platforms.
 2. Read [CONTRIBUTING.md](CONTRIBUTING.md) for branch, PR, change-fragment, and verification rules.
 3. Read [docs/scope.md](docs/scope.md) and [docs/architecture.md](docs/architecture.md) before changing runtime behavior.
-4. Read [docs/security.md](docs/security.md) and [docs/threat-model.md](docs/threat-model.md) before changing privileges, network behavior, secrets, installers, backups, or provider integrations.
+4. Read [docs/security.md](docs/security.md) and [docs/threat-model.md](docs/threat-model.md) before changing privileges, network behavior, secrets, installers, backups, or provider integrations. For AI model/data-egress changes, also read [docs/ai-data-privacy-and-model-security.md](docs/ai-data-privacy-and-model-security.md) and ADR-0029.
 5. For Control Center, billing, domain, DNS, GitHub, multi-server, or web-panel reference work, read [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md), [docs/web-panel-reference-evaluation.md](docs/web-panel-reference-evaluation.md), and the relevant ADRs.
 6. Identify the GitHub issue and milestone before making a substantial change. Do not invent a parallel issue when an existing issue owns the contract.
 
@@ -53,6 +53,7 @@ The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Con
 ## 3. Non-negotiable safety rules
 
 - Never add arbitrary shell execution to a web/API path, webhook, job payload, or agent tool.
+- Treat model output as untrusted input. RESTRICTED AI data is local-only/deny-cloud by default; missing or unknown AI data-classification/egress policy must fail closed. Hermes remains the model/provider router.
 - Never expose a privileged OMES listener publicly by default. Prefer a local socket, authenticated mTLS boundary, or pull worker.
 - Every mutating operation must have preflight/validation, an allowlisted operation name, tenant/resource scope where applicable, correlation ID, idempotency key, audit evidence, retry classification, and post-mutation verification.
 - Do not treat a timeout or accepted asynchronous request as success. Reconcile provider/host state before reporting success.
@@ -134,6 +135,7 @@ Canonical documents:
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Security: [docs/security.md](docs/security.md)
 - Threat model: [docs/threat-model.md](docs/threat-model.md)
+- AI data privacy/model security: [docs/ai-data-privacy-and-model-security.md](docs/ai-data-privacy-and-model-security.md)
 - Agent deployment roadmap: [docs/agent-orchestration-roadmap.md](docs/agent-orchestration-roadmap.md)
 - Control Center and providers: [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md)
 - ADR index: [docs/adr/README.md](docs/adr/README.md)
