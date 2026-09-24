@@ -1,13 +1,26 @@
 # OMES Control Center — UI/UX Interactive Prototype
 
-This directory contains the canonical interactive UI/UX prototype for the **OMES Control Center** (issues [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183)).
+This directory contains the canonical interactive UI/UX prototype for the **OMES Control Center** (issues [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183), [#211](https://github.com/ahliweb/omes/issues/211) redesign v2).
 
 The prototype establishes the visual design system, screen architecture, role-based interaction boundaries (`Owner` vs `Operator`), and operational flows for the AWCMS-based OMES Control Center.
 
+**This is a reference-only, presentation prototype.** The functional Control Center screens
+(actual API calls, live polling, real auth) are **not implemented yet** — that work is tracked
+in [#200](https://github.com/ahliweb/omes/issues/200) (admin screens) and
+[#201](https://github.com/ahliweb/omes/issues/201) (health/backup/audit). `index.html` only
+renders example data produced by `scripts/generate-control-center-data.py` (see below); it does
+not call any OMES/AWCMS API.
+
 ## Files
 
-- [index.html](index.html): Full interactive single-file prototype containing all 9 core screens and 3 diagnostic views.
-- [support.js](support.js): Standalone runtime supporting dynamic state rendering and interactive role switching.
+- [index.html](index.html): Full interactive single-file prototype containing all 9 core screens and 3 diagnostic views (including the `live` Hermes orchestration-tree view).
+- [support.js](support.js): Standalone runtime supporting dynamic state rendering and interactive role switching. Byte-identical vendor file — do not hand-edit.
+- [data.js](data.js): **Generated** (`window.OMES_CC_DATA`). Regenerate with:
+  ```bash
+  python3 scripts/generate-control-center-data.py
+  ```
+  Built from [contracts/control-center/v1/fixtures/*/valid-*.json](../../contracts/control-center/v1/fixtures) (the same fixtures `scripts/check-contracts.py` validates) plus `sample-fleet.json`. `scripts/generate-control-center-data.py --check` fails if `data.js` is stale relative to those inputs; it is run by `tests/run.sh`, `scripts/lint.sh`, and the `check-control-center-data` CI job. Do not hand-edit `data.js` — edit the fixtures/`sample-fleet.json`, then regenerate.
+- [sample-fleet.json](sample-fleet.json): Small, clearly-labelled **supplementary sample** for fleet telemetry (CPU/memory/disk, OS, agent version, uptime) that has no v1 contract fixture yet. See its own `_provenance` field.
 
 ## How to View
 
@@ -42,5 +55,7 @@ Alternatively, open `ui/control-center/index.html` directly as a local file (`fi
 ## Normative Guidelines
 
 For the complete technical specification and token system, refer to:
-- [docs/ui-ux-design-system.md](../../docs/ui-ux-design-system.md)
+- [docs/ui-ux-design-system.md](../../docs/ui-ux-design-system.md) (§8 data provenance, §9 accessibility)
 - [docs/adr/0023-control-center-ui-ux-design-system.md](../../docs/adr/0023-control-center-ui-ux-design-system.md)
+- [docs/adr/0028-hermes-orchestration-visualization.md](../../docs/adr/0028-hermes-orchestration-visualization.md)
+- [docs/testing.md](../../docs/testing.md) (§2.6 `data.js` freshness check)

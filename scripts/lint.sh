@@ -166,6 +166,16 @@ run_architecture() {
   fi
 }
 
+run_control_center_data() {
+  echo "== scripts/generate-control-center-data.py --check (Control Center UI prototype data.js, issue #211) =="
+  if command -v python3 >/dev/null 2>&1; then
+    python3 "$(repo_root)/scripts/generate-control-center-data.py" --check
+  else
+    echo "scripts/lint.sh: python3 not available; cannot run scripts/generate-control-center-data.py --check" >&2
+    return 1
+  fi
+}
+
 cmd_all() {
   local overall=0
   run_shellcheck || overall=1
@@ -177,6 +187,8 @@ cmd_all() {
   run_contracts || overall=1
   echo
   run_architecture || overall=1
+  echo
+  run_control_center_data || overall=1
   return "$overall"
 }
 
@@ -189,9 +201,10 @@ main() {
     yamllint) run_yamllint ;;
     contracts) run_contracts ;;
     architecture) run_architecture ;;
+    control-center-data) run_control_center_data ;;
     all) cmd_all ;;
     *)
-      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|architecture|all]" >&2
+      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|architecture|control-center-data|all]" >&2
       return 2
       ;;
   esac

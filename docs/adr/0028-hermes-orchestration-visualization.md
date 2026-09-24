@@ -39,7 +39,7 @@ We evaluated two architectural approaches:
 | **3. Performance & Resource Footprint** | Polling SQLite databases and scanning `/proc` causes disk contention and CPU overhead. | Negligible: Asynchronous event ingestion into memory/projection store; minimal memory footprint for active trees. |
 | **4. Maintainability & Code Quality** | Low: Breaks on any internal Hermes database schema revision or process manager change. | High: Bounded to stable `hermes.observer.v1` contracts; isolated in pure-Python `lib/omes/py/agent/orchestration.py`. |
 | **5. Scalability & Concurrency** | Degrades under parallel batch workloads (10+ child agents competing for SQLite locks). | High: Naturally scales across concurrent child agents and nested child-grandchild hierarchies using opaque correlation keys. |
-| **6. Accessibility** | Unstructured process lists are difficult to navigate with screen readers and assistive devices. | High: Structured, semantic HTML/CSS expandable hierarchy with ARIA tree roles and live regions in Control Center Screen 6. |
+| **6. Accessibility** | Unstructured process lists are difficult to navigate with screen readers and assistive devices. | Bounded prototype support: native buttons, visible focus, dialog semantics, and a polite status region; a full ARIA tree/live hierarchy remains a follow-up for the functional AWCMS screen. |
 | **7. SEO Impact** | Neutral (internal administrative UI). | Neutral. |
 | **8. UI/UX Implications** | Confusing raw PID/thread metrics that do not map to agent roles or task intents. | Intuitive & High-Density: Screen 6 displays clear delegation summaries, active process trees, elapsed duration, status badges, and safe metadata drawers. |
 | **9. Platform Compatibility** | Fragile across varied container and sandbox environments where `/proc` or PID namespaces are restricted. | 100% compatible across Ubuntu 22.04/24.04/26.04 and Linux Mint 22 without host namespace dependencies. |
@@ -66,4 +66,5 @@ We adopt **Option B**:
 5. **Contract Enforcement:**
    - Enforce wire schemas `hermes-orchestration-event.schema.json` and `hermes-orchestration-tree.schema.json` under JSON Schema Draft 2020-12 fail-closed validation.
 6. **Control Center UI Integration:**
-   - Render live delegation batches and expandable process trees within Control Center Screen 6 (`isHermes` in `ui/control-center/index.html`).
+   - Render live delegation batches and process-tree reference data within Control Center Screen 6 (`isHermes` in `ui/control-center/index.html`).
+   - Keep the reference prototype's accessibility claims bounded to the semantics it actually emits. Full ARIA tree interaction and live event ingestion belong to the functional AWCMS implementation tracked by #201/#198; they are not claimed as shipped by this prototype.

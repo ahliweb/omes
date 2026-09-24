@@ -110,6 +110,21 @@ daemon is available in this implementation environment) - see
 [docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)
 "Left for follow-up".
 
+### 2.6 Control Center prototype contract (issue #211)
+
+The stdlib-only test `tests/py/control_center/test_control_center_browser_contract.py`
+keeps the reference prototype's twelve declared views, render guards, metadata,
+dialog/status accessibility hooks, and generated-data sections in sync. It runs
+automatically through `python3 -m unittest discover -s tests/py -t .` and does
+**not** claim to render a browser DOM or prove absence of runtime console errors.
+
+The actual browser smoke check remains a manual/opt-in release gate because this
+repository intentionally has no browser dependency or bundled browser runtime.
+When performing it, serve `ui/control-center/` with `python3 -m http.server`,
+open all twelve views in a supported browser, record console/page errors, and
+retain the evidence with the release review. The prototype remains reference-only;
+functional authenticated screens are tracked by #198/#200/#201.
+
 `tests/py/provenance/` (issue #173) covers release SLSA provenance and
 SBOM artifact generation: `test_release_bundle.py` exercises deterministic
 manifest/SBOM/SLSA provenance/SHA256SUMS generation, checksum tamper
@@ -210,6 +225,49 @@ mapping/rollback validation, reconciliation's inability to overwrite an OMES log
 `client.py`'s network-never-called-by-default and token-redaction guarantees (via mocked
 `urllib`, never a real Coolify instance - see [`docs/coolify-adapter.md`](coolify-adapter.md)
 section 7 for the opt-in `OMES_COOLIFY_LIVE=1` real-integration gap this leaves).
+
+### 2.6 Control Center UI prototype data (issue #211)
+
+```bash
+python3 scripts/generate-control-center-data.py          # regenerate ui/control-center/data.js
+python3 scripts/generate-control-center-data.py --check   # fails if it is stale
+```
+
+`ui/control-center/index.html` is a reference-only, presentation prototype
+(the functional Control Center screens are **not implemented yet** -
+tracked in [#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201)).
+Its example data is generated - not hand-typed - from
+`contracts/control-center/v1/fixtures/*/valid-*.json` (the same fixtures
+§2.1a's `scripts/check-contracts.py` validates) plus
+`ui/control-center/sample-fleet.json`, a small supplementary sample for
+fleet telemetry that has no v1 contract fixture yet. `--check` is run by
+`tests/run.sh` and `scripts/lint.sh` (job `check-control-center-data` in
+CI, see [docs/ci.md](ci.md) §1.1) so a fixture change that isn't followed
+by regenerating `data.js` fails the build instead of silently drifting.
+`tests/py/control_center/test_generate_control_center_data.py` (run by
+§2.5's `python3 -m unittest discover -s tests/py -t .`) additionally
+asserts the generator's output is deterministic and that the committed
+`data.js` matches it. It also guards that the deployments section only
+attributes a `deployment.request` actor to a `deployment-view` row when
+they share the same `(server_id, deployment_id)` target - never by
+sorted-filename/list-index position, which would fabricate actor causality
+between unrelated fixtures; today's fixtures do not correlate, so every
+row currently renders `"who": "-"` rather than an invented actor.
+
+`load_fixtures()`/`load_fixture()` both raise `FileNotFoundError` (neither
+silently returns `[]`) when a fixture directory is missing, so a
+renamed/removed schema directory fails the generator - and its `--check`
+gate - instead of silently zeroing out a UI section; this is also covered
+by `test_generate_control_center_data.py`.
+
+`tests/py/control_center/test_color_contrast.py` (also run by
+§2.5's `python3 -m unittest discover -s tests/py -t .`) computes WCAG 2.x
+relative luminance/contrast ratio, in pure Python stdlib, for every
+text-on-background pair in the §2.1 palette documented in
+[docs/ui-ux-design-system.md](ui-ux-design-system.md) §9, parsing the hex
+values directly out of that document. It fails if any pair drops below the
+WCAG-AA 4.5:1 threshold for normal text, so the accessibility claim in
+that document is enforced rather than a one-time manual check.
 
 ## 3. Evidence and release gates
 

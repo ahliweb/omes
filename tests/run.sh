@@ -159,6 +159,23 @@ if [[ -d contracts ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Control Center UI prototype data.js freshness (issue #211)
+# ---------------------------------------------------------------------------
+
+if [[ -f scripts/generate-control-center-data.py ]]; then
+  log "running python3 scripts/generate-control-center-data.py --check"
+  if command -v python3 >/dev/null 2>&1; then
+    if ! python3 scripts/generate-control-center-data.py --check; then
+      err "scripts/generate-control-center-data.py --check failed (ui/control-center/data.js is stale)"
+      FAILED=1
+    fi
+  else
+    err "python3 not available; cannot run scripts/generate-control-center-data.py --check"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Architecture boundaries and capability registry (ADR-0017, issue #171)
 # ---------------------------------------------------------------------------
 
