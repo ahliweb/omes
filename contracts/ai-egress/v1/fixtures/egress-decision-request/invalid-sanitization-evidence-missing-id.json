@@ -1,0 +1,13 @@
+{
+  "policy_version": "v1",
+  "classification": "CONFIDENTIAL",
+  "destination": "cloud_sanitized",
+  "purpose": "summarization",
+  "provider_posture": {
+    "status": "approved"
+  },
+  "contains_authentication_material": false,
+  "sanitization_evidence": {
+    "method": "tokenization"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "policy_version": "v1",
+  "classification": "RESTRICTED",
+  "destination": "cloud_sanitized",
+  "decision": "deny",
+  "reason_codes": ["AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED"],
+  "tenant_id": "tenant-fixture-001"
+}

@@ -1,0 +1,10 @@
+{
+  "policy_version": "v1",
+  "classification": "RESTRICTED",
+  "destination": "local_only",
+  "purpose": "reasoning_assist",
+  "provider_posture": {
+    "status": "unknown"
+  },
+  "contains_authentication_material": true
+}

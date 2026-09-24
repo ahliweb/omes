@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/ai-egress/v1/egress-decision-request.schema.json",
+  "title": "egress-decision-request",
+  "description": "Metadata-only input to the OMES AI data-classification and model-egress policy evaluator (issue #214, ADR-0029, docs/ai-data-privacy-and-model-security.md). This shape MUST NEVER carry prompt text, response text, embeddings, retrieved documents, or a real credential/secret value - only bounded classification/destination/posture metadata used to reach a deterministic allow/deny/approval_required decision. `contains_authentication_material` is a caller-asserted boolean flag (never the material itself); it is intentionally not named with a banned secret-like substring so it can hold a plain boolean rather than being forced through the secret_ref shape.",
+  "type": "object",
+  "required": [
+    "policy_version",
+    "classification",
+    "destination",
+    "purpose",
+    "provider_posture",
+    "contains_authentication_material"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "policy_version": {
+      "type": "string",
+      "description": "The egress-policy contract version this request was authored against. An evaluator that does not recognize this version must fail closed (deny) rather than guess at semantics.",
+      "pattern": "^[A-Za-z0-9_.-]{1,32}$"
+    },
+    "classification": {
+      "type": "string",
+      "description": "Data classification of the content that would be sent, per docs/ai-data-privacy-and-model-security.md section 4. Classification is about content/processing risk, not the filename or storage location.",
+      "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
+    },
+    "destination": {
+      "type": "string",
+      "description": "The model-destination class the content would be sent to, per docs/ai-data-privacy-and-model-security.md section 5.",
+      "enum": ["local_only", "private_endpoint", "cloud_sanitized", "deny"]
+    },
+    "purpose": {
+      "type": "string",
+      "description": "A short, closed label for why model processing is requested (e.g. code_generation, reasoning_assist, summarization). Free-form prose describing the actual content is out of scope - this is a label, not a prompt.",
+      "pattern": "^[a-z][a-z0-9_]{1,63}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "description": "Optional tenant scope for a multi-tenant caller (e.g. Control Center). Metadata only.",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "resource_scope": {
+      "type": "string",
+      "description": "Optional resource scope within the tenant. Metadata only.",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "provider_posture": {
+      "type": "object",
+      "description": "The pre-assessed posture of the destination provider/endpoint. `status` must be resolved to approved/not_approved for any non-local_only destination; `unknown` (or an absent object) fails closed.",
+      "required": ["status"],
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": ["approved", "not_approved", "unknown"]
+        },
+        "provider_id": {
+          "type": "string",
+          "description": "An opaque provider/profile identifier - never a credential.",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "contains_authentication_material": {
+      "type": "boolean",
+      "description": "True if the content the caller wants to send includes credentials, API tokens, private keys, or other authentication/secret material. This flag is caller-asserted; the evaluator never inspects content to derive it. Only an explicit `false` is treated as 'no authentication material' - the evaluator treats any other value as `true` (fail closed)."
+    },
+    "sanitization_evidence": {
+      "type": "object",
+      "description": "Evidence that application-owned sanitization/minimization occurred, referenced by identifier only - never the sanitized content itself.",
+      "required": ["method", "evidence_id"],
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "type": "string",
+          "enum": ["tokenization", "redaction", "aggregation", "synthetic_data", "field_removal"]
+        },
+        "evidence_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    }
+  }
+}

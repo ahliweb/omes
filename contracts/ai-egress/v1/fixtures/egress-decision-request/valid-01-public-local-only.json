@@ -1,0 +1,11 @@
+{
+  "policy_version": "v1",
+  "classification": "PUBLIC",
+  "destination": "local_only",
+  "purpose": "code_generation",
+  "provider_posture": {
+    "status": "approved",
+    "provider_id": "local-dev-endpoint"
+  },
+  "contains_authentication_material": false
+}

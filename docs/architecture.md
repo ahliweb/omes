@@ -1132,10 +1132,14 @@ The initial data classes are `PUBLIC`, `INTERNAL`, `CONFIDENTIAL`, and `RESTRICT
 Restricted data defaults to local/private inference; unknown classification fails closed for model
 egress. RAG/embedding/retrieval stages inherit source-data classification.
 
-**Implementation status:** design accepted. Machine-readable policy, Restricted local-only runtime
-enforcement, privacy-posture evidence, Control Center projection, and security regression gates are
-**Not implemented yet** (tracked in
-[#214](https://github.com/ahliweb/omes/issues/214)–[#218](https://github.com/ahliweb/omes/issues/218)).
+**Implementation status:** design accepted. The machine-readable data-classification and
+egress-policy contract and its deterministic evaluator are implemented
+([#214](https://github.com/ahliweb/omes/issues/214); see
+[contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). Restricted
+local-only runtime enforcement, privacy-posture evidence, Control Center projection, and security
+regression gates are **Not implemented yet** (tracked in
+[#215](https://github.com/ahliweb/omes/issues/215)–[#218](https://github.com/ahliweb/omes/issues/218)).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
