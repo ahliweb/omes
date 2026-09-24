@@ -59,6 +59,7 @@ The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Con
 - Preserve backups and rollback boundaries. Never delete files, packages, accounts, or provider resources that OMES did not create or explicitly own.
 - Respect root/user module scope. OMES must not auto-escalate with `sudo` or `sudo -u`.
 - Never place API keys, passwords, access tokens, payment credentials, connection strings, personal documents, or raw provider responses in source, fixtures, logs, issues, PRs, backups, or documentation. Use `[REDACTED]`, `secret_reference`, or a fake-provider fixture.
+- Treat AI/model egress as a security boundary. Never send `RESTRICTED` data, credentials, secrets, or private keys to cloud models. Follow [docs/ai-data-privacy-and-model-security.md](docs/ai-data-privacy-and-model-security.md) and ADR-0029; Hermes remains authoritative for model/provider routing, so do not implement a second OMES LLM router.
 - Do not print or store credentials while using GitHub, Cloudflare, SRS-X, Hermes, or any other external service.
 - Do not silently substitute a provider when a capability is unsupported. Use an explicit `manual_intervention`/action-required path.
 - Do not weaken tests, security gates, or branch protection to make a change pass.
@@ -133,6 +134,7 @@ Canonical documents:
 - Scope and non-goals: [docs/scope.md](docs/scope.md)
 - Architecture: [docs/architecture.md](docs/architecture.md)
 - Security: [docs/security.md](docs/security.md)
+- AI data privacy/model boundary: [docs/ai-data-privacy-and-model-security.md](docs/ai-data-privacy-and-model-security.md)
 - Threat model: [docs/threat-model.md](docs/threat-model.md)
 - Agent deployment roadmap: [docs/agent-orchestration-roadmap.md](docs/agent-orchestration-roadmap.md)
 - Control Center and providers: [docs/control-center-and-integrations.md](docs/control-center-and-integrations.md)
