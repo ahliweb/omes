@@ -165,8 +165,11 @@ class TestWorkerTransport(unittest.TestCase):
 
         def handle_result(data: dict[str, Any]) -> dict[str, Any]:
             submitted_result.update(data)
+            # issue #221: worker-result.request no longer carries job_id;
+            # the Control Center's own ack still has one, but it is a
+            # server-minted id, never an echo of anything the worker sent.
             return {
-                "job_id": data["job_id"],
+                "job_id": "cc-job-0001",
                 "status": "recorded",
                 "reconciled": True,
                 "recorded_at": "2026-09-21T12:06:00Z",
@@ -196,6 +199,8 @@ class TestWorkerTransport(unittest.TestCase):
             self.assertEqual(submitted_result.get("tenant_id"), "tenant-acme")
             self.assertEqual(submitted_result.get("server_id"), "srv-test-01")
             self.assertEqual(submitted_result["evidence"]["returncode"], 0)
+            self.assertNotIn("job_id", submitted_result)
+            self.assertEqual(submitted_result.get("idempotency_key"), "idem-job-status-12345678")
         finally:
             os.environ.pop("OMES_JOBS_TEST_MODE", None)
             os.environ.pop("OMES_JOBS_TEST_ARGV_OVERRIDE", None)
@@ -230,7 +235,7 @@ class TestWorkerTransport(unittest.TestCase):
         def handle_result(data: dict[str, Any]) -> dict[str, Any]:
             submitted_result.update(data)
             return {
-                "job_id": data["job_id"],
+                "job_id": "cc-job-0002",
                 "status": "recorded",
                 "reconciled": False,
                 "recorded_at": "2026-09-21T12:06:00Z",
@@ -253,6 +258,7 @@ class TestWorkerTransport(unittest.TestCase):
         self.assertEqual(res["state"], "rejected")
         self.assertEqual(submitted_result.get("state"), "rejected")
         self.assertEqual(submitted_result.get("error", {}).get("code"), "scope_mismatch")
+        self.assertNotIn("job_id", submitted_result)
 
 
 if __name__ == "__main__":
