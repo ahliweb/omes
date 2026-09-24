@@ -105,9 +105,15 @@ def load_fixture(schema_name: str, filename: str = "valid-01.json") -> dict[str,
 
 
 def load_fixtures(schema_name: str) -> list[dict[str, Any]]:
+    """Load every valid-*.json fixture for schema_name, sorted by filename.
+
+    Fails loudly (like load_fixture()) when the fixture directory is
+    missing, instead of silently returning an empty list: a renamed or
+    removed schema directory must fail the generator (and its --check
+    gate), not silently zero out a whole UI section."""
     fixture_dir = FIXTURES_ROOT / schema_name
     if not fixture_dir.is_dir():
-        return []
+        raise FileNotFoundError(f"fixture directory not found: {fixture_dir}")
     return [load_json(p) for p in sorted(fixture_dir.glob("valid-*.json"))]
 
 

@@ -161,6 +161,22 @@ class TestGenerateControlCenterData(unittest.TestCase):
         # the first, unrelated "operator-1" request instead).
         self.assertEqual(rows[0]["who"], "service:control-center")
 
+    # -- Finding 2: load_fixtures() must fail closed on a missing directory --
+
+    def test_load_fixtures_raises_on_a_missing_fixture_directory(self):
+        with self.assertRaises(FileNotFoundError):
+            gen.load_fixtures("this-schema-does-not-exist")
+
+    def test_load_fixture_and_load_fixtures_fail_the_same_way(self):
+        """Both loaders must fail loudly (not silently degrade) when their
+        backing fixtures are absent, so a renamed/removed schema directory
+        fails the generator and its --check gate instead of silently
+        zeroing out a UI section."""
+        with self.assertRaises(FileNotFoundError):
+            gen.load_fixture("this-schema-does-not-exist")
+        with self.assertRaises(FileNotFoundError):
+            gen.load_fixtures("this-schema-does-not-exist")
+
 
 if __name__ == "__main__":
     unittest.main()

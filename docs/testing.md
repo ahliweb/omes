@@ -254,6 +254,12 @@ sorted-filename/list-index position, which would fabricate actor causality
 between unrelated fixtures; today's fixtures do not correlate, so every
 row currently renders `"who": "-"` rather than an invented actor.
 
+`load_fixtures()`/`load_fixture()` both raise `FileNotFoundError` (neither
+silently returns `[]`) when a fixture directory is missing, so a
+renamed/removed schema directory fails the generator - and its `--check`
+gate - instead of silently zeroing out a UI section; this is also covered
+by `test_generate_control_center_data.py`.
+
 ## 3. Evidence and release gates
 
 `docs/business/release-gates.md` cites this test suite as the proof for several of its
