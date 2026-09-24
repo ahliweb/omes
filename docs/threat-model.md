@@ -180,6 +180,21 @@ Legend — **Likelihood/Impact**: H = High, M = Medium, L = Low.
 
 
 
+
+### AI privacy boundary extension (issue #213)
+
+The detailed model-egress policy is maintained in
+[AI Data Privacy and Model Security](ai-data-privacy-and-model-security.md) and ADR-0029.
+For this threat model, TB7 must be interpreted as a data-classification boundary rather than
+as a binary cloud/no-cloud choice: RESTRICTED data defaults to local-only/deny-cloud;
+CONFIDENTIAL cloud use requires approved minimization/sanitization; embeddings, RAG context,
+model outputs, tool results, logs, caches, and backups remain in scope. Model output is
+untrusted and cannot authorize arbitrary shell/API operations.
+
+The runtime controls are **not implemented yet (tracked in #214-#218)**, so current protection
+still depends on operator configuration and the existing Hermes/OMES boundaries until those
+issues land.
+
 ## 6. Residual risk summary
 
 Even with every mitigation above implemented, the following risks remain and are the
