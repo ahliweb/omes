@@ -15,7 +15,7 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-OMES_DEFAULT_STABLE_TAG="v0.3.0"
+OMES_DEFAULT_STABLE_TAG="v0.4.0"
 OMES_DEFAULT_REPO_URL="https://github.com/ahliweb/omes.git"
 
 # Configuration defaults

@@ -40,7 +40,7 @@ EOF
   chmod +x "$SEED_DIR/bin/omes"
   git -C "$SEED_DIR" add -A
   git -C "$SEED_DIR" commit -q -m "initial commit"
-  git -C "$SEED_DIR" tag -a "v0.3.0" -m "release v0.3.0"
+  git -C "$SEED_DIR" tag -a "v0.4.0" -m "release v0.4.0"
   git -C "$SEED_DIR" commit -q --allow-empty -m "rc commit"
   git -C "$SEED_DIR" tag -a "v0.4.0-rc1" -m "release candidate v0.4.0-rc1"
   git -C "$SEED_DIR" commit -q --allow-empty -m "main edge commit"
@@ -107,7 +107,7 @@ EOF
 @test "bootstrap rc channel rejects non-rc ref" {
   run bash "$BOOTSTRAP_SCRIPT" \
     --channel "rc" \
-    --ref "v0.3.0" \
+    --ref "v0.4.0" \
     --repo-url "$UPSTREAM_DIR" \
     --install-dir "$INSTALL_DIR" \
     --bin-dir "$BIN_DIR"
@@ -115,7 +115,7 @@ EOF
   [[ "$output" == *"does not appear to be a pre-release candidate"* ]]
 }
 
-@test "fresh stable install defaults to immutable v0.3.0 release tag and records provenance" {
+@test "fresh stable install defaults to immutable v0.4.0 release tag and records provenance" {
   run bash "$BOOTSTRAP_SCRIPT" \
     --channel "stable" \
     --repo-url "$UPSTREAM_DIR" \
@@ -126,8 +126,8 @@ EOF
   [ -f "${INSTALL_DIR}/.omes-channel.json" ]
   [ -L "${BIN_DIR}/omes" ]
 
-  # Verify git HEAD points to v0.3.0 commit
-  expected_sha="$(git --git-dir="$UPSTREAM_DIR" rev-parse "v0.3.0^{commit}")"
+  # Verify git HEAD points to v0.4.0 commit
+  expected_sha="$(git --git-dir="$UPSTREAM_DIR" rev-parse "v0.4.0^{commit}")"
   actual_sha="$(git -C "$INSTALL_DIR" rev-parse HEAD)"
   [ "$actual_sha" = "$expected_sha" ]
 
@@ -137,7 +137,7 @@ import json
 with open('${INSTALL_DIR}/.omes-channel.json') as f:
     d = json.load(f)
 assert d['channel'] == 'stable'
-assert d['requested_ref'] == 'v0.3.0'
+assert d['requested_ref'] == 'v0.4.0'
 assert d['resolved_sha'] == '${expected_sha}'
 assert d['is_dirty'] is False
 "
