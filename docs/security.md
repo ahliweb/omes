@@ -282,6 +282,18 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Registrar, invoice, entitlement, and DNS state are named as distinct state domains; a reconciliation rule cannot claim a state domain is reconciled against itself | `lib/omes/py/domains/billing.py`'s `build_reconciliation_rule()` |
 
 
+
+## 8.7 AI data privacy and model security
+
+The canonical AI data-classification and model-egress policy is
+[AI Data Privacy and Model Security](ai-data-privacy-and-model-security.md), recorded by
+ADR-0029. The baseline treats model output as untrusted input, keeps Hermes authoritative for
+model/provider routing, and requires RESTRICTED data to default to local-only/deny-cloud.
+Provider statements such as "not used for training" are not treated as proof of zero
+retention, no human/subprocessor access, or no cross-border transfer.
+
+Runtime policy/evidence enforcement is **not implemented yet (tracked in #214-#218)**.
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
