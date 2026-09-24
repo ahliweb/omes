@@ -1,0 +1,12 @@
+{
+  "policy_version": "v1",
+  "classification": "INTERNAL",
+  "destination": "private_endpoint",
+  "purpose": "reasoning_assist",
+  "tenant_id": "tenant-fixture-001",
+  "provider_posture": {
+    "status": "approved",
+    "provider_id": "operator-private-vpc-endpoint"
+  },
+  "contains_authentication_material": false
+}
