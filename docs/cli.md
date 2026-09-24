@@ -430,7 +430,13 @@ versions`), local endpoint network classification (loopback/private/public, reus
 existing listener audit rather than a second implementation), cloud-fallback and
 network-isolation tri-state (`enabled`/`disabled`/`unknown` — a missing signal is always
 `unknown`, never assumed safe), a `last_verified_at` timestamp, and the #215 local-only posture
-source when that issue's evidence has landed. Returns `PASS`/`FAIL`/`WARN`/`BLOCKED` with stable
+source when that issue's evidence has landed. `cloud_fallback_enabled` is derived from the
+non-secret `fallback_model` and `fallback_providers` Hermes config keys (same allowlist as
+`model.provider`): a cloud-provider `fallback_model` is `enabled`; both keys confirmed unset (or a
+demonstrably local `fallback_model` with `fallback_providers` unset) is `disabled`; a present but
+deliberately unparsed `fallback_providers` list, an unlisted provider, or an unreadable config is
+`unknown` — see
+[docs/ai-data-privacy-and-model-security.md §10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture). Returns `PASS`/`FAIL`/`WARN`/`BLOCKED` with stable
 `AI_PRIVACY_POSTURE_*` reason codes (see
 [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)).
 Unknown or stale evidence is always `BLOCKED`; drift from a declared restricted-local-only

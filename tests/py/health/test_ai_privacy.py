@@ -94,6 +94,115 @@ class TestNetworkIsolation(unittest.TestCase):
             self.assertIsNone(ai_privacy.collect_network_isolation_active(1.0))
 
 
+class TestClassifyFallbackModel(unittest.TestCase):
+    def test_cloud_provider_prefix(self):
+        self.assertEqual(ai_privacy.classify_fallback_model("openai/gpt-4o"), "cloud")
+
+    def test_local_provider_prefix(self):
+        self.assertEqual(ai_privacy.classify_fallback_model("ollama/llama3.1"), "local")
+
+    def test_bare_model_name_without_provider_is_unknown(self):
+        self.assertEqual(ai_privacy.classify_fallback_model("llama3.1"), "unknown")
+
+    def test_unlisted_provider_is_unknown(self):
+        self.assertEqual(ai_privacy.classify_fallback_model("some-future-provider/m"), "unknown")
+
+    def test_empty_or_missing_is_unknown(self):
+        self.assertEqual(ai_privacy.classify_fallback_model(None), "unknown")
+        self.assertEqual(ai_privacy.classify_fallback_model("   "), "unknown")
+
+
+def _config_reader(values):
+    """Builds a fake `hermes config get` for _run(): `values` maps a config
+    key to (returncode, stdout)."""
+
+    def _fake_run(cmd, timeout):
+        key = cmd[-1]
+        rc, out = values.get(key, (0, ""))
+        return rc, out, ""
+
+    return _fake_run
+
+
+class TestCloudFallbackDetection(unittest.TestCase):
+    """`cloud_fallback_enabled` must be enabled/disabled/unknown, and must
+    fail closed: ambiguity is always unknown, never disabled."""
+
+    def _collect(self, values):
+        with mock.patch.object(ai_privacy.shutil, "which", return_value="/usr/bin/hermes"), \
+             mock.patch.object(ai_privacy, "_run", side_effect=_config_reader(values)):
+            return ai_privacy.collect_cloud_fallback_enabled(1.0)
+
+    def test_enabled_when_fallback_model_names_a_cloud_provider(self):
+        self.assertIs(
+            self._collect({"fallback_model": (0, "anthropic/claude-3-5-sonnet\n")}),
+            True,
+        )
+
+    def test_disabled_when_both_keys_are_confirmed_unset(self):
+        self.assertIs(
+            self._collect({"fallback_model": (0, ""), "fallback_providers": (0, "")}),
+            False,
+        )
+
+    def test_disabled_when_fallback_model_is_demonstrably_local(self):
+        self.assertIs(
+            self._collect({
+                "fallback_model": (0, "ollama/llama3.1\n"),
+                "fallback_providers": (0, ""),
+            }),
+            False,
+        )
+
+    def test_unknown_when_fallback_providers_present_but_unparseable(self):
+        # #215 deliberately does not parse the undocumented list rendering
+        # of `fallback_providers`; a non-empty value must degrade to
+        # unknown, never to "disabled".
+        self.assertIsNone(
+            self._collect({
+                "fallback_model": (0, ""),
+                "fallback_providers": (0, "[{'provider': 'openai'}]\n"),
+            })
+        )
+
+    def test_unknown_when_local_fallback_model_but_fallback_providers_present(self):
+        self.assertIsNone(
+            self._collect({
+                "fallback_model": (0, "ollama/llama3.1\n"),
+                "fallback_providers": (0, "- openai\n- anthropic\n"),
+            })
+        )
+
+    def test_unknown_when_fallback_model_provider_is_unlisted(self):
+        self.assertIsNone(self._collect({"fallback_model": (0, "some-future-provider/m\n")}))
+
+    def test_unknown_when_fallback_model_read_fails(self):
+        self.assertIsNone(self._collect({"fallback_model": (1, "")}))
+
+    def test_unknown_when_fallback_providers_read_fails(self):
+        self.assertIsNone(
+            self._collect({"fallback_model": (0, ""), "fallback_providers": (1, "")})
+        )
+
+    def test_unknown_when_hermes_binary_missing(self):
+        with mock.patch.object(ai_privacy.shutil, "which", return_value=None):
+            self.assertIsNone(ai_privacy.collect_cloud_fallback_enabled(1.0))
+
+    def test_observation_renders_tristate_labels(self):
+        with mock.patch.object(ai_privacy, "collect_cloud_fallback_enabled", return_value=True), \
+             mock.patch.object(ai_privacy, "_collect_provider_value", return_value="ollama"), \
+             mock.patch.object(ai_privacy, "_collect_hermes_version", return_value=None), \
+             mock.patch.object(ai_privacy, "collect_local_endpoint_classification", return_value="loopback"), \
+             mock.patch.object(ai_privacy, "collect_network_isolation_active", return_value=True):
+            observation = ai_privacy.build_observation({"expected_posture": "restricted_local_only"}, 1.0)
+            result = ai_privacy.posture_evidence.evaluate(observation, now=observation["observed_at"])
+        self.assertEqual(result["cloud_fallback_enabled"], "enabled")
+        self.assertIn(
+            "AI_PRIVACY_POSTURE_FAIL_CLOUD_FALLBACK_ENABLED_UNDER_RESTRICTED_POSTURE",
+            result["reason_codes"],
+        )
+
+
 class TestRunEndToEnd(unittest.TestCase):
     CANARY = "CANARY_SECRET_" + "sk_live_" + "should_never_appear_in_evidence"
 
