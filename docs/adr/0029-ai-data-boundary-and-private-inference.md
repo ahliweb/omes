@@ -4,7 +4,7 @@
 - **Date:** 2026-09-24
 - **Decision maker:** @ahliweb
 - **Related:** [Issue #213](https://github.com/ahliweb/omes/issues/213), [ADR-0017](0017-upstream-first-ownership-and-boundary-enforcement.md), [docs/ai-data-privacy-and-model-security.md](../ai-data-privacy-and-model-security.md), [docs/security.md](../security.md), [docs/threat-model.md](../threat-model.md)
-- **Implementation:** #214 (machine-readable data classification and egress policy) is implemented; see [contracts/ai-egress/v1](../../contracts/ai-egress/v1/) and [lib/omes/py/privacy/egress_policy.py](../../lib/omes/py/privacy/egress_policy.py). #215–#218 are not implemented yet; tracked in [#215](https://github.com/ahliweb/omes/issues/215)–[#218](https://github.com/ahliweb/omes/issues/218).
+- **Implementation:** #214 (machine-readable data classification and egress policy) is implemented; see [contracts/ai-egress/v1](../../contracts/ai-egress/v1/) and [lib/omes/py/privacy/egress_policy.py](../../lib/omes/py/privacy/egress_policy.py). #215 (Restricted local-only inference deployment posture) is implemented; see `modules/hermes-restricted/module.sh` and [lib/omes/py/privacy/restricted_posture.py](../../lib/omes/py/privacy/restricted_posture.py). #216–#218 are not implemented yet; tracked in [#216](https://github.com/ahliweb/omes/issues/216)–[#218](https://github.com/ahliweb/omes/issues/218).
 
 ## Context
 

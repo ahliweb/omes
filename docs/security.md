@@ -318,11 +318,16 @@ privacy posture/egress evidence surface — `omes health ai-privacy`, backed by
 — is also implemented ([#216](https://github.com/ahliweb/omes/issues/216)): it reports bounded
 policy/destination/isolation metadata and a PASS/FAIL/WARN/BLOCKED status with stable reason
 codes, never raw prompt/response content or credentials, and reads the #215 local-only posture
-source only when that issue has landed (a missing source degrades to `BLOCKED`, never a healthy
-default, under a declared restricted-local-only posture). Restricted local-only runtime
-enforcement itself, Control Center projection, and regression gates are **Not implemented yet**
-(tracked in [#215](https://github.com/ahliweb/omes/issues/215),
-[#217](https://github.com/ahliweb/omes/issues/217), and
+source (a missing source degrades to `BLOCKED`, never a healthy default, under a declared
+restricted-local-only posture). The Restricted local-only deployment posture for the Hermes system
+gateway is implemented ([#215](https://github.com/ahliweb/omes/issues/215); see
+`modules/hermes-restricted/module.sh` and
+[lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py),
+[docs/ai-data-privacy-and-model-security.md section 10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture)
+for the per-requirement status), and the read-only Control Center projection of that evidence is
+implemented ([#217](https://github.com/ahliweb/omes/issues/217); see
+[lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
+Security regression gates for this boundary are **Not implemented yet** (tracked in
 [#218](https://github.com/ahliweb/omes/issues/218)).
 
 ## 9. What OMES does NOT claim

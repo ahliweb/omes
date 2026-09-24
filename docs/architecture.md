@@ -1136,10 +1136,17 @@ egress. RAG/embedding/retrieval stages inherit source-data classification.
 egress-policy contract and its deterministic evaluator are implemented
 ([#214](https://github.com/ahliweb/omes/issues/214); see
 [contracts/ai-egress/v1](../contracts/ai-egress/v1/) and
-[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). Restricted
-local-only runtime enforcement, privacy-posture evidence, Control Center projection, and security
-regression gates are **Not implemented yet** (tracked in
-[#215](https://github.com/ahliweb/omes/issues/215)–[#218](https://github.com/ahliweb/omes/issues/218)).
+[lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py)). The Restricted
+local-only deployment posture for the Hermes system gateway is implemented
+([#215](https://github.com/ahliweb/omes/issues/215); see `modules/hermes-restricted/module.sh` and
+[lib/omes/py/privacy/restricted_posture.py](../lib/omes/py/privacy/restricted_posture.py)), as are
+the read-only privacy-posture evidence surface `omes health ai-privacy`
+([#216](https://github.com/ahliweb/omes/issues/216); see
+[lib/omes/py/privacy/posture_evidence.py](../lib/omes/py/privacy/posture_evidence.py)) and its
+sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issues/217); see
+[lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
+Security regression gates are **Not implemented yet** (tracked in
+[#218](https://github.com/ahliweb/omes/issues/218)).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
