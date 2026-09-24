@@ -477,15 +477,22 @@ def _submit_result(
     readback_status: dict[str, Any] | None = None,
     error: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Uploads sanitized execution result and read-back evidence to Control Center."""
-    jid = job_id or job.get("job_id") or f"job_auto_{secrets.token_hex(8)}"
+    """Uploads sanitized execution result and read-back evidence to Control Center.
+
+    Correlation with the Control Center binds on `idempotency_key`
+    (and `correlation_id`) only - the wire payload never carries a `job_id`
+    (issue #221: the v1 contract required one but never gave the worker any
+    server-known value to send, so `worker-result.request` no longer has
+    that field). `job_id`, when passed in here, is purely the OMES-local
+    job store id (`lib/omes/py/jobs/store.py`) used for local audit/logging
+    and the function's own return value; it is never part of what is sent.
+    """
     now = _now_iso()
 
     result_payload = {
         "tenant_id": creds.tenant_id,
         "server_id": creds.server_id,
         "worker_id": creds.worker_id,
-        "job_id": jid,
         "correlation_id": job.get("correlation_id", "corr_unknown"),
         "idempotency_key": job.get("idempotency_key", f"idem_{secrets.token_hex(12)}"),
         "operation": job.get("operation", "status"),
@@ -518,7 +525,7 @@ def _submit_result(
     if resp_errors:
         raise WorkerError(f"worker-result.response schema violation: {'; '.join(resp_errors)}")
 
-    return {"status": "executed", "job_id": jid, "state": state, "result": resp}
+    return {"status": "executed", "job_id": job_id, "state": state, "result": resp}
 
 
 def main(argv: list[str] | None = None) -> int:

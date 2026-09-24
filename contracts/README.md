@@ -106,6 +106,36 @@ See [docs/control-center-contracts.md](../docs/control-center-contracts.md)
   PR, with the reason explained in the PR description) is a compatibility
   regression.
 
+### Documented exception: issue #221 (`worker-result.request`, `worker-poll.response`)
+
+Issue #221 amended `worker-result.request.schema.json` (removed the
+required `job_id` property) and `worker-poll.response.schema.json` (gave
+`job` a real, closed shape) **in place within `v1`**, rather than cutting
+a `v2` directory, even though both changes are breaking under the rule
+above. This is a deliberate, maintainer-approved exception, not a
+precedent for skipping the `v<major+1>` rule generally:
+
+- `job_id` was required on `worker-result.request` but nothing in the `v1`
+  contract set ever gave the worker a server-known value to put there
+  (`worker-poll.response.job` was an untyped `{"type": "object"}`, and
+  `operation-request.schema.json` has no `job_id` property under its own
+  `additionalProperties: false`). The field was unimplementable as
+  written, not merely inconvenient.
+- `contracts/control-center/v1` has exactly one known consumer (AWCMS),
+  which pins this repository's contracts by commit hash and runs a CI
+  drift gate on that pin (issue #197). The break is therefore detectable
+  immediately and cheap to re-pin, unlike a change against an open
+  ecosystem of unknown consumers.
+- Consumers must re-pin/re-vendor `contracts/control-center/v1/` after
+  this change lands and update any code that sent `job_id` on
+  `worker-result.request` (it now fails `additionalProperties: false`) or
+  that assumed `worker-poll.response.job` was untyped.
+
+See `worker-result.request.schema.json` and
+`worker-poll.response.schema.json` for the field-level detail, and
+`changes/221-worker-result-job-id-contract-fix.md` for the change
+fragment.
+
 ## Areas
 
 | Area | Owner | Status |

@@ -183,6 +183,40 @@ which is rejected for a bearer-token-shaped string inside the otherwise
 schema-legal `error_evidence.message` field — the pattern-based secret-value
 check, not the key-name check, catches it).
 
+### 2.5a Pull-worker job correlation: no `job_id` (issue #221, ADR-0027)
+
+`worker-poll.response.job` (when `status` is `job_available`) now carries
+the same closed shape as `operation-request.schema.json` — `tenant_id`,
+`correlation_id`, `idempotency_key`, `actor`, `operation`, `target`,
+`permission`, and the optional `backup_id`/`rollback_ref`/`parameters` —
+duplicated inline (this repository's validator has no `$ref` support; see
+`contracts/README.md`) rather than left as the untyped `{"type": "object"}`
+it previously was. `lib/omes/py/jobs/worker.py`'s `poll_and_dispatch_once`
+already validated the `job` payload against `operation-request.schema.json`
+at runtime before this change; the schema now says so explicitly instead
+of leaving the poll response's most execution-relevant field unspecified.
+
+`worker-result.request.schema.json` no longer has a `job_id` field at all
+(previously required, both in `required` and `properties`). Nothing in
+this contract set ever gave the worker a server-known job id to echo
+back — `worker-poll.response.job` had no shape, and
+`operation-request.schema.json` has no `job_id` property under its own
+`additionalProperties: false` — so the field was in practice a
+client-invented opaque string
+(`f"job_auto_{secrets.token_hex(8)}"` in `lib/omes/py/jobs/worker.py`)
+that the Control Center could never validate. Correlation between a
+`worker-poll.response.job` and the matching `worker-result.request` binds
+on `idempotency_key` (plus `correlation_id`, `tenant_id`, `server_id`, and
+the leasing `worker_id`) only; `idempotency_key` is minted by the Control
+Center at job-promotion time and is the sole correlation handle.
+
+This was a breaking change to `v1` (removes a required property, adds
+`additionalProperties: false` to a previously-untyped object), amended in
+place rather than released as `v2` — see
+`contracts/README.md` "Documented exception: issue #221" for why that call
+was proportionate here (exactly one known consumer, pinned by commit hash
+with a CI drift gate) and what a consumer must do to re-pin.
+
 ### 2.6 Catalog, subscription, and entitlement contracts (issue #92)
 
 Issue #92 asks OMES to model service plans and enforce explicit
