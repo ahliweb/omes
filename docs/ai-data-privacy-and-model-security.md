@@ -288,6 +288,29 @@ internal file — to project this posture into evidence:
   `restricted_local_only` expected posture — is evaluated as `BLOCKED`, never as a healthy
   default (see `lib/omes/py/privacy/posture_evidence.py`).
 
+**Cloud-fallback detection (implemented, honestly bounded):** `omes health ai-privacy` derives
+`cloud_fallback_enabled` from two non-secret Hermes config keys read through the same supported,
+read-only `hermes config get` interface and the same vetted allowlist
+(`lib/omes/py/provenance/versions.py`'s `ALLOWED_HERMES_CONFIG_KEYS`) the rest of OMES's evidence
+machinery uses — never `$HERMES_HOME/.env`, never a file under `.hermes/`, never `messages.db`.
+The keys are documented at
+[hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers](https://hermes-agent.nousresearch.com/docs/user-guide/features/fallback-providers):
+
+- **`fallback_model`** — the legacy scalar, in the same `provider/model` shape as `model`. A value
+  whose provider classifies as cloud reports `cloud_fallback_enabled = "enabled"`, which under a
+  declared `restricted_local_only` posture is a `FAIL`
+  (`AI_PRIVACY_POSTURE_FAIL_CLOUD_FALLBACK_ENABLED_UNDER_RESTRICTED_POSTURE`).
+- **`fallback_providers`** — the newer **list**-valued key. Upstream does not document what
+  `hermes config get` prints for a list-valued path, so OMES reads it for **presence only** and
+  deliberately does not parse it (the same decision `modules/hermes-restricted/module.sh` made for
+  #215). A present, non-empty value therefore reports `"unknown"`, never `"disabled"`.
+
+`"disabled"` is reported only when `fallback_model` is confirmed unset (or names a provider that
+classifies as local) **and** `fallback_providers` is confirmed unset. Every other outcome — a
+provider outside the bounded local/cloud vocabulary, a bare model name with no provider prefix, a
+missing `hermes` binary, a non-zero exit, an unrecognized `config get` subcommand, or a timeout —
+is `"unknown"`. Ambiguity is never reported as `"disabled"`.
+
 ## 11. Audit and evidence
 
 Privacy evidence should prove policy/posture without retaining the protected content.
