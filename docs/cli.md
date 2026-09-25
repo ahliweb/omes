@@ -468,21 +468,29 @@ anywhere. When passed, the evidence object above is re-validated against
 [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
 (which also runs `jobs.schema`'s secret-value/secret-field scan) immediately before writing, and
 the write is refused — fail closed, nothing persisted — if that validation finds anything
-unbounded, an unexpected field, or a secret-shaped value. A record that passes is written to the
-OMES-owned `<state-dir>/ai-privacy-evidence/` directory (dir mode 0700, file mode 0600); the
-persist outcome is logged to stderr only and never changes stdout's JSON shape or exit code.
+unbounded, an unexpected field, or a secret-shaped value. The evidence directory itself is also
+`os.lstat`-checked (never following a symlink) before writing, and the write is refused if that
+path is a symlink, is not a directory, is not owned by the current effective user, or is
+group-/world-writable. A record that passes both checks is written to the OMES-owned
+`<state-dir>/ai-privacy-evidence/` directory (dir mode 0700, file mode 0600); the persist outcome
+is logged to stderr only and never changes stdout's JSON shape or exit code.
 
 `omes health ai-privacy prune [--max-age-days <N>] [--max-count <N>] [--dry-run] [--json]` (issue
 [#234](https://github.com/ahliweb/omes/issues/234)) deletes evidence persisted by `--persist`
 above once it is older than `--max-age-days` (default 90, or
 `OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS`) and/or beyond `--max-count` most-recent records (default
 500, or `OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT`). Confined strictly to
-`<state-dir>/ai-privacy-evidence/`: only files matching this module's own naming pattern are ever
-candidates for deletion, a symlink is never deleted regardless of its target, and a resolved path
-that would escape that directory is refused. Idempotent (pruning an already-pruned directory is a
-no-op) and supports `--dry-run` (reports what would be pruned without deleting anything). A
-non-positive or absurdly large `--max-age-days`/`--max-count` value fails closed with a usage
-error rather than being silently clamped.
+`<state-dir>/ai-privacy-evidence/`, which is itself checked exactly like `--persist` above
+(refusing a symlinked, foreign-owned, or group-/world-writable directory before deleting anything
+inside it): only files matching this module's own naming pattern are ever candidates for
+deletion, and a symlink entry is never deleted regardless of its target. A record's age is the
+OLDER of its filesystem mtime age and its own recorded `persisted_at` — never `persisted_at`
+alone — and a `persisted_at` more than ~5 minutes in the future is treated as unparseable, so a
+tampered or clock-skewed timestamp can only make pruning more aggressive, never let a record
+dodge `--max-age-days` deletion by claiming to be fresher than it really is. Idempotent (pruning
+an already-pruned directory is a no-op) and supports `--dry-run` (reports what would be pruned
+without deleting anything). A non-positive or absurdly large `--max-age-days`/`--max-count` value
+fails closed with a usage error rather than being silently clamped.
 
 ```bash
 omes health ai-privacy --persist

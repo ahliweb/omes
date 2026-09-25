@@ -27,19 +27,39 @@ Hard boundaries (do not weaken these):
   unexpected field that could smuggle free text - is REFUSED outright,
   never written partially or "sanitized and written anyway" (fail
   closed).
+- The evidence directory ITSELF is checked with `os.lstat` (never
+  following a symlink) before either `persist()` or `prune()` touches
+  it - see `_check_evidence_dir_secure`. A directory path that is a
+  symlink, is not a directory, is not owned by the current effective
+  user, or is group-/world-writable is refused outright: `persist()`
+  writes nothing, `prune()` deletes nothing. `os.path.realpath()` on a
+  possibly-symlinked directory was previously the only confinement
+  check, which silently followed a symlink instead of refusing it - the
+  `lstat` check above closes that gap, and no path used for reading,
+  writing, or deleting entries is ever built from a *resolved* (symlink-
+  following) form of the evidence directory - only from the checked,
+  unresolved path.
 - Pruning only ever touches files matching this module's own naming
-  pattern (`_FILENAME_PATTERN`) inside the resolved evidence directory.
-  A directory entry that is a symlink is never deleted, regardless of
-  its target - this module cannot tell a symlink an attacker planted
-  apart from a legitimate one after the fact, and `persist()` never
-  creates one (it writes via `tempfile.mkstemp` + `os.replace`, which is
-  always a regular file). A resolved real path whose parent is not the
-  resolved evidence directory is likewise refused.
+  pattern (`_FILENAME_PATTERN`) that live directly inside that checked
+  evidence directory. A directory entry that is a symlink is never
+  deleted, regardless of its target - this module cannot tell a symlink
+  an attacker planted apart from a legitimate one after the fact, and
+  `persist()` never creates one (it writes via `tempfile.mkstemp` +
+  `os.replace`, which is always a regular file).
 - Directories are created mode 0700, files mode 0600 - the same
   convention as lib/omes/py/provenance/record.py.
 - A non-positive or absurdly large retention value fails closed with a
   clear error rather than being silently clamped or rounded - see
   `validate_retention_config`.
+- A record's age for retention purposes is the OLDER (larger) of its
+  filesystem mtime age and its own recorded `persisted_at` age - never
+  `persisted_at` alone. A tampered or clock-skewed `persisted_at` that
+  claims to be in the future would otherwise yield a negative age and
+  let a record dodge `max-age` pruning forever; taking the max of the
+  two signals means retention always fails TOWARD deletion, never away
+  from it. A `persisted_at` more than ~5 minutes in the future is
+  additionally treated as unparseable outright (mtime age alone is
+  used), rather than trusted even partially.
 - Pruning is idempotent (running it twice with the same arguments over
   the same directory is a no-op the second time) and supports
   `--dry-run` (reports what WOULD be removed without removing it).
@@ -77,12 +97,17 @@ EVIDENCE_DIR_NAME = "ai-privacy-evidence"
 #: OMES's own naming pattern for a persisted evidence record. Pruning
 #: refuses to touch any file that does not match this exactly - see
 #: module docstring. The embedded timestamp is cosmetic/sortable only;
-#: the AUTHORITATIVE age source is each record's own `persisted_at`
-#: field (see `_read_persisted_at`), with filesystem mtime as a fallback
-#: only when that field cannot be parsed.
+#: the age used for retention is the OLDER of the record's own
+#: `persisted_at` field (see `_read_persisted_at`) and its filesystem
+#: mtime - see `prune()`.
 _FILENAME_PATTERN = re.compile(r"^ai-privacy-evidence-\d{8}T\d{6}Z-[0-9a-f]{8}\.json$")
 
 _TIMESTAMP_PATTERN = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
+
+#: A recorded `persisted_at` more than this far in the future (clock
+#: skew tolerance) is treated as unparseable outright - see
+#: `_read_persisted_at`'s caller in `prune()`.
+_FUTURE_SKEW_TOLERANCE_SECONDS = 5 * 60
 
 #: Bounds on operator-configurable retention. A value outside these
 #: bounds is refused rather than silently clamped - "fail closed" per
@@ -143,6 +168,41 @@ def _evidence_dir(state_dir: str) -> str:
     return os.path.join(state_dir, EVIDENCE_DIR_NAME)
 
 
+def _check_evidence_dir_secure(directory: str) -> Optional[str]:
+    """Fail-closed ownership/permission check for the evidence directory
+    ITSELF (individual entries inside it are checked separately in
+    `prune()`). Uses `os.lstat` - which does NOT follow a symlink -
+    rather than `os.path.realpath()`/`os.path.isdir()`, which silently
+    follow one. Both `persist()` and `prune()` call this BEFORE reading,
+    writing, or deleting anything, and refuse outright (no partial
+    action) if the path:
+
+    - is a symlink;
+    - exists but is not a directory;
+    - is not owned by the current effective user (`os.geteuid()`); or
+    - is group- or world-writable (`mode & 0o022`).
+
+    Returns `None` when the path does not exist yet (the caller creates
+    it itself, mode 0700) or when it exists and passes every check -
+    never when it is unsafe to use for either write or delete."""
+    try:
+        st = os.lstat(directory)
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        return f"could not stat evidence directory {directory!r}: {exc}"
+
+    if stat.S_ISLNK(st.st_mode):
+        return f"evidence directory {directory!r} is a symlink - refusing (fail closed)"
+    if not stat.S_ISDIR(st.st_mode):
+        return f"evidence directory {directory!r} exists but is not a directory - refusing (fail closed)"
+    if st.st_uid != os.geteuid():
+        return f"evidence directory {directory!r} is not owned by the current user - refusing (fail closed)"
+    if st.st_mode & 0o022:
+        return f"evidence directory {directory!r} is group- or world-writable - refusing (fail closed)"
+    return None
+
+
 def persist(state_dir: str, evidence: dict, now: Optional[datetime.datetime] = None) -> dict:
     """Validates `evidence` (expected to be exactly the object
     `lib/omes/py/privacy/posture_evidence.py`'s `evaluate()` returned)
@@ -169,11 +229,15 @@ def persist(state_dir: str, evidence: dict, now: Optional[datetime.datetime] = N
             "details": errors,
         }
 
+    directory = _evidence_dir(state_dir)
+    dir_error = _check_evidence_dir_secure(directory)
+    if dir_error:
+        return {"ok": False, "error": f"refusing to persist: {dir_error}"}
+
     now = now or datetime.datetime.now(datetime.timezone.utc)
     persisted_at = _now_iso(now)
     record = {"schema_version": "v1", "persisted_at": persisted_at, "evidence": evidence}
 
-    directory = _evidence_dir(state_dir)
     os.makedirs(directory, mode=0o700, exist_ok=True)
     os.chmod(directory, 0o700)
 
@@ -194,13 +258,6 @@ def persist(state_dir: str, evidence: dict, now: Optional[datetime.datetime] = N
             os.remove(tmp_path)
 
     return {"ok": True, "path": target, "persisted_at": persisted_at}
-
-
-def _resolve_evidence_dir(state_dir: str) -> Optional[str]:
-    directory = _evidence_dir(state_dir)
-    if not os.path.isdir(directory):
-        return None
-    return os.path.realpath(directory)
 
 
 def _read_persisted_at(path: str) -> Optional[datetime.datetime]:
@@ -229,28 +286,37 @@ def prune(
 ) -> dict:
     """Prunes persisted AI-privacy evidence records under
     `<state_dir>/ai-privacy-evidence/`. Confined strictly to that
-    directory: only entries whose filename matches `_FILENAME_PATTERN`,
-    that are regular files (never a symlink or anything else), and whose
-    resolved real path's parent directory is the resolved evidence
-    directory are ever candidates for deletion. Idempotent: pruning an
-    already-pruned directory is a no-op, and a missing evidence
-    directory is a no-op (never an error) rather than something to
-    create.
+    directory, which is itself checked with `_check_evidence_dir_secure`
+    (never a symlink, not group-/world-writable, owned by the current
+    user) BEFORE anything inside it is read or deleted - all paths below
+    are built from that checked, unresolved directory path, never a
+    `os.path.realpath()`-resolved form that could silently follow a
+    symlink. Only entries whose filename matches `_FILENAME_PATTERN` and
+    that are regular files (never a symlink or anything else) are ever
+    candidates for deletion. Idempotent: pruning an already-pruned
+    directory is a no-op, and a missing evidence directory is a no-op
+    (never an error) rather than something to create.
 
     `now` is an optional fixed clock (a timezone-aware `datetime`), used
     by tests instead of sleeping to exercise expiry deterministically.
-    Age is computed from each candidate's own recorded `persisted_at`
-    field when it parses; a record this module cannot parse falls back
-    to filesystem mtime rather than being treated as automatically
+    A candidate's age is the OLDER (larger) of its filesystem mtime age
+    and its own recorded `persisted_at` age - never `persisted_at`
+    alone, so a tampered or clock-skewed `persisted_at` claiming to be
+    fresher than the file's real mtime can never suppress its age. A
+    `persisted_at` more than `_FUTURE_SKEW_TOLERANCE_SECONDS` in the
+    future is treated as unparseable outright (mtime age alone is used);
+    a record this module cannot parse at all also falls back to
+    filesystem mtime rather than being treated as automatically
     ineligible for pruning."""
     max_age_seconds, max_count = validate_retention_config(max_age_seconds, max_count)
     now_dt = now or datetime.datetime.now(datetime.timezone.utc)
     now_ts = now_dt.timestamp()
 
+    directory = _evidence_dir(state_dir)
     result: dict = {
         "ok": True,
         "dry_run": bool(dry_run),
-        "evidence_dir": _evidence_dir(state_dir),
+        "evidence_dir": directory,
         "max_age_seconds": max_age_seconds,
         "max_count": max_count,
         "pruned": [],
@@ -258,12 +324,21 @@ def prune(
         "skipped": [],
     }
 
-    resolved_dir = _resolve_evidence_dir(state_dir)
-    if resolved_dir is None:
+    dir_error = _check_evidence_dir_secure(directory)
+    if dir_error:
+        result["ok"] = False
+        result["error"] = dir_error
+        return result
+
+    if not os.path.isdir(directory):
+        # _check_evidence_dir_secure already confirmed this is not an
+        # unsafe existing path (symlink/foreign-owned/world-writable) -
+        # it simply does not exist yet. Nothing to prune; never created
+        # here (only persist() creates it).
         return result
 
     candidates = []
-    with os.scandir(resolved_dir) as it:
+    with os.scandir(directory) as it:
         entries = list(it)
 
     for entry in entries:
@@ -278,11 +353,7 @@ def prune(
             result["skipped"].append({"name": name, "reason": "not_a_regular_file"})
             continue
 
-        full_path = os.path.join(resolved_dir, name)
-        real_path = os.path.realpath(full_path)
-        if os.path.dirname(real_path) != resolved_dir:
-            result["skipped"].append({"name": name, "reason": "escapes_evidence_dir"})
-            continue
+        full_path = os.path.join(directory, name)
 
         try:
             st = entry.stat(follow_symlinks=False)
@@ -290,10 +361,23 @@ def prune(
             result["skipped"].append({"name": name, "reason": "stat_failed"})
             continue
 
-        age_seconds = now_ts - st.st_mtime
+        mtime_age = now_ts - st.st_mtime
+        age_seconds = mtime_age
+
         persisted_at = _read_persisted_at(full_path)
         if persisted_at is not None:
-            age_seconds = (now_dt - persisted_at).total_seconds()
+            persisted_at_age = (now_dt - persisted_at).total_seconds()
+            if persisted_at_age < -_FUTURE_SKEW_TOLERANCE_SECONDS:
+                # Implausibly far in the future (tampered `persisted_at`
+                # or clock skew beyond tolerance) - treat exactly like an
+                # unparseable value: fall back to mtime age alone rather
+                # than trust it even partially.
+                pass
+            else:
+                # Retention fails TOWARD deletion: use whichever signal
+                # says the record is OLDER, never whichever says it is
+                # younger.
+                age_seconds = max(mtime_age, persisted_at_age)
 
         candidates.append({"name": name, "path": full_path, "age_seconds": age_seconds, "mtime": st.st_mtime})
 

@@ -440,14 +440,25 @@ an operator explicitly opts in. **Implemented ([#234](https://github.com/ahliweb
 [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
 (which also runs `jobs.schema`'s secret-value/secret-field scan) immediately before writing, and
 refuses — fails closed, writes nothing — if that validation finds anything unbounded, an
-unexpected field, or a secret-shaped value. A record that passes is written to the OMES-owned
-`<state-dir>/ai-privacy-evidence/` directory (mode 0700, files mode 0600), never a Hermes-internal
-path. `omes health ai-privacy prune [--max-age-days <N>] [--max-count <N>] [--dry-run] [--json]`
+unexpected field, or a secret-shaped value. Both `--persist` and `prune` (below) additionally
+check the evidence directory ITSELF with `os.lstat` (never following a symlink) before touching
+it, and refuse outright — writing/deleting nothing — if that path is a symlink, is not a
+directory, is not owned by the current effective user, or is group-/world-writable; an earlier
+revision of this feature resolved the directory with `os.path.realpath()`, which silently
+followed a symlink instead of refusing it — a fail-open confinement bypass caught and fixed before
+merge (see `lib/omes/py/privacy/evidence_retention.py`'s `_check_evidence_dir_secure`). A record
+that passes is written to the OMES-owned `<state-dir>/ai-privacy-evidence/` directory (mode 0700,
+files mode 0600), never a Hermes-internal path. `omes health ai-privacy prune [--max-age-days <N>]
+[--max-count <N>] [--dry-run] [--json]`
 (see [`lib/omes/py/privacy/evidence_retention.py`](../lib/omes/py/privacy/evidence_retention.py))
 deletes records older than the configured max age and/or beyond the configured max count,
 confined strictly to that directory: only files matching this module's own naming pattern are
-ever candidates for deletion, a symlink is never deleted regardless of its target, and a resolved
-path that would escape the evidence directory is refused. Pruning is idempotent and supports
+ever candidates for deletion, and a symlink is never deleted regardless of its target. A record's
+age is the OLDER (larger) of its filesystem mtime age and its own recorded `persisted_at` age —
+never `persisted_at` alone — and a `persisted_at` more than ~5 minutes in the future is treated as
+unparseable outright, so a tampered or clock-skewed timestamp can only make a record look older
+(retention fails TOWARD deletion), never dodge `max-age` pruning by claiming to be fresher than
+its real mtime. Pruning is idempotent and supports
 `--dry-run`. A non-positive or absurdly large `--max-age-days`/`--max-count` value fails closed
 with a usage error rather than being silently clamped. Defaults are 90 days / 500 records
 (`OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS` / `OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT`). If a caller

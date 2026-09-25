@@ -340,7 +340,13 @@ persists is implemented ([#234](https://github.com/ahliweb/omes/issues/234); see
 object against the published schema (fail-closed on anything unbounded or secret-shaped) before
 writing to the OMES-owned `<state-dir>/ai-privacy-evidence/` directory, and `omes health
 ai-privacy prune` deletes records past a configurable max-age/max-count, confined to that
-directory and never following a symlink.
+directory and never following a symlink. Both operations check the evidence directory itself
+with `os.lstat` before use and refuse (write/delete nothing) if it is a symlink, not owned by the
+current user, or group-/world-writable — `os.path.realpath()` alone, used in an earlier revision,
+silently followed a symlink instead of refusing it. A record's retention age is the older of its
+filesystem mtime age and its own `persisted_at` field, and a `persisted_at` more than ~5 minutes
+in the future is treated as unparseable, so a tampered/clock-skewed timestamp can only make
+pruning more aggressive, never let a record dodge `max-age` deletion.
 Security regression gates for this boundary are implemented
 ([#218](https://github.com/ahliweb/omes/issues/218), closed; commit `ce44b0a`, PR #231; see
 `tests/py/privacy/test_privacy_boundary_regression.py`).
