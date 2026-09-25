@@ -42,6 +42,45 @@ _provenance_audit_py() {
   printf '%s/lib/omes/py/provenance/audit.py\n' "$OMES_ROOT"
 }
 
+# _provenance_artifacts_py
+# Issue #236: model/runtime artifact provenance/integrity evidence -
+# lib/omes/py/provenance/artifacts.py.
+_provenance_artifacts_py() {
+  printf '%s/lib/omes/py/provenance/artifacts.py\n' "$OMES_ROOT"
+}
+
+# _provenance_declared_artifacts_json
+# Prints the operator-DECLARED model/runtime artifact list as a JSON
+# array (issue #236). This is OMES's OWN state - never a Hermes internal
+# file or an auto-discovered path - read from
+# OMES_AI_MODEL_ARTIFACTS (an env override, mainly for tests) or the
+# `ai.model_artifacts.declared` state key (set with e.g.
+# `state_set ai.model_artifacts.declared '[{"component":"main-model","path":"/opt/models/model.gguf","expected_sha256":"<hex>"}]'`
+# - see docs/provenance.md section 1b). Prints "[]" (never fails) when
+# neither is set or the value is not parseable JSON, so a caller can
+# always safely embed the result in a larger JSON object.
+_provenance_declared_artifacts_json() {
+  local raw="${OMES_AI_MODEL_ARTIFACTS:-}"
+  if [[ -z "$raw" ]]; then
+    raw="$(state_get "ai.model_artifacts.declared" 2>/dev/null || printf '')"
+  fi
+  [[ -z "$raw" ]] && raw="[]"
+
+  OMES_PROV_DECLARED_RAW="$raw" python3 -c '
+import json
+import os
+
+raw = os.environ.get("OMES_PROV_DECLARED_RAW", "[]")
+try:
+    parsed = json.loads(raw)
+except ValueError:
+    parsed = []
+if not isinstance(parsed, list):
+    parsed = []
+print(json.dumps(parsed))
+'
+}
+
 # provenance_record_component <component> <profile> <payload-json>
 #
 # Documented helper for any module that installs a component: writes a
@@ -92,7 +131,7 @@ provenance_record_component() {
 # _audit_provenance_usage
 _audit_provenance_usage() {
   cat <<'EOF'
-Usage: omes audit provenance [--profile <name>] [--json]
+Usage: omes audit provenance [--profile <name>] [--verify-artifacts [--force]] [--json]
 
 Audits <state-dir>/provenance/*.json records written at install time
 (issue #84): reports each component's checksum status, flags a
@@ -105,8 +144,26 @@ $HERMES_HOME/{skills,plugins,mcp}/** paths for manual review.
 This audit is NOT a security certification - see docs/provenance.md.
 
 Options:
-  --profile <name>   Only include provenance records recorded under this profile.
-  --json             Print the full JSON report instead of a human summary.
+  --profile <name>     Only include provenance records recorded under this profile.
+  --verify-artifacts    Issue #236 (threat AI-06): hash and record
+                        provenance for every operator-DECLARED
+                        model/runtime artifact (`ai.model_artifacts.declared`
+                        state key or OMES_AI_MODEL_ARTIFACTS env override -
+                        never an auto-discovered or Hermes-internal path),
+                        then run the normal audit above (which now
+                        includes those records). Hashing a multi-GB
+                        artifact is expensive, so this is a separate,
+                        explicit operation, not something the default
+                        (fast, read-only) `omes audit provenance` or
+                        `omes health ai-privacy` does automatically - run
+                        it on a schedule appropriate to how often your
+                        artifacts actually change. A declared artifact
+                        whose (size, mtime) is unchanged since its last
+                        recorded verification is NOT re-hashed unless
+                        --force is also given.
+  --force               With --verify-artifacts, re-hash every declared
+                        artifact even if its stat snapshot is unchanged.
+  --json                Print the full JSON report instead of a human summary.
 
 Exit codes: 0 clean (no findings), 7 findings present.
 EOF
@@ -146,6 +203,8 @@ _audit_dispatch_provenance() {
   local want_json=0
   [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
   local profile=""
+  local verify_artifacts=0
+  local force=0
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -157,6 +216,14 @@ _audit_dispatch_provenance() {
         [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "audit provenance: --profile requires a value"
         profile="$2"
         shift 2
+        ;;
+      --verify-artifacts)
+        verify_artifacts=1
+        shift
+        ;;
+      --force)
+        force=1
+        shift
         ;;
       -h | --help)
         _audit_provenance_usage
@@ -173,19 +240,65 @@ _audit_dispatch_provenance() {
     exit "$OMES_EX_PREFLIGHT"
   fi
 
-  local script
-  script="$(_provenance_audit_py)"
-  if [[ ! -r "$script" ]]; then
-    log_error "audit provenance: ${script} not found"
-    exit "$OMES_EX_PREFLIGHT"
-  fi
-
   local state_dir hermes_home
   state_dir="$(omes_state_dir)"
   if declare -F runtime_home >/dev/null 2>&1; then
     hermes_home="$(runtime_home hermes 2>/dev/null || true)"
   else
     hermes_home="${OMES_HERMES_HOME:-${HOME:-}/.hermes}"
+  fi
+
+  if [[ "$verify_artifacts" -eq 1 ]]; then
+    local artifacts_script
+    artifacts_script="$(_provenance_artifacts_py)"
+    if [[ ! -r "$artifacts_script" ]]; then
+      log_error "audit provenance: ${artifacts_script} not found"
+      exit "$OMES_EX_PREFLIGHT"
+    fi
+
+    local -a verify_args=(verify --state-dir "$state_dir")
+    [[ "$force" -eq 1 ]] && verify_args+=(--force)
+
+    local declared_json verify_output verify_rc=0
+    declared_json="$(_provenance_declared_artifacts_json)"
+    verify_output="$(printf '{"declared": %s}' "$declared_json" | python3 "$artifacts_script" "${verify_args[@]}" 2>/dev/null)" || verify_rc=$?
+
+    if [[ -z "$verify_output" ]]; then
+      log_error "audit provenance --verify-artifacts: the verifier produced no output (exit ${verify_rc})"
+      exit "$OMES_EX_PREFLIGHT"
+    fi
+
+    if [[ "$want_json" -eq 1 ]]; then
+      printf '%s\n' "$verify_output"
+    else
+      OMES_PROV_ARTIFACTS_JSON="$verify_output" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_PROV_ARTIFACTS_JSON"])
+except ValueError:
+    print("[omes] audit provenance --verify-artifacts: the verifier did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] audit provenance --verify-artifacts: ok=%s" % d.get("ok"))
+for a in d.get("artifacts", []):
+    print("[omes]   component=%s checksum_status=%s hashed=%s" % (a.get("component"), a.get("checksum_status"), a.get("hashed")))
+for f in d.get("findings", []):
+    print("[omes]   %-4s %s: %s" % (f.get("severity"), f.get("component"), f.get("detail")))
+'
+    fi
+
+    if [[ "$verify_rc" -ne 0 ]]; then
+      exit "$verify_rc"
+    fi
+  fi
+
+  local script
+  script="$(_provenance_audit_py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "audit provenance: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
   fi
 
   local -a py_args=(--state-dir "$state_dir" --hermes-home "$hermes_home")

@@ -203,6 +203,51 @@ class TestCloudFallbackDetection(unittest.TestCase):
         )
 
 
+class TestModelArtifactProvenanceSourcePassthrough(unittest.TestCase):
+    """Issue #236: `build_observation` must forward an already-collected
+    `model_artifact_provenance_source` (produced cheaply by
+    lib/omes/py/provenance/artifacts.py's `summarize()` and assembled by
+    lib/omes/cmd/health.sh - never re-hashed by this module) into the
+    observation posture_evidence.evaluate() reads, exactly like the
+    existing #215 local_only_posture_source integration point."""
+
+    def test_dict_source_is_forwarded_verbatim_into_the_observation(self):
+        source = {
+            "available": True,
+            "status": "pass",
+            "reason": "consistent",
+            "declared_count": 1,
+            "verified_count": 1,
+            "last_verified_at": "2026-09-24T00:00:00Z",
+        }
+        with mock.patch.object(ai_privacy, "_collect_provider_value", return_value=None), \
+             mock.patch.object(ai_privacy, "_collect_hermes_version", return_value=None), \
+             mock.patch.object(ai_privacy, "collect_network_isolation_active", return_value=None):
+            observation = ai_privacy.build_observation({"model_artifact_provenance_source": source}, 1.0)
+        self.assertEqual(observation["model_artifact_provenance_source"], source)
+
+    def test_non_dict_source_is_dropped_not_forwarded(self):
+        with mock.patch.object(ai_privacy, "_collect_provider_value", return_value=None), \
+             mock.patch.object(ai_privacy, "_collect_hermes_version", return_value=None), \
+             mock.patch.object(ai_privacy, "collect_network_isolation_active", return_value=None):
+            observation = ai_privacy.build_observation({"model_artifact_provenance_source": "not-a-dict"}, 1.0)
+        self.assertNotIn("model_artifact_provenance_source", observation)
+
+    def test_missing_source_under_local_destination_and_restricted_posture_blocks(self):
+        with mock.patch.object(ai_privacy, "_collect_provider_value", return_value="ollama"), \
+             mock.patch.object(ai_privacy, "_collect_hermes_version", return_value=None), \
+             mock.patch.object(ai_privacy, "collect_local_endpoint_classification", return_value="loopback"), \
+             mock.patch.object(ai_privacy, "collect_network_isolation_active", return_value=True), \
+             mock.patch.object(ai_privacy, "collect_cloud_fallback_enabled", return_value=False):
+            observation = ai_privacy.build_observation({"expected_posture": "restricted_local_only"}, 1.0)
+            result = ai_privacy.posture_evidence.evaluate(observation, now=observation["observed_at"])
+        self.assertEqual(result["status"], ai_privacy.posture_evidence.STATUS_BLOCKED)
+        self.assertIn(
+            "AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+            result["reason_codes"],
+        )
+
+
 class TestRunEndToEnd(unittest.TestCase):
     CANARY = "CANARY_SECRET_" + "sk_live_" + "should_never_appear_in_evidence"
 
@@ -220,6 +265,14 @@ class TestRunEndToEnd(unittest.TestCase):
         state_facts = {
             "expected_posture": "restricted_local_only",
             "local_only_posture_source": {"available": True, "status": "pass", "source": self.CANARY},
+            "model_artifact_provenance_source": {
+                "available": True,
+                "status": "pass",
+                "reason": self.CANARY,
+                "declared_count": 1,
+                "verified_count": 1,
+                "last_verified_at": self.CANARY,
+            },
             "unexpected_field": self.CANARY,
             "api_key": self.CANARY,
         }

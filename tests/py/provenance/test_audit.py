@@ -58,7 +58,33 @@ class TestEvaluateRecord(unittest.TestCase):
         findings = audit.evaluate_record("x", data, None)
         kinds = {f["kind"]: f for f in findings}
         self.assertIn("checksum_unverified", kinds)
-        self.assertEqual(kinds["checksum_unverified"]["severity"], "WARN")
+
+    def test_missing_status_is_fail_closed_not_a_warning(self):
+        # Issue #236: a declared model/runtime artifact that was not
+        # found on disk at verification time (checksum.status="missing")
+        # must be FAIL, not merely the generic "unverified" WARN.
+        data = dict(VALID_RECORD)
+        data["checksum"] = {"algorithm": "sha256", "expected": None, "actual": None, "status": "missing"}
+        findings = audit.evaluate_record("model-artifact:main-model", data, None)
+        kinds = {f["kind"]: f for f in findings}
+        self.assertIn("artifact_missing", kinds)
+        self.assertEqual(kinds["artifact_missing"]["severity"], "FAIL")
+
+    def test_model_artifact_record_does_not_warn_for_missing_installer_metadata(self):
+        # A model-artifact: record legitimately has no installer_source_url
+        # or resolved_version - those are only meaningful for an
+        # installed package/binary. It must not produce a permanent,
+        # meaningless missing_metadata WARN.
+        data = {
+            "component": "model-artifact:m",
+            "profile": "model-artifact",
+            "installer_source_url": None,
+            "resolved_version": None,
+            "install_time": "2026-09-19T00:00:00Z",
+            "checksum": {"algorithm": "sha256", "expected": "abc", "actual": "abc", "status": "verified"},
+        }
+        findings = audit.evaluate_record("model-artifact:m", data, None)
+        self.assertEqual(findings, [])
 
     def test_verified_pinned_locally_built_produce_no_checksum_warning(self):
         for status in ("verified", "pinned", "locally-built", "package_manager_verified"):

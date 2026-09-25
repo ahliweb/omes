@@ -261,6 +261,7 @@ def build_observation(state_facts: dict, timeout: float) -> dict:
 
     expected_posture = state_facts.get("expected_posture")
     local_only_source = state_facts.get("local_only_posture_source")
+    model_artifact_source = state_facts.get("model_artifact_provenance_source")
 
     observation: dict = {
         "policy_version": "v1",
@@ -279,6 +280,8 @@ def build_observation(state_facts: dict, timeout: float) -> dict:
     }
     if isinstance(local_only_source, dict):
         observation["local_only_posture_source"] = local_only_source
+    if isinstance(model_artifact_source, dict):
+        observation["model_artifact_provenance_source"] = model_artifact_source
     if hermes_version:
         observation["hermes_version_reference"] = {"value": hermes_version, "source": "hermes-cli:hermes --version"}
     return observation

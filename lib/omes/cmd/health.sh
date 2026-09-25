@@ -39,8 +39,12 @@ Targets:
             version, effective provider destination class
             (local/private/cloud/unknown), local endpoint network
             classification, cloud-fallback/network-isolation state,
-            PASS/FAIL/WARN/BLOCKED with stable reason codes, and the #215
-            local-only posture source when available (issue #216; see
+            PASS/FAIL/WARN/BLOCKED with stable reason codes, the #215
+            local-only posture source when available (issue #216), and the
+            #236 model/runtime artifact provenance/integrity summary
+            (declared/verified counts, checksum status, last verification
+            time - never re-hashed on this call; see 'omes audit
+            provenance --verify-artifacts' and
             docs/ai-data-privacy-and-model-security.md section 11). NEVER
             prints prompt text, response text, or credential values.
             Options: --json
@@ -60,6 +64,8 @@ Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.
   OMES_OLLAMA_LOAD_TIMEOUT      bounded model-load timeout in seconds (default 30)
   OMES_AI_PRIVACY_EXPECTED_POSTURE  override for ai.privacy.expected_posture state
                                  (restricted_local_only|unrestricted|unknown)
+  OMES_AI_MODEL_ARTIFACTS       override JSON array for ai.model_artifacts.declared state
+                                 (see 'omes audit provenance --verify-artifacts', issue #236)
 
 Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4 service missing.
             ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
@@ -395,7 +401,52 @@ _health_ai_privacy_state_facts_json() {
 
   json_obj \
     "$(json_kv expected_posture "${expected_posture:-unknown}")" \
-    "$(json_kv local_only_posture_source "$local_only_obj" --raw)"
+    "$(json_kv local_only_posture_source "$local_only_obj" --raw)" \
+    "$(json_kv model_artifact_provenance_source "$(_health_model_artifact_provenance_source_json)" --raw)"
+}
+
+# _health_model_artifact_provenance_source_json
+# Issue #236 (threat AI-06): a cheap, hashing-free summary of every
+# already-recorded `model-artifact:*` provenance record
+# (lib/omes/py/provenance/artifacts.py's `summarize`, produced by `omes
+# audit provenance --verify-artifacts` runs, never by this call itself).
+# This function NEVER hashes artifact bytes - only stats/reads the small
+# JSON records already on disk - so `omes health ai-privacy` stays cheap
+# even when the declared artifacts are multi-gigabyte model files.
+# Prints a fixed "unavailable" object (never fails, never blocks health)
+# when python3 is missing or the summarizer errors.
+_health_model_artifact_provenance_source_json() {
+  if ! command -v python3 >/dev/null 2>&1; then
+    json_obj \
+      "$(json_kv available "false" --raw)" \
+      "$(json_kv status "unknown")" \
+      "$(json_kv reason "not_declared")" \
+      "$(json_kv declared_count "0" --raw)" \
+      "$(json_kv verified_count "0" --raw)" \
+      "$(json_kv last_verified_at "null" --raw)"
+    return 0
+  fi
+
+  local script state_dir output
+  script="${OMES_ROOT}/lib/omes/py/provenance/artifacts.py"
+  state_dir="$(omes_state_dir)"
+
+  if [[ -r "$script" ]]; then
+    output="$(python3 "$script" summarize --state-dir "$state_dir" 2>/dev/null)"
+  fi
+
+  if [[ -z "$output" ]]; then
+    json_obj \
+      "$(json_kv available "false" --raw)" \
+      "$(json_kv status "unknown")" \
+      "$(json_kv reason "not_declared")" \
+      "$(json_kv declared_count "0" --raw)" \
+      "$(json_kv verified_count "0" --raw)" \
+      "$(json_kv last_verified_at "null" --raw)"
+    return 0
+  fi
+
+  printf '%s\n' "$output"
 }
 
 # _health_print_ai_privacy_human <json>
@@ -419,6 +470,10 @@ print("[omes]   local_endpoint=%s cloud_fallback=%s network_isolation=%s" % (
 ))
 lop = d.get("local_only_posture", {})
 print("[omes]   local_only_posture: available=%s status=%s" % (lop.get("available"), lop.get("status")))
+map_ = d.get("model_artifact_provenance", {})
+print("[omes]   model_artifact_provenance: available=%s status=%s reason=%s declared=%s verified=%s last_verified_at=%s" % (
+    map_.get("available"), map_.get("status"), map_.get("reason"), map_.get("declared_count"), map_.get("verified_count"), map_.get("last_verified_at")
+))
 for code in d.get("reason_codes", []):
     print("[omes]   reason: %s" % code)
 '

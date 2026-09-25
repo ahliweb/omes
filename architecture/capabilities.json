@@ -607,6 +607,24 @@
         "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
         "https://github.com/ahliweb/omes/issues/215"
       ]
+    },
+    {
+      "capability_id": "omes.provenance.model_artifact_integrity",
+      "title": "OMES Model/Runtime Artifact Provenance and Integrity Evidence (threat AI-06)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": "main",
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "omes_module": "provenance",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/provenance.md",
+        "https://github.com/ahliweb/omes/issues/236"
+      ]
     }
   ]
 }

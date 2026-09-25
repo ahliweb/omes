@@ -37,6 +37,12 @@ Hard boundaries (do not weaken these):
 - A missing/unavailable #215 local-only posture source under an expected
   `restricted_local_only` posture degrades this evidence to `BLOCKED`
   (with an explicit reason code) rather than silently passing.
+- Issue #236 (threat AI-06): whenever the effective destination is
+  `local`, missing model/runtime artifact provenance/integrity evidence
+  degrades this evidence to `BLOCKED` under a declared
+  `restricted_local_only` posture (and `WARN` otherwise), and a reported
+  checksum mismatch or missing artifact is always `FAIL` - "it is local"
+  is never accepted as a substitute for integrity evidence.
 - This module does not select, call, or route to any model provider, and
   it does not implement host hardening/network isolation itself - it only
   reports evidence a caller already gathered through supported interfaces
@@ -86,6 +92,25 @@ EXPECTED_POSTURES: frozenset[str] = frozenset({"restricted_local_only", "unrestr
 #: Status codes for a #215 local-only posture source, if one is available.
 LOCAL_ONLY_SOURCE_STATUSES: frozenset[str] = frozenset({"pass", "fail", "warn", "unknown"})
 
+#: Status codes for the #236 model/runtime artifact provenance source, if
+#: one is available. Deliberately the same tri-state vocabulary as
+#: LOCAL_ONLY_SOURCE_STATUSES (pass/fail/warn/unknown) rather than a
+#: divergent second vocabulary for the same shape of fact.
+MODEL_ARTIFACT_SOURCE_STATUSES: frozenset[str] = LOCAL_ONLY_SOURCE_STATUSES
+
+#: Bounded reason vocabulary for WHY the #236 model-artifact source
+#: reported the status it did. Never free text - a caller-supplied value
+#: outside this set is replaced with "unknown".
+MODEL_ARTIFACT_REASONS: frozenset[str] = frozenset({
+    "consistent",
+    "checksum_mismatch",
+    "missing_artifact",
+    "unverified_no_pin",
+    "stale",
+    "not_declared",
+    "unknown",
+})
+
 #: Closed vocabulary for `evidence_source` - deliberately NOT free text.
 #: Any value outside this set is rejected (see module docstring); this is
 #: the primary control that makes it structurally impossible for this
@@ -98,6 +123,8 @@ EVIDENCE_SOURCES: frozenset[str] = frozenset({
     "omes-host:state",
     "local-only-posture-source:issue-215",
     "local-only-posture-source:unavailable",
+    "model-artifact-provenance-source:issue-236",
+    "model-artifact-provenance-source:unavailable",
     "unknown",
 })
 
@@ -166,6 +193,15 @@ REASON_CODES: frozenset[str] = frozenset({
     "AI_PRIVACY_POSTURE_WARN_EXPECTED_POSTURE_UNKNOWN",
     "AI_PRIVACY_POSTURE_WARN_EVIDENCE_SOURCE_REJECTED",
     "AI_PRIVACY_POSTURE_WARN_HERMES_VERSION_REFERENCE_REJECTED",
+    # Issue #236: model/runtime artifact provenance/integrity evidence.
+    "AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+    "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_CHECKSUM_MISMATCH",
+    "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_MISSING",
+    "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_INTEGRITY",
+    "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+    "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_UNVERIFIED_NO_PIN",
+    "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_STALE",
+    "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNKNOWN",
 })
 
 #: Default maximum age, in seconds, before evidence is considered stale
@@ -258,6 +294,92 @@ def _local_only_source_evidence(source: Any) -> tuple[dict, bool, Optional[str]]
     return echoed, True, (reason or src_reason)
 
 
+#: Default echoed shape for the #236 model-artifact-provenance evidence
+#: when no source was supplied at all - kept as one constant so every
+#: return path in evaluate() (including the early BLOCKED returns) uses
+#: byte-identical shape, matching this schema's `additionalProperties:
+#: false` / `required` contract.
+_MODEL_ARTIFACT_UNAVAILABLE: dict = {
+    "available": False,
+    "status": "unknown",
+    "reason": "not_declared",
+    "declared_count": 0,
+    "verified_count": 0,
+    "last_verified_at": None,
+}
+
+
+def _bounded_count(value: Any) -> int:
+    return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else 0
+
+
+def _model_artifact_evidence(source: Any) -> tuple[dict, bool, Optional[str]]:
+    """Normalizes the optional #236 model/runtime artifact provenance
+    integration point (declared, operator-owned artifact paths whose
+    checksum was recorded by `omes audit provenance --verify-artifacts`
+    - see lib/omes/py/provenance/artifacts.py). This function never
+    hashes anything itself; it only reads the small, already-collected
+    summary a caller supplies (see lib/omes/cmd/health.sh's
+    `_health_ai_privacy_state_facts_json`), which in turn only ever reads
+    OMES's own recorded provenance JSON files - never a Hermes internal
+    file, and never the model artifact bytes themselves on every health
+    check (hashing a multi-GB model file is a deliberately rare,
+    explicit, operator/cron-triggered operation - see docs/provenance.md
+    section 1b).
+
+    Returns (echoed_object, available, reason_code_if_any). `available`
+    is False whenever no declared-artifact evidence can be confirmed
+    present and well-formed - including when the operator has not
+    declared any artifacts yet - matching this issue's requirement that
+    missing evidence degrade to an explicit BLOCKED/WARN state rather
+    than a healthy-looking default.
+    """
+    if not isinstance(source, Mapping) or source.get("available") is not True:
+        return dict(_MODEL_ARTIFACT_UNAVAILABLE), False, None
+
+    status = source.get("status")
+    if status not in MODEL_ARTIFACT_SOURCE_STATUSES:
+        status = "unknown"
+
+    reason = source.get("reason")
+    if reason not in MODEL_ARTIFACT_REASONS:
+        reason = "unknown"
+
+    declared_count = _bounded_count(source.get("declared_count"))
+    verified_count = _bounded_count(source.get("verified_count"))
+
+    last_verified_at = source.get("last_verified_at")
+    if not isinstance(last_verified_at, str) or not _OBSERVED_AT_PATTERN.match(last_verified_at):
+        last_verified_at = None
+
+    echoed = {
+        "available": True,
+        "status": status,
+        "reason": reason,
+        "declared_count": declared_count,
+        "verified_count": verified_count,
+        "last_verified_at": last_verified_at,
+    }
+
+    posture_reason: Optional[str] = None
+    if status == "fail":
+        if reason == "checksum_mismatch":
+            posture_reason = "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_CHECKSUM_MISMATCH"
+        elif reason == "missing_artifact":
+            posture_reason = "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_MISSING"
+        else:
+            posture_reason = "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_INTEGRITY"
+    elif status == "warn":
+        if reason == "stale":
+            posture_reason = "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_STALE"
+        else:
+            posture_reason = "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_UNVERIFIED_NO_PIN"
+    elif status == "unknown":
+        posture_reason = "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNKNOWN"
+
+    return echoed, True, posture_reason
+
+
 def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[str, Any]:
     """Evaluates a bounded, already-collected observation and returns a
     bounded PASS/FAIL/WARN/BLOCKED privacy-posture evidence object.
@@ -308,6 +430,7 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
             "evidence_source": "unknown",
             "local_only_posture": {"available": False, "status": "unknown", "source": "local-only-posture-source:unavailable"},
             "hermes_version_reference": None,
+            "model_artifact_provenance": dict(_MODEL_ARTIFACT_UNAVAILABLE),
             "status": STATUS_BLOCKED,
             "reason_codes": ["AI_PRIVACY_POSTURE_BLOCKED_UNKNOWN_POLICY_VERSION"],
         }
@@ -350,6 +473,10 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
         else:
             status = _bump(status, STATUS_WARN)
 
+    model_artifact_evidence, model_artifact_available, model_artifact_reason = _model_artifact_evidence(
+        observation.get("model_artifact_provenance_source")
+    )
+
     # Staleness: observed_at is required and must be within the bounded
     # window, or the whole report fails closed to BLOCKED - stale evidence
     # is never reported as healthy, no matter what the individual signals
@@ -384,6 +511,7 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
             "evidence_source": evidence_source,
             "local_only_posture": local_only_evidence,
             "hermes_version_reference": version_ref,
+            "model_artifact_provenance": model_artifact_evidence,
             "status": STATUS_BLOCKED,
             "reason_codes": reasons,
         }
@@ -419,6 +547,28 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
     elif destination_class == "local" and local_endpoint_classification == "unknown":
         _flag(STATUS_WARN, "AI_PRIVACY_POSTURE_WARN_LOCAL_ENDPOINT_CLASSIFICATION_UNKNOWN")
 
+    # Issue #236 (threat AI-06): a local model must not be trusted merely
+    # because it is local. Whenever the effective destination IS local,
+    # model/runtime artifact provenance/integrity evidence is required -
+    # missing evidence is BLOCKED under a declared restricted-local-only
+    # posture (the same fail-closed treatment as a missing #215 source),
+    # and WARN otherwise (the operator has not declared a restricted
+    # expectation, so this is visibility, not yet a hard gate). A reported
+    # checksum mismatch or missing artifact is always FAIL, regardless of
+    # declared posture - integrity evidence that is actively bad is never
+    # merely a warning.
+    if destination_class == "local":
+        if not model_artifact_available:
+            if expected_posture == "restricted_local_only":
+                _flag(STATUS_BLOCKED, "AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE")
+            else:
+                _flag(STATUS_WARN, "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE")
+        elif model_artifact_reason:
+            if model_artifact_reason.startswith("AI_PRIVACY_POSTURE_FAIL_"):
+                _flag(STATUS_FAIL, model_artifact_reason)
+            else:
+                _flag(STATUS_WARN, model_artifact_reason)
+
     if status == STATUS_PASS:
         reasons.append("AI_PRIVACY_POSTURE_PASS_CONSISTENT")
 
@@ -433,6 +583,7 @@ def evaluate(observation: Mapping[str, Any], now: Optional[str] = None) -> dict[
         "evidence_source": evidence_source,
         "local_only_posture": local_only_evidence,
         "hermes_version_reference": version_ref,
+        "model_artifact_provenance": model_artifact_evidence,
         "status": status,
         "reason_codes": reasons,
     }

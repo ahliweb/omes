@@ -16,5 +16,13 @@
   "status": "PASS",
   "reason_codes": [
     "AI_PRIVACY_POSTURE_PASS_CONSISTENT"
-  ]
+  ],
+  "model_artifact_provenance": {
+    "available": true,
+    "status": "pass",
+    "reason": "consistent",
+    "declared_count": 1,
+    "verified_count": 1,
+    "last_verified_at": "2026-09-24T12:00:00Z"
+  }
 }

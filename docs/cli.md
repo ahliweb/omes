@@ -436,7 +436,16 @@ non-secret `fallback_model` and `fallback_providers` Hermes config keys (same al
 demonstrably local `fallback_model` with `fallback_providers` unset) is `disabled`; a present but
 deliberately unparsed `fallback_providers` list, an unlisted provider, or an unreadable config is
 `unknown` — see
-[docs/ai-data-privacy-and-model-security.md §10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture). Returns `PASS`/`FAIL`/`WARN`/`BLOCKED` with stable
+[docs/ai-data-privacy-and-model-security.md §10](ai-data-privacy-and-model-security.md#10-local-only-runtime-posture).
+The output also carries `model_artifact_provenance` (issue
+[#236](https://github.com/ahliweb/omes/issues/236), threat AI-06): `{"available", "status"
+("pass"/"fail"/"warn"/"unknown"), "reason" ("consistent"/"checksum_mismatch"/"missing_artifact"/
+"unverified_no_pin"/"stale"/"not_declared"/"unknown"), "declared_count", "verified_count",
+"last_verified_at"}` — a cheap, hashing-free summary of the operator-declared model/runtime
+artifacts most recently verified by `omes audit provenance --verify-artifacts` (this call never
+re-hashes artifact bytes itself). Whenever the effective destination is `local`: missing evidence
+is `BLOCKED` under a declared restricted-local-only posture, `WARN` otherwise; a reported checksum
+mismatch or missing artifact is always `FAIL`. Returns `PASS`/`FAIL`/`WARN`/`BLOCKED` with stable
 `AI_PRIVACY_POSTURE_*` reason codes (see
 [contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)).
 Unknown or stale evidence is always `BLOCKED`; drift from a declared restricted-local-only
@@ -493,6 +502,20 @@ required metadata is a `WARN`, and executable files under managed
 for review — **never executed**. See [docs/provenance.md](provenance.md)
 ("a provenance report is not a security certification"). Exit codes: 0
 clean, 7 findings.
+
+`omes audit provenance --verify-artifacts [--force] [--json]` (issue
+[#236](https://github.com/ahliweb/omes/issues/236), threat AI-06, implemented by
+[`lib/omes/py/provenance/artifacts.py`](../lib/omes/py/provenance/artifacts.py)) hashes
+(SHA-256) and records provenance for every operator-DECLARED model/runtime artifact — read from
+the `ai.model_artifacts.declared` state key or the `OMES_AI_MODEL_ARTIFACTS` env override, never
+an auto-discovered or Hermes-internal path — then runs the normal audit above (which now includes
+those `model-artifact:<name>` records). A checksum mismatch or a missing artifact is `FAIL`,
+fail-closed; an unpinned artifact is `WARN`. Hashing a multi-GB artifact is expensive, so this is a
+separate, explicit operation — it does not run as part of the default `omes audit provenance` or
+`omes health ai-privacy` — and an artifact whose `(size, mtime)` is unchanged since its last
+recorded verification is not re-hashed unless `--force` is also given. See
+[docs/provenance.md §1b](provenance.md#1b-modelruntime-artifact-provenance-issue-236-threat-ai-06).
+Exit codes: 0 clean, 7 findings.
 > Note: `omes health versions` and `omes audit provenance` (issues
 > [#83](https://github.com/ahliweb/omes/issues/83) and
 > [#84](https://github.com/ahliweb/omes/issues/84)) are implemented on

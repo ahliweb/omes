@@ -61,6 +61,12 @@ VALID_CHECKSUM_STATUSES = {
     # pinned checksum, but this is not "unverified" either (issue #84's
     # apt/uv/pipx package-manager provenance gap).
     "package_manager_verified",
+    # Issue #236: a declared model/runtime artifact path did not exist (or
+    # was not a regular file) at verification time - distinct from
+    # "mismatch" (the file exists but its digest disagrees with the
+    # pinned expectation). `omes audit provenance` treats this the same
+    # as a mismatch: FAIL, fail-closed.
+    "missing",
 }
 
 
@@ -91,6 +97,13 @@ def build_record(component: str, profile: str, payload: dict) -> dict:
             "status": status,
         },
         "package_manager": payload.get("package_manager") or None,
+        # Issue #236: optional {"size": int, "mtime": float} stat snapshot
+        # of a declared model/runtime artifact at the time it was last
+        # actually hashed - lib/omes/py/provenance/artifacts.py uses this
+        # to skip re-hashing an unchanged multi-GB file on a later run.
+        # Never set by any other caller; absent for every non-artifact
+        # component.
+        "artifact_stat": payload.get("artifact_stat") or None,
         "recorded_at": _now(),
     }
 
