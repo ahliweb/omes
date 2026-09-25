@@ -63,6 +63,40 @@ One-line description of the user-visible change.
 `CHANGELOG.md` is compiled from these fragments at release time — do not
 edit `CHANGELOG.md` directly in a feature/docs PR.
 
+**Fragment rules (enforced by CI on every PR, see below):**
+
+- YAML-style frontmatter delimited by two literal `---` lines is required.
+- `issue:` must be a positive integer (the GitHub issue this PR closes or
+  references).
+- `type:` must be exactly one of the ADR-0010 types: `security`, `added`,
+  `changed`, `fixed`, `docs`, `ci`. Conventional-commit/SemVer words such as
+  `minor`, `patch`, `feat`, `refactor`, or `chore` are **not** valid `type`
+  values here, even though they are valid commit-message prefixes (§2) —
+  the two vocabularies are different on purpose.
+- The body must be non-empty and a **single paragraph**: no blank line
+  inside the body, and no line starting with markdown list or heading
+  markup (`- `, `* `, `1. `, `#`/`##`/...). `scripts/release.sh` joins every
+  body line with a space into one changelog bullet at release time, so a
+  bulleted list, a heading, or a paragraph break inside the body would
+  produce a malformed changelog entry. A hard-wrapped line that merely
+  begins with an issue reference, e.g. `#217).`, is fine — only a `#` run
+  immediately followed by whitespace (`# `, `## `, ...) counts as heading
+  markup.
+
+Every PR that adds or changes a fragment is validated on CI by
+`scripts/release.sh --validate-fragments` (issue #238), which runs the
+exact same parser `scripts/release.sh` uses to compile `CHANGELOG.md` at
+release time, so a fragment that passes CI cannot later break a release.
+Run it locally before opening a PR:
+
+```bash
+scripts/release.sh --validate-fragments
+```
+
+It is read-only (no VERSION/CHANGELOG/git mutation, no network access), and
+exits 0 when `changes/` is empty or holds only a `README.md`/placeholder
+file.
+
 ### Cutting a release
 
 Releases follow [ADR-0010](docs/adr/0010-versioning-and-change-fragments.md)

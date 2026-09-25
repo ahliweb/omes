@@ -9,6 +9,7 @@
 #   6. optionally pushes and publishes GitHub Release with read-back verification.
 #
 # Usage: scripts/release.sh <X.Y.Z> [OPTIONS]
+#        scripts/release.sh --validate-fragments
 #
 # Options:
 #   --date YYYY-MM-DD     Release date for CHANGELOG.md (default: UTC today)
@@ -21,6 +22,14 @@
 #   --skip-bundle         Skip generating SLSA provenance and SBOM evidence bundle
 #   --push                Push the created tag to origin
 #   --publish             Push tag, create GitHub Release, and verify read-back
+#   --validate-fragments  Read-only: validate every changes/*.md fragment
+#                         against the ADR-0010 rules and exit non-zero
+#                         listing every bad fragment (no VERSION/CHANGELOG/git
+#                         mutation, no network, no gh calls, no clean-tree/
+#                         main-branch/CI preconditions). Exits 0 when
+#                         changes/ is empty or contains only a
+#                         README/placeholder file. Mutually exclusive with
+#                         the version argument and every other option above.
 #   -h, --help            Show this help text
 
 set -Eeuo pipefail
@@ -40,6 +49,7 @@ bundle_dir=""
 skip_bundle=0
 do_push=0
 do_publish=0
+do_validate_fragments=0
 
 log() { printf '[release] %s\n' "$*"; }
 warn() { printf '[release] WARN %s\n' "$*" >&2; }
@@ -51,7 +61,194 @@ die() {
 }
 
 usage() {
-  sed -n '2,20p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+}
+
+# ---------------------------------------------------------------------------
+# Change-fragment parsing/validation (ADR-0010, issue #238).
+#
+# This is the SINGLE source of truth for what makes a changes/*.md fragment
+# valid, shared by both the release-compile path below and
+# `--validate-fragments` (which lets CI reject a malformed fragment on the
+# pull request that introduces it, instead of only at release time).
+# ---------------------------------------------------------------------------
+
+# type -> heading, in the order they appear in the compiled changelog
+# section. The keys are also the exhaustive set of valid ADR-0010 `type:`
+# values.
+FRAGMENT_TYPE_ORDER=(security added changed fixed docs ci)
+declare -A FRAGMENT_TYPE_HEADING=(
+  [security]="Security"
+  [added]="Added"
+  [changed]="Changed"
+  [fixed]="Fixed"
+  [docs]="Documentation"
+  [ci]="CI and tooling"
+)
+# Comma-joined for error messages. Built with a local IFS rather than
+# "${FRAGMENT_TYPE_ORDER[*]}" directly, because this script sets IFS to
+# $'\n\t' globally (see top of file) and "${arr[*]}" joins with the first
+# character of IFS - a newline here - which would silently split a single
+# error message across multiple lines wherever it is printed.
+FRAGMENT_TYPE_LIST="$(
+  IFS=,
+  echo "${FRAGMENT_TYPE_ORDER[*]}"
+)"
+FRAGMENT_TYPE_LIST="${FRAGMENT_TYPE_LIST//,/, }"
+
+# fragment_errors FILE
+# Parses one change fragment and populates the global array FRAG_ERRORS
+# with one string per validation failure (empty array means the fragment
+# is valid). Also populates FRAG_ISSUE/FRAG_TYPE/FRAG_DESC as a
+# best-effort parse (used by the compile path to build the changelog
+# entry) even when errors are reported. Returns non-zero iff at least one
+# error was found. Must be called directly (not inside a `$(...)` command
+# substitution) since it communicates results via globals, not stdout -
+# a subshell would discard them under `set -u`.
+#
+# Rules enforced (see docs/adr/0010-versioning-and-change-fragments.md and
+# CONTRIBUTING.md §4):
+#   - YAML-style frontmatter delimited by two literal "---" lines is present;
+#   - `issue:` is a positive integer;
+#   - `type:` is one of: security, added, changed, fixed, docs, ci;
+#   - the body is non-empty and is a SINGLE paragraph: no blank line inside
+#     the body, and no line starting with markdown list or heading markup
+#     ("- ", "* ", "1. ", "#"/"##"/...). A hard-wrapped line that merely
+#     begins with an issue reference like "#217)." is NOT heading markup:
+#     only a "#" run immediately followed by whitespace counts as a
+#     heading, since release.sh joins every body line with spaces into one
+#     changelog bullet and a real Markdown heading/list/paragraph break
+#     would corrupt that bullet, but "#217)." is plain prose text.
+fragment_errors() {
+  local f="$1"
+  FRAG_ISSUE=""
+  FRAG_TYPE=""
+  FRAG_DESC=""
+  FRAG_ERRORS=()
+
+  local -a errors=()
+  local line issue="" type="" desc=""
+  local in_front=0 saw_close=0
+  local body_started=0 blank_seen=0 blank_reported=0
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    if [[ "$line" == "---" ]]; then
+      if [[ "$in_front" -eq 0 ]]; then
+        in_front=1
+      else
+        in_front=2
+        saw_close=1
+      fi
+      continue
+    fi
+
+    if [[ "$in_front" -eq 1 ]]; then
+      case "$line" in
+        issue:*) issue="$(printf '%s' "${line#issue:}" | tr -d '[:space:]')" ;;
+        type:*) type="$(printf '%s' "${line#type:}" | tr -d '[:space:]')" ;;
+      esac
+      continue
+    fi
+
+    # Body region: only reached once the closing "---" has been seen.
+    [[ "$in_front" -eq 2 ]] || continue
+    [[ "$line" != \<!--* ]] || continue
+
+    if [[ -z "${line// /}" ]]; then
+      [[ "$body_started" -eq 1 ]] && blank_seen=1
+      continue
+    fi
+
+    if [[ "$blank_seen" -eq 1 && "$blank_reported" -eq 0 ]]; then
+      errors+=("body must be a single paragraph: a blank line separates it into multiple paragraphs")
+      blank_reported=1
+    fi
+
+    if [[ "$line" == "- "* || "$line" == "* "* ]]; then
+      errors+=("body line starts with list markup ('- '/'* '), which release.sh cannot join into one changelog bullet: ${line}")
+    elif [[ "$line" =~ ^[0-9]+\.[[:space:]] ]]; then
+      errors+=("body line starts with numbered-list markup ('1. '), which release.sh cannot join into one changelog bullet: ${line}")
+    elif [[ "$line" =~ ^#+[[:space:]] ]]; then
+      errors+=("body line starts with heading markup ('#'), which release.sh cannot join into one changelog bullet: ${line}")
+    fi
+
+    desc="${desc:+$desc }${line}"
+    body_started=1
+  done <"$f"
+
+  if [[ "$saw_close" -ne 1 ]]; then
+    errors+=("missing or malformed YAML-style frontmatter (two '---' delimiter lines are required)")
+  fi
+  if [[ ! "$issue" =~ ^[1-9][0-9]*$ ]]; then
+    errors+=("issue must be a positive integer (got: '${issue}')")
+  fi
+  if [[ -z "$type" ]]; then
+    errors+=("type is missing (expected one of: ${FRAGMENT_TYPE_LIST})")
+  elif [[ -z "${FRAGMENT_TYPE_HEADING[$type]:-}" ]]; then
+    errors+=("unknown type '${type}' (expected one of: ${FRAGMENT_TYPE_LIST})")
+  fi
+  if [[ -z "$desc" ]]; then
+    errors+=("body/description is empty")
+  fi
+
+  FRAG_ISSUE="$issue"
+  FRAG_TYPE="$type"
+  FRAG_DESC="$desc"
+
+  if [[ "${#errors[@]}" -gt 0 ]]; then
+    FRAG_ERRORS=("${errors[@]}")
+    return 1
+  fi
+  return 0
+}
+
+# validate_fragments_mode
+# Read-only `--validate-fragments` entry point: validates every
+# changes/*.md fragment and reports EVERY bad one (not just the first).
+# Performs no VERSION/CHANGELOG/git mutation, no network access, and no
+# `gh` calls, and does not enforce the clean-tree/main-branch/CI
+# preconditions the release-compile path enforces below.
+validate_fragments_mode() {
+  shopt -s nullglob
+  local -a candidates=(changes/*.md)
+  shopt -u nullglob
+
+  local -a fragments=()
+  local f base
+  for f in "${candidates[@]}"; do
+    base="$(basename "$f")"
+    case "$base" in
+      # A README/placeholder documenting the changes/ convention itself is
+      # not a change fragment and is exempt from these rules.
+      [Rr][Ee][Aa][Dd][Mm][Ee].md | .gitkeep | .placeholder) continue ;;
+    esac
+    fragments+=("$f")
+  done
+
+  if [[ "${#fragments[@]}" -eq 0 ]]; then
+    log "no change fragments to validate in changes/"
+    return 0
+  fi
+
+  local bad=0
+  local eline
+  for f in "${fragments[@]}"; do
+    if ! fragment_errors "$f"; then
+      bad=1
+      err "invalid fragment: ${f}"
+      for eline in "${FRAG_ERRORS[@]}"; do
+        err "  - ${eline}"
+      done
+    fi
+  done
+
+  if [[ "$bad" -ne 0 ]]; then
+    err "one or more change fragments failed validation"
+    return 1
+  fi
+
+  log "all ${#fragments[@]} change fragment(s) in changes/ are valid"
+  return 0
 }
 
 while [[ $# -gt 0 ]]; do
@@ -100,6 +297,10 @@ while [[ $# -gt 0 ]]; do
       do_push=1
       shift
       ;;
+    --validate-fragments)
+      do_validate_fragments=1
+      shift
+      ;;
     -h | --help)
       usage
       exit 0
@@ -119,6 +320,16 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ "$do_validate_fragments" -eq 1 ]]; then
+  if [[ -n "$version" ]]; then
+    err "--validate-fragments does not take a version argument (got: '${version}')"
+    exit 2
+  fi
+  cd "$repo_root"
+  validate_fragments_mode
+  exit $?
+fi
 
 if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   err "a SemVer version X.Y.Z is required (got: '${version}')"
@@ -209,53 +420,23 @@ else
 fi
 
 if [[ "$compile_changelog" -eq 1 ]]; then
-  # type -> heading, in the order they appear in the changelog section.
-  type_order=(security added changed fixed docs ci)
-  declare -A type_heading=(
-    [security]="Security"
-    [added]="Added"
-    [changed]="Changed"
-    [fixed]="Fixed"
-    [docs]="Documentation"
-    [ci]="CI and tooling"
-  )
   declare -A entries=()
 
   for f in "${fragments[@]}"; do
-    issue=""
-    type=""
-    desc=""
-    in_front=0
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      if [[ "$line" == "---" ]]; then
-        if [[ "$in_front" -eq 0 ]]; then in_front=1; else in_front=2; fi
-        continue
-      fi
-      if [[ "$in_front" -eq 1 ]]; then
-        case "$line" in
-          issue:*) issue="$(printf '%s' "${line#issue:}" | tr -d '[:space:]')" ;;
-          type:*) type="$(printf '%s' "${line#type:}" | tr -d '[:space:]')" ;;
-        esac
-        continue
-      fi
-      [[ -n "${line// /}" ]] || continue
-      [[ "$line" != \<!--* ]] || continue
-      desc="${desc:+$desc }${line}"
-    done <"$f"
-
-    if [[ -z "$issue" || -z "$type" || -z "$desc" ]]; then
-      die "malformed fragment (need issue, type and a description): $f"
+    if ! fragment_errors "$f"; then
+      err "malformed fragment: ${f}"
+      for eline in "${FRAG_ERRORS[@]}"; do
+        err "  - ${eline}"
+      done
+      die "release aborted: ${f} failed change-fragment validation (see scripts/release.sh --validate-fragments)"
     fi
-    if [[ -z "${type_heading[$type]:-}" ]]; then
-      die "unknown type '${type}' in $f (expected: ${type_order[*]})"
-    fi
-    entries["$type"]+="- ${desc} ([#${issue}](${repo_url}/issues/${issue}))"$'\n'
+    entries["$FRAG_TYPE"]+="- ${FRAG_DESC} ([#${FRAG_ISSUE}](${repo_url}/issues/${FRAG_ISSUE}))"$'\n'
   done
 
   section="${changelog_heading}"$'\n'
-  for t in "${type_order[@]}"; do
+  for t in "${FRAGMENT_TYPE_ORDER[@]}"; do
     [[ -n "${entries[$t]:-}" ]] || continue
-    section+=$'\n'"### ${type_heading[$t]}"$'\n\n'"${entries[$t]}"
+    section+=$'\n'"### ${FRAGMENT_TYPE_HEADING[$t]}"$'\n\n'"${entries[$t]}"
   done
 
   # shellcheck disable=SC2016
