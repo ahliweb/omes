@@ -9,7 +9,7 @@ from pathlib import Path
 
 from . import _pathfix  # noqa: F401
 
-from hermesbackup import archive, backup, classes as classes_mod, manifest  # noqa: E402
+from hermesbackup import archive, backup, classes as classes_mod, manifest, restricted_scope  # noqa: E402
 
 
 def _make_hermes_home(root: Path) -> Path:
@@ -115,6 +115,96 @@ class TestCreateAndSecretExclusion(HermesBackupTestCase):
     def test_dry_run_creates_no_session_directory(self):
         backup.create(self.hermes_home, ["config", "skills"], include_secrets=False, dry_run=True, dest_root=self.backups_root)
         self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
+
+
+class TestRestrictedScopeGateLegacy(HermesBackupTestCase):
+    """Issue #235: the legacy per-class engine's own 'sessions'/'memory'
+    classes hold the same Restricted-class prompt/session/context data as
+    the native recovery classes (docs/ai-data-privacy-and-model-security.md
+    section 12) and must require the same explicit opt-in - never a bare
+    `--class sessions`."""
+
+    def test_sessions_class_without_opt_in_is_refused_with_stable_reason_code(self):
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(self.hermes_home, ["sessions"], dry_run=False, dest_root=self.backups_root)
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+        self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
+
+    def test_memory_class_without_opt_in_is_refused_with_stable_reason_code(self):
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(self.hermes_home, ["memory"], dry_run=False, dest_root=self.backups_root)
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_dry_run_of_a_restricted_class_is_refused_too(self):
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(self.hermes_home, ["sessions"], dry_run=True, dest_root=self.backups_root)
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_sessions_class_with_opt_in_succeeds(self):
+        result = backup.create(
+            self.hermes_home, ["sessions"], allow_restricted_scope=True, dry_run=False, dest_root=self.backups_root
+        )
+        self.assertTrue(result["restricted_scope_included"])
+        session_dir = Path(result["path"])
+        with tarfile.open(session_dir / "archive.tar", "r") as tar:
+            names = tar.getnames()
+        self.assertIn("sessions/s1.json", names)
+
+    def test_default_classes_never_require_the_opt_in(self):
+        """config+skills (the legacy engine's own default, per classes.py
+        DEFAULT_CLASSES - reached via recovery_class='omes-host') never
+        contain prompt/session data, so the new gate must never fire for
+        them."""
+        result = backup.create(
+            self.hermes_home, recovery_class="omes-host", dry_run=False, dest_root=self.backups_root
+        )
+        self.assertFalse(result["restricted_scope_included"])
+        self.assertEqual(result["classes"], ["config", "skills"])
+
+    def test_mixed_classes_report_only_the_restricted_ones_in_the_error(self):
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(
+                self.hermes_home,
+                ["config", "sessions", "memory"],
+                dry_run=False,
+                dest_root=self.backups_root,
+            )
+        message = str(ctx.exception)
+        self.assertIn("sessions", message)
+        self.assertIn("memory", message)
+        self.assertNotIn("'config'", message)
+
+    def test_restore_of_a_restricted_class_without_opt_in_is_refused(self):
+        result = backup.create(
+            self.hermes_home, ["sessions"], allow_restricted_scope=True, dry_run=False, dest_root=self.backups_root
+        )
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.restore(
+                result["timestamp"],
+                self.hermes_home,
+                ["sessions"],
+                dry_run=False,
+                dest_root=self.backups_root,
+                backups_dest_root=self.backups_root,
+            )
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_restore_of_a_restricted_class_with_opt_in_succeeds(self):
+        result = backup.create(
+            self.hermes_home, ["sessions"], allow_restricted_scope=True, dry_run=False, dest_root=self.backups_root
+        )
+        (self.hermes_home / "sessions" / "s1.json").write_text('{"changed": true}\n', encoding="utf-8")
+
+        out = backup.restore(
+            result["timestamp"],
+            self.hermes_home,
+            ["sessions"],
+            allow_restricted_scope=True,
+            dry_run=False,
+            dest_root=self.backups_root,
+            backups_dest_root=self.backups_root,
+        )
+        self.assertIn("sessions/s1.json", out["restored"])
 
 
 class TestVerifyAndCorruption(HermesBackupTestCase):

@@ -470,7 +470,22 @@ def _maybe_backup(hermes_home: Path, dry_run: bool) -> Dict[str, Any]:
     """Reuses lib/omes/py/hermesbackup (issue #82) for the "backup"
     lifecycle step, scoped to the agent's own isolated HERMES_HOME. A
     fresh agent with no prior HERMES_HOME simply has nothing to back
-    up - this is not an error."""
+    up - this is not an error.
+
+    Issue #235: this pre-mutation safety backup runs automatically and
+    non-interactively on every `apply`/`update`/`rollback` - it is
+    exactly the kind of "default backup" that must not silently capture
+    Restricted-class prompt/session/context data (docs/ai-data-privacy-
+    and-model-security.md section 12). It therefore explicitly pins
+    `--recovery-class omes-host` (legacy engine, default classes
+    `config`+`skills` - see `classes.py` `DEFAULT_CLASSES`), rather than
+    letting `hermesbackup.cli create` fall through to its own default
+    (native `portable-profile`, which ADR-0020 documents as always
+    including session state). An operator who deliberately wants a
+    profile/full-runtime backup that includes session state runs `omes
+    agent-backup create --recovery-class ... --allow-restricted-scope`
+    directly - a separate, explicit, reviewed action - never as a side
+    effect of `apply`."""
     if not hermes_home.exists():
         return {"skipped": "hermes_home does not exist yet (first apply)"}
 
@@ -478,7 +493,15 @@ def _maybe_backup(hermes_home: Path, dry_run: bool) -> Dict[str, Any]:
     env = dict(os.environ)
     env["HERMES_HOME"] = str(hermes_home)
     env["PYTHONPATH"] = str(py_root) + (os.pathsep + env["PYTHONPATH"] if env.get("PYTHONPATH") else "")
-    cmd = [sys.executable, "-m", "hermesbackup.cli", "create", "--json"]
+    cmd = [
+        sys.executable,
+        "-m",
+        "hermesbackup.cli",
+        "create",
+        "--recovery-class",
+        "omes-host",
+        "--json",
+    ]
     if dry_run:
         cmd.append("--dry-run")
     try:

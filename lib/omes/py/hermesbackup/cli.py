@@ -48,6 +48,15 @@ def cmd_create(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
 
+    if args.allow_restricted_scope:
+        print(
+            "WARNING: Restricted-class prompt/session/context data (docs/"
+            "ai-data-privacy-and-model-security.md section 12) will be "
+            "included in this backup. Treat this backup session as "
+            "Restricted-scope.",
+            file=sys.stderr,
+        )
+
     recovery_class = args.recovery_class
     classes_arg = args.class_ or None
     if not recovery_class and classes_arg:
@@ -63,6 +72,7 @@ def cmd_create(args: argparse.Namespace) -> int:
             profile=args.profile,
             include_secrets=allow_sensitive,
             allow_sensitive_credentials=allow_sensitive,
+            allow_restricted_scope=args.allow_restricted_scope,
             dry_run=args.dry_run,
         )
     except backup.BackupError as exc:
@@ -140,6 +150,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
 def cmd_restore(args: argparse.Namespace) -> int:
     target_home = Path(args.hermes_home) if args.hermes_home else paths.hermes_home()
     allow_sensitive = args.allow_sensitive_credentials or args.restore_secrets
+    allow_restricted_scope = args.allow_restricted_scope
 
     if allow_sensitive:
         if not _confirm(
@@ -148,7 +159,18 @@ def cmd_restore(args: argparse.Namespace) -> int:
         ):
             print("error: restore of sensitive credentials was not confirmed", file=sys.stderr)
             return EX_ERROR
-    elif not args.dry_run and not _confirm(args, f"Restore backup {args.timestamp} into {target_home}?"):
+    if allow_restricted_scope:
+        if not _confirm(
+            args,
+            "This will restore Restricted-class prompt/session/context data "
+            "(docs/ai-data-privacy-and-model-security.md section 12) onto a live "
+            "$HERMES_HOME. Continue?",
+        ):
+            print("error: restore of Restricted-scope data was not confirmed", file=sys.stderr)
+            return EX_ERROR
+    if not allow_sensitive and not allow_restricted_scope and not args.dry_run and not _confirm(
+        args, f"Restore backup {args.timestamp} into {target_home}?"
+    ):
         return EX_ERROR
 
     try:
@@ -159,6 +181,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
             dry_run=args.dry_run,
             restore_secrets=allow_sensitive,
             allow_sensitive_credentials=allow_sensitive,
+            allow_restricted_scope=allow_restricted_scope,
             profile=args.profile,
             force_home=args.force_home,
         )
@@ -222,6 +245,18 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="legacy alias for --allow-sensitive-credentials",
     )
+    p_create.add_argument(
+        "--allow-restricted-scope",
+        action="store_true",
+        dest="allow_restricted_scope",
+        help=(
+            "explicit, reviewed opt-in required to include Restricted-class "
+            "prompt/session/context data (recovery classes portable-profile/"
+            "full-runtime-dr, or legacy classes sessions/memory); see "
+            "docs/ai-data-privacy-and-model-security.md section 12 "
+            "(issue #235)"
+        ),
+    )
     p_create.add_argument("--dry-run", action="store_true")
     p_create.add_argument("--hermes-home")
     p_create.add_argument("--json", **common_json)
@@ -268,6 +303,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--restore-secrets",
         action="store_true",
         help="legacy alias for --allow-sensitive-credentials",
+    )
+    p_restore.add_argument(
+        "--allow-restricted-scope",
+        action="store_true",
+        dest="allow_restricted_scope",
+        help=(
+            "explicit, reviewed opt-in required to restore Restricted-class "
+            "prompt/session/context data back onto a live $HERMES_HOME "
+            "(see docs/ai-data-privacy-and-model-security.md section 12, "
+            "issue #235)"
+        ),
     )
     p_restore.add_argument(
         "--class",

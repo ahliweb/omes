@@ -342,7 +342,9 @@ class TestCorruptedBackupIsSurfaced(AgentCliTestCase):
         os.environ["OMES_STATE_DIR"] = str(self.state_home)
         os.environ["PATH"] = f"{SHIMS}{os.pathsep}{old_path_env or ''}"
         try:
-            result = backup_mod.create(hermes_home, None, include_secrets=False, dry_run=False)
+            result = backup_mod.create(
+                hermes_home, None, include_secrets=False, allow_restricted_scope=True, dry_run=False
+            )
             timestamp = result["timestamp"]
             backups_root = backup_paths.backups_root()
             archive_path = backups_root / timestamp / (result.get("artifact") or "archive.tar")
