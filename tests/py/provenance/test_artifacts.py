@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import tempfile
+import time
 import unittest
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -201,6 +202,15 @@ class TestRehashCache(unittest.TestCase):
 
         original_stat = os.stat(self.path)
 
+        # A small real delay before tampering: some filesystems/sandboxes
+        # quantize ctime to a coarser tick than "nanosecond" suggests, so
+        # two stat()s taken back-to-back with no elapsed wall-clock time
+        # can otherwise land on the same tick by coincidence - not because
+        # the fix is wrong, but because the test would then no longer be
+        # exercising a real elapsed-time tamper. A real attacker replacing
+        # a file takes far longer than this.
+        time.sleep(0.05)
+
         # Same size as b"version one" (11 bytes), so a (size, mtime)-only
         # cache would see this as byte-for-byte unchanged once mtime is
         # restored below.
@@ -210,10 +220,19 @@ class TestRehashCache(unittest.TestCase):
             fh.write(tampered)
         os.utime(self.path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
 
-        # Sanity check: the attack scenario actually restored size+mtime.
+        # Sanity check: the attack scenario actually restored size+mtime,
+        # and (given the delay above) actually advanced ctime - i.e. this
+        # test is exercising the real gap the fix closes, not a
+        # same-tick coincidence.
         tampered_stat = os.stat(self.path)
         self.assertEqual(tampered_stat.st_size, original_stat.st_size)
         self.assertEqual(tampered_stat.st_mtime_ns, original_stat.st_mtime_ns)
+        self.assertNotEqual(
+            tampered_stat.st_ctime_ns,
+            original_stat.st_ctime_ns,
+            "test precondition failed: ctime did not advance - this filesystem/sandbox's ctime "
+            "resolution is too coarse to exercise this regression here",
+        )
 
         second = artifacts.verify_one(entry, self.state_dir, force=False)
         self.assertTrue(second["hashed"], "a content swap with a restored mtime must still be rehashed")
