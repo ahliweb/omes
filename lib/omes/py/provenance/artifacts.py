@@ -39,11 +39,24 @@ and is unnecessary - the artifact is expected to change rarely.
 `verify()` is therefore a deliberately separate, explicit,
 operator/cron-triggered operation (`omes audit provenance
 --verify-artifacts`), and even then it SKIPS re-hashing a declared
-artifact whose (size, mtime) stat tuple is unchanged since the last
-recorded verification (unless `--force` is passed) - see
-`_needs_rehash()`. This is a documented, bounded trade-off: a crafted
-same-size, same-mtime replacement would not be caught until the next
-forced/`--force` run (see docs/provenance.md's residual-limits note).
+artifact whose stat snapshot is unchanged since the last recorded
+verification (unless `--force` is passed) - see `_needs_rehash()`. That
+snapshot is `(st_size, st_mtime_ns, st_ctime_ns, st_ino, st_dev)`, not
+merely `(size, mtime)`: `st_mtime` alone is attacker-settable with
+`touch -d`/`os.utime`, so a same-size content swap that also restores
+the original mtime would otherwise still read as unchanged. `st_ctime`
+cannot be set via `utime` and advances on any content or metadata
+write, so including it (as integer nanoseconds, never a float, to avoid
+truncation-based collisions) closes that gap without changing the
+performance design; `st_ino`/`st_dev` additionally catch a path that
+was replaced by an unlink+recreate or a different mounted filesystem. A
+previous snapshot missing any of these keys (a record written by older
+code) is always treated as "needs rehash" - a legacy/incomplete
+snapshot fails closed rather than being trusted. This is still a
+documented, bounded trade-off: it cannot detect a filesystem without a
+reliable ctime, or an attacker with root or clock-control who can
+forge `ctime` alongside `mtime` (see docs/provenance.md's
+residual-limits note).
 
 This module NEVER executes a declared artifact, NEVER reads more than
 the declared path's bytes for hashing, and NEVER prints a credential or
@@ -155,19 +168,49 @@ def _load_previous_record(state_dir: str, name: str) -> Optional[dict]:
         return None
 
 
-def _needs_rehash(previous: Optional[dict], size: int, mtime: float, force: bool) -> bool:
+#: The exact set of keys a stat snapshot must carry for the cache to ever
+#: trust it. `st_mtime_ns` alone is attacker-settable (`touch -d` /
+#: `os.utime`), so a same-size content swap that also restores the
+#: original mtime would otherwise still read as "unchanged". `st_ctime_ns`
+#: cannot be set via `utime` and changes on any content or metadata
+#: write; `st_ino`/`st_dev` additionally catch an unlink+recreate or a
+#: path moved onto a different filesystem. All fields are captured as
+#: integers (nanosecond resolution where applicable), never a float, to
+#: avoid truncation-based collisions.
+_STAT_SNAPSHOT_KEYS = ("size", "mtime_ns", "ctime_ns", "ino", "dev")
+
+
+def _stat_snapshot(st: os.stat_result) -> dict:
+    return {
+        "size": st.st_size,
+        "mtime_ns": st.st_mtime_ns,
+        "ctime_ns": st.st_ctime_ns,
+        "ino": st.st_ino,
+        "dev": st.st_dev,
+    }
+
+
+def _needs_rehash(previous: Optional[dict], current_snapshot: dict, force: bool) -> bool:
     """Returns True unless a previous record exists, its checksum was
     actually computed (not itself already a fail-closed "missing"/
-    "unknown" state), and its recorded (size, mtime) stat snapshot
-    matches the artifact's CURRENT stat exactly. See module docstring for
-    the documented residual limit of this cache."""
+    "unknown" state), and its recorded stat snapshot matches the
+    artifact's CURRENT snapshot on every key in `_STAT_SNAPSHOT_KEYS`
+    exactly. A previous snapshot missing any of those keys - including
+    every record written before this fix, which only ever recorded
+    `size`/`mtime` - is treated as absent: FAILS CLOSED to "needs
+    rehash" rather than trusting an incomplete/legacy snapshot. See the
+    module docstring for the documented residual limit of this cache."""
     if force or previous is None:
         return True
     checksum = previous.get("checksum") or {}
     if checksum.get("status") not in ("verified", "unverified", "mismatch"):
         return True
-    stat_snapshot = previous.get("artifact_stat") or {}
-    return not (stat_snapshot.get("size") == size and stat_snapshot.get("mtime") == mtime)
+    stat_snapshot = previous.get("artifact_stat")
+    if not isinstance(stat_snapshot, dict):
+        return True
+    if any(key not in stat_snapshot for key in _STAT_SNAPSHOT_KEYS):
+        return True
+    return not all(stat_snapshot.get(key) == current_snapshot.get(key) for key in _STAT_SNAPSHOT_KEYS)
 
 
 def verify_one(entry: dict, state_dir: str, force: bool) -> dict:
@@ -202,9 +245,9 @@ def verify_one(entry: dict, state_dir: str, force: bool) -> dict:
         stat_snapshot = None
     else:
         st = os.stat(path)
-        size, mtime = st.st_size, st.st_mtime
+        stat_snapshot = _stat_snapshot(st)
         previous = _load_previous_record(state_dir, raw_name)
-        if _needs_rehash(previous, size, mtime, force):
+        if _needs_rehash(previous, stat_snapshot, force):
             actual = _sha256_file(path)
             hashed = True
         else:
@@ -217,7 +260,6 @@ def verify_one(entry: dict, state_dir: str, force: bool) -> dict:
             status = "verified"
         else:
             status = "mismatch"
-        stat_snapshot = {"size": size, "mtime": mtime}
 
     payload = {
         "installer_source_url": None,

@@ -512,8 +512,9 @@ an auto-discovered or Hermes-internal path — then runs the normal audit above 
 those `model-artifact:<name>` records). A checksum mismatch or a missing artifact is `FAIL`,
 fail-closed; an unpinned artifact is `WARN`. Hashing a multi-GB artifact is expensive, so this is a
 separate, explicit operation — it does not run as part of the default `omes audit provenance` or
-`omes health ai-privacy` — and an artifact whose `(size, mtime)` is unchanged since its last
-recorded verification is not re-hashed unless `--force` is also given. See
+`omes health ai-privacy` — and an artifact whose stat snapshot (`size`, `mtime_ns`, `ctime_ns`,
+`ino`, `dev` — not merely `size`/`mtime`, since `mtime` is attacker-settable) is unchanged since its
+last recorded verification is not re-hashed unless `--force` is also given. See
 [docs/provenance.md §1b](provenance.md#1b-modelruntime-artifact-provenance-issue-236-threat-ai-06).
 Exit codes: 0 clean, 7 findings.
 > Note: `omes health versions` and `omes audit provenance` (issues

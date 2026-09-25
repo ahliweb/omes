@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import json
 import os
 import sys
 import tempfile
@@ -184,6 +185,59 @@ class TestRehashCache(unittest.TestCase):
         second = artifacts.verify_one(entry, self.state_dir, force=False)
         self.assertTrue(second["hashed"])
         self.assertEqual(second["checksum_status"], "mismatch")
+
+    def test_content_swap_with_restored_mtime_is_still_rehashed_and_flagged(self):
+        """Security regression: an attacker who can replace the artifact
+        can also restore its mtime with `touch -d`/`os.utime`. A cache
+        keyed on (size, mtime) alone would then keep reporting the
+        tampered artifact as verified forever - turning an integrity
+        control into an accident detector. The cache must also key on
+        ctime (not attacker-settable via utime) plus inode/device, so a
+        same-size content swap with a restored mtime is still detected."""
+        entry = {"component": "m", "path": self.path, "expected_sha256": self.digest}
+        first = artifacts.verify_one(entry, self.state_dir, force=False)
+        self.assertTrue(first["hashed"])
+        self.assertEqual(first["checksum_status"], "verified")
+
+        original_stat = os.stat(self.path)
+
+        # Same size as b"version one" (11 bytes), so a (size, mtime)-only
+        # cache would see this as byte-for-byte unchanged once mtime is
+        # restored below.
+        tampered = b"version TWO"
+        self.assertEqual(len(tampered), len(b"version one"))
+        with open(self.path, "wb") as fh:
+            fh.write(tampered)
+        os.utime(self.path, ns=(original_stat.st_atime_ns, original_stat.st_mtime_ns))
+
+        # Sanity check: the attack scenario actually restored size+mtime.
+        tampered_stat = os.stat(self.path)
+        self.assertEqual(tampered_stat.st_size, original_stat.st_size)
+        self.assertEqual(tampered_stat.st_mtime_ns, original_stat.st_mtime_ns)
+
+        second = artifacts.verify_one(entry, self.state_dir, force=False)
+        self.assertTrue(second["hashed"], "a content swap with a restored mtime must still be rehashed")
+        self.assertEqual(second["checksum_status"], "mismatch")
+
+    def test_legacy_stat_snapshot_shape_forces_rehash(self):
+        """A provenance record written by older code only ever recorded
+        {"size", "mtime"} - not the new ctime/ino/dev keys. Such a
+        snapshot must never be trusted: it fails closed to "needs
+        rehash" rather than silently treating an incomplete/legacy
+        snapshot as a match."""
+        entry = {"component": "m", "path": self.path, "expected_sha256": self.digest}
+        artifacts.verify_one(entry, self.state_dir, force=False)
+
+        record_path = artifacts._provenance_path(self.state_dir, "m")
+        with open(record_path, "r", encoding="utf-8") as fh:
+            record = json.load(fh)
+        st = os.stat(self.path)
+        record["artifact_stat"] = {"size": st.st_size, "mtime": st.st_mtime}
+        with open(record_path, "w", encoding="utf-8") as fh:
+            json.dump(record, fh)
+
+        second = artifacts.verify_one(entry, self.state_dir, force=False)
+        self.assertTrue(second["hashed"], "a legacy (size, mtime)-only snapshot must force a rehash")
 
 
 class TestSummarize(unittest.TestCase):

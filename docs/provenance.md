@@ -168,15 +168,22 @@ above, rather than building a second, parallel evidence system:
   `--verify-artifacts` is therefore a deliberately separate, explicit,
   operator/cron-triggered operation — run it on whatever cadence matches
   how often your artifacts actually change (e.g. after every model
-  update, or nightly). Even then, a declared artifact whose `(size,
-  mtime)` stat pair is unchanged since its last recorded verification is
-  **not** re-hashed unless `--force` is also given. **Documented residual
-  limit:** this cache trusts the filesystem's stat metadata — a crafted
-  same-size, same-mtime replacement of the artifact bytes would not be
-  detected until the next `--force` run. This is a deliberate,
-  bounded trade-off between integrity assurance and the cost of hashing
-  large files repeatedly; operators with a stronger requirement should
-  run `--force` on their own schedule.
+  update, or nightly). Even then, a declared artifact whose stat
+  snapshot — `(size, mtime_ns, ctime_ns, ino, dev)`, not merely `(size,
+  mtime)` — is unchanged since its last recorded verification is **not**
+  re-hashed unless `--force` is also given: `mtime` alone is
+  attacker-settable (`touch -d`/`os.utime`), so a same-size content swap
+  that also restores the original mtime is still caught because `ctime`
+  cannot be forged via `utime` and changes on any content or metadata
+  write; a legacy snapshot recorded by older code (missing these keys)
+  is always treated as "needs rehash", failing closed. **Documented
+  residual limit:** this cache still trusts the filesystem's stat
+  metadata — an attacker with root access or clock control able to
+  forge `ctime` alongside `mtime`, or a filesystem without a reliable
+  ctime, would not be caught until the next `--force` run. This is a
+  deliberate, bounded trade-off between integrity assurance and the cost
+  of hashing large files repeatedly; operators with a stronger
+  requirement should run `--force` on their own schedule.
 - **`omes health ai-privacy`'s `model_artifact_provenance` field is a
   cheap, hashing-free summary** of the already-recorded
   `model-artifact:*` provenance records (`artifacts.py`'s
