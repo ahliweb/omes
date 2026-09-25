@@ -47,7 +47,21 @@ Targets:
             provenance --verify-artifacts' and
             docs/ai-data-privacy-and-model-security.md section 11). NEVER
             prints prompt text, response text, or credential values.
-            Options: --json
+            Options: --json  --persist
+            --persist is opt-in (issue #234): re-validates the evidence
+            object against contracts/ai-egress/v1/privacy-posture-evidence.schema.json
+            (refusing to write anything that fails - fail closed) and
+            writes it to <state-dir>/ai-privacy-evidence/ (mode 0700/0600).
+            Default behavior is unchanged: nothing is persisted without
+            this flag.
+  ai-privacy prune  Retention/rotation for evidence persisted by
+            --persist above (issue #234). Deletes records older than
+            --max-age-days and/or beyond --max-count, confined to the
+            OMES-owned <state-dir>/ai-privacy-evidence/ directory and only
+            ever touching files matching this module's own naming
+            pattern - never a symlink, never anything else in that
+            directory. Idempotent; supports --dry-run.
+            Options: --json  --dry-run  --max-age-days <N>  --max-count <N>
 
 Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.md):
   OMES_HEALTH_TIMEOUT           per-probe timeout in seconds (default 10)
@@ -66,9 +80,13 @@ Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.
                                  (restricted_local_only|unrestricted|unknown)
   OMES_AI_MODEL_ARTIFACTS       override JSON array for ai.model_artifacts.declared state
                                  (see 'omes audit provenance --verify-artifacts', issue #236)
+  OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS   'ai-privacy prune' default max age in days (default 90)
+  OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT      'ai-privacy prune' default max record count (default 500)
 
 Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4 service missing.
             ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
+            ai-privacy prune: 0 ok, 1 a delete failed, 2 usage error (including an
+            invalid/out-of-range --max-age-days/--max-count).
 EOF
 }
 
@@ -479,15 +497,32 @@ for code in d.get("reason_codes", []):
 '
 }
 
-# _health_run_ai_privacy [--json]
+# _health_evidence_retention_py
+# Issue #234: retention/rotation for AI-privacy evidence OMES itself
+# persists - lib/omes/py/privacy/evidence_retention.py.
+_health_evidence_retention_py() {
+  printf '%s/lib/omes/py/privacy/evidence_retention.py\n' "$OMES_ROOT"
+}
+
+# _health_run_ai_privacy [--json] [--persist]
 _health_run_ai_privacy() {
-  local want_json=0
+  if [[ "${1:-}" == "prune" ]]; then
+    shift
+    _health_run_ai_privacy_prune "$@"
+    return $?
+  fi
+
+  local want_json=0 persist=0
   [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --json)
         want_json=1
+        shift
+        ;;
+      --persist)
+        persist=1
         shift
         ;;
       -h | --help)
@@ -520,6 +555,40 @@ _health_run_ai_privacy() {
     exit "$OMES_EX_PREFLIGHT"
   fi
 
+  # Issue #234: opt-in persistence. Default behavior (persist=0) is
+  # completely unchanged from #216 - nothing is written anywhere. This
+  # runs AFTER the report above is already computed/printed-decided, and
+  # never changes stdout's JSON shape or the exit code the report itself
+  # produced: persistence is a side effect logged to stderr only.
+  if [[ "$persist" -eq 1 ]]; then
+    local retention_script state_dir persist_output persist_rc=0
+    retention_script="$(_health_evidence_retention_py)"
+    state_dir="$(omes_state_dir)"
+    if [[ ! -r "$retention_script" ]]; then
+      log_warn "health ai-privacy --persist: ${retention_script} not found; evidence was NOT persisted"
+    else
+      persist_output="$(printf '%s' "$output" | python3 "$retention_script" persist --state-dir "$state_dir" 2>/dev/null)" || persist_rc=$?
+      if [[ "$persist_rc" -ne 0 ]] || [[ -z "$persist_output" ]]; then
+        log_warn "health ai-privacy --persist: could not persist evidence (exit ${persist_rc}): ${persist_output}"
+      else
+        OMES_AI_PRIVACY_PERSIST_JSON="$persist_output" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_AI_PRIVACY_PERSIST_JSON"])
+except ValueError:
+    d = {}
+
+if d.get("ok"):
+    print("[omes] health ai-privacy --persist: wrote %s" % d.get("path"))
+else:
+    print("[omes] health ai-privacy --persist: refused to persist: %s" % d.get("error"))
+' >&2
+      fi
+    fi
+  fi
+
   if [[ "$want_json" -eq 1 ]]; then
     printf '%s\n' "$output"
   else
@@ -528,8 +597,144 @@ _health_run_ai_privacy() {
 
   exit "$rc"
 }
+
+# _health_ai_privacy_prune_usage
+_health_ai_privacy_prune_usage() {
+  cat <<'EOF'
+Usage: omes health ai-privacy prune [--max-age-days <N>] [--max-count <N>] [--dry-run] [--json]
+
+Retention/rotation for AI-privacy evidence persisted by
+`omes health ai-privacy --persist` (issue #234). Confined strictly to
+the OMES-owned <state-dir>/ai-privacy-evidence/ directory: only files
+matching this module's own naming pattern are ever candidates for
+deletion, a symlink is never deleted regardless of its target, and a
+resolved path that would escape that directory is refused. Idempotent -
+running this twice with the same arguments is a no-op the second time.
+
+Options:
+  --max-age-days <N>   Delete records older than N days (default 90, or
+                        OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS).
+  --max-count <N>       Keep at most the N most recently persisted
+                        records (default 500, or
+                        OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT).
+  --dry-run             Report what would be pruned without deleting it.
+  --json                Print the full JSON result instead of a human summary.
+
+A non-positive or absurdly large --max-age-days/--max-count value fails
+closed with a usage error rather than being silently clamped.
+
+Exit codes: 0 ok, 1 a delete failed, 2 usage error (including an
+invalid/out-of-range --max-age-days/--max-count).
+EOF
+}
+
+# _health_print_ai_privacy_prune_human <json>
+_health_print_ai_privacy_prune_human() {
+  OMES_HEALTH_PRUNE_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_PRUNE_JSON"])
+except ValueError:
+    print("[omes] health ai-privacy prune: the pruner did not return valid JSON")
+    raise SystemExit(0)
+
+mode = "dry-run" if d.get("dry_run") else "live"
+print("[omes] health ai-privacy prune (%s): ok=%s dir=%s" % (mode, d.get("ok"), d.get("evidence_dir")))
+print("[omes]   pruned=%d kept=%d skipped=%d" % (len(d.get("pruned", [])), len(d.get("kept", [])), len(d.get("skipped", []))))
+for name in d.get("pruned", []):
+    print("[omes]   pruned: %s" % name)
+for s in d.get("skipped", []):
+    print("[omes]   skipped: %s (%s)" % (s.get("name"), s.get("reason")))
+'
+}
+
+# _health_run_ai_privacy_prune [--max-age-days <N>] [--max-count <N>] [--dry-run] [--json]
+_health_run_ai_privacy_prune() {
+  local want_json=0 dry_run=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+  local max_age_days="${OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS:-90}"
+  local max_count="${OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT:-500}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      --dry-run)
+        dry_run=1
+        shift
+        ;;
+      --max-age-days)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health ai-privacy prune: --max-age-days requires a value"
+        max_age_days="$2"
+        shift 2
+        ;;
+      --max-count)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health ai-privacy prune: --max-count requires a value"
+        max_count="$2"
+        shift 2
+        ;;
+      -h | --help)
+        _health_ai_privacy_prune_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health ai-privacy prune: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  case "$max_age_days" in
+    '' | *[!0-9]*)
+      omes_die "$OMES_EX_USAGE" "health ai-privacy prune: --max-age-days must be a positive integer (got '${max_age_days}')"
+      ;;
+  esac
+  case "$max_count" in
+    '' | *[!0-9]*)
+      omes_die "$OMES_EX_USAGE" "health ai-privacy prune: --max-count must be a positive integer (got '${max_count}')"
+      ;;
+  esac
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health ai-privacy prune: python3 not found (required for lib/omes/py/privacy/evidence_retention.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_evidence_retention_py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health ai-privacy prune: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local state_dir max_age_seconds
+  state_dir="$(omes_state_dir)"
+  max_age_seconds=$((max_age_days * 86400))
+
+  local -a py_args=(prune --state-dir "$state_dir" --max-age-seconds "$max_age_seconds" --max-count "$max_count")
+  [[ "$dry_run" -eq 1 ]] && py_args+=(--dry-run)
+
+  local output rc=0
+  output="$(python3 "$script" "${py_args[@]}" 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    log_error "health ai-privacy prune: the pruner produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_ai_privacy_prune_human "$output"
+  fi
+
+  exit "$rc"
+}
 # =============================================================================
-# END omes health ai-privacy (issue #216)
+# END omes health ai-privacy (issue #216, retention issue #234)
 # =============================================================================
 
 cmd_health() {

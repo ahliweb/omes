@@ -433,14 +433,30 @@ and `tests/py/health/test_ai_privacy.py`. Unknown or stale evidence (a missing/t
 `observed_at`) is reported `BLOCKED`, never a healthy status, and a drift from a declared
 `restricted_local_only` posture to an observed `cloud` destination is always `FAIL`.
 
-**Retention:** this evidence is intentionally NOT persisted by OMES today — `omes health
-ai-privacy` is a point-in-time read-only report (matching the existing `omes health`/`omes health
-versions` pattern), not a stored log. If a caller chooses to persist the JSON output (for example,
-piping `omes health ai-privacy --json` into an operator-controlled log or ticket), the same
-retention rules as any other bounded evidence apply: keep only what is operationally useful,
-apply an explicit retention/deletion period, and never widen it into a place raw prompt/response
-content could later be pasted "for context." Automated evidence retention/rotation tooling is
-**Not implemented yet (tracked in [#234](https://github.com/ahliweb/omes/issues/234)).**
+**Retention:** `omes health ai-privacy` remains a point-in-time read-only report by default —
+matching the existing `omes health`/`omes health versions` pattern — and persists nothing unless
+an operator explicitly opts in. **Implemented ([#234](https://github.com/ahliweb/omes/issues/234)):**
+`omes health ai-privacy --persist` re-validates the evidence object against
+[contracts/ai-egress/v1/privacy-posture-evidence.schema.json](../contracts/ai-egress/v1/privacy-posture-evidence.schema.json)
+(which also runs `jobs.schema`'s secret-value/secret-field scan) immediately before writing, and
+refuses — fails closed, writes nothing — if that validation finds anything unbounded, an
+unexpected field, or a secret-shaped value. A record that passes is written to the OMES-owned
+`<state-dir>/ai-privacy-evidence/` directory (mode 0700, files mode 0600), never a Hermes-internal
+path. `omes health ai-privacy prune [--max-age-days <N>] [--max-count <N>] [--dry-run] [--json]`
+(see [`lib/omes/py/privacy/evidence_retention.py`](../lib/omes/py/privacy/evidence_retention.py))
+deletes records older than the configured max age and/or beyond the configured max count,
+confined strictly to that directory: only files matching this module's own naming pattern are
+ever candidates for deletion, a symlink is never deleted regardless of its target, and a resolved
+path that would escape the evidence directory is refused. Pruning is idempotent and supports
+`--dry-run`. A non-positive or absurdly large `--max-age-days`/`--max-count` value fails closed
+with a usage error rather than being silently clamped. Defaults are 90 days / 500 records
+(`OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS` / `OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT`). If a caller
+instead chooses to persist the JSON output elsewhere (for example, piping
+`omes health ai-privacy --json` into an operator-controlled log or ticket outside OMES's own
+evidence directory), the same retention rules as any other bounded evidence still apply: keep
+only what is operationally useful, apply an explicit retention/deletion period, and never widen it
+into a place raw prompt/response content could later be pasted "for context" — `omes health
+ai-privacy prune` only ever manages the directory it created itself.
 
 **Incident-response use:** when investigating a suspected AI privacy-posture incident (for
 example, a report that a Restricted-local-only workload may have reached a cloud destination),
@@ -706,6 +722,10 @@ seen only on upstream development branches is not treated as supported release e
    `omes audit provenance --verify-artifacts`, and the `model_artifact_provenance` field in
    `omes health ai-privacy` (section 10's table and [docs/provenance.md](provenance.md) section 1b
    have the per-requirement detail).
+9. **#234** — opt-in retention and rotation for AI-privacy evidence OMES itself persists.
+   Implemented: see [lib/omes/py/privacy/evidence_retention.py](../lib/omes/py/privacy/evidence_retention.py),
+   `omes health ai-privacy --persist`, and `omes health ai-privacy prune` (section 11 above has the
+   full detail).
 
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.

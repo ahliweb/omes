@@ -48,6 +48,7 @@ assembled at runtime so no secret-shaped literal is ever committed (repo
 convention; no `.gitleaks.toml` allowlist entry is needed or permitted),
 and no value here is a real, revoked, or ever-valid credential.
 """
+import datetime
 import json
 import os
 import shutil
@@ -65,6 +66,7 @@ from jobs import store as jobs_store  # noqa: E402
 from privacy import egress_policy, posture_evidence, posture_projection, restricted_posture  # noqa: E402
 from hermesbackup import backup as hermesbackup_backup  # noqa: E402
 from hermesbackup import restricted_scope as hermesbackup_restricted_scope  # noqa: E402
+from privacy import evidence_retention  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = REPO_ROOT / "contracts"
@@ -1603,6 +1605,165 @@ class TestDefaultBackupsCannotCaptureRestrictedScopeData(unittest.TestCase):
             hermesbackup_restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN,
             str(ctx.exception),
         )
+
+
+
+# ---------------------------------------------------------------------------
+# Case 13: opt-in AI-privacy evidence retention never persists raw content,
+#          even under adversarial input (issue #234)
+# ---------------------------------------------------------------------------
+
+
+class TestAiPrivacyEvidenceRetentionNeverPersistsRawContent(unittest.TestCase):
+    """`omes health ai-privacy` (#216) is a point-in-time report that
+    persists nothing by default. Issue #234 adds an OPT-IN
+    `--persist`/`prune` path
+    (lib/omes/py/privacy/evidence_retention.py) for operators who choose
+    to keep bounded evidence around for a while. This is the
+    cross-cutting regression gate for that path: it proves default
+    behavior is unchanged, that a canary secret/prompt-shaped value fed
+    through the evidence object never lands on disk (belt-and-suspenders
+    on top of test_evidence_retention.py's unit coverage - re-running the
+    same schema+secret-scan gate this suite already trusts for every
+    other persisted evidence surface), and that pruning stays confined
+    to files it created."""
+
+    def setUp(self):
+        self._tmp = tempfile.mkdtemp(prefix="omes-234-evidence-retention-test-")
+        self.state_dir = self._tmp
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def _valid_evidence(self, **overrides):
+        base = {
+            "policy_version": "v1",
+            "classification_mode": "fail_closed_v1",
+            "destination_class": "local",
+            "local_endpoint_classification": "loopback",
+            "cloud_fallback_enabled": "disabled",
+            "network_isolation_active": "active",
+            "last_verified_at": "2026-09-25T00:00:00Z",
+            "evidence_source": "omes-host:network-classification",
+            "local_only_posture": {
+                "available": False,
+                "status": "unknown",
+                "source": "local-only-posture-source:unavailable",
+            },
+            "hermes_version_reference": None,
+            "model_artifact_provenance": {
+                "available": False,
+                "status": "unknown",
+                "reason": "not_declared",
+                "declared_count": 0,
+                "verified_count": 0,
+                "last_verified_at": None,
+            },
+            "status": "PASS",
+            "reason_codes": ["AI_PRIVACY_POSTURE_PASS_CONSISTENT"],
+        }
+        base.update(overrides)
+        return base
+
+    def _all_persisted_text(self) -> str:
+        directory = os.path.join(self.state_dir, evidence_retention.EVIDENCE_DIR_NAME)
+        if not os.path.isdir(directory):
+            return ""
+        chunks = []
+        for name in os.listdir(directory):
+            with open(os.path.join(directory, name), "r", encoding="utf-8") as fh:
+                chunks.append(fh.read())
+        return "\n".join(chunks)
+
+    def test_default_mode_persists_nothing(self):
+        """The exact requirement default behavior stays unchanged: calling
+        `evaluate()` (what #216 already does on every `omes health
+        ai-privacy` invocation) never itself writes anything - only an
+        explicit call to `evidence_retention.persist()` does, and nothing
+        in this test suite's normal run reaches that function."""
+        posture_evidence.evaluate(
+            {"policy_version": "v1", "destination_class": "unknown", "observed_at": "2026-09-25T00:00:00Z"},
+            now="2026-09-25T00:00:00Z",
+        )
+        self.assertFalse(os.path.isdir(os.path.join(self.state_dir, evidence_retention.EVIDENCE_DIR_NAME)))
+
+    def test_a_secret_shaped_canary_value_is_never_written_to_disk(self):
+        """Builds the canary at runtime (never a secret-shaped literal in
+        source, per repo convention - no `.gitleaks.toml` allowlist
+        entry). Feeding it through the ONE free-text-shaped field this
+        schema still validates (`evidence_source`) must be refused
+        outright - not sanitized-and-written - and the canary must never
+        appear in any file this module wrote."""
+        canary = "sk_live_" + "CANARY_234EvidenceRetentionOnly"
+        poisoned = self._valid_evidence(evidence_source=canary)
+
+        result = evidence_retention.persist(self.state_dir, poisoned)
+
+        self.assertFalse(result["ok"], msg=result)
+        self.assertNotIn(canary, self._all_persisted_text())
+        self.assertFalse(os.path.isdir(os.path.join(self.state_dir, evidence_retention.EVIDENCE_DIR_NAME))
+                          and os.listdir(os.path.join(self.state_dir, evidence_retention.EVIDENCE_DIR_NAME)))
+
+    def test_a_prompt_shaped_canary_smuggled_as_an_extra_field_is_never_written(self):
+        """A caller that mistakenly (or maliciously) stuffs a prompt/
+        transcript-shaped value into an unexpected top-level key must be
+        refused by the schema's `additionalProperties: false`, exactly
+        like posture_evidence.py's own module docstring promises for
+        every other consumer of this contract."""
+        canary_prompt = "CANARY-PROMPT-234 summarize the attached restricted record"
+        poisoned = self._valid_evidence()
+        poisoned["debug_prompt_echo"] = canary_prompt
+
+        result = evidence_retention.persist(self.state_dir, poisoned)
+
+        self.assertFalse(result["ok"], msg=result)
+        self.assertNotIn(canary_prompt, self._all_persisted_text())
+
+    def test_a_valid_record_persists_and_prune_expires_it_with_no_sleep(self):
+        """End-to-end: a clean record persists, and an injected clock
+        (never a real sleep) proves expiry actually removes it once it
+        is older than max_age_seconds while a fresh sibling survives."""
+        now = datetime.datetime(2026, 9, 25, 0, 0, 0, tzinfo=datetime.timezone.utc)
+        old_persist_time = now - datetime.timedelta(days=100)
+
+        old = evidence_retention.persist(self.state_dir, self._valid_evidence(), now=old_persist_time)
+        self.assertTrue(old["ok"], msg=old)
+        fresh = evidence_retention.persist(self.state_dir, self._valid_evidence(), now=now)
+        self.assertTrue(fresh["ok"], msg=fresh)
+
+        result = evidence_retention.prune(
+            self.state_dir, max_age_seconds=90 * 86400, max_count=500, now=now, dry_run=False
+        )
+
+        self.assertIn(os.path.basename(old["path"]), result["pruned"])
+        self.assertIn(os.path.basename(fresh["path"]), result["kept"])
+        self.assertTrue(os.path.exists(fresh["path"]))
+        self.assertFalse(os.path.exists(old["path"]))
+
+    def test_prune_refuses_a_symlink_escape_and_a_foreign_file(self):
+        directory = os.path.join(self.state_dir, evidence_retention.EVIDENCE_DIR_NAME)
+        os.makedirs(directory, mode=0o700)
+
+        outside_secret = os.path.join(self._tmp, "outside-secret.txt")
+        with open(outside_secret, "w", encoding="utf-8") as fh:
+            fh.write("not OMES evidence")
+
+        escape_name = "ai-privacy-evidence-20260101T000000Z-deadbeef.json"
+        os.symlink(outside_secret, os.path.join(directory, escape_name))
+
+        foreign_name = "some-other-tool-state.json"
+        with open(os.path.join(directory, foreign_name), "w", encoding="utf-8") as fh:
+            fh.write("{}")
+
+        result = evidence_retention.prune(self.state_dir, max_age_seconds=1, max_count=1, dry_run=False)
+
+        self.assertEqual(result["pruned"], [])
+        skipped_names = {s["name"] for s in result["skipped"]}
+        self.assertIn(escape_name, skipped_names)
+        self.assertIn(foreign_name, skipped_names)
+        self.assertTrue(os.path.exists(outside_secret), "prune must never delete a symlink's target")
+        self.assertTrue(os.path.islink(os.path.join(directory, escape_name)))
+        self.assertTrue(os.path.exists(os.path.join(directory, foreign_name)))
 
 
 if __name__ == "__main__":

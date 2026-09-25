@@ -333,7 +333,14 @@ is implemented ([#237](https://github.com/ahliweb/omes/issues/237); see
 the egress evaluator denies `cloud_sanitized` when this evidence is missing or incomplete, or when
 it is not bound to the exact destination provider (`provider_posture.provider_id` must exactly
 equal `provider_assurance.provider_id`), fail closed, regardless of provider posture or
-sanitization evidence.
+sanitization evidence. Opt-in retention and rotation for any AI-privacy evidence OMES itself
+persists is implemented ([#234](https://github.com/ahliweb/omes/issues/234); see
+[lib/omes/py/privacy/evidence_retention.py](../lib/omes/py/privacy/evidence_retention.py)):
+`omes health ai-privacy` still persists nothing by default; `--persist` re-validates the evidence
+object against the published schema (fail-closed on anything unbounded or secret-shaped) before
+writing to the OMES-owned `<state-dir>/ai-privacy-evidence/` directory, and `omes health
+ai-privacy prune` deletes records past a configurable max-age/max-count, confined to that
+directory and never following a symlink.
 Security regression gates for this boundary are implemented
 ([#218](https://github.com/ahliweb/omes/issues/218), closed; commit `ce44b0a`, PR #231; see
 `tests/py/privacy/test_privacy_boundary_regression.py`).
