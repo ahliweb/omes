@@ -176,6 +176,11 @@ run_control_center_data() {
   fi
 }
 
+run_validate_fragments() {
+  echo "== scripts/release.sh --validate-fragments (change-fragment validation, issue #238) =="
+  bash "$(repo_root)/scripts/release.sh" --validate-fragments
+}
+
 cmd_all() {
   local overall=0
   run_shellcheck || overall=1
@@ -189,6 +194,8 @@ cmd_all() {
   run_architecture || overall=1
   echo
   run_control_center_data || overall=1
+  echo
+  run_validate_fragments || overall=1
   return "$overall"
 }
 
@@ -202,9 +209,10 @@ main() {
     contracts) run_contracts ;;
     architecture) run_architecture ;;
     control-center-data) run_control_center_data ;;
+    validate-fragments) run_validate_fragments ;;
     all) cmd_all ;;
     *)
-      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|architecture|control-center-data|all]" >&2
+      echo "usage: scripts/lint.sh [shellcheck|shfmt|yamllint|contracts|architecture|control-center-data|validate-fragments|all]" >&2
       return 2
       ;;
   esac

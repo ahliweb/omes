@@ -176,6 +176,18 @@ if [[ -f scripts/generate-control-center-data.py ]]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Change-fragment validation (ADR-0010, issue #238)
+# ---------------------------------------------------------------------------
+
+if [[ -f scripts/release.sh ]]; then
+  log "running scripts/release.sh --validate-fragments"
+  if ! bash scripts/release.sh --validate-fragments; then
+    err "scripts/release.sh --validate-fragments failed (a changes/*.md fragment is malformed)"
+    FAILED=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
 # Architecture boundaries and capability registry (ADR-0017, issue #171)
 # ---------------------------------------------------------------------------
 

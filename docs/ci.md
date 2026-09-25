@@ -40,6 +40,7 @@ the repository, comment on pull requests, or write security-events.
 | `check-contracts` | Runs `scripts/check-contracts.py` over `contracts/**/fixtures` against their JSON Schema specifications. | **Yes.** |
 | `check-architecture` | Runs `scripts/check-architecture.py` to enforce ADR-0017 capability registry and layer boundaries. | **Yes.** |
 | `check-control-center-data` | Runs `scripts/generate-control-center-data.py --check` to catch a stale `ui/control-center/data.js` (issue #211) — see [ui/control-center/README.md](../ui/control-center/README.md). | **Yes.** |
+| `validate-change-fragments` | Runs `scripts/release.sh --validate-fragments` (issue #238) to reject a malformed `changes/*.md` fragment on the pull request that introduces it, using the exact same parser `scripts/release.sh` uses to compile `CHANGELOG.md` at release time — see §9. | **Yes.** |
 
 
 ### 1.2 `.github/workflows/compatibility.yml`
@@ -152,9 +153,14 @@ Docker (`bats/bats:latest`) when `bats` is not installed locally.
 ## 3. What blocks merge vs. what is advisory
 
 **Blocking** (a failing job fails the PR check): `shellcheck` (at
-`warning` severity), `bats` (`tests/run.sh`), `gitleaks`, `yamllint`,
+`warning` severity), `bats` (`tests/run.sh`, which also runs
+`scripts/release.sh --validate-fragments` — see §9), `gitleaks`, `yamllint`,
 `actionlint`, `supply-chain` (action pinning + unsafe-pipe checks),
-`check-links` (broken link *targets*), the `compatibility.yml` `matrix`
+`check-links` (broken link *targets*), `validate-change-fragments`
+(`scripts/release.sh --validate-fragments`, redundant with the check inside
+`bats`/`tests/run.sh` on purpose — it is also its own named job so a
+malformed fragment's failure is visible on its own line, the same rationale
+`real-install-ubuntu-24-04` uses in §1.2), the `compatibility.yml` `matrix`
 job's `ubuntu:24.04`/`linuxmintd/mint22-amd64` (tier 1) rows, and the
 `real-install-ubuntu-24-04` job (blocking since issue #15 — `apt-base` gives
 it a real module to install and re-install idempotently).
@@ -300,6 +306,47 @@ scripts/release.sh <X.Y.Z> --publish
 - Creation of an annotated git tag `v<X.Y.Z>` matching the exact release commit SHA.
 - Refusal to retarget or force-move existing public release tags.
 - Post-publish read-back verification: reads back the pushed git tag and the published GitHub Release.
+
+## 9. `scripts/release.sh --validate-fragments` (issue #238)
+
+Cutting `v0.4.0` found that 22 of 32 pending `changes/*.md` fragments could
+not be compiled by `scripts/release.sh`, all of which had merged through
+green CI — the problem only surfaced at release time, when it blocked the
+release. `--validate-fragments` closes that gap by running the exact same
+fragment parser `scripts/release.sh` uses to compile `CHANGELOG.md` (both
+paths call the same `fragment_errors` shell function in
+`scripts/release.sh`, so CI and the release can never disagree about what a
+valid fragment looks like), on every pull request, before a bad fragment
+can merge.
+
+```bash
+scripts/release.sh --validate-fragments
+```
+
+It validates every `changes/*.md` file against the ADR-0010 rules (see
+[CONTRIBUTING.md](../CONTRIBUTING.md) §4 for the exact rule list: valid
+frontmatter, a positive-integer `issue`, an ADR-0010 `type`, and a
+single-paragraph, non-empty body), reports **every** bad fragment (not
+just the first), and exits non-zero if any fragment is invalid. It is
+strictly read-only: no `VERSION`/`CHANGELOG.md`/git mutation, no network
+access, no `gh` calls, and none of `scripts/release.sh`'s clean-tree,
+main-branch, or CI-status preconditions apply. It exits 0 when `changes/`
+is empty, does not exist, or contains only a `README.md`/placeholder file.
+
+This check is blocking without any branch-protection change, by running
+in two places:
+- inside `tests/run.sh` (the required `bats` check in §1.1), so a
+  malformed fragment fails the same green check every other test failure
+  does;
+- as its own named `validate-change-fragments` job in
+  `.github/workflows/lint.yml`, so the failure is visible on its own line
+  rather than buried inside the `bats` job's output, mirroring how
+  `check-control-center-data` is wired.
+
+`scripts/lint.sh` also runs it (`scripts/lint.sh validate-fragments`, and
+as part of `scripts/lint.sh` with no arguments), for parity with the
+other checks in this document that have both a `tests/run.sh` and a
+`scripts/lint.sh` entry point.
 
 <!-- OMES-MERMAID: docs/ci.md -->
 

@@ -156,6 +156,16 @@ cleared and a `vX.Y.Z` git tag is created matching the new `VERSION`.
 - `docs/architecture.md`'s repository layout (Section 2) reflects
   `VERSION`, `CHANGELOG.md`, and `changes/` exactly as this ADR defines
   them.
+- **CI-time validation (issue #238)**: the `v0.4.0` release found 22 of 32
+  pending fragments the compile step in `scripts/release.sh` could not
+  parse, all merged through green CI, because nothing validated a fragment
+  before release time. `scripts/release.sh --validate-fragments` now runs
+  the same fragment parser the compile step uses (a single shared
+  `fragment_errors` function, not a second implementation) as a blocking
+  check on every pull request — see [docs/ci.md](../ci.md) Section 9 and
+  [CONTRIBUTING.md](../../CONTRIBUTING.md) Section 4 for the exact rules
+  enforced (frontmatter, positive-integer `issue`, ADR-0010 `type`, and a
+  single-paragraph body).
 
 <!-- OMES-MERMAID: docs/adr/0010-versioning-and-change-fragments.md -->
 
