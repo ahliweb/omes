@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/ai-egress/v1/provider-assurance-evidence.schema.json",
+  "title": "provider-assurance-evidence",
+  "description": "Versioned, structured record of the canonical 10-item provider due-diligence checklist from docs/ai-data-privacy-and-model-security.md section 5 (issue #237, threat AI-07, ADR-0029). This is metadata/attestation REFERENCES only - it MUST NEVER carry a raw provider response, contract text, prompt/response content, or a secret/credential value. Each checklist item records a bounded verification status plus an opaque, non-secret evidence reference (e.g. a ticket, DPA record, or attestation identifier) - never the underlying document content. This schema documents the canonical shape; an equivalent `provider_assurance` object is embedded directly in `egress-decision-request.schema.json` (this validator subset does not support `$ref`, so the shape is intentionally duplicated rather than cross-referenced - the two must be kept in sync by hand). This record makes no certification, audit, or legal-compliance claim - it is engineering evidence that due diligence was performed and recorded, not a guarantee of provider behavior.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "provider_id",
+    "assessed_at",
+    "items"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "The provider-assurance-evidence contract version this record was authored against. An evaluator that does not recognize this version must fail closed (deny) rather than guess at semantics.",
+      "enum": ["v1"]
+    },
+    "provider_id": {
+      "type": "string",
+      "description": "An opaque provider/profile identifier - never a credential. Must match the corresponding `provider_posture.provider_id` used in the same egress decision.",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "assessed_at": {
+      "type": "string",
+      "description": "UTC timestamp (YYYY-MM-DDTHH:MM:SSZ) the checklist was last assessed/reviewed. Freshness policy (how stale an assessment may be before it is treated as unverified) is operator-defined and enforced by the caller, not by this schema.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "assessment_reference": {
+      "type": "string",
+      "description": "Optional opaque reference to the assessment record (e.g. a ticket, DPA register entry, or vendor-review identifier) - a pointer only, never the document content itself.",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "items": {
+      "type": "object",
+      "description": "The 10-item due-diligence checklist from docs/ai-data-privacy-and-model-security.md section 5. Items 1-9 must be `verified` before a cloud destination can be approved; item 10 (private-networking/zero-retention options) is 'where available' and may instead be `not_applicable`.",
+      "required": [
+        "data_categories_and_purpose",
+        "controller_processor_roles",
+        "retention_and_deletion",
+        "training_use",
+        "abuse_monitoring_human_access",
+        "subprocessors_and_transfer_locations",
+        "encryption_and_tenant_isolation",
+        "contractual_dpa_terms",
+        "incident_notification_and_audit",
+        "private_networking_zero_retention_options"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "data_categories_and_purpose": {
+          "type": "object",
+          "description": "Checklist item 1: data categories and purpose of processing are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "controller_processor_roles": {
+          "type": "object",
+          "description": "Checklist item 2: controller/processor (or equivalent) roles are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "retention_and_deletion": {
+          "type": "object",
+          "description": "Checklist item 3: retention and deletion behavior is documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "training_use": {
+          "type": "object",
+          "description": "Checklist item 4: use for training/model improvement is documented. A provider's 'not used for training' claim alone is not sufficient - this item records that the claim was independently assessed and recorded, not merely restated.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "abuse_monitoring_human_access": {
+          "type": "object",
+          "description": "Checklist item 5: abuse-monitoring and human/operations access conditions are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "subprocessors_and_transfer_locations": {
+          "type": "object",
+          "description": "Checklist item 6: subprocessors and transfer/geographic processing locations are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "encryption_and_tenant_isolation": {
+          "type": "object",
+          "description": "Checklist item 7: encryption in transit/at rest and tenant isolation is documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "contractual_dpa_terms": {
+          "type": "object",
+          "description": "Checklist item 8: contractual/DPA terms and applicable legal basis are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "incident_notification_and_audit": {
+          "type": "object",
+          "description": "Checklist item 9: incident notification and audit evidence terms are documented.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        },
+        "private_networking_zero_retention_options": {
+          "type": "object",
+          "description": "Checklist item 10: private-networking/zero-retention options, where available. This item alone may be `not_applicable` when the provider offers no such option; every other item must be `verified`.",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+            "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+          }
+        }
+      }
+    }
+  }
+}

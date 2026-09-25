@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "provider_id": "unassessed-cloud-provider-fixture",
+  "assessed_at": "2026-01-15T00:00:00Z",
+  "items": {
+    "data_categories_and_purpose": {"status": "unknown"},
+    "controller_processor_roles": {"status": "not_verified"},
+    "retention_and_deletion": {"status": "unknown"},
+    "training_use": {"status": "not_verified"},
+    "abuse_monitoring_human_access": {"status": "unknown"},
+    "subprocessors_and_transfer_locations": {"status": "not_verified"},
+    "encryption_and_tenant_isolation": {"status": "unknown"},
+    "contractual_dpa_terms": {"status": "not_verified"},
+    "incident_notification_and_audit": {"status": "unknown"},
+    "private_networking_zero_retention_options": {"status": "unknown"}
+  }
+}

@@ -27,6 +27,32 @@ def _req(**overrides):
     return base
 
 
+def _adequate_provider_assurance(**overrides):
+    """A `provider_assurance` object where every issue #237 checklist item
+    is `verified` (item 10 `not_applicable`) - the minimum shape the
+    evaluator treats as "adequate" for approving `cloud_sanitized`."""
+    items = {
+        "data_categories_and_purpose": {"status": "verified"},
+        "controller_processor_roles": {"status": "verified"},
+        "retention_and_deletion": {"status": "verified"},
+        "training_use": {"status": "verified"},
+        "abuse_monitoring_human_access": {"status": "verified"},
+        "subprocessors_and_transfer_locations": {"status": "verified"},
+        "encryption_and_tenant_isolation": {"status": "verified"},
+        "contractual_dpa_terms": {"status": "verified"},
+        "incident_notification_and_audit": {"status": "verified"},
+        "private_networking_zero_retention_options": {"status": "not_applicable"},
+    }
+    base = {
+        "schema_version": "v1",
+        "provider_id": "approved-cloud-provider-fixture",
+        "assessed_at": "2026-01-15T00:00:00Z",
+        "items": items,
+    }
+    base.update(overrides)
+    return base
+
+
 class TestFailClosedOnUnknownOrMissingValues(unittest.TestCase):
     def test_unknown_classification_fails_closed(self):
         result = egress_policy.evaluate(_req(classification="TOP_SECRET"))
@@ -216,7 +242,14 @@ class TestDecisionMatrix(unittest.TestCase):
     def test_public_allowed_everywhere_when_provider_approved(self):
         approved = {"status": "approved"}
         for destination in ("local_only", "private_endpoint", "cloud_sanitized"):
-            result = egress_policy.evaluate(_req(classification="PUBLIC", destination=destination, provider_posture=approved))
+            result = egress_policy.evaluate(
+                _req(
+                    classification="PUBLIC",
+                    destination=destination,
+                    provider_posture=approved,
+                    provider_assurance=_adequate_provider_assurance(),
+                )
+            )
             self.assertEqual(result["decision"], "allow", destination)
 
     def test_public_cloud_sanitized_denied_when_provider_not_approved(self):
@@ -232,13 +265,15 @@ class TestDecisionMatrix(unittest.TestCase):
         self.assertEqual(result["decision"], "deny")
         self.assertIn("AI_EGRESS_DENY_MISSING_SANITIZATION_EVIDENCE", result["reason_codes"])
 
-        # Sanitization evidence + approved provider -> allow.
+        # Sanitization evidence + approved provider + verified provider
+        # assurance (issue #237) -> allow.
         result = egress_policy.evaluate(
             _req(
                 classification="INTERNAL",
                 destination="cloud_sanitized",
                 provider_posture=approved,
                 sanitization_evidence={"method": "aggregation", "evidence_id": "ev-1"},
+                provider_assurance=_adequate_provider_assurance(),
             )
         )
         self.assertEqual(result["decision"], "allow")
@@ -257,6 +292,7 @@ class TestDecisionMatrix(unittest.TestCase):
                 destination="cloud_sanitized",
                 provider_posture={"status": "approved"},
                 sanitization_evidence={"method": "tokenization", "evidence_id": "ev-1"},
+                provider_assurance=_adequate_provider_assurance(),
             )
         )
         # Per ADR-0029, a "deny by default" class must never silently
@@ -269,6 +305,145 @@ class TestDecisionMatrix(unittest.TestCase):
             _req(classification="CONFIDENTIAL", destination="private_endpoint", provider_posture={"status": "not_approved"})
         )
         self.assertEqual(result["decision"], "approval_required")
+
+
+class TestProviderAssuranceGate(unittest.TestCase):
+    """Issue #237 / threat AI-07: a provider claim such as "not used for
+    training" must never be treated as a complete privacy guarantee.
+    `cloud_sanitized` must stay unapprovable for a provider whose
+    due-diligence evidence is missing or incomplete, even when the
+    provider posture is `approved` and sanitization evidence is present -
+    fail closed to `deny`, never a silent allow."""
+
+    def test_cloud_sanitized_denied_when_provider_assurance_missing(self):
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE", result["reason_codes"])
+
+    def test_cloud_sanitized_denied_when_provider_assurance_incomplete(self):
+        incomplete = _adequate_provider_assurance()
+        incomplete["items"]["training_use"] = {"status": "not_verified"}
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                provider_assurance=incomplete,
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE", result["reason_codes"])
+
+    def test_cloud_sanitized_denied_when_provider_assurance_unknown_status(self):
+        incomplete = _adequate_provider_assurance()
+        incomplete["items"]["subprocessors_and_transfer_locations"] = {"status": "unknown"}
+        result = egress_policy.evaluate(
+            _req(
+                classification="INTERNAL",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                sanitization_evidence={"method": "aggregation", "evidence_id": "ev-1"},
+                provider_assurance=incomplete,
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE", result["reason_codes"])
+
+    def test_optional_item_10_may_be_not_applicable_and_still_allow(self):
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                provider_assurance=_adequate_provider_assurance(),
+            )
+        )
+        self.assertEqual(result["decision"], "allow")
+
+    def test_optional_item_10_unverified_still_denies(self):
+        incomplete = _adequate_provider_assurance()
+        incomplete["items"]["private_networking_zero_retention_options"] = {"status": "unknown"}
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                provider_assurance=incomplete,
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE", result["reason_codes"])
+
+    def test_malformed_provider_assurance_is_treated_as_missing(self):
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                provider_assurance="not-an-object",
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE", result["reason_codes"])
+
+    def test_unknown_provider_assurance_schema_version_fails_closed(self):
+        stale = _adequate_provider_assurance(schema_version="v99-does-not-exist")
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                provider_assurance=stale,
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE", result["reason_codes"])
+
+    def test_provider_assurance_gate_never_overrides_an_existing_more_specific_deny(self):
+        # An unapproved provider is still denied for AI_EGRESS_DENY_PROVIDER_NOT_APPROVED,
+        # not silently reclassified as a provider-assurance failure - the gate only
+        # ever downgrades an allow/approval_required, never a pre-existing deny.
+        result = egress_policy.evaluate(
+            _req(
+                classification="PUBLIC",
+                destination="cloud_sanitized",
+                provider_posture={"status": "not_approved"},
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_PROVIDER_NOT_APPROVED", result["reason_codes"])
+
+    def test_provider_assurance_gate_does_not_apply_to_local_only_or_private_endpoint(self):
+        # The gate is scoped to cloud_sanitized only; RESTRICTED local_only
+        # and an approved private_endpoint must not require provider_assurance.
+        local_result = egress_policy.evaluate(_req(classification="RESTRICTED", destination="local_only"))
+        self.assertEqual(local_result["decision"], "allow")
+
+        private_result = egress_policy.evaluate(
+            _req(classification="INTERNAL", destination="private_endpoint", provider_posture={"status": "approved"})
+        )
+        self.assertEqual(private_result["decision"], "allow")
+
+    def test_restricted_cloud_sanitized_still_denied_even_with_adequate_assurance(self):
+        # RESTRICTED -> cloud_sanitized remains an unconditional deny; adequate
+        # provider assurance must never be able to flip it to allow.
+        result = egress_policy.evaluate(
+            _req(
+                classification="RESTRICTED",
+                destination="cloud_sanitized",
+                provider_posture={"status": "approved"},
+                sanitization_evidence={"method": "tokenization", "evidence_id": "ev-1"},
+                provider_assurance=_adequate_provider_assurance(),
+            )
+        )
+        self.assertEqual(result["decision"], "deny")
+        self.assertIn("AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED", result["reason_codes"])
 
 
 class TestOutputIsBounded(unittest.TestCase):

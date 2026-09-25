@@ -30,6 +30,14 @@ Hard boundaries (do not weaken these):
 - The decision output is one of `allow` / `deny` / `approval_required`
   plus a bounded set of stable reason codes (`REASON_CODES`). It never
   returns a command, shell fragment, path, or anything executable.
+- `cloud_sanitized` (issue #237, threat AI-07): a provider claim such as
+  "not used for training" is never treated as a complete privacy
+  guarantee. Before `cloud_sanitized` can be approved (`allow` or
+  `approval_required`) the request's `provider_assurance` object must
+  record the 10-item due-diligence checklist from
+  docs/ai-data-privacy-and-model-security.md section 5 as `verified`
+  (item 10 may instead be `not_applicable`); a missing or incomplete
+  record is a hard, fail-closed `deny` - it never silently allows.
 """
 from __future__ import annotations
 
@@ -64,6 +72,39 @@ PROVIDER_POSTURE_STATUSES: frozenset[str] = frozenset({
     "unknown",
 })
 
+#: Provider-assurance-evidence contract versions this evaluator knows how to
+#: apply (issue #237, threat AI-07). Any other value fails closed the same
+#: way an unknown `policy_version` does.
+KNOWN_PROVIDER_ASSURANCE_VERSIONS: frozenset[str] = frozenset({"v1"})
+
+#: The 10-item provider due-diligence checklist from
+#: docs/ai-data-privacy-and-model-security.md section 5. Items 1-9 must be
+#: `verified`; `_OPTIONAL_PROVIDER_ASSURANCE_ITEM` (item 10, "where
+#: available") may instead be `not_applicable`. This is the single
+#: canonical list of item keys - contracts/ai-egress/v1/provider-assurance-
+#: evidence.schema.json and egress-decision-request.schema.json's embedded
+#: `provider_assurance.items` mirror these names and must be kept in sync.
+_REQUIRED_PROVIDER_ASSURANCE_ITEMS: tuple[str, ...] = (
+    "data_categories_and_purpose",
+    "controller_processor_roles",
+    "retention_and_deletion",
+    "training_use",
+    "abuse_monitoring_human_access",
+    "subprocessors_and_transfer_locations",
+    "encryption_and_tenant_isolation",
+    "contractual_dpa_terms",
+    "incident_notification_and_audit",
+)
+
+_OPTIONAL_PROVIDER_ASSURANCE_ITEM = "private_networking_zero_retention_options"
+
+_PROVIDER_ASSURANCE_ITEM_STATUSES: frozenset[str] = frozenset({
+    "verified",
+    "not_verified",
+    "unknown",
+    "not_applicable",
+})
+
 DECISIONS: tuple[str, ...] = ("allow", "deny", "approval_required")
 
 #: Stable, machine-readable reason-code vocabulary. Callers/tests may rely
@@ -87,6 +128,8 @@ REASON_CODES: frozenset[str] = frozenset({
     "AI_EGRESS_DENY_RESTRICTED_PROVIDER_NOT_APPROVED",
     "AI_EGRESS_DENY_PROVIDER_NOT_APPROVED",
     "AI_EGRESS_DENY_MISSING_SANITIZATION_EVIDENCE",
+    "AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE",
+    "AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE",
 })
 
 
@@ -97,6 +140,46 @@ def _has_sanitization_evidence(request: Mapping[str, Any]) -> bool:
     method = evidence.get("method")
     evidence_id = evidence.get("evidence_id")
     return isinstance(method, str) and bool(method) and isinstance(evidence_id, str) and bool(evidence_id)
+
+
+def _provider_assurance_status(request: Mapping[str, Any]) -> str:
+    """Evaluates the caller-supplied `provider_assurance` object (issue
+    #237, threat AI-07) against the 10-item due-diligence checklist.
+
+    Returns one of `"adequate"`, `"missing"`, or `"incomplete"`. This is
+    metadata-shape validation only (bounded field/enum checks against
+    already-parsed dict/str values) - it never inspects, hashes, or infers
+    anything about actual provider behavior, and it performs no I/O. A
+    provider's own claim (e.g. "not used for training") is never treated as
+    evidence by itself; only a caller-recorded `verified` status counts.
+    """
+    assurance = request.get("provider_assurance")
+    if not isinstance(assurance, dict):
+        return "missing"
+    if assurance.get("schema_version") not in KNOWN_PROVIDER_ASSURANCE_VERSIONS:
+        return "missing"
+    if not isinstance(assurance.get("provider_id"), str) or not assurance.get("provider_id"):
+        return "missing"
+    items = assurance.get("items")
+    if not isinstance(items, dict):
+        return "missing"
+
+    for key in _REQUIRED_PROVIDER_ASSURANCE_ITEMS:
+        entry = items.get(key)
+        if not isinstance(entry, dict):
+            return "incomplete"
+        status = entry.get("status")
+        if status not in _PROVIDER_ASSURANCE_ITEM_STATUSES or status != "verified":
+            return "incomplete"
+
+    optional_entry = items.get(_OPTIONAL_PROVIDER_ASSURANCE_ITEM)
+    if not isinstance(optional_entry, dict):
+        return "incomplete"
+    optional_status = optional_entry.get("status")
+    if optional_status not in ("verified", "not_applicable"):
+        return "incomplete"
+
+    return "adequate"
 
 
 def _provider_posture_status(request: Mapping[str, Any]) -> str | None:
@@ -245,4 +328,23 @@ def evaluate(request: Mapping[str, Any]) -> dict[str, Any]:
 
     has_sanitization = _has_sanitization_evidence(request)
     decision, reason_code = _matrix_decision(classification, destination, posture_status, has_sanitization)
+
+    # Provider-assurance gate (issue #237, threat AI-07): a provider claim
+    # such as "not used for training" is never a complete privacy
+    # guarantee. Before any cloud_sanitized destination is actually
+    # approved (allow or approval_required - approval_required still means
+    # a human could approve it), the caller must have separately recorded
+    # verified due-diligence evidence for retention, human access,
+    # subprocessors, residency/transfer, and the rest of the section 5
+    # checklist. This only ever downgrades an approval into a deny; it
+    # never overrides an existing deny (e.g. missing sanitization evidence,
+    # unapproved provider, RESTRICTED-to-cloud) with a different reason,
+    # and it never turns a deny into an allow.
+    if destination == "cloud_sanitized" and decision in ("allow", "approval_required"):
+        assurance_status = _provider_assurance_status(request)
+        if assurance_status == "missing":
+            return _respond("deny", ["AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE"])
+        if assurance_status == "incomplete":
+            return _respond("deny", ["AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE"])
+
     return _respond(decision, [reason_code])

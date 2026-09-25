@@ -80,6 +80,139 @@
           "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
         }
       }
+    },
+    "provider_assurance": {
+      "type": "object",
+      "description": "Provider-assurance evidence for the destination provider (issue #237, threat AI-07): the 10-item due-diligence checklist from docs/ai-data-privacy-and-model-security.md section 5, recorded as bounded verification statuses plus opaque, non-secret evidence references only - never a raw provider response or contract text. The evaluator (lib/omes/py/privacy/egress_policy.py) requires this object, with every item other than `private_networking_zero_retention_options` at status `verified`, before it will approve (allow/approval_required) a `cloud_sanitized` destination; a missing or incomplete record fails closed to `deny`. This shape mirrors contracts/ai-egress/v1/provider-assurance-evidence.schema.json - duplicated rather than `$ref`'d because this validator subset does not support `$ref` - and the two must be kept in sync by hand.",
+      "required": ["schema_version", "provider_id", "assessed_at", "items"],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "enum": ["v1"]
+        },
+        "provider_id": {
+          "type": "string",
+          "description": "An opaque provider/profile identifier - never a credential. Must match the corresponding `provider_posture.provider_id`.",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "assessed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+        },
+        "assessment_reference": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        },
+        "items": {
+          "type": "object",
+          "required": [
+            "data_categories_and_purpose",
+            "controller_processor_roles",
+            "retention_and_deletion",
+            "training_use",
+            "abuse_monitoring_human_access",
+            "subprocessors_and_transfer_locations",
+            "encryption_and_tenant_isolation",
+            "contractual_dpa_terms",
+            "incident_notification_and_audit",
+            "private_networking_zero_retention_options"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "data_categories_and_purpose": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "controller_processor_roles": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "retention_and_deletion": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "training_use": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "abuse_monitoring_human_access": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "subprocessors_and_transfer_locations": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "encryption_and_tenant_isolation": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "contractual_dpa_terms": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "incident_notification_and_audit": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            },
+            "private_networking_zero_retention_options": {
+              "type": "object",
+              "required": ["status"],
+              "additionalProperties": false,
+              "properties": {
+                "status": {"type": "string", "enum": ["verified", "not_verified", "unknown", "not_applicable"]},
+                "evidence_ref": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{1,128}$"}
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

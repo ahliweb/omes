@@ -1,0 +1,33 @@
+{
+  "policy_version": "v1",
+  "classification": "INTERNAL",
+  "destination": "cloud_sanitized",
+  "purpose": "summarization",
+  "provider_posture": {
+    "status": "approved",
+    "provider_id": "approved-cloud-provider-fixture"
+  },
+  "contains_authentication_material": false,
+  "sanitization_evidence": {
+    "method": "aggregation",
+    "evidence_id": "sanitization-evidence-fixture-002"
+  },
+  "provider_assurance": {
+    "schema_version": "v1",
+    "provider_id": "approved-cloud-provider-fixture",
+    "assessed_at": "2026-01-15T00:00:00Z",
+    "assessment_reference": "vendor-review-fixture-001",
+    "items": {
+      "data_categories_and_purpose": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "controller_processor_roles": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "retention_and_deletion": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "training_use": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "abuse_monitoring_human_access": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "subprocessors_and_transfer_locations": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "encryption_and_tenant_isolation": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "contractual_dpa_terms": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "incident_notification_and_audit": {"status": "verified", "evidence_ref": "dpa-fixture-001"},
+      "private_networking_zero_retention_options": {"status": "not_applicable"}
+    }
+  }
+}
