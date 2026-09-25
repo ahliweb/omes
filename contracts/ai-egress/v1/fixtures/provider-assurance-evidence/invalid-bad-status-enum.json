@@ -1,0 +1,17 @@
+{
+  "schema_version": "v1",
+  "provider_id": "approved-cloud-provider-fixture",
+  "assessed_at": "2026-01-15T00:00:00Z",
+  "items": {
+    "data_categories_and_purpose": {"status": "provider_claims_it_is_fine"},
+    "controller_processor_roles": {"status": "verified"},
+    "retention_and_deletion": {"status": "verified"},
+    "training_use": {"status": "verified"},
+    "abuse_monitoring_human_access": {"status": "verified"},
+    "subprocessors_and_transfer_locations": {"status": "verified"},
+    "encryption_and_tenant_isolation": {"status": "verified"},
+    "contractual_dpa_terms": {"status": "verified"},
+    "incident_notification_and_audit": {"status": "verified"},
+    "private_networking_zero_retention_options": {"status": "not_applicable"}
+  }
+}

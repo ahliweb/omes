@@ -21,7 +21,11 @@
 > [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
 > Negative regression and exfiltration-resistance coverage is also implemented
 > ([#218](https://github.com/ahliweb/omes/issues/218); see
-> `tests/py/privacy/test_privacy_boundary_regression.py`).
+> `tests/py/privacy/test_privacy_boundary_regression.py`). Structured provider-assurance evidence
+> (retention, human access, subprocessors, residency) for the section 5 checklist is also
+> implemented ([#237](https://github.com/ahliweb/omes/issues/237); see
+> [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)),
+> gating `cloud_sanitized` approval in the same evaluator.
 >
 > This document is engineering guidance for OMES. It does **not** claim legal compliance,
 > regulatory approval, ISO certification, Common Criteria certification, or that a local model is
@@ -186,6 +190,40 @@ applicable:
 
 Provider marketing language is not evidence of an OMES security control. This checklist is the
 single canonical provider-assurance list for this document; do not create a second one elsewhere.
+
+**Implemented ([#237](https://github.com/ahliweb/omes/issues/237)):** this 10-item checklist is
+recorded as a versioned, structured `provider_assurance` object -
+[contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)
+documents the canonical shape, and the same shape is embedded directly in
+[contracts/ai-egress/v1/egress-decision-request.schema.json](../contracts/ai-egress/v1/egress-decision-request.schema.json)
+(duplicated rather than `$ref`'d, because `scripts/check-contracts.py`'s stdlib validator subset
+does not support `$ref` - the two must be kept in sync by hand). Each item records a bounded
+`status` (`verified`/`not_verified`/`unknown`/`not_applicable`) plus an optional opaque
+`evidence_ref` pointer (e.g. a ticket or DPA register entry) - never the underlying document,
+contract text, or provider response. `lib/omes/py/privacy/egress_policy.py`'s `evaluate()` consults
+this object for any `cloud_sanitized` destination: items 1-9 must all be `verified` (item 10,
+private-networking/zero-retention, may instead be `not_applicable` when the provider offers no such
+option); a missing `provider_assurance` object or any incomplete item is a hard, fail-closed `deny`
+(`AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE` / `AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE`) that
+overrides an otherwise-approved decision. The assurance record must also be bound to the exact
+destination provider: `provider_posture.provider_id` must be present and exactly equal
+`provider_assurance.provider_id`, or the request is denied
+(`AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH`) - adequate due diligence recorded for one provider
+must never approve egress to a different provider. None of this ever turns an existing deny into an
+allow, and it never weakens the unconditional RESTRICTED-to-`cloud_sanitized` denial. See
+`tests/py/privacy/test_egress_policy.py`'s `TestProviderAssuranceGate` and
+`tests/py/privacy/test_privacy_boundary_regression.py`'s
+`TestProviderAssuranceIsNeverInferredFromAProviderClaim` and
+`TestProviderAssuranceMustBeBoundToTheDestinationProvider` for the exhaustive regression coverage.
+
+**Residual limits, stated honestly:** this is caller-recorded attestation evidence, not independent
+verification. The evaluator has no way to confirm that a `verified` status is actually true of the
+provider - it only enforces that someone recorded the due-diligence claim in the required
+structured shape before egress can be approved, and that a provider's own prose claim cannot
+satisfy an item (only the closed status enum counts). It also does not itself enforce evidence
+freshness/staleness (an `assessed_at` timestamp is recorded but no expiry policy is evaluated yet)
+or automatically detect that a provider's actual practice has drifted from its recorded assurance -
+both remain an operator process, not an automated OMES control, until a future issue adds them.
 
 ## 6. Decision matrix
 
@@ -486,7 +524,7 @@ privileged listener.
 | Secrets leak through logs/audit/Control Center | Content-minimized evidence + existing redaction |
 | RAG/embedding silently exports Restricted documents | Same classification propagated through the RAG pipeline |
 | Local model is assumed safe despite compromised host/model | Host hardening, provenance, non-root execution, supply-chain checks |
-| Provider marketing claim is treated as a full privacy guarantee | Separate provider-assurance fields for training, retention, access, subprocessors, transfer |
+| Provider marketing claim is treated as a full privacy guarantee | Structured, versioned provider-assurance fields for training, retention, access, subprocessors, transfer, gating `cloud_sanitized` approval fail-closed (#237) |
 | Restricted prompt/session data silently swept into a default backup | Backup classification follows source classification; explicit inclusion policy required |
 | Sensitive payload pasted into an incident ticket/PR/chat as "evidence" | Evidence preserved by reference (policy, destination, timestamps, correlation ID), never raw payload |
 
@@ -611,6 +649,11 @@ seen only on upstream development branches is not treated as supported release e
    AWCMS-side consumption remains not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)).
 5. **#218** — negative/regression tests for disclosure and policy bypass. Implemented: see
    `tests/py/privacy/test_privacy_boundary_regression.py`.
+6. **#237** — structured provider-assurance evidence (threat AI-07) gating `cloud_sanitized`
+   approval. Implemented: see
+   [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)
+   and the `provider_assurance` gate in
+   [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py).
 
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.

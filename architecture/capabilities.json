@@ -536,6 +536,24 @@
       ]
     },
     {
+      "capability_id": "omes.privacy.provider_assurance",
+      "title": "OMES Provider-Assurance Evidence for Cloud Model Egress (retention, human access, subprocessors, residency)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": null,
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "omes_module": "privacy",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md",
+        "https://github.com/ahliweb/omes/issues/237"
+      ]
+    },
+    {
       "capability_id": "omes.privacy.posture_evidence",
       "title": "OMES AI Privacy Posture and Egress Evidence (read-only)",
       "authority": "omes",
