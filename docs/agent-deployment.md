@@ -204,8 +204,14 @@ A privilege mismatch fails with exit 5 before any mutation.
    **reference names** (never values).
 3. **backup**: if the agent's `HERMES_HOME` already exists (i.e. this is
    not the first apply), calls `lib/omes/py/hermesbackup`'s `create`
-   (issue #82's default classes: `config`, `skills`) scoped to that
-   `HERMES_HOME`. A fresh agent with no prior `HERMES_HOME` has nothing
+   with `--recovery-class omes-host` (issue #82's default classes:
+   `config`, `skills`), scoped to that `HERMES_HOME`. This recovery class
+   is pinned explicitly (issue #235) rather than left to
+   `hermesbackup`'s own default, because the native `portable-profile`
+   recovery class always includes Restricted-class session state
+   (ADR-0020) and must never be created as a side effect of a routine
+   lifecycle command - see [docs/hermes-backup.md](hermes-backup.md)
+   section 3a. A fresh agent with no prior `HERMES_HOME` has nothing
    to back up yet - not an error.
 4. **mutate**:
    - detects and cleans up any legacy `omes-agent-<name>.service` unit or drop-ins (stopping and disabling them);

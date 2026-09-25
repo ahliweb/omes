@@ -300,24 +300,37 @@ Two separate backup systems exist, deliberately:
 | Tool | Scope | Never touches |
 |---|---|---|
 | `omes backup` / `omes restore` | OMES-managed paths (config/PATH drop-ins the modules themselves wrote) | `$HERMES_HOME/.env` (secrets) — never registered for backup |
-| `omes agent-backup` (issue #82) | Hermes's own data under `$HERMES_HOME`, by explicit data class | `secrets` class unless `--include-secrets`/`--restore-secrets` is passed |
+| `omes agent-backup` (issue #82) | Hermes's own data under `$HERMES_HOME`, by explicit data class or recovery class | `secrets` class unless `--include-secrets`/`--restore-secrets` is passed; `sessions`/`memory` classes and the `portable-profile`/`full-runtime-dr` recovery classes unless `--allow-restricted-scope` is passed (issue #235 — see below) |
 
 ```bash
-omes agent-backup create                          # default classes: config, skills
-omes agent-backup create --class memory --class sessions --class runtime-state
+omes agent-backup create --recovery-class omes-host   # safe default: config, skills only
+omes agent-backup create                              # native portable-profile (ADR-0020) -
+                                                        # ALWAYS includes session state, so this
+                                                        # now requires --allow-restricted-scope too
+omes agent-backup create --class memory --class sessions --allow-restricted-scope
 omes agent-backup list
 omes agent-backup verify <timestamp>
 omes agent-backup restore <timestamp> --yes
 ```
 
-| Class | Paths | Default? |
-|---|---|---|
-| `config` | `config.yaml`, `SOUL.md` | Yes |
-| `skills` | `skills/` | Yes |
-| `memory` | `memories/` | No |
-| `sessions` | `sessions/`, `state.db` | No |
-| `runtime-state` | `logs/`, `cache/`, `cron/`, `state-snapshots/`, `modal_snapshots.json`, `verification_evidence.db` | No |
-| `secrets` | `.env`, `auth.json` | **Never** without `--include-secrets` |
+`omes agent apply`'s own automatic pre-mutation backup step pins
+`--recovery-class omes-host` explicitly (issue #235), so a routine
+`apply`/`update`/`rollback` never triggers the Restricted-scope gate.
+
+| Class | Paths | Default? | Requires `--allow-restricted-scope`? |
+|---|---|---|---|
+| `config` | `config.yaml`, `SOUL.md` | Yes (under `omes-host`) | No |
+| `skills` | `skills/` | Yes (under `omes-host`) | No |
+| `memory` | `memories/` | No | **Yes** (issue #235) |
+| `sessions` | `sessions/`, `state.db` | No | **Yes** (issue #235) |
+| `runtime-state` | `logs/`, `cache/`, `cron/`, `state-snapshots/`, `modal_snapshots.json`, `verification_evidence.db` | No | No |
+| `secrets` | `.env`, `auth.json` | **Never** without `--include-secrets` | No (separate gate) |
+
+The native recovery classes `portable-profile` (upstream `hermes profile
+export`) and `full-runtime-dr` (upstream `hermes backup`) both always
+include session state by upstream Hermes's own design (ADR-0020) and
+therefore also always require `--allow-restricted-scope`, on both create
+and restore. See [docs/hermes-backup.md](hermes-backup.md) section 3a.
 
 `--dry-run` uses `os.stat` only — it never opens a file's content, even
 for `secrets` with `--include-secrets` — so a dry run cannot leak secret

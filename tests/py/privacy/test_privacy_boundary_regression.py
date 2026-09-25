@@ -63,6 +63,8 @@ from jobs import runner as jobs_runner  # noqa: E402
 from jobs import schema as jobs_schema  # noqa: E402
 from jobs import store as jobs_store  # noqa: E402
 from privacy import egress_policy, posture_evidence, posture_projection, restricted_posture  # noqa: E402
+from hermesbackup import backup as hermesbackup_backup  # noqa: E402
+from hermesbackup import restricted_scope as hermesbackup_restricted_scope  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 CONTRACTS = REPO_ROOT / "contracts"
@@ -1103,7 +1105,7 @@ class TestRagAndEmbeddingMetadataFollowTheSameRules(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# Case 9: a provider claim is never a complete privacy guarantee (#237, AI-07)
+# Case 11: a provider claim is never a complete privacy guarantee (#237, AI-07)
 # ---------------------------------------------------------------------------
 
 
@@ -1345,6 +1347,172 @@ class TestProviderAssuranceMustBeBoundToTheDestinationProvider(unittest.TestCase
         self.assertEqual(result["decision"], "deny")
         self.assertIn("AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED", result["reason_codes"])
         self.assertNotIn("AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH", result["reason_codes"])
+# Case 12: default backups cannot silently capture Restricted-class
+#          prompt/session/context data (issue #235; ADR-0020; docs/
+#          ai-data-privacy-and-model-security.md section 12)
+# ---------------------------------------------------------------------------
+
+
+def _restricted_scope_hermes_home(root: Path) -> Path:
+    """A minimal $HERMES_HOME with one path from every legacy class,
+    including the two Restricted-scope ones ('sessions', 'memory')."""
+    home = root / "hermeshome"
+    (home / "skills").mkdir(parents=True)
+    (home / "memories").mkdir(parents=True)
+    (home / "sessions").mkdir(parents=True)
+    (home / "config.yaml").write_text("model: gpt\n", encoding="utf-8")
+    (home / "skills" / "foo.py").write_text("print('hi')\n", encoding="utf-8")
+    (home / "memories" / "MEMORY.md").write_text(CANARY_TRANSCRIPT, encoding="utf-8")
+    (home / "sessions" / "s1.json").write_text(f'{{"transcript": "{CANARY_TRANSCRIPT}"}}\n', encoding="utf-8")
+    return home
+
+
+class TestDefaultBackupsCannotCaptureRestrictedScopeData(unittest.TestCase):
+    """This is the actual enforcement gate for the invariant already
+    stated in section 14 of docs/ai-data-privacy-and-model-security.md
+    ("Restricted prompt/session data silently swept into a default
+    backup"). Before issue #235 this invariant was operating guidance
+    only - `hermesbackup.backup.create()`'s own default (native
+    `portable-profile`, ADR-0020) always included session state and
+    nothing refused it. These tests FAIL if that control regresses.
+
+    A real Hermes CLI is never required: `tests/shims/hermes` stands in
+    for `hermes profile export`/`hermes backup`, exactly as
+    tests/py/hermesbackup/test_native_backup.py already does."""
+
+    SHIM_DIR = str(Path(__file__).resolve().parents[2] / "shims")
+
+    def setUp(self):
+        if self.SHIM_DIR not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{self.SHIM_DIR}{os.pathsep}{os.environ.get('PATH', '')}"
+        self._tmp = tempfile.mkdtemp(prefix="omes-235-backupscope-test-")
+        self.root = Path(self._tmp)
+        self.hermes_home = _restricted_scope_hermes_home(self.root)
+        self.backups_root = self.root / "state" / "backups" / "hermes"
+
+    def tearDown(self):
+        shutil.rmtree(self._tmp, ignore_errors=True)
+
+    def test_default_create_with_no_arguments_at_all_is_refused_not_silently_included(self):
+        """The exact regression this issue closes: `create()` called with
+        NO recovery_class/class_names (the literal default `omes
+        agent-backup create`) must refuse, not silently produce a
+        portable-profile archive containing session state."""
+        with self.assertRaises(hermesbackup_backup.BackupError) as ctx:
+            hermesbackup_backup.create(self.hermes_home, dest_root=self.backups_root)
+        self.assertIn(
+            hermesbackup_restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN,
+            str(ctx.exception),
+        )
+        # Fail-closed, per AGENTS.md: nothing was written for the refused
+        # attempt - never a partially-written or silently-included backup.
+        self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
+
+    def test_every_recovery_class_documented_as_including_session_state_is_gated(self):
+        for recovery_class in hermesbackup_restricted_scope.RESTRICTED_RECOVERY_CLASSES:
+            with self.assertRaises(hermesbackup_backup.BackupError) as ctx:
+                hermesbackup_backup.create(
+                    self.hermes_home,
+                    recovery_class=recovery_class,
+                    allow_sensitive_credentials=True,  # a different opt-in must not substitute
+                    dest_root=self.backups_root,
+                )
+            self.assertIn(
+                hermesbackup_restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN,
+                str(ctx.exception),
+                msg=f"recovery_class={recovery_class}",
+            )
+
+    def test_every_legacy_class_holding_prompt_or_session_data_is_gated(self):
+        for legacy_class in hermesbackup_restricted_scope.RESTRICTED_LEGACY_CLASSES:
+            with self.assertRaises(hermesbackup_backup.BackupError) as ctx:
+                hermesbackup_backup.create(
+                    self.hermes_home,
+                    [legacy_class],
+                    dest_root=self.backups_root,
+                )
+            self.assertIn(
+                hermesbackup_restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN,
+                str(ctx.exception),
+                msg=f"class={legacy_class}",
+            )
+
+    def test_the_only_way_past_the_gate_is_the_explicit_reviewed_opt_in(self):
+        """A caller CAN still get a Restricted-scope backup - this is a
+        default-deny gate, not a hard prohibition - but only by passing
+        the separate, explicit `allow_restricted_scope` flag; no other
+        combination of inputs (dry_run, allow_sensitive_credentials,
+        profile name, --class ordering) may substitute for it."""
+        result = hermesbackup_backup.create(
+            self.hermes_home,
+            allow_restricted_scope=True,
+            dest_root=self.backups_root,
+        )
+        self.assertTrue(result["restricted_scope_included"])
+
+        legacy_result = hermesbackup_backup.create(
+            self.hermes_home,
+            ["sessions", "memory"],
+            allow_restricted_scope=True,
+            dest_root=self.backups_root,
+        )
+        self.assertTrue(legacy_result["restricted_scope_included"])
+
+    def test_the_safe_default_classes_config_and_skills_are_never_gated(self):
+        """Config/skills-only backups (the legacy engine's actual
+        no-argument default, per classes.py DEFAULT_CLASSES) must keep
+        working with zero extra flags - this issue tightens scope, it
+        does not regress the existing safe default."""
+        result = hermesbackup_backup.create(
+            self.hermes_home,
+            recovery_class="omes-host",
+            dest_root=self.backups_root,
+        )
+        self.assertFalse(result["restricted_scope_included"])
+
+    def test_no_canary_transcript_or_memory_content_reaches_disk_on_a_refused_attempt(self):
+        """Belt-and-suspenders: even though enforcement here is by
+        declared scope (never by content), a refused attempt must not
+        have opened/copied file content at all - so a canary planted in
+        the Restricted paths cannot appear anywhere under the backups
+        root after the refusal."""
+        for attempt in (
+            lambda: hermesbackup_backup.create(self.hermes_home, dest_root=self.backups_root),
+            lambda: hermesbackup_backup.create(
+                self.hermes_home, ["sessions"], dest_root=self.backups_root
+            ),
+            lambda: hermesbackup_backup.create(
+                self.hermes_home, ["memory"], dry_run=True, dest_root=self.backups_root
+            ),
+        ):
+            with self.assertRaises(hermesbackup_backup.BackupError):
+                attempt()
+
+        self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
+
+    def test_restore_of_restricted_scope_data_onto_a_live_hermes_home_is_also_gated(self):
+        """The gate protects restore too: reintroducing Restricted-class
+        session data onto a live $HERMES_HOME is the same kind of
+        decision as creating it, and must not happen as a side effect of
+        a routine 'restore the latest backup' operation."""
+        created = hermesbackup_backup.create(
+            self.hermes_home,
+            ["sessions"],
+            allow_restricted_scope=True,
+            dest_root=self.backups_root,
+        )
+        with self.assertRaises(hermesbackup_backup.BackupError) as ctx:
+            hermesbackup_backup.restore(
+                created["timestamp"],
+                self.hermes_home,
+                ["sessions"],
+                dest_root=self.backups_root,
+                backups_dest_root=self.backups_root,
+            )
+        self.assertIn(
+            hermesbackup_restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN,
+            str(ctx.exception),
+        )
 
 
 if __name__ == "__main__":

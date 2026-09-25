@@ -26,6 +26,11 @@
 > implemented ([#237](https://github.com/ahliweb/omes/issues/237); see
 > [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)),
 > gating `cloud_sanitized` approval in the same evaluator.
+> `tests/py/privacy/test_privacy_boundary_regression.py`). Default-backup-scope
+> enforcement for Restricted-class prompt/session/context data
+> ([#235](https://github.com/ahliweb/omes/issues/235)) is implemented; see
+> section 12 below, [lib/omes/py/hermesbackup/restricted_scope.py](../lib/omes/py/hermesbackup/restricted_scope.py),
+> and [docs/hermes-backup.md](hermes-backup.md) section 3a.
 >
 > This document is engineering guidance for OMES. It does **not** claim legal compliance,
 > regulatory approval, ISO certification, Common Criteria certification, or that a local model is
@@ -475,13 +480,45 @@ classification.
   assumed to have completed because the local OMES/Hermes state was cleared.
 
 Section 11's `omes health ai-privacy` evidence surface (#216) supports the incident-evidence
-practice above (preserve the bounded JSON report by reference, never raw content). Automated
-backup-scope *enforcement* (actively preventing a default backup job from sweeping up
-Restricted-class prompt/session data) is **not implemented yet (tracked in [#235](https://github.com/ahliweb/omes/issues/235))** (it is
-out of #215's scope, which covers the Hermes gateway's local-only inference posture, not backup
-enforcement); today the
-backup-scope guidance in this section remains operating guidance for anyone handling a backup or
-restore of AI-adjacent data.
+practice above (preserve the bounded JSON report by reference, never raw content).
+
+**Automated backup-scope enforcement is implemented ([#235](https://github.com/ahliweb/omes/issues/235)):**
+`lib/omes/py/hermesbackup/restricted_scope.py` is a fail-closed, default-deny preflight gate that
+runs inside `hermesbackup.backup.create()`/`create_legacy()`/`create_native()`/`restore()` (see
+[docs/hermes-backup.md](hermes-backup.md) section 3a for the full mechanism). It refuses - never
+silently excludes-and-continues, never silently includes - any backup or restore whose recovery
+class or legacy class is documented (ADR-0020; this document's own classification of `sessions`/
+`memories` data as prompt/session/context data) as containing Restricted-class prompt, session, or
+context data, unless the caller passes the separate, explicit `--allow-restricted-scope` /
+`allow_restricted_scope=True` opt-in. The refusal carries the stable reason code
+`BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN`. This closes the concrete gap #235 was opened for: before
+this change, `omes agent-backup create` with no arguments (and `omes agent apply`'s automatic
+pre-mutation backup step) silently produced a native `portable-profile` backup that upstream Hermes
+itself documents as always including session state (ADR-0020) - a real instance of "Restricted
+prompt/session data silently swept into a default backup." `omes agent apply`'s automatic backup
+step now explicitly pins the safe `omes-host`/`config`+`skills` scope instead of falling through to
+that native default, so routine lifecycle operations never trigger the gate at all.
+
+Enforcement here is deliberately by **declared scope** (recovery-class name; legacy per-class path
+enumeration OMES itself owns), never by opening or parsing archive/database content - consistent
+with the constraint elsewhere in this document and AGENTS.md that OMES must not read Hermes's
+private `messages.db`/`.hermes/` internals. Regression coverage extending #218's suite is in
+`tests/py/privacy/test_privacy_boundary_regression.py`'s
+`TestDefaultBackupsCannotCaptureRestrictedScopeData`, plus unit coverage in
+`tests/py/hermesbackup/test_native_backup.py` and `tests/py/hermesbackup/test_backup.py`.
+
+**Residual limitations, stated honestly:** (1) this control governs OMES's own backup engine only
+(`lib/omes/py/hermesbackup/`); it has no visibility into Hermes's own independent
+`state-snapshots/`/`backups/` directories (ADR-0020/`docs/hermes-backup.md` section 2 note these are
+intentionally excluded from every OMES class to avoid duplicating Hermes's own retention). (2) The
+gate is scope-based, not content-based - a legacy `config`/`runtime-state` class that happened to
+contain user-pasted transcript text embedded in a config file or log line would not be caught (this
+document's classification model treats that as a data-hygiene concern for the operator/application,
+not something a generic path-based backup gate can detect without opening file content, which OMES
+deliberately does not do here). (3) Coverage is specific to `hermesbackup`; other host/module
+backups going through `lib/omes/backup.sh`'s generic `backup_path()` do not touch Hermes data today
+and are out of this issue's scope - a future module that backs up a Hermes-adjacent path directly
+would need its own review against this section.
 
 ## 13. Control Center projection
 
@@ -654,6 +691,10 @@ seen only on upstream development branches is not treated as supported release e
    [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)
    and the `provider_assurance` gate in
    [lib/omes/py/privacy/egress_policy.py](../lib/omes/py/privacy/egress_policy.py).
+7. **#235** — enforced, fail-closed default-backup-scope gate for Restricted-class prompt/session/
+   context data. Implemented: see
+   [lib/omes/py/hermesbackup/restricted_scope.py](../lib/omes/py/hermesbackup/restricted_scope.py)
+   and [docs/hermes-backup.md](hermes-backup.md) section 3a (section 12 above has the full detail).
 
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.

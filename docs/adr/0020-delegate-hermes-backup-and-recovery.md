@@ -66,3 +66,27 @@ Previously, OMES implemented custom tarball assembly in `lib/omes/py/hermesbacku
 4. **CLI & Inventory**:
    - `omes agent-backup create` defaults to `--recovery-class portable-profile`.
    - `omes agent-backup list` and `omes agent-backup inventory` report session format, recovery class, profile, and sensitivity status.
+
+## Amendment (2026-09-25, issue #235)
+
+`portable-profile` and `full-runtime-dr` both include session state by this ADR's own design (see
+"Context" above: `hermes profile export` explicitly covers "skills, memory, configurations, and
+session state"; `hermes backup` is a strict superset). Per
+[docs/ai-data-privacy-and-model-security.md](../ai-data-privacy-and-model-security.md) section 12,
+that session state is Restricted-class prompt/session/context data that must never silently enter a
+default backup. Issue #235 found that this ADR's own decision — defaulting `omes agent-backup
+create` to `portable-profile` — was exactly that silent default, with no enforcement.
+
+This amendment does not change the delegation decision above (OMES still fully delegates archive
+creation for these two classes to `hermes profile export`/`hermes backup`); it adds a preflight gate
+in front of it:
+
+- `omes agent-backup create`'s no-argument default now uses the `omes-host` recovery class (its own
+  `config`+`skills` classes), not `portable-profile`, and `omes agent apply`'s automatic
+  pre-mutation backup step is pinned to `omes-host` explicitly for the same reason.
+- Creating or restoring a `portable-profile`/`full-runtime-dr` backup (or the legacy
+  `sessions`/`memory` classes) now requires an explicit `--allow-restricted-scope` opt-in, refused
+  with the stable reason code `BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN` otherwise.
+- See [docs/hermes-backup.md](../hermes-backup.md) section 3a and
+  [lib/omes/py/hermesbackup/restricted_scope.py](../../lib/omes/py/hermesbackup/restricted_scope.py)
+  for the full mechanism.

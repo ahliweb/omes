@@ -19,7 +19,7 @@ import tarfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from . import archive, classes as classes_mod, manifest, paths
+from . import archive, classes as classes_mod, manifest, paths, restricted_scope
 
 
 class BackupError(Exception):
@@ -79,15 +79,28 @@ def create_native(
     recovery_class: str = "portable-profile",
     profile: str = "default",
     allow_sensitive_credentials: bool = False,
+    allow_restricted_scope: bool = False,
     dry_run: bool = False,
     dest_root: Path | None = None,
 ) -> Dict[str, Any]:
     """Creates a native Hermes backup session using supported upstream commands:
     - portable-profile -> `hermes profile export` (credentials excluded upstream)
     - full-runtime-dr -> `hermes backup` (sensitive, requires allow_sensitive_credentials)
+
+    Issue #235: both recovery classes include Restricted-class session
+    state by upstream Hermes's own documented design (ADR-0020), so both
+    also require the separate, explicit `allow_restricted_scope` opt-in
+    below - checked BEFORE dry_run, so a dry-run preview reports the same
+    fail-closed refusal an actual create would, rather than only
+    surfacing it on the real (mutating) attempt.
     """
     dest_root = dest_root or paths.backups_root()
     classes_mod.validate_recovery_class(recovery_class)
+
+    try:
+        restricted_scope.require_recovery_class_opt_in(recovery_class, allow_restricted_scope)
+    except restricted_scope.RestrictedScopeError as exc:
+        raise BackupError(str(exc)) from exc
 
     if recovery_class == "full-runtime-dr" and not allow_sensitive_credentials:
         raise BackupError(
@@ -97,6 +110,7 @@ def create_native(
 
     fmt = "native-hermes-profile" if recovery_class == "portable-profile" else "native-hermes-runtime"
     sensitive = (recovery_class == "full-runtime-dr")
+    restricted_scope_included = recovery_class in restricted_scope.RESTRICTED_RECOVERY_CLASSES
 
     if dry_run:
         return {
@@ -105,6 +119,7 @@ def create_native(
             "recovery_class": recovery_class,
             "profile": profile if recovery_class == "portable-profile" else None,
             "sensitive": sensitive,
+            "restricted_scope_included": restricted_scope_included,
             "hermes_home": str(hermes_home),
         }
 
@@ -163,6 +178,7 @@ def create_native(
         "artifact_size": size,
         "profile": profile if recovery_class == "portable-profile" else None,
         "sensitive": sensitive,
+        "restricted_scope_included": restricted_scope_included,
         "hermes_home": str(hermes_home),
         "hermes_version": _hermes_version(),
         "omes_version": _omes_version(),
@@ -194,6 +210,7 @@ def create_native(
         "sha256": checksum,
         "artifact_sha256": checksum,
         "sensitive": sensitive,
+        "restricted_scope_included": restricted_scope_included,
         "meta": meta,
     }
 
@@ -207,6 +224,7 @@ def create(
     recovery_class: str | None = None,
     profile: str = "default",
     allow_sensitive_credentials: bool = False,
+    allow_restricted_scope: bool = False,
     classes: list[str] | tuple[str, ...] | None = None,
 ):
     """Creates one backup session.
@@ -215,6 +233,13 @@ def create(
     legacy classes, delegates to create_native (ADR-0020).
     If legacy class_names are provided (e.g. ['config', 'skills']), or if recovery_class
     is 'omes-host', preserves legacy archive creation for backward compatibility.
+
+    `allow_restricted_scope` (issue #235) is the explicit, reviewed opt-in
+    required before a backup that includes Restricted-class prompt/session/
+    context data (native `portable-profile`/`full-runtime-dr`, or legacy
+    `sessions`/`memory` classes) may be created; see
+    `restricted_scope.py`. It defaults to False so every call site that
+    does not pass it explicitly stays fail-closed.
     """
     dest_root = dest_root or paths.backups_root()
     if classes is not None and class_names is None:
@@ -229,6 +254,7 @@ def create(
                 recovery_class=recovery_class,
                 profile=profile,
                 allow_sensitive_credentials=allow_sens,
+                allow_restricted_scope=allow_restricted_scope,
                 dry_run=dry_run,
                 dest_root=dest_root,
             )
@@ -237,6 +263,7 @@ def create(
             hermes_home,
             class_names=class_names or ("config", "skills"),
             include_secrets=include_secrets,
+            allow_restricted_scope=allow_restricted_scope,
             dry_run=dry_run,
             dest_root=dest_root,
         )
@@ -251,11 +278,13 @@ def create(
                 dest_root=dest_root,
                 profile=profile,
                 allow_sensitive_credentials=allow_sensitive_credentials,
+                allow_restricted_scope=allow_restricted_scope,
             )
         return create_legacy(
             hermes_home,
             class_names=class_names,
             include_secrets=include_secrets,
+            allow_restricted_scope=allow_restricted_scope,
             dry_run=dry_run,
             dest_root=dest_root,
         )
@@ -267,6 +296,7 @@ def create(
         recovery_class="portable-profile",
         profile=profile,
         allow_sensitive_credentials=allow_sens,
+        allow_restricted_scope=allow_restricted_scope,
         dry_run=dry_run,
         dest_root=dest_root,
     )
@@ -276,6 +306,7 @@ def create_legacy(
     hermes_home: Path,
     class_names: list[str] | tuple[str, ...] | None = None,
     include_secrets: bool = False,
+    allow_restricted_scope: bool = False,
     dry_run: bool = False,
     dest_root: Path | None = None,
 ):
@@ -288,12 +319,23 @@ def create_legacy(
             "class 'secrets' requires --include-secrets (secrets are never backed up by default)"
         )
 
+    # Issue #235: fail-closed BEFORE dry_run, same rationale as
+    # create_native - a dry-run preview must report the same refusal a
+    # real create would, not silently preview Restricted-scope paths.
+    try:
+        restricted_scope.require_legacy_opt_in(resolved_classes, allow_restricted_scope)
+    except restricted_scope.RestrictedScopeError as exc:
+        raise BackupError(str(exc)) from exc
+
+    restricted_scope_included = bool(restricted_scope.legacy_classes_requiring_opt_in(resolved_classes))
+
     if dry_run:
         preview = archive.preview_classes(hermes_home, resolved_classes)
         return {
             "dry_run": True,
             "format": "legacy-omes",
             "classes": list(resolved_classes),
+            "restricted_scope_included": restricted_scope_included,
             "hermes_home": str(hermes_home),
             "entries": preview,
             "entry_count": len(preview),
@@ -309,6 +351,7 @@ def create_legacy(
         "hermes_home": str(hermes_home),
         "classes": list(resolved_classes),
         "include_secrets": bool(include_secrets and "secrets" in resolved_classes),
+        "restricted_scope_included": restricted_scope_included,
         "timestamp": session_dir.name,
         "omes_version": _omes_version(),
     }
@@ -320,6 +363,7 @@ def create_legacy(
         "path": str(session_dir),
         "format": "legacy-omes",
         "classes": list(resolved_classes),
+        "restricted_scope_included": restricted_scope_included,
         "entry_count": len(entries),
         "meta": meta,
     }
@@ -354,6 +398,7 @@ def list_sessions(dest_root: Path | None = None):
                 "hermes_version": meta.get("hermes_version"),
                 "include_secrets": bool(meta.get("include_secrets", False) or meta.get("sensitive", False)),
                 "sensitive": bool(meta.get("sensitive", False) or meta.get("include_secrets", False)),
+                "restricted_scope_included": bool(meta.get("restricted_scope_included", False)),
             }
         )
     return sessions
@@ -429,8 +474,16 @@ def restore(
     dest_root: Path | None = None,
     backups_dest_root: Path | None = None,
     allow_sensitive_credentials: bool = False,
+    allow_restricted_scope: bool = False,
     profile: str | None = None,
 ):
+    """Restores a backup session. `allow_restricted_scope` (issue #235)
+    mirrors `create()`'s gate: restoring a session that carries Restricted-
+    class prompt/session/context data back onto a live `$HERMES_HOME`
+    is the same kind of explicit, reviewed decision as creating one, so it
+    requires the same opt-in - a script that blindly restores the latest
+    backup must not silently reintroduce session/memory data an operator
+    never reviewed."""
     dest_root = dest_root or paths.backups_root()
     session_dir = dest_root / timestamp
     if not session_dir.is_dir():
@@ -452,6 +505,14 @@ def restore(
                 "--allow-sensitive-credentials (or --restore-secrets)"
             )
 
+        recovery_class = meta.get("recovery_class") or (
+            "portable-profile" if fmt == "native-hermes-profile" else "full-runtime-dr"
+        )
+        try:
+            restricted_scope.require_recovery_class_opt_in(recovery_class, allow_restricted_scope)
+        except restricted_scope.RestrictedScopeError as exc:
+            raise BackupError(str(exc)) from exc
+
         backed_up_home = meta.get("hermes_home")
         if backed_up_home and str(target_hermes_home) != backed_up_home and not force_home:
             raise BackupError(
@@ -470,13 +531,19 @@ def restore(
                 "dry_run": True,
             }
 
-        # Create pre-restore recovery point before host mutation
+        # Create pre-restore recovery point before host mutation. This is
+        # OMES's own protective safety snapshot of whatever currently
+        # exists at the target - not a new operator-initiated "default"
+        # export - so it always passes allow_sensitive_credentials/
+        # allow_restricted_scope=True internally; the operator's own
+        # opt-in was already required above to reach this point at all.
         target_hermes_home.mkdir(parents=True, exist_ok=True)
         pre_restore = create(
             target_hermes_home,
             recovery_class="portable-profile" if fmt == "native-hermes-profile" else "full-runtime-dr",
             profile=profile or meta.get("profile", "default"),
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=backups_dest_root or dest_root,
         )
 
@@ -542,6 +609,11 @@ def restore(
         c for c in meta.get("classes", []) if c != "secrets" or restore_secrets
     )
 
+    try:
+        restricted_scope.require_legacy_opt_in(requested, allow_restricted_scope)
+    except restricted_scope.RestrictedScopeError as exc:
+        raise BackupError(str(exc)) from exc
+
     selected = [e for e in entries if e["category"] in requested]
     if not selected:
         return {"timestamp": timestamp, "restored": [], "skipped_secrets": True, "dry_run": dry_run}
@@ -567,11 +639,15 @@ def restore(
             "dry_run": True,
         }
 
-    # Pre-restore backup: protect whatever currently lives at the target paths
+    # Pre-restore backup: protect whatever currently lives at the target
+    # paths. Same rationale as the native path above: this is OMES's own
+    # protective snapshot, not a new operator-initiated export, so it
+    # always passes allow_restricted_scope=True internally.
     pre_restore = create(
         target_hermes_home,
         list({e["category"] for e in selected}),
         include_secrets=restore_secrets,
+        allow_restricted_scope=True,
         dry_run=False,
         dest_root=backups_dest_root or dest_root,
     )

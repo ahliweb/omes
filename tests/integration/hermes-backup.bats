@@ -42,21 +42,34 @@ teardown() {
 }
 
 @test "omes agent-backup create defaults to native portable-profile and excludes secrets" {
-  run "$OMES_BIN" agent-backup create --json
+  run "$OMES_BIN" agent-backup create --allow-restricted-scope --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"format": "native-hermes-profile"'* ]]
   [[ "$output" == *'"recovery_class": "portable-profile"'* ]]
   [[ "$output" != *"canary-secret-value"* ]]
 }
 
+@test "omes agent-backup create without --allow-restricted-scope is refused with a stable reason code (issue #235)" {
+  run "$OMES_BIN" agent-backup create --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN"* ]]
+  [ ! -d "${OMES_STATE_DIR}/backups/hermes" ] || [ -z "$(ls -A "${OMES_STATE_DIR}/backups/hermes" 2>/dev/null)" ]
+}
+
 @test "omes agent-backup create --recovery-class full-runtime-dr requires sensitive opt-in" {
-  run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --json
+  run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --allow-restricted-scope --json
   [ "$status" -ne 0 ]
   [[ "$output" == *"allow-sensitive-credentials"* ]]
 }
 
-@test "omes agent-backup create --recovery-class full-runtime-dr with --allow-sensitive-credentials succeeds" {
+@test "omes agent-backup create --recovery-class full-runtime-dr with --allow-sensitive-credentials still requires --allow-restricted-scope (issue #235)" {
   run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --allow-sensitive-credentials --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN"* ]]
+}
+
+@test "omes agent-backup create --recovery-class full-runtime-dr with both opt-ins succeeds" {
+  run "$OMES_BIN" agent-backup create --recovery-class full-runtime-dr --allow-sensitive-credentials --allow-restricted-scope --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"format": "native-hermes-runtime"'* ]]
   [[ "$output" == *'"recovery_class": "full-runtime-dr"'* ]]
@@ -65,15 +78,21 @@ teardown() {
 
 @test "omes agent-backup --json create honors the global --json flag placed right after the command word" {
   local out
-  out="$("$OMES_BIN" agent-backup --json create 2>/dev/null)"
+  out="$("$OMES_BIN" agent-backup --json create --allow-restricted-scope 2>/dev/null)"
   run python3 -c "import json,sys; json.loads(sys.argv[1])" "$out"
   [ "$status" -eq 0 ]
 }
 
 @test "omes agent-backup create --dry-run creates no session directory" {
-  run "$OMES_BIN" agent-backup create --dry-run --json
+  run "$OMES_BIN" agent-backup create --dry-run --allow-restricted-scope --json
   [ "$status" -eq 0 ]
   [ ! -d "${OMES_STATE_DIR}/backups/hermes" ] || [ -z "$(ls -A "${OMES_STATE_DIR}/backups/hermes" 2>/dev/null)" ]
+}
+
+@test "omes agent-backup create --dry-run without --allow-restricted-scope is refused too (issue #235)" {
+  run "$OMES_BIN" agent-backup create --dry-run --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN"* ]]
 }
 
 @test "omes agent-backup create with legacy classes preserves backward compatibility" {
@@ -90,7 +109,7 @@ teardown() {
 }
 
 @test "omes agent-backup list and inventory show created sessions" {
-  "$OMES_BIN" agent-backup create --yes >/dev/null
+  "$OMES_BIN" agent-backup create --allow-restricted-scope --yes >/dev/null
   run "$OMES_BIN" agent-backup list --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"native-hermes-profile"'* ]]
@@ -101,17 +120,18 @@ teardown() {
 }
 
 @test "omes agent-backup verify reports OK for a freshly created native session" {
-  run "$OMES_BIN" agent-backup create --json
-  [ "$status" -eq 0 ]
-  ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
+  local create_out
+  create_out="$("$OMES_BIN" agent-backup create --allow-restricted-scope --json 2>/dev/null)"
+  ts="$(printf '%s' "$create_out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
   run "$OMES_BIN" agent-backup verify "$ts" --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"ok": true'* ]]
 }
 
 @test "omes agent-backup restore requires --yes or a TTY to proceed" {
-  run "$OMES_BIN" agent-backup create --json
-  ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
+  local create_out
+  create_out="$("$OMES_BIN" agent-backup create --allow-restricted-scope --json 2>/dev/null)"
+  ts="$(printf '%s' "$create_out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
   printf 'changed\n' >"${HERMES_HOME}/config.yaml"
 
   run "$OMES_BIN" agent-backup restore "$ts"
@@ -119,12 +139,25 @@ teardown() {
   [ "$(cat "${HERMES_HOME}/config.yaml")" = "changed" ]
 }
 
-@test "omes agent-backup restore --yes restores native profile and creates pre-restore backup" {
-  run "$OMES_BIN" agent-backup create --json
-  ts="$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
+@test "omes agent-backup restore without --allow-restricted-scope is refused with a stable reason code (issue #235)" {
+  local create_out
+  create_out="$("$OMES_BIN" agent-backup create --allow-restricted-scope --json 2>/dev/null)"
+  ts="$(printf '%s' "$create_out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
   printf 'changed\n' >"${HERMES_HOME}/config.yaml"
 
   run "$OMES_BIN" agent-backup restore "$ts" --yes --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"BACKUP_RESTRICTED_SCOPE_REQUIRES_OPT_IN"* ]]
+  [ "$(cat "${HERMES_HOME}/config.yaml")" = "changed" ]
+}
+
+@test "omes agent-backup restore --yes restores native profile and creates pre-restore backup" {
+  local create_out
+  create_out="$("$OMES_BIN" agent-backup create --allow-restricted-scope --json 2>/dev/null)"
+  ts="$(printf '%s' "$create_out" | python3 -c 'import json,sys; print(json.load(sys.stdin)["timestamp"])')"
+  printf 'changed\n' >"${HERMES_HOME}/config.yaml"
+
+  run "$OMES_BIN" agent-backup restore "$ts" --yes --allow-restricted-scope --json
   [ "$status" -eq 0 ]
   [[ "$output" == *'"health_verified": true'* ]]
   [[ "$output" == *"pre_restore_backup"* ]]
@@ -154,7 +187,7 @@ teardown() {
 }
 
 @test "omes doctor reports the hermes-backup module_doctor line once applied" {
-  "$OMES_BIN" agent-backup create --yes >/dev/null
+  "$OMES_BIN" agent-backup create --allow-restricted-scope --yes >/dev/null
   run "$OMES_BIN" install --module hermes-backup --yes
   [ "$status" -eq 0 ]
 

@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import _pathfix  # noqa: F401
 
-from hermesbackup import backup, classes as classes_mod, manifest
+from hermesbackup import backup, classes as classes_mod, manifest, restricted_scope
 
 
 # Ensure tests/shims is in PATH so mock `hermes` is executed
@@ -51,11 +51,12 @@ class NativeBackupTestCase(unittest.TestCase):
 
 class TestNativeCreate(NativeBackupTestCase):
     def test_default_create_is_native_portable_profile(self):
-        result = backup.create(self.hermes_home, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         self.assertEqual(result["format"], "native-hermes-profile")
         self.assertEqual(result["recovery_class"], "portable-profile")
         self.assertEqual(result["profile"], "default")
         self.assertFalse(result["sensitive"])
+        self.assertTrue(result["restricted_scope_included"])
 
         session_dir = Path(result["path"])
         self.assertTrue((session_dir / "default.hermes-profile.tar.gz").is_file())
@@ -68,11 +69,13 @@ class TestNativeCreate(NativeBackupTestCase):
         self.assertEqual(meta["profile"], "default")
         self.assertEqual(meta["artifact"], "default.hermes-profile.tar.gz")
         self.assertTrue(meta.get("sha256"))
+        self.assertTrue(meta["restricted_scope_included"])
 
     def test_create_custom_profile(self):
         result = backup.create(
             self.hermes_home,
             profile="researcher",
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
         self.assertEqual(result["profile"], "researcher")
@@ -86,6 +89,7 @@ class TestNativeCreate(NativeBackupTestCase):
                 self.hermes_home,
                 recovery_class="full-runtime-dr",
                 allow_sensitive_credentials=False,
+                allow_restricted_scope=True,
                 dest_root=self.backups_root,
             )
 
@@ -94,6 +98,7 @@ class TestNativeCreate(NativeBackupTestCase):
             self.hermes_home,
             recovery_class="full-runtime-dr",
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
         self.assertEqual(result["format"], "native-hermes-runtime")
@@ -107,6 +112,7 @@ class TestNativeCreate(NativeBackupTestCase):
         result = backup.create(
             self.hermes_home,
             dry_run=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
         self.assertTrue(result["dry_run"])
@@ -116,19 +122,77 @@ class TestNativeCreate(NativeBackupTestCase):
     def test_export_failure_raises_backup_error(self):
         os.environ["SHIM_HERMES_PROFILE_EXPORT_EXIT"] = "1"
         with self.assertRaises(backup.BackupError):
+            backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
+
+
+class TestNativeCreateRestrictedScopeGate(NativeBackupTestCase):
+    """Issue #235: the recovery classes Hermes itself documents as always
+    including session state (ADR-0020) must never be creatable as a
+    *default* backup - i.e. without the explicit, reviewed
+    --allow-restricted-scope opt-in. This is the actual "default backups
+    cannot capture Restricted prompt/session data" enforcement point."""
+
+    def test_default_create_without_opt_in_is_refused_with_stable_reason_code(self):
+        with self.assertRaises(backup.BackupError) as ctx:
             backup.create(self.hermes_home, dest_root=self.backups_root)
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+        # Fail-closed: nothing was written to disk on the refused attempt.
+        self.assertFalse(self.backups_root.exists() and any(self.backups_root.iterdir()))
+
+    def test_explicit_portable_profile_without_opt_in_is_refused(self):
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(
+                self.hermes_home,
+                recovery_class="portable-profile",
+                dest_root=self.backups_root,
+            )
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_full_runtime_dr_without_restricted_scope_opt_in_is_refused_even_with_credentials_opt_in(self):
+        """--allow-sensitive-credentials alone (the pre-#235 gate) must
+        NOT be treated as equivalent to the new, separate
+        --allow-restricted-scope opt-in - they cover different data
+        (credentials vs. prompt/session/context data)."""
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(
+                self.hermes_home,
+                recovery_class="full-runtime-dr",
+                allow_sensitive_credentials=True,
+                dest_root=self.backups_root,
+            )
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_dry_run_without_opt_in_is_refused_too(self):
+        """A dry-run preview must report the same fail-closed refusal a
+        real create would - never silently preview Restricted-scope
+        inclusion as if it were fine."""
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.create(self.hermes_home, dry_run=True, dest_root=self.backups_root)
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+
+    def test_omes_host_recovery_class_is_not_gated_by_the_native_check(self):
+        """`omes-host` resolves to the legacy engine's own default classes
+        (config, skills) which never include session state, so it must
+        NOT require --allow-restricted-scope."""
+        result = backup.create(
+            self.hermes_home,
+            recovery_class="omes-host",
+            dest_root=self.backups_root,
+        )
+        self.assertEqual(result["format"], "legacy-omes")
+        self.assertFalse(result["restricted_scope_included"])
 
 
 class TestNativeVerify(NativeBackupTestCase):
     def test_verify_native_profile_ok(self):
-        result = backup.create(self.hermes_home, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         verified = backup.verify(result["timestamp"], dest_root=self.backups_root)
         self.assertTrue(verified["ok"])
         self.assertEqual(verified["problems"], [])
         self.assertEqual(verified["format"], "native-hermes-profile")
 
     def test_verify_detects_tampered_native_artifact_sha256(self):
-        result = backup.create(self.hermes_home, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         session_dir = self.backups_root / result["timestamp"]
         artifact_path = session_dir / result["artifact"]
         with tarfile.open(artifact_path, "w:gz") as tar:
@@ -143,7 +207,7 @@ class TestNativeVerify(NativeBackupTestCase):
         self.assertTrue(any("sha256 mismatch" in p for p in verified["problems"]))
 
     def test_verify_detects_corrupted_archive_bytes(self):
-        result = backup.create(self.hermes_home, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         session_dir = self.backups_root / result["timestamp"]
         artifact_path = session_dir / result["artifact"]
         artifact_path.write_text("corrupted content", encoding="utf-8")
@@ -152,7 +216,7 @@ class TestNativeVerify(NativeBackupTestCase):
             backup.verify(result["timestamp"], dest_root=self.backups_root)
 
     def test_verify_detects_missing_native_artifact(self):
-        result = backup.create(self.hermes_home, dest_root=self.backups_root)
+        result = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         session_dir = self.backups_root / result["timestamp"]
         (session_dir / result["artifact"]).unlink()
 
@@ -162,10 +226,11 @@ class TestNativeVerify(NativeBackupTestCase):
 
 class TestNativeRestore(NativeBackupTestCase):
     def test_restore_native_profile_success(self):
-        created = backup.create(self.hermes_home, dest_root=self.backups_root)
+        created = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         res = backup.restore(
             created["timestamp"],
             self.hermes_home,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
             backups_dest_root=self.backups_root,
         )
@@ -178,6 +243,7 @@ class TestNativeRestore(NativeBackupTestCase):
             self.hermes_home,
             recovery_class="full-runtime-dr",
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
         with self.assertRaises(backup.BackupError) as ctx:
@@ -185,6 +251,7 @@ class TestNativeRestore(NativeBackupTestCase):
                 created["timestamp"],
                 self.hermes_home,
                 allow_sensitive_credentials=False,
+                allow_restricted_scope=True,
                 dest_root=self.backups_root,
                 backups_dest_root=self.backups_root,
             )
@@ -195,12 +262,14 @@ class TestNativeRestore(NativeBackupTestCase):
             self.hermes_home,
             recovery_class="full-runtime-dr",
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
         res = backup.restore(
             created["timestamp"],
             self.hermes_home,
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
             backups_dest_root=self.backups_root,
         )
@@ -208,7 +277,7 @@ class TestNativeRestore(NativeBackupTestCase):
         self.assertEqual(res["format"], "native-hermes-runtime")
 
     def test_restore_rejects_tampered_artifact(self):
-        created = backup.create(self.hermes_home, dest_root=self.backups_root)
+        created = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         session_dir = self.backups_root / created["timestamp"]
         (session_dir / created["artifact"]).write_text("tampered", encoding="utf-8")
 
@@ -216,26 +285,28 @@ class TestNativeRestore(NativeBackupTestCase):
             backup.restore(
                 created["timestamp"],
                 self.hermes_home,
+                allow_restricted_scope=True,
                 dest_root=self.backups_root,
                 backups_dest_root=self.backups_root,
             )
         self.assertIn("corrupt", str(ctx.exception))
 
     def test_restore_fails_when_health_check_fails(self):
-        created = backup.create(self.hermes_home, dest_root=self.backups_root)
+        created = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         os.environ["SHIM_HERMES_DOCTOR_EXIT"] = "1"
 
         with self.assertRaises(backup.BackupError) as ctx:
             backup.restore(
                 created["timestamp"],
                 self.hermes_home,
+                allow_restricted_scope=True,
                 dest_root=self.backups_root,
                 backups_dest_root=self.backups_root,
             )
         self.assertIn("health check failed", str(ctx.exception))
 
     def test_restore_refuses_different_home_without_force(self):
-        created = backup.create(self.hermes_home, dest_root=self.backups_root)
+        created = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         other_home = self.root / "other-home"
         other_home.mkdir()
 
@@ -244,6 +315,7 @@ class TestNativeRestore(NativeBackupTestCase):
                 created["timestamp"],
                 other_home,
                 force_home=False,
+                allow_restricted_scope=True,
                 dest_root=self.backups_root,
                 backups_dest_root=self.backups_root,
             )
@@ -252,19 +324,39 @@ class TestNativeRestore(NativeBackupTestCase):
             created["timestamp"],
             other_home,
             force_home=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
             backups_dest_root=self.backups_root,
         )
         self.assertTrue(res["health_verified"])
 
+    def test_restore_without_restricted_scope_opt_in_is_refused(self):
+        """Mirrors the create-side gate: restoring a session that carries
+        Restricted-class session state back onto a live $HERMES_HOME must
+        not succeed silently either."""
+        created = backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
+        with self.assertRaises(backup.BackupError) as ctx:
+            backup.restore(
+                created["timestamp"],
+                self.hermes_home,
+                dest_root=self.backups_root,
+                backups_dest_root=self.backups_root,
+            )
+        self.assertIn(restricted_scope.REASON_RESTRICTED_SCOPE_REQUIRES_OPT_IN, str(ctx.exception))
+        # Fail-closed: nothing on disk changed (no hermes import ran).
+        self.assertFalse((self.hermes_home / "profile.json").exists())
+
 
 class TestInventoryAndPruning(NativeBackupTestCase):
     def test_list_sessions_reports_native_attributes(self):
-        res_profile = backup.create(self.hermes_home, profile="researcher", dest_root=self.backups_root)
+        res_profile = backup.create(
+            self.hermes_home, profile="researcher", allow_restricted_scope=True, dest_root=self.backups_root
+        )
         res_runtime = backup.create(
             self.hermes_home,
             recovery_class="full-runtime-dr",
             allow_sensitive_credentials=True,
+            allow_restricted_scope=True,
             dest_root=self.backups_root,
         )
 
@@ -277,15 +369,17 @@ class TestInventoryAndPruning(NativeBackupTestCase):
         self.assertEqual(s_prof["recovery_class"], "portable-profile")
         self.assertEqual(s_prof["profile"], "researcher")
         self.assertFalse(s_prof["sensitive"])
+        self.assertTrue(s_prof["restricted_scope_included"])
 
         s_run = by_ts[res_runtime["timestamp"]]
         self.assertEqual(s_run["format"], "native-hermes-runtime")
         self.assertEqual(s_run["recovery_class"], "full-runtime-dr")
         self.assertTrue(s_run["sensitive"])
+        self.assertTrue(s_run["restricted_scope_included"])
 
     def test_prune_native_sessions(self):
         for _ in range(4):
-            backup.create(self.hermes_home, dest_root=self.backups_root)
+            backup.create(self.hermes_home, allow_restricted_scope=True, dest_root=self.backups_root)
         removed = backup.prune(keep=2, dest_root=self.backups_root)
         self.assertEqual(len(removed), 2)
         remaining = backup.list_sessions(dest_root=self.backups_root)
