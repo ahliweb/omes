@@ -15,6 +15,7 @@
     "evidence_source",
     "local_only_posture",
     "hermes_version_reference",
+    "model_artifact_provenance",
     "status",
     "reason_codes"
   ],
@@ -63,6 +64,8 @@
         "omes-host:state",
         "local-only-posture-source:issue-215",
         "local-only-posture-source:unavailable",
+        "model-artifact-provenance-source:issue-236",
+        "model-artifact-provenance-source:unavailable",
         "unknown"
       ]
     },
@@ -84,6 +87,8 @@
             "omes-host:state",
             "local-only-posture-source:issue-215",
             "local-only-posture-source:unavailable",
+            "model-artifact-provenance-source:issue-236",
+            "model-artifact-provenance-source:unavailable",
             "unknown"
           ]
         }
@@ -109,8 +114,30 @@
             "omes-host:state",
             "local-only-posture-source:issue-215",
             "local-only-posture-source:unavailable",
+            "model-artifact-provenance-source:issue-236",
+            "model-artifact-provenance-source:unavailable",
             "unknown"
           ]
+        }
+      }
+    },
+    "model_artifact_provenance": {
+      "type": "object",
+      "description": "Issue #236 (threat AI-06) model/runtime artifact provenance/integrity evidence integration point: a local model must not be trusted merely because it is local. `available: false` (including before #236 evidence has ever been recorded) must never be treated as a healthy default - whenever `destination_class` is 'local' it degrades this evidence to BLOCKED (under a declared restricted_local_only posture) or WARN (otherwise). `status`/`reason` summarize the most recent `omes audit provenance --verify-artifacts` run; the underlying checksum hashing does not run on every evaluation (see docs/provenance.md) - only this small bounded summary is read here.",
+      "required": ["available", "status", "reason", "declared_count", "verified_count", "last_verified_at"],
+      "additionalProperties": false,
+      "properties": {
+        "available": { "type": "boolean" },
+        "status": { "type": "string", "enum": ["pass", "fail", "warn", "unknown"] },
+        "reason": {
+          "type": "string",
+          "enum": ["consistent", "checksum_mismatch", "missing_artifact", "unverified_no_pin", "stale", "not_declared", "unknown"]
+        },
+        "declared_count": { "type": "integer", "minimum": 0 },
+        "verified_count": { "type": "integer", "minimum": 0 },
+        "last_verified_at": {
+          "type": ["string", "null"],
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
         }
       }
     },
@@ -145,7 +172,15 @@
           "AI_PRIVACY_POSTURE_WARN_LOCAL_ONLY_SOURCE_REPORTS_UNKNOWN",
           "AI_PRIVACY_POSTURE_WARN_EXPECTED_POSTURE_UNKNOWN",
           "AI_PRIVACY_POSTURE_WARN_EVIDENCE_SOURCE_REJECTED",
-          "AI_PRIVACY_POSTURE_WARN_HERMES_VERSION_REFERENCE_REJECTED"
+          "AI_PRIVACY_POSTURE_WARN_HERMES_VERSION_REFERENCE_REJECTED",
+          "AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+          "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_CHECKSUM_MISMATCH",
+          "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_MISSING",
+          "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_INTEGRITY",
+          "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+          "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_UNVERIFIED_NO_PIN",
+          "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_STALE",
+          "AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNKNOWN"
         ]
       }
     }

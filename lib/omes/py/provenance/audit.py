@@ -36,6 +36,15 @@ EXIT_FINDINGS = 7
 
 REQUIRED_FIELDS = ("component", "installer_source_url", "resolved_version", "install_time")
 
+# Issue #236: a `model-artifact:<name>` record (lib/omes/py/provenance/
+# artifacts.py) describes a declared file's checksum, not an installed
+# package/binary - it legitimately has no installer source URL or
+# resolved version to report, so those two fields are not required for
+# this component kind (avoids a permanent, meaningless WARN on every
+# otherwise-clean artifact record).
+_MODEL_ARTIFACT_PREFIX = "model-artifact:"
+_MODEL_ARTIFACT_REQUIRED_FIELDS = ("component", "install_time")
+
 # Reference substrings that identify a mutable (non-pinned) URL - a
 # branch/tag that can change after the fact rather than an immutable
 # release asset or commit SHA.
@@ -103,7 +112,8 @@ def evaluate_record(component: str, data: Optional[dict], load_error: Optional[s
         )
         return findings
 
-    missing = [f for f in REQUIRED_FIELDS if not data.get(f)]
+    required_fields = _MODEL_ARTIFACT_REQUIRED_FIELDS if component.startswith(_MODEL_ARTIFACT_PREFIX) else REQUIRED_FIELDS
+    missing = [f for f in required_fields if not data.get(f)]
     if missing:
         findings.append(
             {
@@ -126,6 +136,19 @@ def evaluate_record(component: str, data: Optional[dict], load_error: Optional[s
                 "severity": "FAIL",
                 "kind": "checksum_mismatch",
                 "detail": f"recorded checksum mismatch (expected {expected}, actual {actual}) - fail closed",
+            }
+        )
+    elif status == "missing":
+        # Issue #236: a declared model/runtime artifact was not found on
+        # disk at verification time. Fail-closed like a checksum
+        # mismatch - the file's absence is itself an integrity failure,
+        # not merely "unverified".
+        findings.append(
+            {
+                "component": component,
+                "severity": "FAIL",
+                "kind": "artifact_missing",
+                "detail": "declared model/runtime artifact was not found on disk at verification time - fail closed",
             }
         )
     elif status not in ("verified", "pinned", "locally-built", "package_manager_verified"):

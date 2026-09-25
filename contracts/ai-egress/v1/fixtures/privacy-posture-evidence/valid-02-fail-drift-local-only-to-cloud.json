@@ -17,5 +17,13 @@
   "reason_codes": [
     "AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD",
     "AI_PRIVACY_POSTURE_FAIL_CLOUD_FALLBACK_ENABLED_UNDER_RESTRICTED_POSTURE"
-  ]
+  ],
+  "model_artifact_provenance": {
+    "available": false,
+    "status": "unknown",
+    "reason": "not_declared",
+    "declared_count": 0,
+    "verified_count": 0,
+    "last_verified_at": null
+  }
 }

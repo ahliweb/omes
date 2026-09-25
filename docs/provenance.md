@@ -132,6 +132,87 @@ graphify (`uv tool install graphifyy` / `pipx install graphifyy`, see
   PATH, or produce no parseable output — this is a discovery step, never
   a precondition for `module_apply` succeeding.
 
+## 1b. Model/runtime artifact provenance (issue #236, threat AI-06)
+
+A local model must not be trusted merely because it is local. #215
+verifies the Hermes gateway's non-root identity and denies outbound
+network access from that unit; it does not verify that the model
+weights or runtime binaries a local inference server actually loads
+are the ones the operator expects. `lib/omes/py/provenance/artifacts.py`
+closes that gap by **layering on the same checksum/provenance model**
+above, rather than building a second, parallel evidence system:
+
+- **The operator explicitly DECLARES the artifact paths OMES should
+  track** as OMES's own state — `ai.model_artifacts.declared` (set with
+  `state_set ai.model_artifacts.declared
+  '[{"component":"main-model","path":"/opt/models/model.gguf","expected_sha256":"<hex>"}]'`)
+  or the `OMES_AI_MODEL_ARTIFACTS` environment override for testing.
+  This module NEVER scans `$HERMES_HOME`, `.hermes/`, or any other
+  Hermes-owned or auto-discovered directory for model files — per
+  ADR-0017, artifact locations must come from an interface/config the
+  operator declares, never from reading Hermes' private state.
+- **`omes audit provenance --verify-artifacts [--force]`** hashes each
+  declared artifact (SHA-256) and writes a provenance record under the
+  component name `model-artifact:<name>` via the same
+  `lib/omes/py/provenance/record.py` writer every other component uses,
+  so the existing `omes audit provenance` reader, its
+  checksum-mismatch-is-FAIL / missing-required-metadata-is-WARN findings
+  evaluator, and its executable-review listing all apply to these
+  records too, with no duplicated logic. A missing declared artifact
+  (checksum status `missing`) is evaluated the same as a checksum
+  mismatch: `FAIL`, fail-closed — never merely `unverified`.
+- **Performance: hashing does not run on every check.** Hashing a
+  multi-GB model file on every `omes health ai-privacy` invocation (or
+  even every `omes audit provenance` run) would be prohibitively slow
+  and is unnecessary, since the artifact is expected to change rarely.
+  `--verify-artifacts` is therefore a deliberately separate, explicit,
+  operator/cron-triggered operation — run it on whatever cadence matches
+  how often your artifacts actually change (e.g. after every model
+  update, or nightly). Even then, a declared artifact whose stat
+  snapshot — `(size, mtime_ns, ctime_ns, ino, dev)`, not merely `(size,
+  mtime)` — is unchanged since its last recorded verification is **not**
+  re-hashed unless `--force` is also given: `mtime` alone is
+  attacker-settable (`touch -d`/`os.utime`), so a same-size content swap
+  that also restores the original mtime is still caught because `ctime`
+  cannot be forged via `utime` and changes on any content or metadata
+  write; a legacy snapshot recorded by older code (missing these keys)
+  is always treated as "needs rehash", failing closed. **Documented
+  residual limit:** this cache still trusts the filesystem's stat
+  metadata — an attacker with root access or clock control able to
+  forge `ctime` alongside `mtime`, or a filesystem without a reliable
+  ctime, would not be caught until the next `--force` run. This is a
+  deliberate, bounded trade-off between integrity assurance and the cost
+  of hashing large files repeatedly; operators with a stronger
+  requirement should run `--force` on their own schedule.
+- **`omes health ai-privacy`'s `model_artifact_provenance` field is a
+  cheap, hashing-free summary** of the already-recorded
+  `model-artifact:*` provenance records (`artifacts.py`'s
+  `summarize()`) — it only stats/reads the small JSON records already on
+  disk, never the artifact bytes themselves, so the health check stays
+  fast even when the declared artifacts are multi-gigabyte files. Under
+  a declared `restricted_local_only` posture, missing evidence for a
+  currently-local destination is `BLOCKED` (fail-closed, matching the
+  #215 local-only-posture-source pattern); otherwise it is `WARN`. A
+  reported checksum mismatch or missing artifact is always `FAIL`,
+  regardless of declared posture. Evidence older than 7 days (the
+  oldest declared artifact's last recorded verification) is `WARN`
+  (`stale`) rather than trusted indefinitely — see
+  `docs/ai-data-privacy-and-model-security.md` sections 10-11.
+- **Signature verification (e.g. sigstore/minisign) is evaluated but not
+  implemented.** Most local model-weight formats (GGUF, safetensors,
+  etc.) have no widely-adopted upstream signature to verify against
+  today, unlike an apt package or a signed release binary; SHA-256
+  digest pinning was chosen as the primary, lower-complexity control,
+  layered on this repository's existing checksum model rather than
+  introducing a new verification toolchain and trust-root management
+  problem. If a future upstream model distribution channel publishes
+  signatures, this should be added as an additional, optional layer —
+  not a replacement for digest pinning — via a reviewed ADR.
+- This audit does NOT verify a separately-managed local inference
+  server's own process identity, non-root posture, or network binding —
+  that is `modules/hermes-restricted/module.sh`'s scope (issue #215),
+  not this one.
+
 ## 2. `omes audit provenance [--profile <name>] [--json]`
 
 Reads every `<state-dir>/provenance/*.json` record and reports:
@@ -210,6 +291,10 @@ is required to execute an unmapped baseline without verification, recording prov
 - It is not a replacement for `scripts/check-supply-chain.sh` (CI-time
   checks) or `docs/security.md` §6's supply-chain rules — it is a
   runtime, host-side, diagnostic layer on top of them.
+- §1b's model/runtime artifact verification does not implement signature
+  verification (e.g. sigstore/minisign) — see §1b's residual-limit note —
+  and does not verify a separately-managed local inference server's own
+  process identity or non-root posture (that is issue #215's scope).
 
 ## 6. Release-scoped evidence bundles (issue #173, ADR-0010)
 
@@ -251,5 +336,7 @@ python3 scripts/verify-release-bundle.py \
   download-to-file, optional-sha256-pin contract this provenance record
   is attached to.
 - [docs/security.md](security.md) §6 — supply-chain rules.
-- [docs/threat-model.md](threat-model.md) T15, T41 — the threats this control mitigates.
-- [ADR-0010](adr/0010-versioning-and-change-fragments.md) and [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md).
+- [docs/threat-model.md](threat-model.md) T15, T41, AI-06 — the threats this control mitigates.
+- [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) section 10 —
+  §1b's model/runtime artifact provenance is one input to the Restricted local-only posture table.
+- [ADR-0010](adr/0010-versioning-and-change-fragments.md), [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md), and [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md).

@@ -35,6 +35,14 @@ def _obs(**overrides):
             "status": "pass",
             "source": "local-only-posture-source:issue-215",
         },
+        "model_artifact_provenance_source": {
+            "available": True,
+            "status": "pass",
+            "reason": "consistent",
+            "declared_count": 1,
+            "verified_count": 1,
+            "last_verified_at": "2026-09-24T12:00:00Z",
+        },
     }
     base.update(overrides)
     return base
@@ -339,6 +347,141 @@ class TestNoSecretOrPromptLeakage(unittest.TestCase):
         obs["extra_unexpected_field"] = self.CANARY_SECRET
         result = pe.evaluate(obs)
         errors = schema_mod.scan_for_raw_secrets(result)
+        self.assertEqual(errors, [], errors)
+
+
+class TestModelArtifactProvenance(unittest.TestCase):
+    """Issue #236 (threat AI-06): a local model must not be trusted merely
+    because it is local. These tests exercise the model/runtime artifact
+    provenance/integrity evidence integration point analogous to the
+    existing #215 local_only_posture_source tests above."""
+
+    def test_missing_source_under_restricted_local_posture_is_blocked_not_healthy(self):
+        obs = _obs()
+        del obs["model_artifact_provenance_source"]
+        result = pe.evaluate(obs)
+        self.assertEqual(result["status"], pe.STATUS_BLOCKED)
+        self.assertIn("AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE", result["reason_codes"])
+        self.assertFalse(result["model_artifact_provenance"]["available"])
+
+    def test_missing_source_under_unrestricted_posture_is_warn_not_blocked(self):
+        obs = _obs(expected_posture="unrestricted", local_only_posture_source=None)
+        del obs["model_artifact_provenance_source"]
+        result = pe.evaluate(obs)
+        self.assertNotEqual(result["status"], pe.STATUS_PASS)
+        self.assertNotEqual(result["status"], pe.STATUS_BLOCKED)
+        self.assertIn("AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE", result["reason_codes"])
+
+    def test_missing_source_when_destination_is_not_local_is_not_penalized(self):
+        # AI-06 is specifically about a LOCAL model. When the effective
+        # destination is not local, there is no local artifact to verify,
+        # so a missing source must not itself block an otherwise-
+        # consistent cloud/unrestricted report.
+        result = pe.evaluate(
+            _obs(
+                expected_posture="unrestricted",
+                destination_class="cloud",
+                local_endpoint={"classification": "not_applicable"},
+                local_only_posture_source=None,
+                model_artifact_provenance_source=None,
+            )
+        )
+        self.assertEqual(result["status"], pe.STATUS_PASS)
+
+    def test_checksum_mismatch_is_fail_never_downgraded(self):
+        result = pe.evaluate(
+            _obs(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "fail",
+                    "reason": "checksum_mismatch",
+                    "declared_count": 1,
+                    "verified_count": 0,
+                    "last_verified_at": "2026-09-24T12:00:00Z",
+                }
+            )
+        )
+        self.assertEqual(result["status"], pe.STATUS_FAIL)
+        self.assertIn("AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_CHECKSUM_MISMATCH", result["reason_codes"])
+
+    def test_missing_artifact_is_fail_never_downgraded(self):
+        result = pe.evaluate(
+            _obs(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "fail",
+                    "reason": "missing_artifact",
+                    "declared_count": 1,
+                    "verified_count": 0,
+                    "last_verified_at": "2026-09-24T12:00:00Z",
+                }
+            )
+        )
+        self.assertEqual(result["status"], pe.STATUS_FAIL)
+        self.assertIn("AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_MISSING", result["reason_codes"])
+
+    def test_unpinned_artifact_is_warn_not_pass(self):
+        result = pe.evaluate(
+            _obs(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "warn",
+                    "reason": "unverified_no_pin",
+                    "declared_count": 1,
+                    "verified_count": 0,
+                    "last_verified_at": "2026-09-24T12:00:00Z",
+                }
+            )
+        )
+        self.assertNotEqual(result["status"], pe.STATUS_PASS)
+        self.assertIn("AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_UNVERIFIED_NO_PIN", result["reason_codes"])
+
+    def test_stale_artifact_evidence_is_warn_not_pass(self):
+        result = pe.evaluate(
+            _obs(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "warn",
+                    "reason": "stale",
+                    "declared_count": 1,
+                    "verified_count": 1,
+                    "last_verified_at": "2026-08-01T12:00:00Z",
+                }
+            )
+        )
+        self.assertNotEqual(result["status"], pe.STATUS_PASS)
+        self.assertIn("AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_STALE", result["reason_codes"])
+
+    def test_fully_consistent_model_artifact_evidence_does_not_block_pass(self):
+        result = pe.evaluate(_obs())
+        self.assertEqual(result["status"], pe.STATUS_PASS)
+        self.assertEqual(result["model_artifact_provenance"]["status"], "pass")
+
+    def test_unrecognized_reason_is_replaced_not_echoed(self):
+        result = pe.evaluate(
+            _obs(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "pass",
+                    "reason": "totally-made-up-reason",
+                    "declared_count": 1,
+                    "verified_count": 1,
+                    "last_verified_at": "2026-09-24T12:00:00Z",
+                }
+            )
+        )
+        self.assertEqual(result["model_artifact_provenance"]["reason"], "unknown")
+
+    def test_output_matches_published_contract_schema(self):
+        result = pe.evaluate(_obs())
+        schema = schema_mod.load_json(
+            __import__("pathlib").Path(__file__).resolve().parents[3]
+            / "contracts"
+            / "ai-egress"
+            / "v1"
+            / "privacy-posture-evidence.schema.json"
+        )
+        errors = schema_mod.validate(result, schema)
         self.assertEqual(errors, [], errors)
 
 

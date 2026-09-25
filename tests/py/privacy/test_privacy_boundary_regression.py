@@ -145,6 +145,14 @@ def _observation(**overrides):
             "status": "pass",
             "source": "local-only-posture-source:issue-215",
         },
+        "model_artifact_provenance_source": {
+            "available": True,
+            "status": "pass",
+            "reason": "consistent",
+            "declared_count": 1,
+            "verified_count": 1,
+            "last_verified_at": "2026-09-24T00:00:00Z",
+        },
     }
     base.update(overrides)
     return base
@@ -504,6 +512,20 @@ class TestCredentialMaterialIsRejectedOrRedacted(unittest.TestCase):
                 )
             )
         )
+        outputs.append(
+            posture_evidence.evaluate(
+                _observation(
+                    model_artifact_provenance_source={
+                        "available": True,
+                        "status": CANARY_PROMPT,
+                        "reason": CANARY_API_KEY,
+                        "declared_count": 1,
+                        "verified_count": 1,
+                        "last_verified_at": CANARY_TRANSCRIPT,
+                    }
+                )
+            )
+        )
 
         outputs.append(
             restricted_posture.evaluate_restricted_posture(
@@ -676,6 +698,38 @@ class TestLocalOnlyPostureRejectsSilentCloudFallback(unittest.TestCase):
             evidence["reason_codes"],
         )
 
+    def test_model_artifact_checksum_mismatch_is_fail_even_when_every_other_signal_is_healthy(self):
+        """Issue #236 (threat AI-06): 'it is local' must never be treated
+        as a substitute for artifact integrity evidence. Everything else
+        about this observation is a fully-consistent restricted-local-only
+        posture; only the artifact checksum disagrees."""
+        evidence = posture_evidence.evaluate(
+            _observation(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "fail",
+                    "reason": "checksum_mismatch",
+                    "declared_count": 1,
+                    "verified_count": 0,
+                    "last_verified_at": "2026-09-24T00:00:00Z",
+                }
+            )
+        )
+        self.assertEqual(evidence["status"], posture_evidence.STATUS_FAIL)
+        self.assertIn(
+            "AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_CHECKSUM_MISMATCH",
+            evidence["reason_codes"],
+        )
+
+    def test_missing_model_artifact_evidence_under_restricted_posture_is_blocked_not_pass(self):
+        evidence = posture_evidence.evaluate(_observation(model_artifact_provenance_source=None))
+        self.assertEqual(evidence["status"], posture_evidence.STATUS_BLOCKED)
+        self.assertIn(
+            "AI_PRIVACY_POSTURE_BLOCKED_MODEL_ARTIFACT_EVIDENCE_UNAVAILABLE",
+            evidence["reason_codes"],
+        )
+        self.assertFalse(evidence["model_artifact_provenance"]["available"])
+
     def test_silent_fallback_findings_survive_the_control_center_projection(self):
         evidence = posture_evidence.evaluate(
             _observation(destination_class="local", cloud_fallback_enabled=True)
@@ -737,6 +791,42 @@ class TestStaleOrMissingEvidenceIsNeverSuccess(unittest.TestCase):
             posture_projection.classify_freshness("2027-01-01T00:00:00Z", "2026-09-24T00:00:00Z"),
             posture_projection.FRESHNESS_UNKNOWN,
         )
+
+    def test_stale_model_artifact_verification_is_never_reported_as_pass(self):
+        """Issue #236: hashing a multi-GB model artifact runs on a bounded
+        cadence, not on every health check (see docs/provenance.md), so a
+        verification that has not run recently enough must degrade to
+        WARN, never be silently trusted as still-current."""
+        evidence = posture_evidence.evaluate(
+            _observation(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "warn",
+                    "reason": "stale",
+                    "declared_count": 1,
+                    "verified_count": 1,
+                    "last_verified_at": "2026-01-01T00:00:00Z",
+                }
+            )
+        )
+        self.assertNotEqual(evidence["status"], posture_evidence.STATUS_PASS)
+        self.assertIn("AI_PRIVACY_POSTURE_WARN_MODEL_ARTIFACT_EVIDENCE_STALE", evidence["reason_codes"])
+
+    def test_missing_model_artifact_on_disk_is_fail_not_warn(self):
+        evidence = posture_evidence.evaluate(
+            _observation(
+                model_artifact_provenance_source={
+                    "available": True,
+                    "status": "fail",
+                    "reason": "missing_artifact",
+                    "declared_count": 1,
+                    "verified_count": 0,
+                    "last_verified_at": "2026-09-24T00:00:00Z",
+                }
+            )
+        )
+        self.assertEqual(evidence["status"], posture_evidence.STATUS_FAIL)
+        self.assertIn("AI_PRIVACY_POSTURE_FAIL_MODEL_ARTIFACT_MISSING", evidence["reason_codes"])
 
     def test_a_missing_215_local_only_source_blocks_a_restricted_posture_report(self):
         for source in (None, {}, {"available": False}, {"available": "yes"}):

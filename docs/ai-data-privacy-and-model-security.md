@@ -30,7 +30,11 @@
 > enforcement for Restricted-class prompt/session/context data
 > ([#235](https://github.com/ahliweb/omes/issues/235)) is implemented; see
 > section 12 below, [lib/omes/py/hermesbackup/restricted_scope.py](../lib/omes/py/hermesbackup/restricted_scope.py),
-> and [docs/hermes-backup.md](hermes-backup.md) section 3a.
+> and [docs/hermes-backup.md](hermes-backup.md) section 3a. Model/runtime artifact
+> provenance/integrity evidence for local inference (threat AI-06) is also implemented
+> ([#236](https://github.com/ahliweb/omes/issues/236); see
+> [lib/omes/py/provenance/artifacts.py](../lib/omes/py/provenance/artifacts.py) and
+> [docs/provenance.md](provenance.md) section 1b).
 >
 > This document is engineering guidance for OMES. It does **not** claim legal compliance,
 > regulatory approval, ISO certification, Common Criteria certification, or that a local model is
@@ -317,7 +321,7 @@ implemented by `modules/hermes-restricted/module.sh` (opt-in; requires
 | Local inference service runs non-root | **Partially implemented / scope boundary.** OMES does not install, select, or run a model server itself (non-goal: no custom model scheduler). The Hermes gateway process this module hardens already runs under `hermes-gateway-system`'s dedicated non-root service account; verifying the non-root identity of an operator's own separately-managed local inference server (e.g. Ollama) is **not implemented yet**. |
 | Endpoint binds to loopback/private interface by default | **Verified, not configured.** This module verifies the endpoint classifies as local/private; it does not itself configure or bind a model server's listen address (that server is not OMES-owned - see scope boundary above). |
 | Service/network egress is denied or narrowly allowlisted where technically compatible | **Implemented for the gateway unit.** `module_apply` writes a `40-omes-restricted-network.conf` systemd drop-in (`IPAddressDeny=any` / `IPAddressAllow=localhost link-local` plus any operator-approved ranges) on the `hermes-gateway` system unit. This is an **all-or-nothing, whole-unit** policy - every process in that unit's cgroup loses outbound network access, not just model calls; see the module's own `module_apply` confirmation prompt for this trade-off (a gateway that also needs internet access for browser automation or other MCP tools is not compatible with this policy). Requires systemd >= 235; older systemd is logged as an advisory warning, not enforced. |
-| Model/runtime artifacts have provenance and integrity evidence | **Not implemented yet** (tracked in #215 follow-on work; existing host-level provenance in `docs/compatibility-evidence.md` does not yet cover model/runtime artifact hashes). |
+| Model/runtime artifacts have provenance and integrity evidence | **Implemented** ([#236](https://github.com/ahliweb/omes/issues/236), threat AI-06). Layered on the existing #84 checksum/provenance model rather than a second evidence system: an operator DECLARES the artifact paths OMES should track as OMES's own state (`ai.model_artifacts.declared` / `OMES_AI_MODEL_ARTIFACTS` - never an auto-discovered or Hermes-internal path), and `omes audit provenance --verify-artifacts` hashes and records each one as a `model-artifact:<name>` provenance record (`lib/omes/py/provenance/artifacts.py`), reusing `omes audit provenance`'s existing findings evaluator: a checksum mismatch or a missing artifact is FAIL, fail-closed; an unpinned artifact is WARN. Because hashing a multi-GB model file on every check would be prohibitively slow, this hashing step is a deliberately separate, explicit, operator/cron-triggered operation - it does NOT run on every `omes audit provenance` or `omes health ai-privacy` call - and even then a declared artifact whose stat snapshot (`size`, `mtime_ns`, `ctime_ns`, `ino`, `dev` - not merely `size`/`mtime`, since `mtime` alone is attacker-settable via `touch -d`/`os.utime`) is unchanged since its last recorded verification is skipped unless `--force` is passed (a documented, bounded trade-off against an attacker with root or clock control: see docs/provenance.md). `omes health ai-privacy` reads only the small, already-recorded summary (`lib/omes/py/provenance/artifacts.py`'s `summarize()` - never re-hashing artifact bytes) via its `model_artifact_provenance` evidence field: missing evidence for a currently-local destination is BLOCKED under a declared restricted-local-only posture, WARN otherwise, and a reported mismatch/missing artifact is always FAIL regardless of declared posture. Signature verification (e.g. sigstore/minisign) is evaluated but not implemented - see the trade-off analysis in PR #236 - because most local model-weight formats have no widely-adopted upstream signature to verify against today; digest pinning was chosen as the primary control, layered on the existing checksum model. |
 | GPU/CPU compatibility is checked before mutation | **Implemented, advisory only.** `module_check` reports CPU core count, total memory, and GPU tooling presence (`nvidia-smi`/`rocm-smi`/`/dev/dri`) read-only; it warns below a configurable memory threshold but never blocks on hardware alone (only the endpoint-locality check blocks). |
 | Logs avoid prompt bodies and secret values | **Implemented.** Only the bounded evidence fields section 11 allows (endpoint-locality bucket, destination class, decision, reason codes) are logged or persisted to state - never a raw endpoint URL, model name, or credential. |
 | Reinstallation is idempotent | **Implemented.** A repeated `module_apply` re-evaluates the posture and rewrites the same drop-in content; no new resources are created. |
@@ -404,6 +408,8 @@ Allowed examples:
 - correlation/idempotency identifier;
 - verification timestamp and source;
 - PASS/FAIL/WARN/BLOCKED.
+- model/runtime artifact checksum status, declared/verified counts, and last verification
+  timestamp (never the artifact's own bytes or file contents; see [#236](https://github.com/ahliweb/omes/issues/236)).
 
 Prohibited evidence:
 
@@ -695,6 +701,11 @@ seen only on upstream development branches is not treated as supported release e
    context data. Implemented: see
    [lib/omes/py/hermesbackup/restricted_scope.py](../lib/omes/py/hermesbackup/restricted_scope.py)
    and [docs/hermes-backup.md](hermes-backup.md) section 3a (section 12 above has the full detail).
+8. **#236** — model/runtime artifact provenance/integrity evidence for local inference (threat
+   AI-06). Implemented: see [lib/omes/py/provenance/artifacts.py](../lib/omes/py/provenance/artifacts.py),
+   `omes audit provenance --verify-artifacts`, and the `model_artifact_provenance` field in
+   `omes health ai-privacy` (section 10's table and [docs/provenance.md](provenance.md) section 1b
+   have the per-requirement detail).
 
 Each issue follows one issue → one branch → one pull request and must preserve rollback,
 idempotency, evidence, and upstream-first ownership.
