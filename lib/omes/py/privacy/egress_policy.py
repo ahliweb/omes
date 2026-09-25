@@ -37,7 +37,12 @@ Hard boundaries (do not weaken these):
   record the 10-item due-diligence checklist from
   docs/ai-data-privacy-and-model-security.md section 5 as `verified`
   (item 10 may instead be `not_applicable`); a missing or incomplete
-  record is a hard, fail-closed `deny` - it never silently allows.
+  record is a hard, fail-closed `deny` - it never silently allows. That
+  assurance record must also be bound to the exact destination provider:
+  `provider_posture.provider_id` must be present and exactly equal
+  `provider_assurance.provider_id`, or the request is denied
+  (`AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH`) - adequate due diligence
+  recorded for one provider must never approve egress to a different one.
 """
 from __future__ import annotations
 
@@ -130,6 +135,7 @@ REASON_CODES: frozenset[str] = frozenset({
     "AI_EGRESS_DENY_MISSING_SANITIZATION_EVIDENCE",
     "AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE",
     "AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE",
+    "AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH",
 })
 
 
@@ -180,6 +186,28 @@ def _provider_assurance_status(request: Mapping[str, Any]) -> str:
         return "incomplete"
 
     return "adequate"
+
+
+def _provider_assurance_matches_posture_provider(request: Mapping[str, Any]) -> bool:
+    """An `adequate` `provider_assurance` record proves due diligence was
+    recorded for SOME provider - this checks it was recorded for the SAME
+    provider the request is actually about to send content to (issue #237
+    follow-up: a fully verified assurance record for provider A must never
+    approve a request to provider B). Requires `provider_posture.provider_id`
+    to be present (a non-empty string) AND exactly equal to
+    `provider_assurance.provider_id`; a missing posture `provider_id` fails
+    closed rather than being treated as "any provider matches"."""
+    posture = request.get("provider_posture")
+    posture_provider_id = posture.get("provider_id") if isinstance(posture, dict) else None
+    if not isinstance(posture_provider_id, str) or not posture_provider_id:
+        return False
+
+    assurance = request.get("provider_assurance")
+    assurance_provider_id = assurance.get("provider_id") if isinstance(assurance, dict) else None
+    if not isinstance(assurance_provider_id, str) or not assurance_provider_id:
+        return False
+
+    return posture_provider_id == assurance_provider_id
 
 
 def _provider_posture_status(request: Mapping[str, Any]) -> str | None:
@@ -346,5 +374,11 @@ def evaluate(request: Mapping[str, Any]) -> dict[str, Any]:
             return _respond("deny", ["AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE"])
         if assurance_status == "incomplete":
             return _respond("deny", ["AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE"])
+        # assurance_status == "adequate" here, but adequate evidence for
+        # SOME provider must never approve egress to a DIFFERENT provider -
+        # the assurance record must be bound to the exact destination
+        # provider named in provider_posture.
+        if not _provider_assurance_matches_posture_provider(request):
+            return _respond("deny", ["AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH"])
 
     return _respond(decision, [reason_code])

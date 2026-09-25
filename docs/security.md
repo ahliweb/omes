@@ -330,8 +330,10 @@ implemented ([#217](https://github.com/ahliweb/omes/issues/217); see
 AI-07's structured provider-assurance evidence (retention, human access, subprocessors, residency)
 is implemented ([#237](https://github.com/ahliweb/omes/issues/237); see
 [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json)):
-the egress evaluator denies `cloud_sanitized` when this evidence is missing or incomplete, fail
-closed, regardless of provider posture or sanitization evidence.
+the egress evaluator denies `cloud_sanitized` when this evidence is missing or incomplete, or when
+it is not bound to the exact destination provider (`provider_posture.provider_id` must exactly
+equal `provider_assurance.provider_id`), fail closed, regardless of provider posture or
+sanitization evidence.
 Security regression gates for this boundary are implemented
 ([#218](https://github.com/ahliweb/omes/issues/218), closed; commit `ce44b0a`, PR #231; see
 `tests/py/privacy/test_privacy_boundary_regression.py`).

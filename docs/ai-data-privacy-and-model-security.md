@@ -205,11 +205,16 @@ this object for any `cloud_sanitized` destination: items 1-9 must all be `verifi
 private-networking/zero-retention, may instead be `not_applicable` when the provider offers no such
 option); a missing `provider_assurance` object or any incomplete item is a hard, fail-closed `deny`
 (`AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE` / `AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE`) that
-overrides an otherwise-approved decision - it never turns an existing deny into an allow, and it
-never weakens the unconditional RESTRICTED-to-`cloud_sanitized` denial. See
+overrides an otherwise-approved decision. The assurance record must also be bound to the exact
+destination provider: `provider_posture.provider_id` must be present and exactly equal
+`provider_assurance.provider_id`, or the request is denied
+(`AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH`) - adequate due diligence recorded for one provider
+must never approve egress to a different provider. None of this ever turns an existing deny into an
+allow, and it never weakens the unconditional RESTRICTED-to-`cloud_sanitized` denial. See
 `tests/py/privacy/test_egress_policy.py`'s `TestProviderAssuranceGate` and
 `tests/py/privacy/test_privacy_boundary_regression.py`'s
-`TestProviderAssuranceIsNeverInferredFromAProviderClaim` for the exhaustive regression coverage.
+`TestProviderAssuranceIsNeverInferredFromAProviderClaim` and
+`TestProviderAssuranceMustBeBoundToTheDestinationProvider` for the exhaustive regression coverage.
 
 **Residual limits, stated honestly:** this is caller-recorded attestation evidence, not independent
 verification. The evaluator has no way to confirm that a `verified` status is actually true of the
