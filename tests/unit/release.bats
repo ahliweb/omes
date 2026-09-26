@@ -12,6 +12,12 @@ setup() {
   git -C "$WORK_REPO" init -q -b main
   git -C "$WORK_REPO" config user.email "release-test@example.invalid"
   git -C "$WORK_REPO" config user.name "Release Tester"
+  # Never let git spawn detached auto-gc/maintenance after a commit or tag:
+  # it keeps writing into .git after the test body returns and races the
+  # teardown's rm -rf ("work_repo/.git: Directory not empty").
+  git -C "$WORK_REPO" config gc.auto 0
+  git -C "$WORK_REPO" config gc.autoDetach false
+  git -C "$WORK_REPO" config maintenance.auto false
 
   # Copy scripts/release.sh and minimal project files
   mkdir -p "$WORK_REPO/scripts" "$WORK_REPO/changes"
