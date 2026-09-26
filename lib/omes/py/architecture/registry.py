@@ -17,9 +17,16 @@ Provides machine-checkable enforcement of:
        capabilities; R5 logical_boundary implies omes_module null and
        authority != omes; R6 requires omes_module + on-repo evidence for any
        authority-omes "implemented" capability or tool_data "gateway" claim;
-       R7 constrains authority external's implementation_status and SIEM-like
-       capabilities; R8 gates references to a second agent framework; R9
-       reserves the hermes.* id namespace and Hermes runtime terms.
+       R7 constrains authority external's implementation_status and requires
+       any SIEM-like id/title (any spelling of "SIEM"/"Wazuh"/"Splunk"/
+       "Sentinel") to declare authority external regardless of the
+       capability's own declared authority; R8 gates references to a second
+       agent framework, matching common spelling variants (spaced,
+       underscored, hyphenated, concatenated: e.g. "Semantic Kernel",
+       "Llama Index", "Crew AI", "Auto Gen", "Lang Graph"); R9 reserves the
+       hermes.* id namespace and Hermes runtime terms, matching a reserved
+       term (e.g. "model_routing") across space/underscore/hyphen/
+       concatenated spellings in both the capability_id and the title.
   - Control Center contract safety C1 (no raw shell-command escape hatch in
     any contracts/control-center/v1 schema) and C2 (operation-request.schema.json
     allowlist/required-field shape).
@@ -74,7 +81,8 @@ _HERMES_RESERVED_TERMS = frozenset({
 })
 
 _SECOND_AGENT_FRAMEWORK_RE = re.compile(
-    r"(langchain|langgraph|autogen|crewai|llama[-_]?index|semantic[-_]?kernel|haystack)",
+    r"(lang[\s_-]?chain|lang[\s_-]?graph|auto[\s_-]?gen|crew[\s_-]?ai|"
+    r"llama[\s_-]?index|semantic[\s_-]?kernel|haystack)",
     re.IGNORECASE,
 )
 
@@ -87,6 +95,41 @@ def _id_segments(cap_id: str) -> list[str]:
 
 def _title_words(title: str) -> list[str]:
     return [w for w in re.split(r"\W+", (title or "").lower()) if w]
+
+
+def _reserved_term_match(cap_id: str, title: str, terms: frozenset[str]) -> str | None:
+    """Returns the first reserved term (from `terms`, canonical underscore
+    form, e.g. "model_routing") matched anywhere in `cap_id` or `title`,
+    treating space, underscore, hyphen and no-separator ("concatenated") as
+    equivalent word joins on BOTH sides of the comparison. This closes the
+    bypass where a multi-word reserved term such as "model_routing" never
+    matches a naturally-spaced title like "OMES Model Routing Helper"
+    because the title is tokenised on `\\W+` (splitting on spaces) while the
+    reserved term is only ever spelled with an underscore.
+    """
+
+    def _tokens(text: str) -> list[str]:
+        return [t for t in re.split(r"[\s_.\-]+", (text or "").lower()) if t]
+
+    for text in (cap_id, title):
+        words = _tokens(text)
+        if not words:
+            continue
+        for term in terms:
+            term_words = term.split("_")
+            term_concat = "".join(term_words)
+            # underscore/hyphen/space forms all tokenise identically via
+            # _tokens(), so a single-token exact match covers all of them;
+            # the concatenated form (no separator at all) is checked
+            # explicitly since _tokens() never re-joins split words.
+            if term in words or term_concat in words:
+                return term
+            n = len(term_words)
+            if n > 1:
+                for i in range(len(words) - n + 1):
+                    if words[i:i + n] == term_words:
+                        return term
+    return None
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -392,15 +435,27 @@ def validate_semantic_invariants(
                     )
 
         # R7: authority `external` -> implementation_status in
-        # {optional_external, staged}; a SIEM-like id/title must be
-        # `optional_external` unless implemented with R6 evidence.
+        # {optional_external, staged}; a SIEM-like id/title must never be
+        # presented as OMES-shipped core (threat-model AR-05), so this check
+        # runs regardless of `authority` -- it is NOT nested under the
+        # `authority == "external"` branch, because a SIEM-like capability
+        # declared under any other authority (e.g. "omes") is itself the
+        # violation, not a formatting detail of the external branch.
         if authority == "external":
             if implementation_status not in ("optional_external", "staged"):
                 errors.append(
                     f"R7 capability '{cap_id}': authority 'external' requires implementation_status "
                     f"in {{'optional_external', 'staged'}}, got '{implementation_status}'"
                 )
-            if _SIEM_RE.search(cap_id or "") or _SIEM_RE.search(title or ""):
+
+        if _SIEM_RE.search(cap_id or "") or _SIEM_RE.search(title or ""):
+            if authority != "external":
+                errors.append(
+                    f"R7 capability '{cap_id}': SIEM-like capability must declare authority "
+                    f"'external', got '{authority}' (SIEM/external observability must never be "
+                    "presented as OMES-shipped core)"
+                )
+            else:
                 has_evidence = bool(omes_module) and _has_implementation_evidence(
                     root, str(omes_module)
                 )
@@ -437,10 +492,12 @@ def validate_semantic_invariants(
                 f"R9 capability '{cap_id}': capability_id in the reserved 'hermes.' namespace "
                 f"requires authority 'hermes', got '{authority}'"
             )
-        if authority == "omes" and haystack_terms & _HERMES_RESERVED_TERMS:
+        reserved_match = _reserved_term_match(cap_id, title, _HERMES_RESERVED_TERMS)
+        if authority == "omes" and reserved_match:
             errors.append(
                 f"R9 capability '{cap_id}': authority 'omes' must not own a Hermes-reserved runtime "
-                "concern (reasoning/model_routing/memory/delegation/sessions)"
+                f"concern (matched reserved term '{reserved_match}' in the id or title; reserved: "
+                "reasoning/model_routing/memory/delegation/sessions)"
             )
 
     return errors

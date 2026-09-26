@@ -286,6 +286,50 @@ class SemanticInvariantTests(unittest.TestCase):
         errs = registry.validate_semantic_invariants(_registry_of(cap))
         self.assertEqual([e for e in errs if e.startswith("R7 ")], [])
 
+    def test_r7_siem_like_omes_authority_bypass_fails(self) -> None:
+        # Regression for the confirmed bypass: the SIEM guard previously only
+        # ran inside `if authority == "external":`, so a SIEM-like
+        # capability declared with authority "omes" (or any other) slipped
+        # through as [] errors. This must now fail regardless of authority.
+        cap = _base_cap(
+            capability_id="omes.observability.wazuh_bridge",
+            title="OMES Wazuh SIEM Bridge",
+            authority="omes",
+            plane="observability",
+            execution_semantics="observational",
+            implementation_status="implemented",
+            omes_module="architecture",
+        )
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertTrue(any(e.startswith("R7 ") for e in errs), errs)
+
+    def test_r7_siem_like_platform_authority_also_fails(self) -> None:
+        cap = _base_cap(
+            capability_id="platform.observability.splunk_forwarder",
+            title="Platform Splunk Forwarder",
+            authority="platform",
+            plane="observability",
+            execution_semantics="observational",
+            implementation_status="staged",
+            omes_module=None,
+        )
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertTrue(any(e.startswith("R7 ") for e in errs), errs)
+
+    def test_r7_non_siem_omes_capability_unaffected(self) -> None:
+        # Negative control: an ordinary OMES capability with no SIEM-like
+        # term must not be flagged by the widened R7 check.
+        cap = _base_cap(
+            capability_id="omes.example.host_thing",
+            title="OMES Host Thing",
+            authority="omes",
+            plane="host_control",
+            execution_semantics="deterministic",
+            implementation_status="staged",
+        )
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertEqual([e for e in errs if e.startswith("R7 ")], [])
+
     # -- R8 -----------------------------------------------------------
     def test_r8_second_agent_framework_without_adr_fails(self) -> None:
         cap = _base_cap(
@@ -321,6 +365,36 @@ class SemanticInvariantTests(unittest.TestCase):
         errs = registry.validate_semantic_invariants(_registry_of(cap))
         self.assertEqual([e for e in errs if e.startswith("R8 ")], [])
 
+    def test_r8_standard_spelling_variants_all_match(self) -> None:
+        # Regression for the confirmed bypass: the old regex required
+        # "semantic[-_]?kernel" / "llama[-_]?index" (hyphen/underscore only,
+        # no space), so the standard spellings "Semantic Kernel" and "Llama
+        # Index" never matched. This table also covers "Crew AI", "Auto
+        # Gen" and "Lang Graph" called out for the same review.
+        variants = [
+            "LangChain", "Lang Chain", "lang_chain", "lang-chain",
+            "LangGraph", "Lang Graph", "lang_graph", "lang-graph",
+            "AutoGen", "Auto Gen", "auto_gen", "auto-gen",
+            "CrewAI", "Crew AI", "crew_ai", "crew-ai",
+            "LlamaIndex", "Llama Index", "llama_index", "llama-index",
+            "SemanticKernel", "Semantic Kernel", "semantic_kernel", "semantic-kernel",
+            "Haystack",
+        ]
+        for idx, variant in enumerate(variants):
+            with self.subTest(variant=variant):
+                cap = _base_cap(
+                    capability_id=f"hermes.example.thing_{idx}",
+                    title=f"Bridge to {variant}",
+                    authority="hermes",
+                    plane="agent_runtime",
+                    execution_semantics="probabilistic",
+                    adr_reference=None,
+                )
+                errs = registry.validate_semantic_invariants(_registry_of(cap))
+                self.assertTrue(
+                    any(e.startswith("R8 ") for e in errs), (variant, errs)
+                )
+
     # -- R9 -----------------------------------------------------------
     def test_r9_hermes_namespace_wrong_authority_fails(self) -> None:
         cap = _base_cap(capability_id="hermes.example.thing", authority="omarchy")
@@ -351,6 +425,60 @@ class SemanticInvariantTests(unittest.TestCase):
 
     def test_r9_hermes_namespace_correct_authority_passes(self) -> None:
         cap = _base_cap(capability_id="hermes.example.thing", authority="hermes")
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertEqual([e for e in errs if e.startswith("R9 ")], [])
+
+    def test_r9_model_routing_title_bypass_fails(self) -> None:
+        # Regression for the confirmed bypass: _HERMES_RESERVED_TERMS
+        # contains the joined token "model_routing", but titles are split
+        # on `\W+`, so the natural title "OMES Model Routing Helper" never
+        # produced the token "model_routing" and the check returned [].
+        cap = _base_cap(
+            capability_id="omes.agent.model_router",
+            title="OMES Model Routing Helper",
+            authority="omes",
+            plane="host_control",
+            execution_semantics="deterministic",
+            implementation_status="staged",
+        )
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertTrue(any(e.startswith("R9 ") for e in errs), errs)
+
+    def test_r9_reserved_term_spelling_variants(self) -> None:
+        variants = [
+            ("omes.agent.thing1", "OMES Model Routing Helper"),
+            ("omes.agent.thing2", "OMES model-routing helper"),
+            ("omes.agent.model_routing_helper", "OMES Helper"),
+            ("omes.agent.modelrouting_helper", "OMES Helper"),
+            ("omes.agent.thing5", "OMES ModelRouting Helper"),
+        ]
+        for cap_id, title in variants:
+            with self.subTest(cap_id=cap_id, title=title):
+                cap = _base_cap(
+                    capability_id=cap_id,
+                    title=title,
+                    authority="omes",
+                    plane="host_control",
+                    execution_semantics="deterministic",
+                    implementation_status="staged",
+                )
+                errs = registry.validate_semantic_invariants(_registry_of(cap))
+                self.assertTrue(
+                    any(e.startswith("R9 ") for e in errs), (cap_id, title, errs)
+                )
+
+    def test_r9_similar_but_not_reserved_term_passes(self) -> None:
+        # Negative control: "router"/"routing" must not be conflated with
+        # unrelated words, and a title that does not contain the reserved
+        # compound term must not be flagged.
+        cap = _base_cap(
+            capability_id="omes.agent.model_router",
+            title="OMES Model Router Helper",
+            authority="omes",
+            plane="host_control",
+            execution_semantics="deterministic",
+            implementation_status="staged",
+        )
         errs = registry.validate_semantic_invariants(_registry_of(cap))
         self.assertEqual([e for e in errs if e.startswith("R9 ")], [])
 
