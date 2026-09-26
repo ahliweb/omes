@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "precedence": ["delegate", "port", "adapt", "defer", "reject"],
   "capabilities": [
     {
@@ -11,6 +11,9 @@
       "observed_upstream_revision": "v2026.9.14",
       "maturity": "released_supported",
       "disposition": "delegate",
+      "plane": "agent_runtime",
+      "execution_semantics": "probabilistic",
+      "implementation_status": "delegated_upstream",
       "omes_module": null,
       "duplication_allowed": false,
       "adr_reference": null,
@@ -28,6 +31,9 @@
       "observed_upstream_revision": "v4.0.4",
       "maturity": "released_supported",
       "disposition": "adapt",
+      "plane": "infrastructure",
+      "execution_semantics": "deterministic",
+      "implementation_status": "delegated_upstream",
       "omes_module": "desktop",
       "duplication_allowed": false,
       "adr_reference": "ADR-0008",

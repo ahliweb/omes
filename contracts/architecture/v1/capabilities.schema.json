@@ -13,7 +13,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "enum": ["1.0.0"]
+      "enum": ["1.1.0"]
     },
     "precedence": {
       "type": "array",
@@ -35,7 +35,10 @@
           "maturity",
           "disposition",
           "duplication_allowed",
-          "evidence_urls"
+          "evidence_urls",
+          "plane",
+          "execution_semantics",
+          "implementation_status"
         ],
         "additionalProperties": false,
         "properties": {
@@ -54,7 +57,39 @@
               "omarchy",
               "awcms",
               "graphify",
-              "provider"
+              "provider",
+              "platform",
+              "external"
+            ]
+          },
+          "plane": {
+            "type": "string",
+            "enum": [
+              "business_control",
+              "host_control",
+              "agent_runtime",
+              "tool_data",
+              "infrastructure",
+              "observability"
+            ]
+          },
+          "execution_semantics": {
+            "type": "string",
+            "enum": [
+              "probabilistic",
+              "deterministic",
+              "observational",
+              "external_authority"
+            ]
+          },
+          "implementation_status": {
+            "type": "string",
+            "enum": [
+              "implemented",
+              "delegated_upstream",
+              "staged",
+              "optional_external",
+              "logical_boundary"
             ]
           },
           "upstream_project": {

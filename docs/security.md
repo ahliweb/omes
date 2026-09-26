@@ -351,6 +351,24 @@ Security regression gates for this boundary are implemented
 ([#218](https://github.com/ahliweb/omes/issues/218), closed; commit `ce44b0a`, PR #231; see
 `tests/py/privacy/test_privacy_boundary_regression.py`).
 
+### 8.8 Guardrail ownership summary (issue #247)
+
+[docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)
+formalizes the layered reference architecture and the guardrail ownership matrix that the controls
+in this document implement. In summary: business/governance guardrails (identity, RBAC/ABAC,
+approval, tenant scope, audit of business decisions) belong to AWCMS; host execution guardrails
+(preflight, apply, verify, backup, restore, rollback, provenance) belong to OMES; agent/runtime
+guardrails (reasoning, tool orchestration, sessions, memory, delegation, model/provider routing)
+belong to Hermes; data/privacy guardrails are split across the owning application's minimization
+logic, OMES's policy/evidence boundary (§8.7 above), and Hermes's model/provider routing;
+infrastructure guardrails (OS, systemd, filesystem, firewall) belong to the platform layer; and
+observability guardrails are split across OMES's own evidence, AWCMS's sanitized projection, and an
+optional external SIEM. No single layer satisfies every guardrail, and a control described in this
+document is never evidence that a different plane's guardrail has been satisfied on its behalf. In
+particular, **OMES does not mediate all Hermes-native tool execution** — a user or operator reaching
+Hermes through a Hermes-owned channel bypasses both AWCMS and OMES entirely, and no control in this
+document changes that.
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

@@ -38,6 +38,7 @@
 15. [Web-panel reference boundary](#15-web-panel-reference-boundary)
 16. [Upstream-first ownership and architecture boundaries](#16-upstream-first-ownership-and-architecture-boundaries)
 17. [AI data privacy and model-boundary architecture](#17-ai-data-privacy-and-model-boundary-architecture)
+18. [Layered reference architecture and deterministic execution boundary](#18-layered-reference-architecture-and-deterministic-execution-boundary)
 
 ---
 
@@ -1060,6 +1061,40 @@ Enforcement rules:
 
 These rules are enforced in CI via `scripts/check-architecture.py` and unit tests in `tests/py/architecture/test_registry.py`.
 
+#### 16.2.1 Registry schema 1.1.0 and fail-closed invariants (issue #247)
+
+Per issue [#247](https://github.com/ahliweb/omes/issues/247), `contracts/architecture/v1/capabilities.schema.json` is versioned `1.1.0` and `architecture/capabilities.json` declares `schema_version: "1.1.0"`. Schema 1.1.0 adds:
+
+- Two new `authority` values: `platform` (OS/infrastructure primitives — Linux, systemd, filesystem, firewall) and `external` (optional third-party systems, such as a SIEM product, that OMES never treats as core).
+- Three new **required** per-capability fields:
+  - `plane`: which layer of the reference architecture (§18) the capability belongs to — `business_control | host_control | agent_runtime | tool_data | infrastructure | observability`.
+  - `execution_semantics`: how the capability actually behaves — `probabilistic` (model-driven), `deterministic` (fixed check/apply/verify logic), `observational` (read-only projection), or `external_authority` (state owned by a third party OMES only reconciles against).
+  - `implementation_status`: `implemented` (OMES code exists in this repository), `delegated_upstream` (owned and shipped by an upstream project — Hermes, Omarchy, Graphify, a provider, or AWCMS), `staged` (tracked design/implementation not yet landed), `optional_external` (an optional third-party integration, never shipped core), or `logical_boundary` (a trust/integration boundary this document describes, not a component OMES ships).
+- Existing fields (`maturity`, `disposition`, `evidence_urls`, `authority`, and so on) keep their prior meaning unchanged.
+
+The registry gained four new entries describing boundaries and infrastructure that earlier schema versions had no vocabulary for: `boundary.tool_gateway.mcp` (the MCP/API/tool integration boundary, `logical_boundary`), `boundary.knowledge.retrieval` (RAG/knowledge retrieval services, `logical_boundary`), `platform.host.infrastructure` (Linux/systemd/storage/network/secret storage, `delegated_upstream`), and `external.observability.siem` (an optional SIEM integration such as Wazuh, `optional_external`). None of the four has an `omes_module`; none is evidence that OMES ships a tool gateway, a retrieval pipeline, or a SIEM.
+
+`lib/omes/py/architecture/registry.py` enforces nine additional semantic invariants (`R1`–`R9`), each failing closed with its own distinct error message:
+
+| Invariant | Rule |
+|---|---|
+| R1 | Authority `omes` can never carry plane `agent_runtime`/`business_control`, and never carries `execution_semantics: probabilistic` — OMES capabilities are deterministic host control, not a second reasoning layer. |
+| R2 | Plane `agent_runtime` with an authority other than `hermes` requires a non-empty `adr_reference` (R1 still blocks `authority: omes` outright). |
+| R3 | Plane `business_control` requires authority `awcms`, `provider`, or `external`; authority `awcms` may never carry plane `agent_runtime`. |
+| R4 | Authority `omes` may never own anything that is actually retrieval/RAG: an id segment or title word matching `rag`, `retrieval`, `retriever`, `vectorstore`, `embedding`, or `embeddings` is rejected. |
+| R5 | `implementation_status: logical_boundary` requires `omes_module: null` and authority other than `omes` — a logical boundary is described, not implemented, by this repository. |
+| R6 | Authority `omes` with `implementation_status: implemented` requires a non-null `omes_module` with real implementation evidence in the repository tree (`lib/omes/py/<module>/`, a `modules/` directory containing `<module>`, or a matching `lib/omes/<module>*` path); this also blocks a claimed OMES "gateway" capability (id/title containing `gateway`, plane `tool_data`) that has no such evidence — there is no universal OMES tool gateway without a registered capability and matching code. |
+| R7 | Authority `external` must carry `implementation_status` `optional_external` or `staged`; anything whose id/title matches `siem`, `wazuh`, or `splunk`/`sentinel`-style products must be `optional_external` unless it separately satisfies R6's implementation evidence. |
+| R8 | A second agent framework (id/title/`upstream_project` matching `langchain`, `langgraph`, `autogen`, `crewai`, `llama[-_]?index`, `semantic[-_]kernel`, or `haystack`) requires a non-empty `adr_reference` and an authority other than `omes` — adopting one is an ADR decision, never a silent registry entry. |
+| R9 | A `hermes.`-prefixed `capability_id` must carry `authority: hermes`; authority `omes` may never own an id/title touching reasoning, model routing, memory, delegation, or sessions — those remain Hermes-reserved regardless of how the capability is named. |
+
+`registry.py` also gained a Control Center contract guard (`C1`–`C2`, run from the same `check_all`) and a canonical-documentation guard (`D1`–`D2`):
+
+- **C1** — no `*.schema.json` under `contracts/control-center/v1/` (excluding `fixtures/`) may declare a property key of `command`, `cmd`, `shell`, `script`, `exec`, `argv`, `shell_command`, or `raw_command` at any nesting depth — the Control Center boundary in §14 stays free of an arbitrary-command shape even by accident.
+- **C2** — `operation-request.schema.json` must set top-level `additionalProperties: false`, must give `operation` a non-empty enum (the safe-operation allowlist, resolved through any `$ref`/`$defs` indirection), and must require `tenant_id`, `correlation_id`, `idempotency_key`, `actor`, `operation`, `target`, and `permission`.
+- **D1** — across the six canonical documents (this file, `docs/scope.md`, `docs/security.md`, `docs/threat-model.md`, `docs/ai-data-privacy-and-model-security.md`, `docs/control-center-and-integrations.md`), a line naming an unsupported OS (Debian, Fedora, RHEL/Red Hat, CentOS, Rocky Linux, AlmaLinux, openSUSE, macOS, or Windows) together with the word "support" fails the check unless the same line also carries a negation (`not`, `unsupported`, `no `, `non-goal`, `never`, `out of scope`, an `n't` contraction). Arch Linux is exempt, since Omarchy — an Arch-based upstream — is discussed throughout as a source project, not a supported target.
+- **D2** — this file must contain the `<!-- omes:reference-architecture:v1 -->` marker, a fenced ```mermaid block immediately after it, and the literal phrase `does not mediate all Hermes-native tool execution` (see §18).
+
 ### 16.3 Automated upstream drift review and deprecation tracking
 
 Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml`.
@@ -1149,6 +1184,231 @@ Security regression gates are implemented ([#218](https://github.com/ahliweb/ome
 closed; commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
+
+## 18. Layered reference architecture and deterministic execution boundary
+
+Per issue [#247](https://github.com/ahliweb/omes/issues/247), this section formalizes, in one
+place, the layered reference architecture that Sections 12.4, 14, 16, and 17 already establish
+piecemeal, and names the exact boundary within which OMES executes deterministically versus the
+boundaries it does not — and must never claim to — mediate. It restates existing authorities; it
+does not create a new one, and it does not change any status recorded elsewhere in this document
+or in [docs/control-center-release-closeout.md](control-center-release-closeout.md).
+
+<!-- omes:reference-architecture:v1 -->
+
+```mermaid
+flowchart TB
+    Users["Users / Operators"]
+
+    subgraph BCP["Business & governance plane"]
+        AWCMS["AWCMS Control Center<br/>identity, RBAC/ABAC, approval,<br/>audit, tenant scope<br/>(shipped in ahliweb/awcms, epic #195;<br/>not implemented in this repository)"]
+    end
+
+    subgraph HCP["Host control plane (deterministic)"]
+        OMES["OMES<br/>check -> preflight -> apply -> verify<br/>backup / restore / rollback, provenance"]
+    end
+
+    subgraph ARP["Agent runtime plane"]
+        Hermes["Hermes Agent<br/>reasoning, tools, sessions, memory,<br/>delegation, model/provider routing"]
+    end
+
+    subgraph TDB["Tool / data boundary (logical)"]
+        MCP["MCP / API / tool adapters<br/>(logical boundary, not an OMES gateway)"]
+        RAG["RAG / knowledge retrieval<br/>(Hermes / specialized-service territory,<br/>logical boundary)"]
+    end
+
+    subgraph INF["Infrastructure plane"]
+        Infra["Ubuntu Server 26.04/24.04/22.04 LTS<br/>Linux Mint 22.x - systemd - storage<br/>network - secrets"]
+    end
+
+    subgraph OBS["Observability & evidence"]
+        Evidence["OMES health / audit / provenance evidence"]
+        SIEM["Optional SIEM (external)"]
+    end
+
+    Users -->|governed requests| AWCMS
+    Users -.->|direct, Hermes-owned channels<br/>AWCMS is NOT mandatory ingress| Hermes
+    AWCMS -->|allowlisted job requests only| OMES
+    OMES --> Infra
+    OMES --> Evidence
+    Hermes --> MCP
+    Hermes --> RAG
+    Hermes -.->|observed via hermes.observer.v1 only| Evidence
+    Evidence -.->|optional export| SIEM
+    AWCMS -.->|sanitized projection, never raw evidence| Evidence
+
+    classDef implemented fill:#1f6f43,stroke:#123f26,color:#ffffff;
+    classDef delegated fill:#2f5fa8,stroke:#1c3a67,color:#ffffff;
+    classDef staged fill:#8a6d1f,stroke:#5c4a14,color:#ffffff;
+    classDef optionalExternal fill:#6b6b6b,stroke:#3d3d3d,color:#ffffff,stroke-dasharray: 4 3;
+    classDef logical fill:#ffffff,stroke:#666666,color:#111111,stroke-dasharray: 4 3;
+
+    class OMES,Evidence implemented;
+    class Hermes,Infra delegated;
+    class AWCMS staged;
+    class SIEM optionalExternal;
+    class MCP,RAG logical;
+```
+
+**Legend:**
+
+| Style | Meaning |
+|---|---|
+| Solid green (`implemented`) | OMES code exists in this repository (OMES host control plane, evidence surfaces). |
+| Solid blue (`delegated_upstream`) | Owned and shipped by a supported upstream, not reimplemented here (Hermes Agent; the OS/systemd/storage/network/secrets infrastructure plane). |
+| Solid amber (`staged` / shipped upstream, not in this repo) | The AWCMS Control Center is shipped and merged in `ahliweb/awcms` (epic #195, see [docs/control-center-release-closeout.md](control-center-release-closeout.md)) but has no implementation in this repository; this repository ships only the contracts, job runner, and pull worker it talks to. |
+| Dashed grey (`optional_external`) | An optional third-party integration OMES never ships as core, such as a SIEM. |
+| Dashed white/outline (`logical_boundary`) | A trust/integration boundary this document describes for clarity, not a component OMES builds or gates traffic through. |
+
+### 18.1 The deterministic execution boundary
+
+```text
++-----------------------------------------------------------------+
+|                     Users / Operators                            |
++-------------------------------+---------------------------------+
+                                |
+                also (Hermes-owned channels, not mandatory via AWCMS)
+                                |
+        +-----------------------v----------------------+
+        |         AWCMS Control Center (governed)      |
+        |  identity / RBAC / ABAC / approval / audit    |
+        +-----------------------+----------------------+
+                                | allowlisted, idempotent,
+                                | audited job request only
+        +-----------------------v----------------------+
+        |                    OMES                       |
+        |  DETERMINISTIC EXECUTION BOUNDARY             |
+        |  check -> preflight -> apply -> verify        |
+        |  backup / restore / rollback / provenance     |
+        +-----------------------+----------------------+
+                                |
+        +-----------------------v----------------------+
+        |     Ubuntu Server / Linux Mint / systemd      |
+        +------------------------------------------------+
+
+        +------------------------------------------------+
+        |               Hermes Agent                      |
+        |  reasoning / tools / sessions / memory /        |
+        |  delegation / model-provider routing            |
+        |  (reached directly by users/operators too;      |
+        |   OMES observes only via hermes.observer.v1)    |
+        +-----------------------+----------------------+
+                                |
+                +---------------+---------------+
+                v                               v
+        MCP / API / tool adapters       RAG / knowledge retrieval
+        (logical boundary)              (logical boundary)
+```
+
+Everything inside the OMES box is deterministic: a fixed `check` -> `preflight` -> `apply` ->
+`verify` lifecycle with `rollback` on failure or explicit request (Section 3), driven by typed,
+allowlisted operations (Section 14) — never a model decision. Everything inside the Hermes Agent
+box is probabilistic agent runtime behavior that Hermes owns outright (Section 12.4); OMES neither
+executes nor authorizes what happens there.
+
+### 18.2 Limitations — read this before assuming OMES mediates agent behavior
+
+- **OMES does not mediate all Hermes-native tool execution.** A user or operator can reach Hermes
+  Agent directly through Hermes-owned channels (its own CLI, chat/messaging gateway, or API)
+  without ever passing through AWCMS or OMES. OMES observes a bounded, opt-in slice of that
+  activity through the read-only `hermes.observer.v1` hook (Section 16.4); it has no general
+  interception point for Hermes tool calls, and none is planned.
+- **The MCP/API/tool integration boundary is logical, not an OMES gateway.** `boundary.tool_gateway.mcp`
+  (§16.2.1) names a trust boundary this document describes so operators and auditors can reason
+  about it; OMES does not ship, proxy, or gate traffic through a universal MCP/tool gateway. Any
+  future OMES capability whose id/title contains "gateway" and claims `plane: tool_data` must carry
+  real implementation evidence (registry invariant R6) or the registry entry is rejected.
+  RAG/embedding/retrieval is not OMES core: `boundary.knowledge.retrieval` is Hermes/specialized-service
+  territory (registry invariant R4 rejects an `authority: omes` capability whose id or title matches
+  `rag`/`retrieval`/`retriever`/`vectorstore`/`embedding(s)`).
+- **LangChain, LangGraph, and equivalent second agent frameworks (AutoGen, CrewAI, LlamaIndex,
+  Semantic Kernel, Haystack) are not adopted anywhere in OMES.** Introducing one is not a
+  refactor-time decision: it requires a documented capability gap that Hermes cannot already close,
+  a new ADR, a registry entry that satisfies invariant R8 (non-empty `adr_reference`, authority
+  other than `omes`), a threat-model analysis (Section 5 delta, `docs/threat-model.md`), and an
+  explicit migration/rollback plan. It must never create a duplicate reasoning/tool-orchestration
+  authority alongside Hermes.
+
+### 18.3 Plane table
+
+| Plane | Primary authority | `execution_semantics` | Registry `plane` value |
+|---|---|---|---|
+| Business & governance | AWCMS Control Center (shipped upstream in `ahliweb/awcms`, epic #195; not implemented in this repository) | `probabilistic` where AWCMS itself invokes AI features, otherwise `external_authority` for its own governed state | `business_control` |
+| Host control | OMES | `deterministic` | `host_control` |
+| Agent runtime | Hermes Agent | `probabilistic` | `agent_runtime` |
+| Tool / data (MCP, adapters, RAG) | Hermes / the adapter's own upstream (logical boundary; OMES ships no gateway or retrieval pipeline) | `probabilistic` | `tool_data` |
+| Infrastructure | The OS/platform (Ubuntu Server, Linux Mint, systemd, storage, network, secrets) | `deterministic` | `infrastructure` |
+| Observability & evidence | OMES (host evidence), AWCMS (sanitized projection), optionally an external SIEM | `observational` | `observability` |
+
+### 18.4 Guardrail ownership matrix
+
+No single layer satisfies every guardrail below; each guardrail is owned by exactly one plane, and
+a capability that tries to own a guardrail outside its own plane fails the registry invariants in
+§16.2.1.
+
+| Guardrail | Owner |
+|---|---|
+| Business/governance (identity, RBAC/ABAC, approval workflow, tenant scope, audit of business decisions) | AWCMS |
+| Host execution (preflight, apply, verify, backup, restore, rollback, provenance) | OMES |
+| Agent/runtime (reasoning, tool orchestration, sessions, memory, delegation, model/provider routing) | Hermes |
+| Data/privacy (classification, egress policy, minimization) | The owning application (domain-specific minimization) plus OMES's policy/evidence boundary (Section 17, `contracts/ai-egress/v1`) plus Hermes's model/provider routing — three cooperating authorities, never one |
+| Infrastructure (OS, systemd, filesystem, firewall, network, secret storage) | The OS/platform layer |
+| Observability (evidence, audit trails, drift/health reporting) | OMES (host evidence), AWCMS (sanitized projection), and optionally external tooling (a SIEM) |
+
+### 18.5 Security properties
+
+- **Fail-closed by construction.** Every mutating OMES operation requires preflight, an
+  allowlisted operation name, tenant/resource scope, a correlation ID, an idempotency key, audit
+  evidence, retry classification, and post-mutation verification (AGENTS.md §3); none of these is
+  optional or inferred from model output.
+- **No arbitrary shell in any web/API/job/tool path.** Enforced structurally by registry invariant
+  R6 (an OMES "gateway" claim needs real evidence) and by the Control Center contract guard C1 (no
+  `command`/`cmd`/`shell`/`script`/`exec`/`argv`/`shell_command`/`raw_command` key anywhere under
+  `contracts/control-center/v1/*.schema.json`).
+- **No public privileged listener by default.** The only supported Control Center transport is the
+  outbound pull worker (ADR-0027); OMES hosts keep zero listening ports for Control Center traffic.
+- **Model output is data, not authorization.** A model or agent can request an operation; only the
+  deterministic OMES job boundary (Section 14, contract guard C2) decides whether it is allowlisted,
+  in scope, and approved.
+- **Default-deny across planes.** AWCMS re-derives its own permission decision rather than trusting
+  a client-supplied flag; OMES independently re-derives its own allowlist and approval decision
+  rather than trusting AWCMS's `permission` field (Section 14; `docs/control-center-release-closeout.md`
+  §4).
+- **No second authority for the same state.** Registrar, DNS, billing, entitlement, and deployment
+  states stay separate (Section 14); Hermes-reserved concepts (reasoning, model routing, memory,
+  delegation, sessions) cannot be claimed by an `authority: omes` registry entry (invariant R9).
+
+### 18.6 Consumers
+
+- Issue [#246](https://github.com/ahliweb/omes/issues/246) owns the AWCMS Architecture view. It
+  must project `architecture/capabilities.json` (schema `1.1.0`) — including the new `plane`,
+  `execution_semantics`, and `implementation_status` fields — rather than hard-code a copy of this
+  section's diagram or table. **Not implemented yet (tracked in #246).**
+- Issue [#232](https://github.com/ahliweb/omes/issues/232) owns AWCMS-side consumption of the AI
+  data-privacy posture and egress-approval contracts described in Section 17 and
+  [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
+  **Not implemented yet (tracked in #232).**
+
+### 18.7 Standards crosswalk
+
+The following is an **engineering alignment reference, not a certification claim**. OMES does not
+assert compliance, certification, or audit attestation against any framework below; it names which
+of its existing controls a reviewer can map to which framework so a future compliance effort has a
+starting point, not a finished one.
+
+| Standard | Relevant OMES control(s) | Note |
+|---|---|---|
+| NIST SP 800-207 (Zero Trust Architecture) | No implicit trust between planes; every OMES mutation is allowlisted, authenticated, and independently re-verified (Section 14, C2) | Alignment only |
+| NIST AI RMF 1.0 + Generative AI Profile | Data classification and egress policy (Section 17); fail-closed unknown-classification handling; model output treated as untrusted input | Alignment only |
+| ISO/IEC 42001 (AI management system) | Layered authority model (this section); documented decision hierarchy (§16.1) | Alignment only |
+| ISO/IEC 27001 / 27002 | Least-privilege defaults, audit logging, secret handling (`docs/security.md`) | Alignment only |
+| ISO/IEC 27005 (risk management) | STRIDE threat table and residual-risk summary (`docs/threat-model.md`) | Alignment only |
+| ISO/IEC 27017 / 27018 (cloud security/PII) | Cloud-model egress denial-by-default for Restricted data (Section 17) | Alignment only |
+| ISO/IEC 27034 (application security) | Contract schema validation, fixed-argv job boundary, no arbitrary shell (C1/C2) | Alignment only |
+| ISO 22301 (business continuity) | Backup/restore/rollback model (Section 7) | Alignment only |
+| ISO/IEC 20000-1 (service management) | Health/status/doctor evidence surfaces, change-fragment discipline (`AGENTS.md` §4) | Alignment only |
+| ISO/IEC 15408 (Common Criteria) | Not applicable — **no scoped Target of Evaluation exists**; this row is listed only to record that it was considered and explicitly excluded | Not claimed |
+| OWASP Top 10 for LLM Applications | Prompt-injection-resistant deterministic job boundary (model output is data, not authorization); egress policy against sensitive-data leakage; no arbitrary tool execution | Alignment only |
 
 <!-- OMES-MERMAID: docs/architecture.md -->
 
