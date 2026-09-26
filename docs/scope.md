@@ -106,6 +106,14 @@ OMES explicitly does **not**:
 9. Treat a future web Control Center as part of the local CLI runtime. AWCMS/awcms-one may provide a companion business/control plane, but it must not become an arbitrary remote shell, a second Hermes runtime, or the source of truth for host state.
 10. Treat Cloudflare, SRS-X, GitHub, Coolify, Nomad, or Kubernetes as mandatory core dependencies. Provider integrations are staged optional work with explicit capabilities and manual fallback.
 11. Treat external panels such as Herman as UX references only. They do not change the native CLI boundary, Hermes ownership, provider contracts, or the prohibition on arbitrary remote shell execution.
+12. Implement a second LLM/model router. Hermes Agent remains authoritative for model/provider routing (see [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary), [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md)).
+13. Adopt LangChain, LangGraph, or an equivalent second agent-orchestration framework (AutoGen, CrewAI, LlamaIndex, Semantic Kernel, Haystack) as an OMES runtime. Adoption of any such framework anywhere in the stack requires a documented capability gap, an ADR, a registry entry, a threat-model delta, and a migration/rollback plan — not a silent dependency addition.
+14. Ship a universal MCP/tool gateway. The MCP/API/tool integration boundary is a logical trust boundary this document describes, not a component OMES builds or proxies traffic through.
+15. Implement RAG, embedding, or retrieval pipelines as OMES core. Retrieval/knowledge territory belongs to Hermes or a specialized service, never an `authority: omes` registry entry.
+16. Claim general Debian, Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux, openSUSE, macOS, or Windows support. See the supported-platform summary below and [docs/compatibility-matrix.md](compatibility-matrix.md); those platforms are explicitly out of scope.
+17. Ship a bundled SIEM. Optional SIEM integration (e.g. Wazuh) is an external, optional capability OMES may export evidence to; it is never shipped as core.
+
+See [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary) for the full layered reference architecture, the deterministic execution boundary, and the guardrail ownership matrix that these non-goals follow from.
 
 ## 5. Destructive-operation policy
 

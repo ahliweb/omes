@@ -404,6 +404,12 @@ The two OMES-side dependencies are merged on this repository's `main`: the outbo
 
 The close-out record — verification gates, ownership-boundary checks, operator flow, permissions, recovery guidance and release metadata — is [docs/control-center-release-closeout.md](control-center-release-closeout.md) (issue [#202](https://github.com/ahliweb/omes/issues/202)).
 
+Issue [#246](https://github.com/ahliweb/omes/issues/246) owns an AWCMS-side **Architecture view**
+consumer contract: it must render [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)'s
+layered reference architecture (planes, guardrail ownership, `implementation_status`) by projecting
+`architecture/capabilities.json` (schema `1.1.0`) rather than hard-coding a copy of that diagram or
+table in AWCMS. **Not implemented yet (tracked in #246).**
+
 ### 11.2 Deferred Control Center work
 
 All of the following, previously deferred, have shipped and are removed from this list:

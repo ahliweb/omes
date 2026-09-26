@@ -134,6 +134,22 @@ Per [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md), O
 model/provider routing to Hermes and communicate only through supported upstream interfaces. It must
 not inspect private Hermes databases or introduce a second agent runtime.
 
+### 3.1 Privacy controls across the layered reference architecture (issue #247)
+
+[docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)
+places the table above onto the layered reference architecture's planes: the deterministic
+classification/egress-policy evaluator and its bounded, metadata-only evidence surface
+(`omes health ai-privacy`, Section 11) live in OMES's `host_control`/`observability` planes; the
+actual routing decision between a local/private and an approved cloud model is Hermes's
+`agent_runtime`-plane responsibility; and a sanitized, approval-gated projection of that evidence
+for operators is AWCMS's `business_control`-plane responsibility. AWCMS-side consumption of the
+privacy-posture and egress-approval contracts is **not implemented yet (tracked in
+[#232](https://github.com/ahliweb/omes/issues/232))** — this repository ships only the OMES-side
+contracts and evaluator (Section 4, `contracts/ai-egress/v1`) and the OMES-side projection
+(`lib/omes/py/privacy/posture_projection.py`, #217). No projection produced by any plane may carry
+raw prompt text, response text, embeddings, retrieved documents, or credential values; every
+evidence contract in Section 11 is bounded and metadata-only by schema, not by convention.
+
 ## 4. Data classification
 
 The initial OMES policy uses four classes. Machine-readable classification and egress policy is

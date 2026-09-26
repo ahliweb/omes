@@ -47,6 +47,12 @@ Rules enforced by CI (`scripts/check-architecture.py`):
 - Upstream features observed only on `main` cannot be classified as `released_supported`.
 - Any temporary capability duplication requires an ADR reference and an explicit `removal_trigger`.
 
+### Layered reference architecture (issue #247)
+
+- The system is layered into planes with distinct `execution_semantics`: business/governance (AWCMS and registrars, `external_authority`), host control (OMES, `deterministic`), agent runtime (Hermes, `probabilistic`), tool/data (MCP adapters and RAG — logical boundaries, not OMES-shipped), infrastructure (the OS/platform, `deterministic`), and observability (OMES evidence, AWCMS projection, optional external SIEM, `observational`). See [docs/architecture.md §18](docs/architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary).
+- `architecture/capabilities.json` (schema `1.1.0`) requires every capability to declare `plane`, `execution_semantics`, and `implementation_status` (`implemented | delegated_upstream | staged | optional_external | logical_boundary`) alongside the existing `authority` field (now also allowing `platform` and `external`). `lib/omes/py/architecture/registry.py` enforces this fail-closed (invariants R1–R9), plus Control Center contract guards (C1–C2) and canonical-documentation guards (D1–D2) — see `docs/architecture.md §16.2.1`.
+- **OMES does not mediate all Hermes-native tool execution.** Users and operators can reach Hermes Agent directly through Hermes-owned channels, bypassing both AWCMS and OMES; never describe or implement OMES as a universal interception point for Hermes tool calls.
+
 The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Control Center, registrar adapters, GitHub integration, and Coolify are staged work unless their implementation issue has landed.
 
 

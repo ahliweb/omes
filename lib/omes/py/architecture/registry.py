@@ -1,5 +1,6 @@
 """lib/omes/py/architecture/registry.py - Architecture boundary and capability
-registry validation (ADR-0017, issue #171).
+registry validation (ADR-0017, issue #171; plane/semantics invariants and
+Control Center/documentation contract checks added for issue #247).
 
 Provides machine-checkable enforcement of:
   - Upstream-first precedence: DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT
@@ -8,11 +9,35 @@ Provides machine-checkable enforcement of:
   - Exclusion of unreleased/upstream-main features from released_supported maturity
   - Layer boundaries forbidding core modules from importing commercial/domain code
   - Strict decoupling forbidding OMES from implementing Hermes agent reasoning/runtime
+  - Semantic plane/authority/execution-semantics invariants R1-R9 (schema 1.1.0):
+    R1 authority omes excludes agent_runtime/business_control plane and
+       probabilistic execution_semantics; R2 non-hermes agent_runtime plane
+       requires an adr_reference; R3 business_control plane requires
+       authority in {awcms, provider, external}; R4 forbids OMES-owned RAG
+       capabilities; R5 logical_boundary implies omes_module null and
+       authority != omes; R6 requires omes_module + on-repo evidence for any
+       authority-omes "implemented" capability or tool_data "gateway" claim;
+       R7 constrains authority external's implementation_status and requires
+       any SIEM-like id/title (any spelling of "SIEM"/"Wazuh"/"Splunk"/
+       "Sentinel") to declare authority external regardless of the
+       capability's own declared authority; R8 gates references to a second
+       agent framework, matching common spelling variants (spaced,
+       underscored, hyphenated, concatenated: e.g. "Semantic Kernel",
+       "Llama Index", "Crew AI", "Auto Gen", "Lang Graph"); R9 reserves the
+       hermes.* id namespace and Hermes runtime terms, matching a reserved
+       term (e.g. "model_routing") across space/underscore/hyphen/
+       concatenated spellings in both the capability_id and the title.
+  - Control Center contract safety C1 (no raw shell-command escape hatch in
+    any contracts/control-center/v1 schema) and C2 (operation-request.schema.json
+    allowlist/required-field shape).
+  - Canonical documentation invariants D1 (no unsupported-OS "support" claims)
+    and D2 (docs/architecture.md reference-architecture marker/diagram/phrase).
 """
 from __future__ import annotations
 
 import ast
 import json
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -41,6 +66,70 @@ COMMERCIAL_DOMAIN_MODULES = frozenset({
 
 DEFAULT_SCHEMA_PATH = REPO_ROOT / "contracts" / "architecture" / "v1" / "capabilities.schema.json"
 DEFAULT_REGISTRY_PATH = REPO_ROOT / "architecture" / "capabilities.json"
+
+# ---------------------------------------------------------------------------
+# Semantic-invariant support (issue #247): keyword sets and regexes shared by
+# validate_semantic_invariants() below.
+# ---------------------------------------------------------------------------
+
+_RAG_TERMS = frozenset({
+    "rag", "retrieval", "retriever", "vectorstore", "embedding", "embeddings",
+})
+
+_HERMES_RESERVED_TERMS = frozenset({
+    "reasoning", "model_routing", "memory", "delegation", "sessions",
+})
+
+_SECOND_AGENT_FRAMEWORK_RE = re.compile(
+    r"(lang[\s_-]?chain|lang[\s_-]?graph|auto[\s_-]?gen|crew[\s_-]?ai|"
+    r"llama[\s_-]?index|semantic[\s_-]?kernel|haystack)",
+    re.IGNORECASE,
+)
+
+_SIEM_RE = re.compile(r"(siem|wazuh|splunk|sentinel)", re.IGNORECASE)
+
+
+def _id_segments(cap_id: str) -> list[str]:
+    return [seg for seg in re.split(r"[._-]", cap_id or "") if seg]
+
+
+def _title_words(title: str) -> list[str]:
+    return [w for w in re.split(r"\W+", (title or "").lower()) if w]
+
+
+def _reserved_term_match(cap_id: str, title: str, terms: frozenset[str]) -> str | None:
+    """Returns the first reserved term (from `terms`, canonical underscore
+    form, e.g. "model_routing") matched anywhere in `cap_id` or `title`,
+    treating space, underscore, hyphen and no-separator ("concatenated") as
+    equivalent word joins on BOTH sides of the comparison. This closes the
+    bypass where a multi-word reserved term such as "model_routing" never
+    matches a naturally-spaced title like "OMES Model Routing Helper"
+    because the title is tokenised on `\\W+` (splitting on spaces) while the
+    reserved term is only ever spelled with an underscore.
+    """
+
+    def _tokens(text: str) -> list[str]:
+        return [t for t in re.split(r"[\s_.\-]+", (text or "").lower()) if t]
+
+    for text in (cap_id, title):
+        words = _tokens(text)
+        if not words:
+            continue
+        for term in terms:
+            term_words = term.split("_")
+            term_concat = "".join(term_words)
+            # underscore/hyphen/space forms all tokenise identically via
+            # _tokens(), so a single-token exact match covers all of them;
+            # the concatenated form (no separator at all) is checked
+            # explicitly since _tokens() never re-joins split words.
+            if term in words or term_concat in words:
+                return term
+            n = len(term_words)
+            if n > 1:
+                for i in range(len(words) - n + 1):
+                    if words[i:i + n] == term_words:
+                        return term
+    return None
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -235,6 +324,393 @@ def check_runtime_coupling(repo_root: Path) -> list[str]:
     return errors
 
 
+def validate_semantic_invariants(
+    data: dict[str, Any], repo_root: Path | None = None
+) -> list[str]:
+    """Semantic plane/authority invariants (issue #247, ADR-0017): R1-R9.
+
+    Each rule fails closed with a distinct, greppable error message prefix
+    so a violation can never be silently swallowed by a broader check.
+    """
+    errors: list[str] = []
+    root = repo_root or REPO_ROOT
+    capabilities = data.get("capabilities", [])
+    if not isinstance(capabilities, list):
+        return errors
+
+    for cap in capabilities:
+        if not isinstance(cap, dict):
+            continue
+        cap_id = cap.get("capability_id", "<missing>")
+        title = cap.get("title", "")
+        authority = cap.get("authority")
+        plane = cap.get("plane")
+        execution_semantics = cap.get("execution_semantics")
+        implementation_status = cap.get("implementation_status")
+        omes_module = cap.get("omes_module")
+        adr_reference = cap.get("adr_reference")
+        upstream_project = cap.get("upstream_project", "")
+
+        segments = {s.lower() for s in _id_segments(cap_id)}
+        words = set(_title_words(title))
+        haystack_terms = segments | words
+
+        # R1: authority `omes` -> plane must not be agent_runtime/business_control;
+        # execution_semantics must not be probabilistic.
+        if authority == "omes":
+            if plane in ("agent_runtime", "business_control"):
+                errors.append(
+                    f"R1 capability '{cap_id}': authority 'omes' must not declare plane '{plane}' "
+                    "(OMES must not implement a second agent runtime or business-control plane)"
+                )
+            if execution_semantics == "probabilistic":
+                errors.append(
+                    f"R1 capability '{cap_id}': authority 'omes' must not declare execution_semantics "
+                    "'probabilistic' (OMES is deterministic host tooling, not a reasoning engine)"
+                )
+
+        # R2: plane `agent_runtime` and authority != hermes -> requires non-empty
+        # adr_reference (R1 still independently blocks authority `omes`).
+        if plane == "agent_runtime" and authority != "hermes":
+            if not adr_reference or not str(adr_reference).strip():
+                errors.append(
+                    f"R2 capability '{cap_id}': plane 'agent_runtime' with authority '{authority}' "
+                    "(!= 'hermes') requires a non-empty 'adr_reference'"
+                )
+
+        # R3: plane `business_control` -> authority in {awcms, provider, external};
+        # authority `awcms` -> plane != agent_runtime.
+        if plane == "business_control" and authority not in ("awcms", "provider", "external"):
+            errors.append(
+                f"R3 capability '{cap_id}': plane 'business_control' requires authority in "
+                f"{{'awcms', 'provider', 'external'}}, got '{authority}'"
+            )
+        if authority == "awcms" and plane == "agent_runtime":
+            errors.append(
+                f"R3 capability '{cap_id}': authority 'awcms' must not declare plane 'agent_runtime'"
+            )
+
+        # R4: RAG terms under authority `omes`.
+        if authority == "omes" and haystack_terms & _RAG_TERMS:
+            errors.append(
+                f"R4 capability '{cap_id}': authority 'omes' must not own a RAG/retrieval "
+                "capability (matched a RAG-related term in the id or title)"
+            )
+
+        # R5: implementation_status `logical_boundary` -> omes_module must be null
+        # and authority must not be `omes`.
+        if implementation_status == "logical_boundary":
+            if omes_module is not None:
+                errors.append(
+                    f"R5 capability '{cap_id}': implementation_status 'logical_boundary' requires "
+                    f"omes_module to be null, got {omes_module!r}"
+                )
+            if authority == "omes":
+                errors.append(
+                    f"R5 capability '{cap_id}': implementation_status 'logical_boundary' must not "
+                    "declare authority 'omes' (a logical boundary is not a component OMES ships)"
+                )
+
+        # R6: authority `omes` and implementation_status `implemented` ->
+        # omes_module non-null and implementation evidence exists in the repo.
+        # Also: authority omes + plane tool_data + id/title containing
+        # "gateway" must satisfy the same evidence requirement (no universal
+        # OMES tool gateway without registered capability + implementation
+        # evidence).
+        is_gateway_claim = (
+            authority == "omes" and plane == "tool_data" and "gateway" in haystack_terms
+        )
+        if (authority == "omes" and implementation_status == "implemented") or is_gateway_claim:
+            if not omes_module:
+                errors.append(
+                    f"R6 capability '{cap_id}': authority 'omes' with implementation_status "
+                    "'implemented' (or a tool_data 'gateway' claim) requires a non-null 'omes_module'"
+                )
+            else:
+                if not _has_implementation_evidence(root, str(omes_module)):
+                    errors.append(
+                        f"R6 capability '{cap_id}': no implementation evidence found in the repo for "
+                        f"omes_module '{omes_module}' (expected lib/omes/py/<module>/, or modules/ "
+                        "containing it, or lib/omes/<module>*)"
+                    )
+
+        # R7: authority `external` -> implementation_status in
+        # {optional_external, staged}; a SIEM-like id/title must never be
+        # presented as OMES-shipped core (threat-model AR-05), so this check
+        # runs regardless of `authority` -- it is NOT nested under the
+        # `authority == "external"` branch, because a SIEM-like capability
+        # declared under any other authority (e.g. "omes") is itself the
+        # violation, not a formatting detail of the external branch.
+        if authority == "external":
+            if implementation_status not in ("optional_external", "staged"):
+                errors.append(
+                    f"R7 capability '{cap_id}': authority 'external' requires implementation_status "
+                    f"in {{'optional_external', 'staged'}}, got '{implementation_status}'"
+                )
+
+        if _SIEM_RE.search(cap_id or "") or _SIEM_RE.search(title or ""):
+            if authority != "external":
+                errors.append(
+                    f"R7 capability '{cap_id}': SIEM-like capability must declare authority "
+                    f"'external', got '{authority}' (SIEM/external observability must never be "
+                    "presented as OMES-shipped core)"
+                )
+            else:
+                has_evidence = bool(omes_module) and _has_implementation_evidence(
+                    root, str(omes_module)
+                )
+                if implementation_status != "optional_external" and not (
+                    implementation_status == "implemented" and has_evidence
+                ):
+                    errors.append(
+                        f"R7 capability '{cap_id}': SIEM-like capability under authority 'external' "
+                        "must declare implementation_status 'optional_external' unless implemented "
+                        "with repo evidence (R6)"
+                    )
+
+        # R8: second agent framework references require a non-empty
+        # adr_reference AND authority != omes.
+        if (
+            _SECOND_AGENT_FRAMEWORK_RE.search(cap_id or "")
+            or _SECOND_AGENT_FRAMEWORK_RE.search(title or "")
+            or _SECOND_AGENT_FRAMEWORK_RE.search(upstream_project or "")
+        ):
+            if not adr_reference or not str(adr_reference).strip():
+                errors.append(
+                    f"R8 capability '{cap_id}': references a second agent framework and requires a "
+                    "non-empty 'adr_reference'"
+                )
+            if authority == "omes":
+                errors.append(
+                    f"R8 capability '{cap_id}': references a second agent framework and must not "
+                    "declare authority 'omes'"
+                )
+
+        # R9: Hermes-reserved namespace and terms.
+        if (cap_id or "").startswith("hermes.") and authority != "hermes":
+            errors.append(
+                f"R9 capability '{cap_id}': capability_id in the reserved 'hermes.' namespace "
+                f"requires authority 'hermes', got '{authority}'"
+            )
+        reserved_match = _reserved_term_match(cap_id, title, _HERMES_RESERVED_TERMS)
+        if authority == "omes" and reserved_match:
+            errors.append(
+                f"R9 capability '{cap_id}': authority 'omes' must not own a Hermes-reserved runtime "
+                f"concern (matched reserved term '{reserved_match}' in the id or title; reserved: "
+                "reasoning/model_routing/memory/delegation/sessions)"
+            )
+
+    return errors
+
+
+def _has_implementation_evidence(repo_root: Path, module: str) -> bool:
+    """Returns True if `module` has on-disk evidence of implementation under
+    lib/omes/py/<module>/, modules/ (a path containing <module>), or a
+    lib/omes/<module>* sibling tree."""
+    candidate = repo_root / "lib" / "omes" / "py" / module
+    if candidate.is_dir():
+        return True
+
+    modules_dir = repo_root / "modules"
+    if modules_dir.is_dir():
+        for path in modules_dir.rglob("*"):
+            if module in path.name:
+                return True
+
+    lib_omes_dir = repo_root / "lib" / "omes"
+    if lib_omes_dir.is_dir():
+        for path in lib_omes_dir.glob(f"{module}*"):
+            return True
+
+    return False
+
+
+def check_control_center_contracts(repo_root: Path) -> list[str]:
+    """C1-C2: Control Center contract safety (issue #247).
+
+    C1: no *.schema.json under contracts/control-center/v1/ (recursively,
+    excluding fixtures/) declares a property key that looks like a raw shell
+    command escape hatch, at any nesting.
+    C2: operation-request.schema.json declares additionalProperties: false
+    at the top level, `operation` has a non-empty enum (allowlist,
+    resolving $ref/$defs if used), and `required` includes tenant_id,
+    correlation_id, idempotency_key, actor, operation, target, permission.
+    """
+    errors: list[str] = []
+    cc_dir = repo_root / "contracts" / "control-center" / "v1"
+    if not cc_dir.is_dir():
+        return errors
+
+    forbidden_keys = frozenset({
+        "command", "cmd", "shell", "script", "exec", "argv",
+        "shell_command", "raw_command",
+    })
+
+    def _walk_for_forbidden_keys(node: Any, path: Path) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                if key in forbidden_keys:
+                    errors.append(
+                        f"C1 {path}: declares forbidden property key '{key}' "
+                        "(no schema.json may expose a raw shell-command escape hatch)"
+                    )
+                _walk_for_forbidden_keys(value, path)
+        elif isinstance(node, list):
+            for item in node:
+                _walk_for_forbidden_keys(item, path)
+
+    for schema_file in sorted(cc_dir.rglob("*.schema.json")):
+        try:
+            rel = schema_file.relative_to(cc_dir)
+        except ValueError:
+            rel = schema_file
+        if rel.parts and rel.parts[0] == "fixtures":
+            continue
+        try:
+            schema_data = json.loads(schema_file.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"C1 {schema_file}: failed to parse JSON: {exc}")
+            continue
+        _walk_for_forbidden_keys(schema_data, schema_file)
+
+    op_request_path = cc_dir / "operation-request.schema.json"
+    if op_request_path.is_file():
+        try:
+            op_schema = json.loads(op_request_path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"C2 {op_request_path}: failed to parse JSON: {exc}")
+            op_schema = None
+
+        if isinstance(op_schema, dict):
+            if op_schema.get("additionalProperties") is not False:
+                errors.append(
+                    f"C2 {op_request_path}: top-level 'additionalProperties' must be false"
+                )
+
+            defs = op_schema.get("$defs") or op_schema.get("definitions") or {}
+
+            def _resolve(node: Any) -> Any:
+                if isinstance(node, dict) and "$ref" in node:
+                    ref = node["$ref"]
+                    if isinstance(ref, str) and ref.startswith("#/$defs/"):
+                        return defs.get(ref[len("#/$defs/"):], {})
+                    if isinstance(ref, str) and ref.startswith("#/definitions/"):
+                        return defs.get(ref[len("#/definitions/"):], {})
+                    return {}
+                return node
+
+            properties = op_schema.get("properties", {})
+            operation_schema = _resolve(properties.get("operation", {}))
+            enum = operation_schema.get("enum") if isinstance(operation_schema, dict) else None
+            if not isinstance(enum, list) or len(enum) == 0:
+                errors.append(
+                    f"C2 {op_request_path}: 'operation' property must declare a non-empty enum "
+                    "(allowlist)"
+                )
+
+            required = op_schema.get("required", [])
+            required_fields = {
+                "tenant_id", "correlation_id", "idempotency_key", "actor",
+                "operation", "target", "permission",
+            }
+            missing = required_fields - set(required if isinstance(required, list) else [])
+            if missing:
+                errors.append(
+                    f"C2 {op_request_path}: 'required' is missing {sorted(missing)}"
+                )
+        elif op_schema is not None:
+            errors.append(f"C2 {op_request_path}: schema root must be an object")
+    else:
+        errors.append(
+            f"C2 {op_request_path}: missing; the typed operation allowlist contract is required"
+        )
+
+    return errors
+
+
+_CANONICAL_DOCS = (
+    "docs/architecture.md",
+    "docs/scope.md",
+    "docs/security.md",
+    "docs/threat-model.md",
+    "docs/ai-data-privacy-and-model-security.md",
+    "docs/control-center-and-integrations.md",
+)
+
+_UNSUPPORTED_OS_RE = re.compile(
+    r"(Debian|Fedora|RHEL|Red Hat|CentOS|Rocky Linux|AlmaLinux|openSUSE|macOS|Windows)",
+    re.IGNORECASE,
+)
+_SUPPORT_RE = re.compile(r"support", re.IGNORECASE)
+_NEGATION_RE = re.compile(
+    r"(\bnot\b|unsupported|\bno \b|non-goal|\bnever\b|out of scope|isn't|aren't|n't)",
+    re.IGNORECASE,
+)
+_ARCH_LINUX_RE = re.compile(r"arch linux", re.IGNORECASE)
+
+_REFERENCE_ARCHITECTURE_MARKER = "<!-- omes:reference-architecture:v1 -->"
+_MEDIATE_PHRASE = "does not mediate all Hermes-native tool execution"
+
+
+def check_canonical_documentation(repo_root: Path) -> list[str]:
+    """D1-D2: canonical documentation invariants (issue #247).
+
+    Gracefully skips any canonical doc that does not exist under
+    `repo_root` (real repo: all six must exist; test tmp roots: only the
+    files a test constructs are checked).
+    """
+    errors: list[str] = []
+
+    for rel in _CANONICAL_DOCS:
+        doc_path = repo_root / rel
+        if not doc_path.is_file():
+            continue
+        try:
+            text = doc_path.read_text(encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"D1 {doc_path}: failed to read: {exc}")
+            continue
+
+        for lineno, line in enumerate(text.splitlines(), start=1):
+            if _ARCH_LINUX_RE.search(line):
+                continue
+            if _UNSUPPORTED_OS_RE.search(line) and _SUPPORT_RE.search(line):
+                if not _NEGATION_RE.search(line):
+                    errors.append(
+                        f"D1 {doc_path}:{lineno}: line names an unsupported OS alongside "
+                        "'support' with no negation - only Ubuntu Server 26.04/24.04/22.04 LTS "
+                        f"and Linux Mint 22.x are supported: {line.strip()!r}"
+                    )
+
+    arch_doc = repo_root / "docs" / "architecture.md"
+    if arch_doc.is_file():
+        try:
+            arch_text = arch_doc.read_text(encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"D2 {arch_doc}: failed to read: {exc}")
+            arch_text = None
+
+        if arch_text is not None:
+            marker_idx = arch_text.find(_REFERENCE_ARCHITECTURE_MARKER)
+            if marker_idx == -1:
+                errors.append(
+                    f"D2 {arch_doc}: missing required marker '{_REFERENCE_ARCHITECTURE_MARKER}'"
+                )
+            else:
+                remainder = arch_text[marker_idx:]
+                if "```mermaid" not in remainder:
+                    errors.append(
+                        f"D2 {arch_doc}: no ```mermaid block found after the "
+                        "reference-architecture marker"
+                    )
+            if _MEDIATE_PHRASE not in arch_text:
+                errors.append(
+                    f"D2 {arch_doc}: missing required phrase {_MEDIATE_PHRASE!r}"
+                )
+
+    return errors
+
+
 def check_all(repo_root: Path | None = None) -> list[str]:
     root = repo_root or REPO_ROOT
     all_errors: list[str] = []
@@ -254,5 +730,8 @@ def check_all(repo_root: Path | None = None) -> list[str]:
     all_errors.extend(check_module_coverage(root, reg_data))
     all_errors.extend(check_layer_boundaries(root))
     all_errors.extend(check_runtime_coupling(root))
+    all_errors.extend(validate_semantic_invariants(reg_data, root))
+    all_errors.extend(check_control_center_contracts(root))
+    all_errors.extend(check_canonical_documentation(root))
 
     return all_errors
