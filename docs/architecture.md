@@ -1333,7 +1333,7 @@ executes nor authorizes what happens there.
 
 | Plane | Primary authority | `execution_semantics` | Registry `plane` value |
 |---|---|---|---|
-| Business & governance | AWCMS Control Center (shipped upstream in `ahliweb/awcms`, epic #195; not implemented in this repository) | `probabilistic` where AWCMS itself invokes AI features, otherwise `external_authority` for its own governed state | `business_control` |
+| Business & governance | AWCMS Control Center (shipped upstream in `ahliweb/awcms`, epic #195; not implemented in this repository) | `external_authority` (AWCMS owns its governed business state; OMES only reconciles against it) | `business_control` |
 | Host control | OMES | `deterministic` | `host_control` |
 | Agent runtime | Hermes Agent | `probabilistic` | `agent_runtime` |
 | Tool / data (MCP, adapters, RAG) | Hermes / the adapter's own upstream (logical boundary; OMES ships no gateway or retrieval pipeline) | `probabilistic` | `tool_data` |
