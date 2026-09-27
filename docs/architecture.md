@@ -1402,6 +1402,16 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
   **Shipped** in `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830)
   (`37d4d818`).
+- Issue [#249](https://github.com/ahliweb/omes/issues/249) (split from issue #246 part 2, business
+  control plane, `provider.github.repository_progress`) owns the "Progres Hermes" repository
+  progress view. [ADR-0030](adr/0030-repository-progress-projection.md) decides that AWCMS polls the
+  GitHub REST API directly (never an OMES host worker, per the deterministic execution boundary —
+  OMES does not mediate every provider observation AWCMS needs) and produces the read-only
+  `contracts/control-center/v1/repository-progress-view.schema.json` projection (see
+  [docs/control-center-contracts.md §2.12](control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030)).
+  The contract, its fixtures, and this ADR are **implemented** in this repository. **AWCMS-side
+  consumption (the polling job, projection table, and screen) is not implemented yet (tracked in
+  #249).**
 
 ### 18.7 Standards crosswalk
 

@@ -307,6 +307,10 @@ The preferred authentication model is a GitHub App with minimum organization/rep
 
 OMES may sell a managed GitHub integration add-on, but it must not mirror GitHub's subscription ledger or claim control of GitHub billing. Provider billing observations, if added later, remain explicitly provider-sourced.
 
+### 8.1 First concrete consumer: repository progress (issue #249, ADR-0030)
+
+Issue [#249](https://github.com/ahliweb/omes/issues/249) (split from issue #246 part 2) is the first concrete Control Center consumer of this GitHub observation model: the "Progres Hermes" view, showing milestone and issue progress for a tenant's configured repository. [ADR-0030](adr/0030-repository-progress-projection.md) decides the fetch path — **AWCMS polls the GitHub REST API** on a schedule (default 15 minutes), read-only, with authentication optional (none for a public repository; a read-only fine-grained token or GitHub App installation token via `secret_reference` otherwise) — rather than an OMES host worker fetching on AWCMS's behalf (wrong authority plane: repository progress is a GitHub observation for AWCMS to project, not host-control state OMES owns) or a static committed snapshot (a stale, false copy of provider truth). The wire contract, `repository-progress-view.schema.json`, is defined in [docs/control-center-contracts.md §2.12](control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030) and is implemented in this repository. **AWCMS consumption (the polling job, projection table, and screen) is not implemented yet (tracked in #249).**
+
 Authoritative sources:
 
 - [GitHub Apps](https://docs.github.com/en/apps/creating-github-apps/about-creating-github-apps)

@@ -614,6 +614,27 @@
       ]
     },
     {
+      "capability_id": "provider.github.repository_progress",
+      "title": "GitHub Repository Milestone and Issue Progress Projection (Progres Hermes view)",
+      "authority": "provider",
+      "upstream_project": "github",
+      "supported_baseline": "rest.v3",
+      "observed_upstream_revision": "rest.v3",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "plane": "business_control",
+      "execution_semantics": "external_authority",
+      "implementation_status": "staged",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0030",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030",
+        "https://github.com/ahliweb/omes/blob/main/docs/adr/0030-repository-progress-projection.md"
+      ]
+    },
+    {
       "capability_id": "omes.privacy.egress_policy",
       "title": "OMES AI Data-Classification and Model-Egress Policy Evaluator",
       "authority": "omes",

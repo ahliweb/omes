@@ -41,6 +41,7 @@ architecture and state model."
 | [0027](0027-control-center-pull-worker-transport.md) | Control Center secure pull-worker transport | Accepted |
 | [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
 | [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
+| [0030](0030-repository-progress-projection.md) | GitHub repository progress projection for the Progres Hermes view | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -102,6 +103,10 @@ ADR 0029 was authored on 2026-09-24 as part of issue
 [#213](https://github.com/ahliweb/omes/issues/213), "docs(security):
 define AI data privacy boundary and local/cloud model policy."
 
+ADR 0030 was authored on 2026-09-27 as part of issue
+[#249](https://github.com/ahliweb/omes/issues/249), split from
+[#246](https://github.com/ahliweb/omes/issues/246) part 2, "feat(control-center):
+GitHub repository progress projection for the Progres Hermes view."
 
 
 
