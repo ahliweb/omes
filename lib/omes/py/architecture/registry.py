@@ -32,6 +32,10 @@ Provides machine-checkable enforcement of:
     allowlist/required-field shape).
   - Canonical documentation invariants D1 (no unsupported-OS "support" claims)
     and D2 (docs/architecture.md reference-architecture marker/diagram/phrase).
+  - AV1: the checked-in `architecture-capabilities-view` fixture (issue #246,
+    part 3) is not stale relative to architecture/capabilities.json - it is
+    regenerated in memory via lib/omes/py/architecture/capabilities_view.py
+    and diffed against the fixture on disk.
 """
 from __future__ import annotations
 
@@ -48,6 +52,7 @@ if str(PY_ROOT) not in sys.path:
     sys.path.insert(0, str(PY_ROOT))
 
 from jobs import schema as schema_mod  # noqa: E402
+from architecture import capabilities_view  # noqa: E402
 
 STANDARD_PRECEDENCE = ("delegate", "port", "adapt", "defer", "reject")
 
@@ -711,6 +716,59 @@ def check_canonical_documentation(repo_root: Path) -> list[str]:
     return errors
 
 
+_ARCHITECTURE_CAPABILITIES_VIEW_FIXTURE = (
+    Path("contracts")
+    / "control-center"
+    / "v1"
+    / "fixtures"
+    / "architecture-capabilities-view"
+    / "valid-01-generated.json"
+)
+
+
+def check_architecture_capabilities_view(
+    repo_root: Path, registry_data: dict[str, Any] | None = None
+) -> list[str]:
+    """AV1: the checked-in `architecture-capabilities-view` fixture (issue
+    #246, part 3, `contracts/control-center/v1/architecture-capabilities-view.schema.json`)
+    must not be stale relative to architecture/capabilities.json. Regenerates
+    the projection in memory from the same builder the generator script uses
+    (`lib/omes/py/architecture/capabilities_view.build_fixture_view()`) and
+    diffs it, byte-for-byte, against the fixture on disk - the same
+    signature `scripts/generate-architecture-capabilities-view.py --check`
+    uses, so a capability added/changed/removed in the registry without
+    regenerating the fixture fails this guard.
+
+    Gracefully skips (returns no errors) when the fixture file does not
+    exist under `repo_root` yet, so this check does not break test tmp
+    roots that construct only a subset of the real repository tree.
+    """
+    errors: list[str] = []
+    fixture_path = repo_root / _ARCHITECTURE_CAPABILITIES_VIEW_FIXTURE
+    if not fixture_path.is_file():
+        return errors
+
+    try:
+        data = registry_data if registry_data is not None else load_registry(repo_root / "architecture" / "capabilities.json")
+        expected = capabilities_view.build_fixture_view(repo_root, data)
+        expected_text = json.dumps(expected, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
+    except Exception as exc:  # noqa: BLE001
+        return [f"AV1 {fixture_path}: failed to build expected projection: {exc}"]
+
+    try:
+        current_text = fixture_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        return [f"AV1 {fixture_path}: failed to read: {exc}"]
+
+    if current_text != expected_text:
+        errors.append(
+            f"AV1 {fixture_path}: stale relative to architecture/capabilities.json - "
+            "run scripts/generate-architecture-capabilities-view.py"
+        )
+
+    return errors
+
+
 def check_all(repo_root: Path | None = None) -> list[str]:
     root = repo_root or REPO_ROOT
     all_errors: list[str] = []
@@ -733,5 +791,6 @@ def check_all(repo_root: Path | None = None) -> list[str]:
     all_errors.extend(validate_semantic_invariants(reg_data, root))
     all_errors.extend(check_control_center_contracts(root))
     all_errors.extend(check_canonical_documentation(root))
+    all_errors.extend(check_architecture_capabilities_view(root, reg_data))
 
     return all_errors
