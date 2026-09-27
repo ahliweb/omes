@@ -403,7 +403,7 @@
   ],
   "generated_at": "2026-01-01T00:00:00Z",
   "omes_commit": "0000000000000000000000000000000000000000",
-  "omes_version": "0.4.0",
+  "omes_version": "0.5.0",
   "planes": [
     {
       "execution_semantics": "external_authority",
