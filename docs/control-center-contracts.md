@@ -33,6 +33,7 @@ concrete per entity, with actual JSON Schemas and fixtures under
 | Approvals for destructive operations | records the approval decision and actor | enforces the approval gate before executing (issue #90) | no knowledge |
 | Secrets (tokens, passwords, credentials) | never stores raw values; stores `secret_ref` pointers only | resolves `secret_ref` locally (env/file/vault/os-keyring); never returns raw values | resolves its own secrets from its own `.env`, unrelated to Control Center secrets |
 | AI privacy posture / egress policy-decision evidence (issue #217) | displays the projection; owns which tenant/actor may read it and who may approve an approval_required decision (RBAC/ABAC) | **owns** the evidence and the pure evaluation/projection logic (`lib/omes/py/privacy/`); never selects or calls a model provider | **owns** agent reasoning and model/provider routing; OMES only reads bounded facts through supported interfaces, never Hermes's private databases |
+| Layered reference architecture / capability registry evidence (issue #247; Architecture view issue #246, part 3) | displays the read-only `architecture-capabilities-view` projection; owns which tenant/actor may read it (RBAC/ABAC) | **owns** `architecture/capabilities.json` and the pure projection logic (`lib/omes/py/architecture/capabilities_view.py`); never stores a copy of AWCMS's own business/governance state | no knowledge (agent_runtime plane entries are read from the registry, never modified by Hermes) |
 
 This matrix is the concrete instantiation of
 [docs/control-center-and-integrations.md](control-center-and-integrations.md)
@@ -71,6 +72,7 @@ Each has at least one valid and one invalid fixture under
 | Worker result response (issue #192, ADR-0027) | `worker-result.response.schema.json` | Control Center → OMES Worker |
 | Hermes orchestration event (issue #183, ADR-0028) | `hermes-orchestration-event.schema.json` | Hermes Observer → OMES |
 | Hermes orchestration tree (issue #183, ADR-0028) | `hermes-orchestration-tree.schema.json` | OMES → Control Center |
+| Architecture capabilities view (issue #246, part 3) | `architecture-capabilities-view.schema.json` | OMES → Control Center |
 
 ### 2.1 Mutating-request common fields
 
@@ -609,6 +611,45 @@ Two events (§3) accompany this section:
 carries the request's `justification` text). Both are delivered over the
 existing pull-worker/outbox transport (§5, ADR-0027, issue #192); neither
 introduces a new privileged inbound listener.
+
+### 2.11 Architecture capabilities view (issue #246, part 3)
+
+Issue #246 owns the future AWCMS Architecture view described in
+[docs/architecture.md §18.6](architecture.md#186-consumers): planes
+rendered as lanes, capabilities rendered as cards with an
+`implementation_status` badge, and an OMES version/commit/`generated_at`
+provenance stamp. This part of #246 is OMES-side only: the contract, its
+fixtures, and the fixture generator. **The AWCMS-side screen that consumes
+this contract is a separate, later PR — not implemented yet (tracked in
+#246).**
+
+`architecture-capabilities-view.schema.json` is a READ-ONLY projection of
+`architecture/capabilities.json` (schema `1.1.0`) plus the plane table in
+[docs/architecture.md §18.3](architecture.md#183-plane-table). It carries
+only closed enums and bounded identifiers already present in the internal
+registry — no ADR text, evidence URLs, removal triggers, or duplication
+flags — and `additionalProperties: false` at every object level makes "no
+raw shell/command escape hatch anywhere in this schema" structural, not
+merely a convention (registry guard C1,
+`lib/omes/py/architecture/registry.py`).
+
+The projection logic lives once, in
+`lib/omes/py/architecture/capabilities_view.py`'s `build_view()` /
+`build_fixture_view()`, and is shared by:
+
+- `scripts/generate-architecture-capabilities-view.py`, which regenerates
+  the checked-in fixture
+  (`contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json`)
+  from the live `architecture/capabilities.json`, and
+- registry guard **AV1** (`registry.check_architecture_capabilities_view()`,
+  run by `scripts/check-architecture.py`), which fails closed whenever that
+  fixture is stale relative to the registry — a capability added, removed,
+  or reclassified without regenerating the fixture is a CI failure, not a
+  silent drift.
+
+| Contract | Schema file |
+|---|---|
+| Architecture capabilities view | `architecture-capabilities-view.schema.json` |
 
 ## 3. Versioned events (v1)
 

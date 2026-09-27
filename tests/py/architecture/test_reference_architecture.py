@@ -21,6 +21,7 @@ if str(PY_ROOT) not in sys.path:
     sys.path.insert(0, str(PY_ROOT))
 
 from architecture import registry  # noqa: E402
+from architecture import capabilities_view  # noqa: E402
 from jobs import schema as schema_mod  # noqa: E402
 
 
@@ -794,6 +795,69 @@ class SchemaVersionTests(unittest.TestCase):
         reg_data = copy.deepcopy(registry.load_registry())
         errs = schema_mod.validate(reg_data, self.schema)
         self.assertEqual(errs, [])
+
+
+class ArchitectureCapabilitiesViewFreshnessTests(unittest.TestCase):
+    """AV1: contracts/control-center/v1/fixtures/architecture-capabilities-view/
+    valid-01-generated.json must not be stale relative to
+    architecture/capabilities.json (issue #246, part 3)."""
+
+    def test_current_repository_fixture_is_fresh(self) -> None:
+        errs = registry.check_architecture_capabilities_view(REPO_ROOT)
+        self.assertEqual(errs, [], f"Expected 0 AV1 errors, got: {errs}")
+
+    def test_stale_fixture_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            reg_dir = root / "architecture"
+            reg_dir.mkdir(parents=True)
+            reg_data = _registry_of(_base_cap())
+            (reg_dir / "capabilities.json").write_text(json.dumps(reg_data), encoding="utf-8")
+
+            fixture_dir = (
+                root / "contracts" / "control-center" / "v1" / "fixtures" / "architecture-capabilities-view"
+            )
+            fixture_dir.mkdir(parents=True)
+            (fixture_dir / "valid-01-generated.json").write_text(
+                json.dumps({"stale": True}), encoding="utf-8"
+            )
+
+            errs = registry.check_architecture_capabilities_view(root, reg_data)
+            self.assertTrue(any(e.startswith("AV1 ") for e in errs), errs)
+
+    def test_regenerated_fixture_passes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            (root / "VERSION").write_text("0.0.0-test\n", encoding="utf-8")
+            reg_dir = root / "architecture"
+            reg_dir.mkdir(parents=True)
+            reg_data = _registry_of(_base_cap())
+            (reg_dir / "capabilities.json").write_text(json.dumps(reg_data), encoding="utf-8")
+
+            fixture_dir = (
+                root / "contracts" / "control-center" / "v1" / "fixtures" / "architecture-capabilities-view"
+            )
+            fixture_dir.mkdir(parents=True)
+            fixture_path = fixture_dir / "valid-01-generated.json"
+
+            expected = capabilities_view.build_fixture_view(root, reg_data)
+            fixture_path.write_text(
+                json.dumps(expected, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
+
+            errs = registry.check_architecture_capabilities_view(root, reg_data)
+            self.assertEqual(errs, [], errs)
+
+    def test_missing_fixture_skips_gracefully(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            errs = registry.check_architecture_capabilities_view(root)
+            self.assertEqual(errs, [])
+
+    def test_check_all_includes_av1(self) -> None:
+        errs = registry.check_all(REPO_ROOT)
+        self.assertEqual([e for e in errs if e.startswith("AV1 ")], [])
 
 
 if __name__ == "__main__":

@@ -412,8 +412,11 @@ table in AWCMS. Part 1 (the `.omes-cc` design system, `ahliweb/awcms` PR
 [#829](https://github.com/ahliweb/awcms/pull/829), `2d40f5ce`) and part 1b (design-system polish,
 `ahliweb/awcms` PR [#832](https://github.com/ahliweb/awcms/pull/832), `6d3bf18b`; sidebar clipping
 split out as [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831), open) have
-**shipped**. The Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur views are **not
-implemented yet (tracked in #246)**.
+**shipped**. Part 3, the OMES-side read-only projection contract the future Arsitektur screen
+consumes (`architecture-capabilities-view.schema.json`, its fixtures, its generator, and registry
+guard AV1 — see [docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)),
+is **implemented** in this repository. The Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur
+AWCMS-side screens themselves are **not implemented yet (tracked in #246)**.
 
 ### 11.2 Deferred Control Center work
 

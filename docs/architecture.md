@@ -1095,6 +1095,10 @@ The registry gained four new entries describing boundaries and infrastructure th
 - **D1** — across the six canonical documents (this file, `docs/scope.md`, `docs/security.md`, `docs/threat-model.md`, `docs/ai-data-privacy-and-model-security.md`, `docs/control-center-and-integrations.md`), a line naming an unsupported OS (Debian, Fedora, RHEL/Red Hat, CentOS, Rocky Linux, AlmaLinux, openSUSE, macOS, or Windows) together with the word "support" fails the check unless the same line also carries a negation (`not`, `unsupported`, `no `, `non-goal`, `never`, `out of scope`, an `n't` contraction). Arch Linux is exempt, since Omarchy — an Arch-based upstream — is discussed throughout as a source project, not a supported target.
 - **D2** — this file must contain the `<!-- omes:reference-architecture:v1 -->` marker, a fenced ```mermaid block immediately after it, and the literal phrase `does not mediate all Hermes-native tool execution` (see §18).
 
+`registry.py` also gained a fixture-freshness guard for the read-only Architecture view projection added in issue #246, part 3 (§18.6, [docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)):
+
+- **AV1** — the checked-in fixture `contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json` must not be stale relative to `architecture/capabilities.json`: the guard regenerates the projection in memory via `lib/omes/py/architecture/capabilities_view.build_fixture_view()` (the same builder `scripts/generate-architecture-capabilities-view.py` uses) and fails closed if it differs from the fixture on disk.
+
 ### 16.3 Automated upstream drift review and deprecation tracking
 
 Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml`.
@@ -1383,7 +1387,14 @@ a capability that tries to own a guardrail outside its own plane fails the regis
 - Issue [#246](https://github.com/ahliweb/omes/issues/246) owns the AWCMS Architecture view. It
   must project `architecture/capabilities.json` (schema `1.1.0`) — including the new `plane`,
   `execution_semantics`, and `implementation_status` fields — rather than hard-code a copy of this
-  section's diagram or table. **Not implemented yet (tracked in #246).**
+  section's diagram or table. The OMES-side read-only projection contract this view consumes,
+  `contracts/control-center/v1/architecture-capabilities-view.schema.json` (planes as lanes,
+  capabilities as cards, an `implementation_status` badge per card, and an
+  OMES version/commit/`generated_at` provenance stamp — see
+  [docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)),
+  its fixtures, its generator (`scripts/generate-architecture-capabilities-view.py`), and the
+  registry staleness guard AV1 are **implemented** in this repository. **The AWCMS-side screen
+  itself is not implemented yet (tracked in #246).**
 - Issue [#232](https://github.com/ahliweb/omes/issues/232) owned AWCMS-side consumption of the AI
   data-privacy posture and egress-approval contracts described in Section 17 and
   [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
