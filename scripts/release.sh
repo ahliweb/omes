@@ -251,6 +251,45 @@ validate_fragments_mode() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# architecture-capabilities-view fixture regeneration (issue #254)
+#
+# contracts/control-center/v1/fixtures/architecture-capabilities-view/
+# valid-01-generated.json embeds `omes_version` read live from VERSION
+# (lib/omes/py/architecture/capabilities_view.py: read_omes_version()). The
+# AV1 staleness guard in lib/omes/py/architecture/registry.py (run by
+# scripts/check-architecture.py and tests/py/architecture) rebuilds that
+# fixture in memory from architecture/capabilities.json and diffs it
+# byte-for-byte against the committed copy, so bumping VERSION without
+# regenerating the fixture fails CI on the release PR (as happened cutting
+# v0.5.0, PR #253, which needed a manual fixup commit).
+#
+# Called immediately after each place below that writes VERSION, so the
+# regenerated fixture always lands in the same commit/stage as the version
+# bump. Never called from the push/publish section: --publish only pushes
+# the tag and creates the GitHub Release, it does not re-bump VERSION or
+# regenerate anything.
+#
+# Skips silently when the generator script is not present under repo_root
+# (e.g. the minimal tmp repos tests/unit/release.bats sandboxes for tests
+# that do not need it), and fails closed (die) if the generator *is*
+# present but exits non-zero, so a broken generator blocks the release
+# instead of silently shipping a stale/partial fixture.
+# ---------------------------------------------------------------------------
+regenerate_architecture_capabilities_view() {
+  local generator="${repo_root}/scripts/generate-architecture-capabilities-view.py"
+  [[ -f "$generator" ]] || return 0
+
+  python3 "$generator" \
+    || die "failed to regenerate architecture-capabilities-view fixture after VERSION bump (ran: ${generator})"
+
+  local fixture="${repo_root}/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
+  if [[ -f "$fixture" ]]; then
+    git add "$fixture"
+    log "regenerated and staged architecture-capabilities-view fixture for VERSION=${version}"
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --date)
@@ -471,6 +510,7 @@ All notable changes to OMES are documented here. The format follows
   git rm -q "${fragments[@]}"
   git add CHANGELOG.md VERSION
   log "compiled ${#fragments[@]} fragment(s) into CHANGELOG.md; VERSION=${version}"
+  regenerate_architecture_capabilities_view
 
   # Synchronize README status claim if present
   if [[ -f README.md ]]; then
@@ -484,6 +524,7 @@ else
   fi
   printf '%s\n' "$version" >VERSION
   git add VERSION
+  regenerate_architecture_capabilities_view
   if [[ -f README.md ]]; then
     sed -i -E "s/\*\*Pre-alpha, version \`[^\`]+\`\.\*\*/\*\*Pre-alpha, version \`${version}\`.\*\*/g" README.md
     git add README.md

@@ -221,6 +221,133 @@ EOF
 }
 
 # ---------------------------------------------------------------------------
+# architecture-capabilities-view fixture regeneration (issue #254):
+# scripts/release.sh must regenerate the fixture right after writing VERSION,
+# so a release PR does not fail the "Architecture boundaries" CI job / the
+# AV1 staleness guard in tests/py/architecture the way v0.5.0 (PR #253) did.
+# ---------------------------------------------------------------------------
+
+_copy_architecture_capabilities_view_deps() {
+  cp "${OMES_TEST_ROOT}/scripts/generate-architecture-capabilities-view.py" "$WORK_REPO/scripts/"
+  cp -r "${OMES_TEST_ROOT}/lib" "$WORK_REPO/"
+  # Strip any __pycache__ left over from running Python locally in
+  # OMES_TEST_ROOT's checkout: these are on-disk build cruft, never
+  # tracked in git there, but a bare `cp -r` would carry them into
+  # WORK_REPO where the test's own `git add -A` *would* track them - and
+  # their .pyc content embeds the source path, so re-running the
+  # generator from WORK_REPO's own path (different from OMES_TEST_ROOT's)
+  # would then modify those "tracked" bytecode files, corrupting the
+  # git-status-is-clean assertions below with unrelated diffs.
+  find "$WORK_REPO/lib" -name '__pycache__' -type d -exec rm -rf {} +
+  mkdir -p "$WORK_REPO/architecture"
+  cp "${OMES_TEST_ROOT}/architecture/capabilities.json" "$WORK_REPO/architecture/"
+  mkdir -p "$WORK_REPO/contracts/control-center/v1/fixtures/architecture-capabilities-view"
+  cp "${OMES_TEST_ROOT}/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json" \
+    "$WORK_REPO/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
+}
+
+@test "release regenerates and stages the architecture-capabilities-view fixture on VERSION bump" {
+  _copy_architecture_capabilities_view_deps
+
+  cat > "$WORK_REPO/changes/100-test.md" <<'EOF'
+---
+issue: 100
+type: added
+---
+Test feature description.
+EOF
+  git -C "$WORK_REPO" add -A
+  git -C "$WORK_REPO" commit -q -m "add change fragment and architecture-capabilities-view dependencies"
+
+  run bash "$WORK_REPO/scripts/release.sh" 0.3.0 --skip-ci-check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"regenerated and staged architecture-capabilities-view fixture"* ]]
+
+  local fixture="$WORK_REPO/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
+  grep -q '"omes_version": "0.3.0"' "$fixture"
+
+  # Exactly the AV1 staleness check (registry.py / check-architecture.py)
+  # runs: rebuild the projection and diff it byte-for-byte against the
+  # fixture release.sh just wrote.
+  run python3 "$WORK_REPO/scripts/generate-architecture-capabilities-view.py" --check --out "$fixture"
+  [ "$status" -eq 0 ]
+
+  # Staged as part of the release commit, not left dirty afterwards.
+  # --untracked-files=no: running the generator's imports (architecture,
+  # jobs.schema) writes __pycache__ directories under the copied lib/ tree,
+  # which are untracked cruft unrelated to what release.sh itself staged or
+  # committed - not a sign of an incomplete commit.
+  [ -z "$(git -C "$WORK_REPO" status --porcelain --untracked-files=no)" ]
+}
+
+@test "release --no-commit stages the regenerated architecture-capabilities-view fixture without committing" {
+  _copy_architecture_capabilities_view_deps
+
+  cat > "$WORK_REPO/changes/100-test.md" <<'EOF'
+---
+issue: 100
+type: added
+---
+Test feature description.
+EOF
+  git -C "$WORK_REPO" add -A
+  git -C "$WORK_REPO" commit -q -m "add change fragment and architecture-capabilities-view dependencies"
+
+  run bash "$WORK_REPO/scripts/release.sh" 0.3.0 --no-commit --skip-ci-check
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"regenerated and staged architecture-capabilities-view fixture"* ]]
+
+  local fixture="$WORK_REPO/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
+  grep -q '"omes_version": "0.3.0"' "$fixture"
+
+  # Staged, but --no-commit must not have committed or tagged.
+  [ -n "$(git -C "$WORK_REPO" status --porcelain)" ]
+  ! git -C "$WORK_REPO" rev-parse -q --verify "refs/tags/v0.3.0" >/dev/null
+}
+
+@test "release --dry-run does not touch the architecture-capabilities-view fixture" {
+  _copy_architecture_capabilities_view_deps
+
+  cat > "$WORK_REPO/changes/100-test.md" <<'EOF'
+---
+issue: 100
+type: added
+---
+Test feature description.
+EOF
+
+  local fixture="$WORK_REPO/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
+  local before_fixture
+  before_fixture="$(cat "$fixture")"
+
+  run bash "$WORK_REPO/scripts/release.sh" 0.3.0 --dry-run
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"regenerated and staged architecture-capabilities-view fixture"* ]]
+
+  [ "$(cat "$fixture")" = "$before_fixture" ]
+}
+
+@test "release regeneration is skipped gracefully when the generator is absent" {
+  # Base WORK_REPO deliberately has no scripts/generate-architecture-capabilities-view.py
+  # or lib/omes/py/architecture (see other tests in this file) - release.sh must
+  # not fail just because this fixture-generation dependency is missing.
+  cat > "$WORK_REPO/changes/100-test.md" <<'EOF'
+---
+issue: 100
+type: added
+---
+Test feature description.
+EOF
+  git -C "$WORK_REPO" add changes/
+  git -C "$WORK_REPO" commit -q -m "add change fragment"
+
+  run bash "$WORK_REPO/scripts/release.sh" 0.3.0 --skip-ci-check
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"regenerated and staged architecture-capabilities-view fixture"* ]]
+  [ "$(cat "$WORK_REPO/VERSION")" = "0.3.0" ]
+}
+
+# ---------------------------------------------------------------------------
 # --validate-fragments (issue #238): read-only change-fragment validation,
 # sharing scripts/release.sh's own parser with the compile path above.
 # ---------------------------------------------------------------------------
