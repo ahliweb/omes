@@ -614,14 +614,16 @@ introduces a new privileged inbound listener.
 
 ### 2.11 Architecture capabilities view (issue #246, part 3)
 
-Issue #246 owns the future AWCMS Architecture view described in
+Issue #246 (now closed) owned the AWCMS Architecture view described in
 [docs/architecture.md §18.6](architecture.md#186-consumers): planes
 rendered as lanes, capabilities rendered as cards with an
 `implementation_status` badge, and an OMES version/commit/`generated_at`
 provenance stamp. This part of #246 is OMES-side only: the contract, its
-fixtures, and the fixture generator. **The AWCMS-side screen that consumes
-this contract is a separate, later PR — not implemented yet (tracked in
-#246).**
+fixtures, and the fixture generator, all implemented in this repository.
+**The AWCMS-side screen that consumes this contract, `/admin/omes/arsitektur`,
+shipped in `ahliweb/awcms` PR [#836](https://github.com/ahliweb/awcms/pull/836)
+(`d9e1ef4b`, sql/165, permission `omes_control.architecture.read`), rendering
+the vendored pinned contract snapshot.**
 
 `architecture-capabilities-view.schema.json` is a READ-ONLY projection of
 `architecture/capabilities.json` (schema `1.1.0`) plus the plane table in

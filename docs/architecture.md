@@ -1384,9 +1384,9 @@ a capability that tries to own a guardrail outside its own plane fails the regis
 
 ### 18.6 Consumers
 
-- Issue [#246](https://github.com/ahliweb/omes/issues/246) owns the AWCMS Architecture view. It
-  must project `architecture/capabilities.json` (schema `1.1.0`) — including the new `plane`,
-  `execution_semantics`, and `implementation_status` fields — rather than hard-code a copy of this
+- Issue [#246](https://github.com/ahliweb/omes/issues/246) (closed) owned the AWCMS Architecture
+  view. It projects `architecture/capabilities.json` (schema `1.1.0`) — including the `plane`,
+  `execution_semantics`, and `implementation_status` fields — rather than hard-coding a copy of this
   section's diagram or table. The OMES-side read-only projection contract this view consumes,
   `contracts/control-center/v1/architecture-capabilities-view.schema.json` (planes as lanes,
   capabilities as cards, an `implementation_status` badge per card, and an
@@ -1394,7 +1394,9 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   [docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)),
   its fixtures, its generator (`scripts/generate-architecture-capabilities-view.py`), and the
   registry staleness guard AV1 are **implemented** in this repository. **The AWCMS-side screen
-  itself is not implemented yet (tracked in #246).**
+  `/admin/omes/arsitektur` shipped** in `ahliweb/awcms` PR
+  [#836](https://github.com/ahliweb/awcms/pull/836) (`d9e1ef4b`, sql/165, permission
+  `omes_control.architecture.read`).
 - Issue [#232](https://github.com/ahliweb/omes/issues/232) owned AWCMS-side consumption of the AI
   data-privacy posture and egress-approval contracts described in Section 17 and
   [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).

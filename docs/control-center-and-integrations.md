@@ -404,19 +404,38 @@ The two OMES-side dependencies are merged on this repository's `main`: the outbo
 
 The close-out record — verification gates, ownership-boundary checks, operator flow, permissions, recovery guidance and release metadata — is [docs/control-center-release-closeout.md](control-center-release-closeout.md) (issue [#202](https://github.com/ahliweb/omes/issues/202)).
 
-Issue [#246](https://github.com/ahliweb/omes/issues/246) owns an AWCMS-side **Architecture view**
-consumer contract: it must render [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)'s
+Issue [#246](https://github.com/ahliweb/omes/issues/246) (Control Panel parity with the redesign)
+is **closed**. It owned bringing `.omes-cc` design parity and four missing AWCMS-side views —
+Hermes, Orkestrasi langsung, Arsitektur, and Progres Hermes — up to the reference redesign,
+including an AWCMS-side **Architecture view** consumer contract rendering
+[docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)'s
 layered reference architecture (planes, guardrail ownership, `implementation_status`) by projecting
 `architecture/capabilities.json` (schema `1.1.0`) rather than hard-coding a copy of that diagram or
 table in AWCMS. Part 1 (the `.omes-cc` design system, `ahliweb/awcms` PR
 [#829](https://github.com/ahliweb/awcms/pull/829), `2d40f5ce`) and part 1b (design-system polish,
 `ahliweb/awcms` PR [#832](https://github.com/ahliweb/awcms/pull/832), `6d3bf18b`; sidebar clipping
-split out as [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831), open) have
-**shipped**. Part 3, the OMES-side read-only projection contract the future Arsitektur screen
-consumes (`architecture-capabilities-view.schema.json`, its fixtures, its generator, and registry
-guard AV1 — see [docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)),
-is **implemented** in this repository. The Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur
-AWCMS-side screens themselves are **not implemented yet (tracked in #246)**.
+split out as [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831), still open, not
+part of #246's closure) **shipped**. Part 2 (Hermes, Orkestrasi langsung, Progres Hermes)
+**shipped** in `ahliweb/awcms` PR [#834](https://github.com/ahliweb/awcms/pull/834) (`1dde8027`,
+sql/163–164, permission `hermes_orchestration.read`, worker routes
+`POST /api/v1/omes/worker/hermes-orchestration-{tree,event}`, read API
+`GET /api/v1/omes/hermes-orchestration/{tree,events}`), with render fixes in PR
+[#835](https://github.com/ahliweb/awcms/pull/835) (`221cf599`) and PR
+[#837](https://github.com/ahliweb/awcms/pull/837) (`4a7416ac`). Part 3, the OMES-side read-only
+projection contract the Arsitektur screen consumes (`architecture-capabilities-view.schema.json`,
+its fixtures, its generator, and registry guard AV1 — see
+[docs/control-center-contracts.md §2.11](control-center-contracts.md#211-architecture-capabilities-view-issue-246-part-3)),
+**shipped** in this repository (`ahliweb/omes` PR [#251](https://github.com/ahliweb/omes/pull/251),
+`339f2f37`), and the consuming AWCMS-side screen `/admin/omes/arsitektur` **shipped** in
+`ahliweb/awcms` PR [#836](https://github.com/ahliweb/awcms/pull/836) (`d9e1ef4b`, sql/165,
+permission `omes_control.architecture.read`). Full evidence is in
+[docs/control-center-release-closeout.md](control-center-release-closeout.md). Two items remain
+genuinely deferred and are tracked by their own issues, not by #246: the real GitHub
+repository-progress projection for Progres Hermes ([#249](https://github.com/ahliweb/omes/issues/249),
+open) and the sidebar clipping fix (`ahliweb/awcms#831`, open); the Hermes screen's `planner`/step
+`budget` fields are permanently not reported because Hermes, not OMES/AWCMS, owns model routing
+(ADR-0017). Production deployment of these AWCMS changes into `omes-cms.ahlikoding.com` is tracked
+separately in `ahliweb/serv-dinkesdocker` `docs/24`, not by this document.
 
 ### 11.2 Deferred Control Center work
 
@@ -426,11 +445,14 @@ All of the following, previously deferred, have shipped and are removed from thi
 - v1 worker contract fix (`worker-result.request` `job_id`, `worker-poll.response.job` shape) — **shipped**, commit `62c3b01` (PR [`ahliweb/omes#222`](https://github.com/ahliweb/omes/pull/222), closing #221).
 - AI data-privacy boundary, machine-readable egress policy, restricted local-only inference posture, privacy-posture evidence and projection, and the matching regression coverage — **shipped**, commit `ce44b0a` (PR [`ahliweb/omes#231`](https://github.com/ahliweb/omes/pull/231), closing #213, #214, #215, #216, #217, #218). See [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 - AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts (§2.10 of [docs/control-center-contracts.md](control-center-contracts.md)) — **shipped**, `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing [#232](https://github.com/ahliweb/omes/issues/232).
+- Control Panel parity with the redesign: `.omes-cc` design system, and the Hermes, Orkestrasi langsung, Arsitektur, and Progres Hermes views — **shipped**, closing [#246](https://github.com/ahliweb/omes/issues/246). See §11.1 above and [docs/control-center-release-closeout.md](control-center-release-closeout.md).
 
 Genuinely still deferred:
 
 - A dedicated enrollment-token management screen (`omes_control.enrollments.manage`) — not implemented yet (tracked in [#233](https://github.com/ahliweb/omes/issues/233)).
 - Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
+- The GitHub repository-progress projection for the Progres Hermes view — not implemented yet (tracked in [#249](https://github.com/ahliweb/omes/issues/249)); the screen ships only an explicit empty state until this lands.
+- The Control Panel sidebar clipping fix — not implemented yet (tracked in [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831)); split out of #246 part 1b and does not block its closure.
 
 ## 12. Related documents
 
