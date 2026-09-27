@@ -376,7 +376,7 @@ The Control Center adds a new network-facing trust boundary. It must be added to
 | Foundation | idempotent audited jobs | #90 | Implemented: job runner, atomic store, approval policy, and read-back reconciliation delivered in [docs/jobs.md](jobs.md), `lib/omes/py/jobs/runner.py`, `lib/omes/py/jobs/store.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
 | Foundation | AWCMS Control Center | #91 | OMES wire contracts delivered: `operation-request.schema.json`, `deployment-view.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), [docs/control-center-foundation.md](control-center-foundation.md). The web GUI and tenant DB are implemented in `ahliweb/awcms`, not here — see §11.1. |
 | Foundation | service catalog/entitlements | #92 | Implemented: pure `evaluate()` policy, backend eligibility enforcement, and subscription/entitlement contracts delivered in `lib/omes/py/jobs/entitlement.py`, `lib/omes/py/jobs/states.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
-| Security | AI privacy posture and policy-decision projection | #217 (closed, commit `ce44b0a`, PR #231) | OMES-side wire contracts and pure projection/authorization logic delivered: [docs/control-center-contracts.md](control-center-contracts.md) section 2.10, `ai-privacy-posture-view.schema.json`, `ai-egress-approval.request/response.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), `lib/omes/py/privacy/posture_projection.py`. AWCMS-side screen/API/database consumption is not implemented yet; not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)). |
+| Security | AI privacy posture and policy-decision projection | #217 (closed, commit `ce44b0a`, PR #231); #232 (closed, `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830), `37d4d818`) | OMES-side wire contracts and pure projection/authorization logic delivered: [docs/control-center-contracts.md](control-center-contracts.md) section 2.10, `ai-privacy-posture-view.schema.json`, `ai-egress-approval.request/response.schema.json` in [`contracts/control-center/v1/`](../contracts/control-center/v1/), `lib/omes/py/privacy/posture_projection.py`. AWCMS-side screen/API/database consumption **shipped** in `ahliweb/awcms` PR #830: the `/admin/omes/ai-privacy` screen and the `GET /api/v1/omes/ai-privacy/posture` / `POST /api/v1/omes/ai-privacy/egress-approvals` API. |
 | Billing | manual billing ledger | #93 | Implemented: immutable price snapshots, integer-minor currency arithmetic, and reconciliation helpers delivered in `lib/omes/py/jobs/ledger.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Rendering/email remain in awcms-one. |
 | Billing | recurring billing and webhooks | #94 | Implemented: webhook signature verification, replay protection, grace periods, and suspension policy delivered in `lib/omes/py/jobs/recurring.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). Gateway adapters remain external. |
 | Billing | reporting projections | #95 | Implemented: pure fixture-based usage, billing, and revenue projection contracts delivered in `lib/omes/py/jobs/projections.py`, [`contracts/control-center/v1/`](../contracts/control-center/v1/). |
@@ -408,7 +408,12 @@ Issue [#246](https://github.com/ahliweb/omes/issues/246) owns an AWCMS-side **Ar
 consumer contract: it must render [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary)'s
 layered reference architecture (planes, guardrail ownership, `implementation_status`) by projecting
 `architecture/capabilities.json` (schema `1.1.0`) rather than hard-coding a copy of that diagram or
-table in AWCMS. **Not implemented yet (tracked in #246).**
+table in AWCMS. Part 1 (the `.omes-cc` design system, `ahliweb/awcms` PR
+[#829](https://github.com/ahliweb/awcms/pull/829), `2d40f5ce`) and part 1b (design-system polish,
+`ahliweb/awcms` PR [#832](https://github.com/ahliweb/awcms/pull/832), `6d3bf18b`; sidebar clipping
+split out as [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831), open) have
+**shipped**. The Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur views are **not
+implemented yet (tracked in #246)**.
 
 ### 11.2 Deferred Control Center work
 
@@ -417,10 +422,10 @@ All of the following, previously deferred, have shipped and are removed from thi
 - Prototype redesign v2 driven by v1 contract fixtures — **shipped**, commit `0820e6e` (PR [`ahliweb/omes#212`](https://github.com/ahliweb/omes/pull/212), closing #211).
 - v1 worker contract fix (`worker-result.request` `job_id`, `worker-poll.response.job` shape) — **shipped**, commit `62c3b01` (PR [`ahliweb/omes#222`](https://github.com/ahliweb/omes/pull/222), closing #221).
 - AI data-privacy boundary, machine-readable egress policy, restricted local-only inference posture, privacy-posture evidence and projection, and the matching regression coverage — **shipped**, commit `ce44b0a` (PR [`ahliweb/omes#231`](https://github.com/ahliweb/omes/pull/231), closing #213, #214, #215, #216, #217, #218). See [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
+- AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts (§2.10 of [docs/control-center-contracts.md](control-center-contracts.md)) — **shipped**, `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing [#232](https://github.com/ahliweb/omes/issues/232).
 
 Genuinely still deferred:
 
-- AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts (§2.10 of [docs/control-center-contracts.md](control-center-contracts.md)) — not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)).
 - A dedicated enrollment-token management screen (`omes_control.enrollments.manage`) — not implemented yet (tracked in [#233](https://github.com/ahliweb/omes/issues/233)).
 - Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
 

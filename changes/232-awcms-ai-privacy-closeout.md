@@ -1,0 +1,5 @@
+---
+issue: 232
+type: docs
+---
+Close out #232 on the OMES side: `docs/control-center-release-closeout.md`, `docs/ai-data-privacy-and-model-security.md`, `docs/architecture.md`, `docs/control-center-and-integrations.md`, `docs/control-center-contracts.md`, `docs/adr/0029-ai-data-boundary-and-private-inference.md`, and `docs/ui-ux-design-system.md` now record that AWCMS-side consumption of the AI privacy posture and egress-approval contracts shipped in `ahliweb/awcms` PR #830 (squash-merged at `37d4d818d7fea87f07d5d0cbc4a48d7e5f2f8210`), which adds the session-free `POST /api/v1/omes/worker/ai-privacy-posture` worker route, the `omes_control.ai_privacy.read`/`ai_privacy.approve` permissions, the `/admin/omes/ai-privacy` screen, and the `GET /api/v1/omes/ai-privacy/posture` / `POST /api/v1/omes/ai-privacy/egress-approvals` API, and that the `.omes-cc` design system refresh (parts 1/1b of #246, `ahliweb/awcms` PR #829 `2d40f5ce` and PR #832 `6d3bf18b`) has shipped with sidebar clipping split out as `ahliweb/awcms#831`, while the remaining #246 views (Hermes, Orkestrasi langsung, Progres Hermes, Arsitektur) stay open.
