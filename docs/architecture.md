@@ -1410,8 +1410,24 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   `contracts/control-center/v1/repository-progress-view.schema.json` projection (see
   [docs/control-center-contracts.md §2.12](control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030)).
   The contract, its fixtures, and this ADR are **implemented** in this repository. **AWCMS-side
-  consumption (the polling job, projection table, and screen) is not implemented yet (tracked in
-  #249).**
+  consumption is shipped**: `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845)
+  (squash `8de1782d`) adds migrations sql/166 (`awcms_omes_repository_progress_config` and
+  `awcms_omes_repository_progress`, both FORCE RLS) and sql/167 (the permission
+  `omes_control.repository_progress.configure`; read reuses
+  `omes_control.hermes_orchestration.read`), the routes `GET /api/v1/omes/repository-progress` and
+  `GET`/`PUT`/`DELETE /api/v1/omes/repository-progress/config` (`PUT`/`DELETE` require an
+  `Idempotency-Key` and are audited), the scheduled job `omes:repository-progress:poll`
+  (`*/15 * * * *`, ETag conditional requests, rate-limit-aware, `ssrfSafeFetch`, validation against
+  the vendored schema with fail-closed behavior, and a failing poll keeps the last good
+  observation), and the screen `/admin/omes/progres-hermes` with unconfigured/fresh/stale/error
+  states. The optional token is a `secret_ref` of `{"store":"env","key":
+  "OMES_REPOSITORY_PROGRESS_GITHUB_TOKEN"}` — a v1 simplification (one shared environment token,
+  not per-tenant). Per ADR-0030, the `github_webhook` source, per-tenant distinct credentials, and
+  GitHub App installation tokens remain deferred. Production rollout to
+  `omes-cms.ahlikoding.com` is tracked separately in `ahliweb/serv-dinkesdocker` `docs/24`, not by
+  this document. With this, `provider.github.repository_progress`'s `implementation_status` moves
+  from `staged` to `delegated_upstream` in `architecture/capabilities.json`, and issue #249 is
+  closed.
 
 ### 18.7 Standards crosswalk
 
