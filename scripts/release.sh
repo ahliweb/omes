@@ -280,8 +280,8 @@ regenerate_architecture_capabilities_view() {
   local generator="${repo_root}/scripts/generate-architecture-capabilities-view.py"
   [[ -f "$generator" ]] || return 0
 
-  python3 "$generator" ||
-    die "failed to regenerate architecture-capabilities-view fixture after VERSION bump (ran: ${generator})"
+  python3 "$generator" \
+    || die "failed to regenerate architecture-capabilities-view fixture after VERSION bump (ran: ${generator})"
 
   local fixture="${repo_root}/contracts/control-center/v1/fixtures/architecture-capabilities-view/valid-01-generated.json"
   if [[ -f "$fixture" ]]; then
