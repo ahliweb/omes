@@ -301,7 +301,7 @@ def evaluate_upstream_drift(
             caps_by_upstream.setdefault(upstream, []).append(cap)
 
     for upstream, caps in sorted(caps_by_upstream.items()):
-        if upstream in ("ahliweb/omes", "awcms", "cloudflare", "srs-x"):
+        if upstream in ("ahliweb/omes", "awcms", "cloudflare", "srs-x", "github"):
             # Internal or SaaS provider without public package releases to scan directly
             continue
 

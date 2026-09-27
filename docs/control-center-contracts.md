@@ -34,6 +34,7 @@ concrete per entity, with actual JSON Schemas and fixtures under
 | Secrets (tokens, passwords, credentials) | never stores raw values; stores `secret_ref` pointers only | resolves `secret_ref` locally (env/file/vault/os-keyring); never returns raw values | resolves its own secrets from its own `.env`, unrelated to Control Center secrets |
 | AI privacy posture / egress policy-decision evidence (issue #217) | displays the projection; owns which tenant/actor may read it and who may approve an approval_required decision (RBAC/ABAC) | **owns** the evidence and the pure evaluation/projection logic (`lib/omes/py/privacy/`); never selects or calls a model provider | **owns** agent reasoning and model/provider routing; OMES only reads bounded facts through supported interfaces, never Hermes's private databases |
 | Layered reference architecture / capability registry evidence (issue #247; Architecture view issue #246, part 3) | displays the read-only `architecture-capabilities-view` projection; owns which tenant/actor may read it (RBAC/ABAC) | **owns** `architecture/capabilities.json` and the pure projection logic (`lib/omes/py/architecture/capabilities_view.py`); never stores a copy of AWCMS's own business/governance state | no knowledge (agent_runtime plane entries are read from the registry, never modified by Hermes) |
+| GitHub repository/milestone/issue progress (issue #249, ADR-0030; Progres Hermes view) | **owns**: polls the GitHub REST API, builds and stores the `repository-progress-view` projection, and owns which tenant/actor may read it (RBAC/ABAC) — not implemented yet (tracked in #249) | owns the wire contract only (`repository-progress-view.schema.json`); never fetches GitHub data itself | no knowledge |
 
 This matrix is the concrete instantiation of
 [docs/control-center-and-integrations.md](control-center-and-integrations.md)
@@ -73,6 +74,7 @@ Each has at least one valid and one invalid fixture under
 | Hermes orchestration event (issue #183, ADR-0028) | `hermes-orchestration-event.schema.json` | Hermes Observer → OMES |
 | Hermes orchestration tree (issue #183, ADR-0028) | `hermes-orchestration-tree.schema.json` | OMES → Control Center |
 | Architecture capabilities view (issue #246, part 3) | `architecture-capabilities-view.schema.json` | OMES → Control Center |
+| Repository progress view (issue #249, ADR-0030) | `repository-progress-view.schema.json` | AWCMS (from GitHub) → Control Center |
 
 ### 2.1 Mutating-request common fields
 
@@ -653,6 +655,67 @@ The projection logic lives once, in
 |---|---|
 | Architecture capabilities view | `architecture-capabilities-view.schema.json` |
 
+### 2.12 Repository progress view (issue #249, ADR-0030)
+
+Issue [#249](https://github.com/ahliweb/omes/issues/249) (split from issue #246
+part 2) adds the wire contract behind the AWCMS **Progres Hermes** view:
+milestone name, done/open issue counts, and issue number/title/state/kind for
+a GitHub repository. [ADR-0030](adr/0030-repository-progress-projection.md)
+records the fetch-path decision: **AWCMS polls the GitHub REST API** on a
+schedule (default 15 minutes), read-only, with authentication optional (none
+for a public repository; a read-only fine-grained token or GitHub App
+installation token referenced by `secret_ref` otherwise) — never an OMES host
+worker, and never a static committed snapshot. This section, its schema, and
+its fixtures are **OMES-side only, and implemented in this repository**; the
+AWCMS-side polling job, projection table, and screen are **not implemented
+yet (tracked in #249)**.
+
+`repository-progress-view.schema.json` fixes the shape that job produces:
+
+- `repository` — `owner`, `name`, `html_url` restricted to
+  `https://github.com/` by pattern (no other host can be smuggled in as an
+  authoritative source link).
+- `observed_at` — when the poll last succeeded, so a consumer can compute
+  freshness itself (this contract does not embed a `projection-state` block
+  the way §2.9's reports do, because it is a single-repository snapshot, not
+  an aggregated report; see "AWCMS consumption expectations" in ADR-0030 for
+  the freshness/stale/error states AWCMS must render around it).
+- `source` — `github_rest_poll` (the only implemented path) or the reserved
+  `github_webhook` value, kept in the enum only so a later, additive
+  freshness optimization that reuses issue #101's `github-webhook-envelope`
+  contract and `lib/omes/py/domains/github.py` HMAC verifier does not require
+  a breaking schema change — a webhook delivery alone is never sufficient on
+  its own (ADR-0030's evaluation), so no webhook receiver is implemented
+  here.
+- `milestones[]` — `number`, `title`, `state`, `open_issues`, `closed_issues`,
+  `due_on` (nullable), `html_url`. No milestone description (free-form
+  provider text).
+- `issues[]` — `number`, `title`, `state`, `labels[]` (names only — no color,
+  description, or id), `milestone_number` (nullable), a derived `kind`
+  (`epic`/`feature`/`bug`/`docs`/`other`, computed deterministically from
+  labels per ADR-0030 — never invented), `html_url`, `updated_at`. **No issue
+  body, no comments, and no assignee/author PII** — this is a progress board,
+  not an issue tracker mirror.
+
+`additionalProperties: false` at every object level makes "no raw
+shell/command escape hatch anywhere in this schema" structural (registry
+guard C1), matching every other `contracts/control-center/v1` schema; see
+`fixtures/repository-progress-view/invalid-forbidden-command-key.json`.
+
+This is the first concrete consumer of issue #101's GitHub observation model
+(`docs/domain-providers.md` §4, `contracts/domains/v1/github-provider-
+observation.schema.json`): GitHub remains the sole authority for repository
+state, AWCMS stores an observation stamped with `observed_at`, and a stale
+observation is rendered as stale rather than silently presented as current.
+It does not redefine or duplicate any `contracts/domains/v1/github-*` schema
+— those cover GitHub App installation, repository/environment mapping, and
+webhook-envelope verification; this contract is a narrower, display-oriented
+projection with its own shape.
+
+| Contract | Schema file |
+|---|---|
+| Repository progress view | `repository-progress-view.schema.json` |
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
@@ -757,6 +820,14 @@ This document defines the contract; it does not redefine or duplicate:
   [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
   and [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md) for
   the underlying policy.
+- **#101** (GitHub App installation/webhook/observation contracts,
+  `docs/domain-providers.md` §4) — §2.12's `repository-progress-view` is a
+  new, narrower projection built on top of the same GitHub observation model
+  #101 established; it does not redefine `contracts/domains/v1/github-*`
+  or `lib/omes/py/domains/github.py`'s HMAC verifier, and does not add a
+  live GitHub App, API client, or webhook receiver to this repository. See
+  [ADR-0030](adr/0030-repository-progress-projection.md) for the fetch-path
+  decision.
 
 See [docs/control-center-threat-model.md](control-center-threat-model.md)
 for the STRIDE analysis of this boundary.
