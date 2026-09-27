@@ -515,10 +515,13 @@ issue #216 (`lib/omes/py/privacy/posture_evidence.py`) - never raw
 prompts, transcripts, restricted data, or provider credentials. #217's
 own scope was the OMES-side wire contracts and the pure
 projection/authorization logic (`lib/omes/py/privacy/posture_projection.py`),
-which are implemented. **No AWCMS-side screen, API, or database consumes
-these contracts yet** - that AWCMS-side consumption work is not implemented yet
-(tracked in [#232](https://github.com/ahliweb/omes/issues/232)); this repository only owns the wire shapes and the pure
-OMES-side evaluation logic.
+which are implemented. **The AWCMS-side screen, API, and database that consume
+these contracts shipped** in `ahliweb/awcms` PR
+[#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing
+[#232](https://github.com/ahliweb/omes/issues/232): the `/admin/omes/ai-privacy`
+screen and the `GET /api/v1/omes/ai-privacy/posture` /
+`POST /api/v1/omes/ai-privacy/egress-approvals` API. This repository owns the
+wire shapes and the pure OMES-side evaluation logic.
 
 **Authority split** (this is this issue's documentation acceptance
 criterion, stated explicitly, not merely implied by the ownership

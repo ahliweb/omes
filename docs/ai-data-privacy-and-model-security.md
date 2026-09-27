@@ -143,10 +143,12 @@ classification/egress-policy evaluator and its bounded, metadata-only evidence s
 actual routing decision between a local/private and an approved cloud model is Hermes's
 `agent_runtime`-plane responsibility; and a sanitized, approval-gated projection of that evidence
 for operators is AWCMS's `business_control`-plane responsibility. AWCMS-side consumption of the
-privacy-posture and egress-approval contracts is **not implemented yet (tracked in
-[#232](https://github.com/ahliweb/omes/issues/232))** — this repository ships only the OMES-side
+privacy-posture and egress-approval contracts **shipped in `ahliweb/awcms` PR
+[#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing
+[#232](https://github.com/ahliweb/omes/issues/232)** — this repository ships the OMES-side
 contracts and evaluator (Section 4, `contracts/ai-egress/v1`) and the OMES-side projection
-(`lib/omes/py/privacy/posture_projection.py`, #217). No projection produced by any plane may carry
+(`lib/omes/py/privacy/posture_projection.py`, #217); AWCMS owns the `/admin/omes/ai-privacy` screen
+and API that consume them. No projection produced by any plane may carry
 raw prompt text, response text, embeddings, retrieved documents, or credential values; every
 evidence contract in Section 11 is bounded and metadata-only by schema, not by convention.
 
@@ -589,8 +591,9 @@ and authority split. They show:
 - evidence authority and freshness (`authority`, `evidence_freshness`);
 - drift and remediation status (`status`, e.g. `AI_PRIVACY_POSTURE_FAIL_DRIFT_LOCAL_ONLY_TO_CLOUD`).
 
-**The AWCMS-side screen, API, and database that would consume these contracts are not implemented
-yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232))** - this repository only fixes the projection's wire
+**The AWCMS-side screen, API, and database that consume these contracts shipped in `ahliweb/awcms`
+PR [#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing
+[#232](https://github.com/ahliweb/omes/issues/232)** - this repository fixes the projection's wire
 shape and the OMES-side authorization backstop (cross-tenant denial, the RESTRICTED-cloud approval
 block), both implemented under #217 (closed; commit `ce44b0a`, PR #231).
 
@@ -732,7 +735,9 @@ seen only on upstream development branches is not treated as supported release e
    #215 local-only posture source is integrated via the two state keys section 10 documents.
 4. **#217** — sanitized Control Center projection and policy-decision contracts. Implemented
    (OMES side): see [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py).
-   AWCMS-side consumption remains not implemented yet (tracked in [#232](https://github.com/ahliweb/omes/issues/232)).
+   AWCMS-side consumption shipped in `ahliweb/awcms` PR
+   [#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing
+   [#232](https://github.com/ahliweb/omes/issues/232).
 5. **#218** — negative/regression tests for disclosure and policy bypass. Implemented: see
    `tests/py/privacy/test_privacy_boundary_regression.py`.
 6. **#237** — structured provider-assurance evidence (threat AI-07) gating `cloud_sanitized`

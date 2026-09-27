@@ -1384,10 +1384,11 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   must project `architecture/capabilities.json` (schema `1.1.0`) — including the new `plane`,
   `execution_semantics`, and `implementation_status` fields — rather than hard-code a copy of this
   section's diagram or table. **Not implemented yet (tracked in #246).**
-- Issue [#232](https://github.com/ahliweb/omes/issues/232) owns AWCMS-side consumption of the AI
+- Issue [#232](https://github.com/ahliweb/omes/issues/232) owned AWCMS-side consumption of the AI
   data-privacy posture and egress-approval contracts described in Section 17 and
   [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
-  **Not implemented yet (tracked in #232).**
+  **Shipped** in `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830)
+  (`37d4d818`).
 
 ### 18.7 Standards crosswalk
 
