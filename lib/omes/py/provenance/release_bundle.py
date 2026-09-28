@@ -30,10 +30,14 @@ from jobs import schema as schema_mod  # noqa: E402
 
 MANIFEST_SCHEMA_PATH = REPO_ROOT / "contracts" / "provenance" / "v1" / "release-manifest.schema.json"
 
-HERMES_PINNED_BASELINE = "v2026.9.14"
-HERMES_PINNED_SHA256 = "a3cb2f821c1fdfddfa264287d2c3dfa4b16259fdfb746538c64223d6112d26f2"
+HERMES_PINNED_BASELINE = "v2026.9.24"
+# Kept in sync with HERMES_BASELINE_INSTALLER_SHA256 in lib/omes/versions.sh -
+# both pin the SHA-256 of the same upstream installer URL
+# (https://hermes-agent.nousresearch.com/install.sh) for the same baseline
+# release; this was previously a different, drifted value (issue #259).
+HERMES_PINNED_SHA256 = "0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8"
 OMARCHY_PINNED_BASELINE = "v4.0.4"
-GRAPHIFY_PINNED_BASELINE = "0.9.64"
+GRAPHIFY_PINNED_BASELINE = "0.9.71"
 
 SUPPORTED_TIERS = {
     "tier1": ["ubuntu:24.04", "ubuntu:26.04", "linuxmint:22"],

@@ -16,7 +16,7 @@
 >
 > This document describes the staged deployment boundary for generic and specialist agents beyond the implemented MVP. It does not claim that the backends in sections 2.3-2.5 are implemented on the current branch.
 
-OMES will not become a second agent runtime, chat router, memory engine, skill marketplace, or full PaaS. Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171), Hermes Agent (baseline `v2026.9.14`) remains the authoritative agent runtime and owns reasoning, messaging, memory, skills, model/provider routing, delegation, approvals, and native service management.
+OMES will not become a second agent runtime, chat router, memory engine, skill marketplace, or full PaaS. Under [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md) and issue [#171](https://github.com/ahliweb/omes/issues/171), Hermes Agent (baseline `v2026.9.24`) remains the authoritative agent runtime and owns reasoning, messaging, memory, skills, model/provider routing, delegation, approvals, and native service management.
 
 OMES owns the host operational and assurance boundary:
 

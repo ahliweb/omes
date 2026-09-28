@@ -125,7 +125,7 @@ EOF
 }
 
 @test "module_apply passes --branch to installer when OMES_HERMES_VERSION is set" {
-  export OMES_HERMES_VERSION="v2026.9.14"
+  export OMES_HERMES_VERSION="v2026.9.24"
   local installer="${OMES_TEST_TMPDIR}/installer.sh"
   _fake_installer_body >"$installer"
   export SHIM_CURL_OUTPUT_FILE="$installer"
@@ -134,7 +134,7 @@ EOF
   [ "$status" -eq 0 ]
   run grep 'installer-ran' "$SHIM_LOG"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"args=--branch v2026.9.14"* ]]
+  [[ "$output" == *"args=--branch v2026.9.24"* ]]
 }
 
 # --- module_apply: supply-chain (sha256 baseline & pin) ----------------------
@@ -157,7 +157,7 @@ import json
 import os
 d = json.loads(os.environ["OMES_TEST_JSON"])
 assert d["checksum"]["status"] == "mismatch", d
-assert d["checksum"]["expected"] == "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22"
+assert d["checksum"]["expected"] == "0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8"
 '
   [ "$status" -eq 0 ]
 }
@@ -225,17 +225,17 @@ assert d["checksum"]["status"] == "unverified", d
 @test "hermes_lookup_installer_digest resolves trusted digest for supported baselines" {
   run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" ""
   [ "$status" -eq 0 ]
-  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+  [ "$output" = "0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8" ]
 
-  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v2026.9.14"
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v2026.9.24"
   [ "$status" -eq 0 ]
-  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+  [ "$output" = "0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8" ]
 
-  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v0.21.3"
+  run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "v0.21.5"
   [ "$status" -eq 0 ]
-  [ "$output" = "00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22" ]
+  [ "$output" = "0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8" ]
 
-  run hermes_lookup_installer_digest "https://example.com/custom.sh" "v2026.9.14"
+  run hermes_lookup_installer_digest "https://example.com/custom.sh" "v2026.9.24"
   [ "$status" -eq 1 ]
 
   run hermes_lookup_installer_digest "https://hermes-agent.nousresearch.com/install.sh" "unmapped"

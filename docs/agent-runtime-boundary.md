@@ -2,7 +2,7 @@
 
 > Implements [ADR-0013](adr/0013-agent-runtime-boundary.md), [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md),
 > and issues [#85](https://github.com/ahliweb/omes/issues/85), [#171](https://github.com/ahliweb/omes/issues/171). Hermes Agent is the
-> only supported runtime today (baseline `v2026.9.14`). This document describes the interface
+> only supported runtime today (baseline `v2026.9.24`). This document describes the interface
 > OMES needs from *any* agent runtime, the Hermes implementation that
 > currently fulfils it, and the isolation bar a second runtime would have
 > to clear before OMES adds it. It does not announce a second runtime.

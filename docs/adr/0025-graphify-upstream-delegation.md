@@ -67,6 +67,7 @@ We adopt **Option B**:
 3. **Capability Gating & Version Baseline:**
    - Supported baseline remains `0.9.64` until newer releases (e.g., `0.9.65`) undergo full compatibility and security verification.
    - The capability registry `architecture/capabilities.json` tracks `graphify.knowledge.extraction` as `released_supported` and marks the skill/MCP delegation as complete, removing the temporary duplication allowance.
+   - **2026-09-28 update (issue #259):** upstream released `0.9.65`-`0.9.71` since this ADR was accepted. `0.9.71` underwent the compatibility verification this section required — `extract --code-only`, `export obsidian`, `hook {install,uninstall,status}`, `install --platform hermes`, and default `.gitignore`/`.graphifyignore` honoring were re-verified empirically against `0.9.71` (`docker run --rm python:3.12-slim`; see [docs/graphify.md](../graphify.md) and [docs/graphify-privacy.md](../graphify-privacy.md)) with no breaking changes to the surface OMES uses. The supported baseline is raised to `0.9.71` accordingly; the command-by-command ownership matrix and privacy guardrails above are unchanged.
 
 ---
 

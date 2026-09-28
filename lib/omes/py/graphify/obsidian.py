@@ -30,8 +30,8 @@ OMES_GENERATED_MARKER = "omes_generated: true"
 INDEX_NOTE_NAME = "_index.md"
 PROVENANCE_NOTE_NAME = "_provenance.md"
 
-# Upstream `graphify export obsidian` (verified 2026-09-19 against graphify
-# 0.9.64, `graphify export obsidian --graph <graph.json> --dir <dir>`)
+# Upstream `graphify export obsidian` (verified 2026-09-28 against graphify
+# 0.9.71, `graphify export obsidian --graph <graph.json> --dir <dir>`)
 # writes its own manifest of every file it produced - reused here instead
 # of re-deriving the file list ourselves. See docs/graphify.md §5.2.
 UPSTREAM_MANIFEST_NAME = ".graphify_obsidian_manifest.json"

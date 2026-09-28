@@ -13,7 +13,7 @@ Obsidian export actions (issue #53, docs/graphify.md §5):
   unavailable or fails.
 - `plan-upstream`/`write-upstream` post-process an ALREADY-RUN
   `graphify export obsidian --dir <staging-dir>` output (verified
-  2026-09-19 against graphify 0.9.64 to produce real vault-ready
+  2026-09-28 against graphify 0.9.71 to produce real vault-ready
   Markdown with its own YAML front matter) by injecting OMES's required
   front-matter fields into every `.md` file it listed in its own
   `.graphify_obsidian_manifest.json`, then applying the same

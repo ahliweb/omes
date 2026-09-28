@@ -1,6 +1,6 @@
 """OMES-side change detection for Graphify sources (issue #54).
 
-Stdlib only (ADR-0012). Verified 2026-09-19 against graphify 0.9.64:
+Stdlib only (ADR-0012). Verified 2026-09-28 against graphify 0.9.71:
 upstream does NOT expose a literal `--update`/`--watch` CLI *flag* (the
 earlier framing in docs/graphify.md §1.8 was correct about that narrow
 point), but it DOES ship real *subcommands* with those names -
@@ -34,7 +34,7 @@ MANIFEST_SCHEMA_VERSION = 1
 
 DEFAULT_MAX_FILE_MB = 5
 
-# Verified 2026-09-19 against graphify 0.9.64: `graphify extract` honors
+# Verified 2026-09-28 against graphify 0.9.71: `graphify extract` honors
 # BOTH .gitignore and .graphifyignore by default, with no flag needed
 # (docs/graphify-privacy.md §3) - this scan mirrors that by reading both
 # top-level files, so `omes graphify sync`'s change detection stays

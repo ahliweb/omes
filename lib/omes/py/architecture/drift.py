@@ -394,8 +394,21 @@ def evaluate_upstream_drift(
             continue
 
         # Evaluate capabilities under this upstream
-        # Determine baseline(s) in registry
-        baselines = {c.get("supported_baseline") for c in caps if c.get("supported_baseline")}
+        # Determine baseline(s) in registry. The literal sentinel "n/a" marks a
+        # logical/boundary capability (schema-required `supported_baseline`
+        # string field, but no upstream release actually applies - see
+        # capabilities with `implementation_status: logical_boundary`). It must
+        # be excluded here: otherwise a lexicographic sort (`sorted(baselines)`)
+        # can pick "n/a" as the "lowest" baseline ahead of a real version string
+        # like "v2026.9.14" (since 'n' < 'v'), which made every finding for that
+        # upstream report "Current Baseline: n/a" even though real, versioned
+        # capabilities under the same upstream had a perfectly good pinned
+        # baseline (issue #259).
+        baselines = {
+            c.get("supported_baseline")
+            for c in caps
+            if c.get("supported_baseline") and c.get("supported_baseline") != "n/a"
+        }
         observed_revs = {c.get("observed_upstream_revision") for c in caps if c.get("observed_upstream_revision")}
         primary_baseline = sorted(baselines)[0] if baselines else None
 

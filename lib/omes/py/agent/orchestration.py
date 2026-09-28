@@ -20,7 +20,7 @@ from typing import Any
 from jobs import paths, schema as schema_mod
 
 SCHEMA_VERSION = "1.0.0"
-HERMES_BASELINE = "v2026.9.14"
+HERMES_BASELINE = "v2026.9.24"
 DEFAULT_STALE_THRESHOLD_SECONDS = 300
 
 ACTIVE_STATES = frozenset({"PENDING", "STARTING", "RUNNING"})
