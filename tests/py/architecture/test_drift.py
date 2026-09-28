@@ -232,6 +232,62 @@ class TestUpstreamDrift(unittest.TestCase):
         self.assertEqual(res["action"], "simulate_noop")
         self.assertFalse(res["actionable"])
 
+    def test_logical_boundary_na_sentinel_does_not_win_primary_baseline(self) -> None:
+        """Scenario (issue #259): a logical-boundary capability's `supported_baseline:
+        "n/a"` sentinel must not be picked as the "primary baseline" for an
+        upstream ahead of a real, pinned version string just because "n/a"
+        sorts lower lexicographically ('n' < 'v'). The finding's
+        current_baseline must reflect the real pinned baseline, not "n/a".
+        """
+        registry_data = {
+            "schema_version": "1.1.0",
+            "precedence": ["delegate", "port", "adapt", "defer", "reject"],
+            "capabilities": [
+                {
+                    "capability_id": "hermes.agent.reasoning",
+                    "title": "Hermes Agent Core",
+                    "authority": "hermes",
+                    "upstream_project": "NousResearch/hermes-agent",
+                    "supported_baseline": "v2026.9.14",
+                    "observed_upstream_revision": "v2026.9.14",
+                    "maturity": "released_supported",
+                    "disposition": "delegate",
+                    "omes_module": None,
+                    "duplication_allowed": False,
+                    "evidence_urls": ["https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.14"],
+                },
+                {
+                    "capability_id": "boundary.tool_gateway.mcp",
+                    "title": "MCP / API / tool integration boundary (logical)",
+                    "authority": "hermes",
+                    "upstream_project": "NousResearch/hermes-agent",
+                    "supported_baseline": "n/a",
+                    "observed_upstream_revision": None,
+                    "maturity": "released_supported",
+                    "disposition": "delegate",
+                    "omes_module": None,
+                    "duplication_allowed": False,
+                    "evidence_urls": [],
+                },
+            ],
+        }
+        fixtures = {
+            "github:NousResearch/hermes-agent:release": {
+                "tag_name": "v2026.9.24",
+                "html_url": "https://github.com/NousResearch/hermes-agent/releases/tag/v2026.9.24",
+            },
+        }
+        client = drift.UpstreamClient(fixtures=fixtures, offline=True)
+        report = drift.evaluate_upstream_drift(
+            registry_data=registry_data,
+            client=client,
+            check_main_candidate=False,
+        )
+
+        finding = next(f for f in report.findings if f.classification == drift.BASELINE_UPDATE_AVAILABLE)
+        self.assertEqual(finding.current_baseline, "v2026.9.14")
+        self.assertNotEqual(finding.current_baseline, "n/a")
+
     def test_format_markdown_report(self) -> None:
         """Scenario: Markdown output contains required sections and summary table."""
         report = drift.DriftReport(

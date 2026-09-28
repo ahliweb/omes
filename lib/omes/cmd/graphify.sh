@@ -121,7 +121,7 @@ _graphify_version_gt() {
 # Enforces version baseline and compatibility policies (ADR-0025, issue #180):
 # - Pinning: must match OMES_GRAPHIFY_VERSION if set.
 # - Minimum baseline: must be >= 0.9.64 (or OMES_GRAPHIFY_MIN_VERSION).
-# - Candidate warning: warns if newer than released-supported baseline 0.9.64.
+# - Candidate warning: warns if newer than released-supported baseline 0.9.71.
 _graphify_version_policy_check() {
   local version_str
   version_str="$(_graphify_installed_version 2>/dev/null || true)"
@@ -147,8 +147,8 @@ _graphify_version_policy_check() {
     return 1
   fi
 
-  if _graphify_version_gt "$ver" "0.9.64"; then
-    log_warn "graphify: installed version '${ver}' is newer than released-supported baseline (0.9.64); running with candidate upstream capability"
+  if _graphify_version_gt "$ver" "0.9.71"; then
+    log_warn "graphify: installed version '${ver}' is newer than released-supported baseline (0.9.71); running with candidate upstream capability"
   fi
   return 0
 }
@@ -905,7 +905,7 @@ _graphify_export_py() {
 
 # _graphify_stage_upstream_export <graph-json> <staging-dir>
 # Runs upstream `graphify export obsidian --graph <graph-json> --dir
-# <staging-dir>` (verified 2026-09-19 against graphify 0.9.64 to produce
+# <staging-dir>` (verified 2026-09-28 against graphify 0.9.71 to produce
 # real vault-ready Markdown with its own YAML front matter, plus a canvas
 # file and its own generated-files manifest - docs/graphify.md §5.2).
 # Writes ONLY into the throwaway <staging-dir>, never the vault, so this

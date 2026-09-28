@@ -542,7 +542,7 @@ assert d['path'].endswith('/project')
 
 @test "omes graphify warns when upstream version is candidate newer than baseline" {
   mkdir -p "${OMES_TEST_TMPDIR}/project-new-ver"
-  SHIM_GRAPHIFY_VERSION="0.9.65" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project-new-ver"
+  SHIM_GRAPHIFY_VERSION="0.9.72" run "$OMES_BIN" graphify run "${OMES_TEST_TMPDIR}/project-new-ver"
   [ "$status" -eq 0 ]
   [[ "$output" == *"candidate upstream capability"* ]]
 }

@@ -208,7 +208,44 @@ exact list so the client and its documentation cannot silently drift apart.
 - Rotate the token by updating the environment variable the credential
   reference names; OMES holds no copy to rotate.
 
-### 6.3 Network exposure policy
+### 6.3 Upstream baseline verification (issue #259)
+
+`architecture/capabilities.json`'s `coolify.deployment.adapter` capability
+tracks a `supported_baseline` against `coollabsio/coolify` releases. As of
+2026-09-28 this is `v4.3.23` (previously `v4.0.0`). Because there is no live
+Coolify HTTP integration exercised by CI (see the status note at the top of
+this document) and no host-level release gate that talks to a real Coolify
+instance, this baseline bump is **not** a claim that `v4.3.23` was
+integration-tested against a running Coolify server. It is a documented
+changelog review verifying that every Coolify release between `v4.0.0` and
+`v4.3.23` does not change the exact endpoint/method surface §6.1 lists as
+used by `client.py`:
+
+- `v4.2.0`/`v4.3.0` introduced a breaking change requiring `POST` instead of
+  `GET` for state-changing endpoints (`/servers/{uuid}/validate`,
+  `/applications/{uuid}/{start,restart,stop}`,
+  `/databases/{uuid}/{start,restart,stop}`,
+  `/services/{uuid}/{start,restart,stop}`, and the service-application
+  equivalents). `client.py` calls none of these endpoints, so this change is
+  not applicable.
+- `v4.3.22` rejected `host_path` in persistent-volume API requests
+  (previously supported). `client.py` never sends a `host_path` field, so
+  this change is not applicable.
+- Every other endpoint §6.1 lists (`GET /applications[/{uuid}]`,
+  `POST /deploy`, `GET /deployments[...]`,
+  `POST /applications/{uuid}/rollback`, `GET /servers[/{uuid}]`,
+  `GET /projects[/{uuid}[/{environment}]]`) is unaffected across the full
+  `v4.0.0...v4.3.23` release window
+  (<https://github.com/coollabsio/coolify/compare/v4.0.0...v4.3.23>).
+
+If a future Coolify release changes one of the endpoints/methods §6.1
+actually calls, that is a `BREAKING_CHANGE`-classified finding for
+`scripts/upstream-drift.py` (ADR-0026) to catch on its next scheduled run,
+and must be re-verified against `client.py` (and, ideally, a real instance
+once live integration exists - see section 7) before the baseline is raised
+again.
+
+### 6.4 Network exposure policy
 
 - `client.py` makes **zero** network calls unless the environment variable
   `OMES_COOLIFY_LIVE=1` is set. This is checked inside `_request()` before

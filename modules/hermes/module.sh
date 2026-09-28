@@ -26,12 +26,12 @@ source "${OMES_ROOT}/lib/omes/versions.sh"
 # shellcheck source=../../lib/omes/cmd/audit-provenance.sh
 source "${OMES_ROOT}/lib/omes/cmd/audit-provenance.sh"
 
-# Default upstream installer location (verified 2026-09-21 against Hermes Agent
-# v2026.9.14 / v0.21.3). Overridable via OMES_HERMES_INSTALLER_URL purely for
+# Default upstream installer location (verified 2026-09-28 against Hermes Agent
+# v2026.9.24 / v0.21.5). Overridable via OMES_HERMES_INSTALLER_URL purely for
 # testability; there is no documented operator reason to change it.
 HERMES_DEFAULT_INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
-# Verified SHA-256 of the upstream installer for release v2026.9.14 (2026-09-21):
-# 00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22
+# Verified SHA-256 of the upstream installer for release v2026.9.24 (2026-09-28):
+# 0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8
 
 HERMES_PATH_MARKER_BEGIN="# BEGIN OMES hermes PATH"
 HERMES_PATH_MARKER_END="# END OMES hermes PATH"

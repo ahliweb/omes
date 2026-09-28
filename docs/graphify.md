@@ -9,8 +9,8 @@
 > and the deletion/re-index procedure (issue #55) are documented separately
 > in [docs/graphify-privacy.md](graphify-privacy.md), also implemented.
 >
-> Upstream facts in this document were verified 2026-09-19 against
-> `graphify` version `0.9.64` (see
+> Upstream facts in this document were verified 2026-09-28 against
+> `graphify` version `0.9.71` (see
 > [ADR-0014](adr/0014-graphify-integration-boundary.md),
 > [ADR-0017](adr/0017-upstream-first-ownership-and-boundary-enforcement.md), and
 > [ADR-0025](adr/0025-graphify-upstream-delegation.md)).
@@ -30,8 +30,8 @@
   writes for this integration must install `graphifyy`, never `graphify`.
 - CLI executable name (installed by the `graphifyy` package): `graphify`.
 - License: Apache-2.0 (per `pip show graphifyy`).
-- Verified baseline: installed version is `graphify 0.9.64` (with `0.9.65` observed on PyPI
-  as an unverified candidate per ADR-0025).
+- Verified baseline: installed version is `graphify 0.9.71` (issue #259; previously `0.9.64`
+  per ADR-0025).
 - Requires Python >= 3.10.
 
 ### 1.2 Three modes
@@ -245,7 +245,7 @@ Both flags are parsed by the extension itself, not by `bin/omes` (docs/cli.md §
 **Exit codes:** 0, 1 (neither `uv` nor `pipx` found, upgrade/uninstall failed, or declined
 confirmation without `--yes`), 2 (unknown/missing subcommand).
 
-**JSON schema:** `{"command":"graphify","subcommand":"update","ok":true,"installer":"uv","version":"0.9.64","exit_code":0}`,
+**JSON schema:** `{"command":"graphify","subcommand":"update","ok":true,"installer":"uv","version":"0.9.71","exit_code":0}`,
 `{"command":"graphify","subcommand":"uninstall","ok":true,"installer":"uv","exit_code":0}`.
 
 **Examples:**
@@ -262,7 +262,7 @@ omes graphify uninstall --yes --json      # remove the tool-env install only
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `OMES_GRAPHIFY_VERSION` | unset | Operator | Pins the installed `graphifyy` version (e.g. `0.9.64`); a mismatch against the currently installed `graphify --version` output triggers a reinstall via `uv tool install graphifyy==<version>` (or the pipx equivalent). |
+| `OMES_GRAPHIFY_VERSION` | unset | Operator | Pins the installed `graphifyy` version (e.g. `0.9.71`); a mismatch against the currently installed `graphify --version` output triggers a reinstall via `uv tool install graphifyy==<version>` (or the pipx equivalent). |
 | `OMES_GRAPHIFY_INSTALLER` | unset | Operator | Set to `uv-bootstrap` to allow `module_check`/`module_apply` to download and run the official `uv` installer (`https://astral.sh/uv/install.sh`, to a temp file, never `curl \| bash`) when neither `uv` nor `pipx` is already on `PATH`. Without this, `module_check` fails with an actionable message instead of installing anything itself. |
 | `OMES_UV_INSTALLER_SHA256` | unset | Operator | Verifies the downloaded `uv` installer's sha256 before executing it (only relevant with `OMES_GRAPHIFY_INSTALLER=uv-bootstrap`); a mismatch aborts with no execution, mirroring `OMES_HERMES_INSTALLER_SHA256` (docs/configuration.md §7). |
 | `OMES_GRAPHIFY_PYTHON` | `python3` | Test-only | Overrides the python interpreter `module_check`'s version gate probes. Not a documented operator knob — exists so tests can simulate "python3 missing" by pointing at a nonexistent path instead of hiding a whole `PATH` directory (which risks also hiding unrelated coreutils a real host happens to colocate with `python3`). |
@@ -328,7 +328,7 @@ After a successful (non-dry-run) extraction, OMES writes `omes-provenance.json` 
   "out_dir": "/home/op/code/myrepo/graphify-out",
   "backend": null,
   "provider_env_var": null,
-  "graphify_version": "0.9.64",
+  "graphify_version": "0.9.71",
   "omes_version": "0.1.0",
   "invoked_by": "op"
 }
@@ -342,7 +342,7 @@ After a successful (non-dry-run) extraction, OMES writes `omes-provenance.json` 
 
 Following ADR-0017 and ADR-0025:
 - **Upstream delegation:** When the installed Graphify version supports `graphify install --platform hermes` (e.g. `graphify install --help` exposes `--platform`), OMES runs the upstream command directly, backing up existing files and recording `mode: upstream`.
-- **Bundled fallback:** If the installed Graphify version is baseline 0.9.64 (which does not provide `--platform hermes`), OMES falls back to copying the bundled `modules/graphify/skill/{SKILL.md,run.sh}` into `${OMES_HERMES_HOME:-$HOME/.hermes}/skills/graphify/` with an informative deprecation notice.
+- **Bundled fallback:** The current baseline (`0.9.71`) provides `--platform hermes`. If the installed Graphify version predates Hermes platform support (the original `0.9.64` baseline, which did not provide `--platform hermes`), OMES falls back to copying the bundled `modules/graphify/skill/{SKILL.md,run.sh}` into `${OMES_HERMES_HOME:-$HOME/.hermes}/skills/graphify/` with an informative deprecation notice.
 - **Uninstall:** `omes graphify skill uninstall` removes only the Graphify skill files from Hermes's skill directory, leaving all other skills untouched.
 
 **JSON schema:**
@@ -356,7 +356,7 @@ Following ADR-0017 and ADR-0025:
 ## §4 MCP integration
 
 Implemented (issue #52). Upstream `graphifyy[mcp]` (an optional PyPI extra, §1) provides a
-real, invocable console script — verified empirically 2026-09-19 against graphify 0.9.64
+real, invocable console script — verified empirically 2026-09-28 against graphify 0.9.71
 (`pip install "graphifyy[mcp]"` inside `python:3.12-slim`):
 
 ```
@@ -475,7 +475,7 @@ vault.
 
 ### 5.1 Two render paths — upstream preferred, OMES's own renderer as fallback
 
-Verified 2026-09-19 against graphify 0.9.64 (`docker run --rm python:3.12-slim bash -c 'pip
+Verified 2026-09-28 against graphify 0.9.71 (`docker run --rm python:3.12-slim bash -c 'pip
 install -q graphifyy && graphify extract /work --code-only && graphify export obsidian --graph
 /work/graphify-out/graph.json --dir /work/vault-export'`): upstream's `export obsidian` is real
 and DOES produce genuinely vault-ready Markdown — one note per code symbol/file with its own YAML
@@ -522,7 +522,7 @@ Every Markdown note this command writes or updates carries, at minimum:
 
 ```yaml
 omes_generated: true
-graphify_version: "0.9.64"
+graphify_version: "0.9.71"
 extraction_mode: "code"
 generated_at: "2026-09-19T12:00:00Z"
 graph_sha256: "<sha256 of the source graph.json>"
@@ -601,7 +601,7 @@ tree against that manifest without ever invoking `graphify` or writing anything,
 §1.8 (written for issue #49, before this issue actually re-verified the full command list) states
 that `graphify --help` exposes no literal `--update`/`--watch` **flag** - that specific, narrow
 claim is still correct. It did not go on to check whether `update`/`watch` exist as **top-level
-subcommands**, and they do. Re-verified against graphify 0.9.64 (`docker run --rm python:3.12-slim
+subcommands**, and they do. Re-verified against graphify 0.9.71 (`docker run --rm python:3.12-slim
 bash -c 'pip install -q graphifyy && graphify --help'`, plus a live `extract`/`update` run on a
 synthetic 2-file repo):
 

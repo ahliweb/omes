@@ -249,8 +249,8 @@ $ omes audit provenance --json
 
 For known OMES-supported Hermes releases, installer verification is **enabled by default** (issue #170).
 OMES automatically resolves the expected digest from trusted repository metadata (`lib/omes/versions.sh`) without requiring manual operator configuration:
-- For upstream Hermes release **v2026.9.14** (Hermes Agent v0.21.3), the verified installer SHA-256 is:
-  `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`.
+- For upstream Hermes release **v2026.9.24** (Hermes Agent v0.21.5), the verified installer SHA-256 is:
+  `0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8`.
 
 Operators can override the expected hash by setting `OMES_HERMES_INSTALLER_SHA256` before `omes install`/`omes update`
 (`docs/hermes-integration.md` §2, `docs/security.md` §6). A mismatch aborts the install with **no execution** (exit 6)
@@ -267,8 +267,8 @@ is required to execute an unmapped baseline without verification, recording prov
   installer over a connection you trust and recompute
   `OMES_HERMES_INSTALLER_SHA256` yourself before retrying.
 - **Unverified checksum (WARN):** set `OMES_HERMES_INSTALLER_SHA256` once
-  you have a trusted hash to pin against (for v2026.9.14, use
-  `00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22`);
+  you have a trusted hash to pin against (for v2026.9.24, use
+  `0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8`);
   upstream Hermes installer script is verified periodically per release
   (`docs/hermes-integration.md` §2).
 - **Mutable URL (WARN):** prefer an immutable release asset or pinned
@@ -301,7 +301,7 @@ is required to execute an unmapped baseline without verification, recording prov
 For each published release, OMES generates and verifies a complete, reproducible evidence bundle (`dist/release-v<version>/`):
 
 1. **`release-manifest.json`**: Conforms to `contracts/provenance/v1/release-manifest.schema.json`. Records version, tag, exact commit SHA, release date, repository URL, and an artifact inventory table.
-2. **`sbom.json`**: Machine-readable Software Bill of Materials distinguishing managed distributions (OMES source, Hermes `v2026.9.14`, Omarchy `v4.0.4`, Graphify `0.9.64`) from discovered host packages.
+2. **`sbom.json`**: Machine-readable Software Bill of Materials distinguishing managed distributions (OMES source, Hermes `v2026.9.24`, Omarchy `v4.0.4`, Graphify `0.9.71`) from discovered host packages.
 3. **`provenance.slsa.json`**: SLSA/in-toto compatible build provenance attestation binding the release tag, commit SHA, build definition, and resolved upstream dependencies.
 4. **`compatibility-evidence.json`**: Platform compatibility matrix evidence for Tier 1 (Ubuntu 24.04/26.04, Linux Mint 22) and Tier 2. Enforces fail-closed evaluation: missing evidence cannot be rendered as `PASS`.
 5. **`recovery-evidence.json`**: Rollback, backup/restore, and disaster recovery gate statuses (`PASS`, `FAIL`, `WARN`, `BLOCKED`, `NOT TESTED`).

@@ -1,7 +1,7 @@
 """lib/omes/py/health/hermes_adapter.py - Hermes runtime health adapter (issue #178).
 
 Standard library only (ADR-0012). This adapter communicates with the supported
-Hermes agent CLI (v2026.9.14) to consume authoritative runtime health signals
+Hermes agent CLI (v2026.9.24) to consume authoritative runtime health signals
 (`hermes doctor`, `hermes gateway status`, `hermes profile list`), delegating
 runtime semantics to Hermes while ensuring bounded, read-only execution with
 redacted outputs.

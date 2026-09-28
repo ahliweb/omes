@@ -3,7 +3,7 @@
 > Status: implemented, as described. This document is the privacy-specific companion to
 > [docs/graphify.md](graphify.md) (the integration's full technical reference) — it does not
 > repeat that document's install/workflow/export/sync mechanics except where needed to make the
-> privacy picture self-contained. Verified 2026-09-19 against graphify `0.9.64`
+> privacy picture self-contained. Verified 2026-09-28 against graphify `0.9.71`
 > (see [ADR-0014](adr/0014-graphify-integration-boundary.md)).
 
 ## 1. Local AST extraction vs. provider-backed semantic extraction
@@ -63,7 +63,7 @@ When `--mode semantic` runs (an explicit, operator-initiated action - never a de
 
 ## 3. Ignored paths: `.gitignore` and `.graphifyignore`
 
-Re-verified 2026-09-19 (`docker run --rm python:3.12-slim bash -c 'pip install -q graphifyy && ...'`,
+Re-verified 2026-09-28 against graphify `0.9.71` (`docker run --rm python:3.12-slim bash -c 'pip install -q graphifyy && ...'`,
 a live `extract --code-only` run against a synthetic two-directory repo, once with only a
 `.gitignore` and once with only a `.graphifyignore`): **both mechanisms are honored by graphify
 BY DEFAULT, with no flag needed** — a file matched by either is excluded from extraction. Passing

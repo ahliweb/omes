@@ -154,7 +154,7 @@ Implementing issue: #6 (core helpers), #11 (Hermes secret handling), #16 (CI enf
   Hermes installer) is downloaded to a temporary file first, cryptographically verified, then
   executed as a separate step. This makes the exact bytes executed inspectable and verifiable.
 - **Enforced SHA-256 verification by default.** Known upstream baselines (such as Hermes
-  v2026.9.14) have their verified installer digests recorded in trusted repository metadata
+  v2026.9.24) have their verified installer digests recorded in trusted repository metadata
   (`lib/omes/versions.sh`) and enforced by default (issue #170). A mismatch aborts before
   execution with no mutation and records fail-closed provenance. Unmapped baselines fail closed
   unless an explicit expected hash (`OMES_HERMES_INSTALLER_SHA256`) or explicit unsafe development

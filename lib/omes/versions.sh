@@ -43,9 +43,9 @@ unset _omes_versions_dep
 # ---------------------------------------------------------------------------
 # Supported upstream baselines & trusted metadata (issues #164, #170)
 # ---------------------------------------------------------------------------
-HERMES_BASELINE_VERSION="v2026.9.14"
+HERMES_BASELINE_VERSION="v2026.9.24"
 HERMES_BASELINE_INSTALLER_URL="https://hermes-agent.nousresearch.com/install.sh"
-HERMES_BASELINE_INSTALLER_SHA256="00f9080c6452bf87f03ef2fffb4b2c23b9f43f946aaae956e4c547d17e310b22"
+HERMES_BASELINE_INSTALLER_SHA256="0fbf2969c12b9ef9c90b81519814865faa9ee4e22056e2a9a4d0b1d5e59966e8"
 
 # hermes_lookup_installer_digest <url> <version/branch>
 # Resolves the trusted expected SHA-256 digest for a known upstream Hermes baseline.
@@ -56,7 +56,7 @@ hermes_lookup_installer_digest() {
 
   if [[ -z "$url" || "$url" == "$HERMES_BASELINE_INSTALLER_URL" ]]; then
     case "${ver:-}" in
-      "" | "$HERMES_BASELINE_VERSION" | "v2026.9.14" | "v0.21.3" | "0.21.3")
+      "" | "$HERMES_BASELINE_VERSION" | "v2026.9.24" | "v0.21.5" | "0.21.5")
         printf '%s\n' "$HERMES_BASELINE_INSTALLER_SHA256"
         return 0
         ;;
