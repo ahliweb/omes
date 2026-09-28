@@ -6,6 +6,20 @@ All notable changes to OMES are documented here. The format follows
 `changes/*.md` fragments by `scripts/release.sh` (see
 `docs/adr/0010-versioning-and-change-fragments.md`); do not edit by hand.
 
+## [0.6.0](https://github.com/ahliweb/omes/releases/tag/v0.6.0) - 2026-09-28
+
+### Added
+
+- Added the repository-progress-view Control Center contract, fixtures, and ADR-0030 recording the decision that AWCMS polls the GitHub REST API (read-only, optionally authenticated) to feed the Progres Hermes milestone/issue progress view; AWCMS-side consumption is not implemented yet. ([#249](https://github.com/ahliweb/omes/issues/249))
+
+### Fixed
+
+- scripts/release.sh now regenerates and stages the architecture-capabilities-view fixture right after writing VERSION, so a release PR no longer fails the Architecture boundaries CI check with a stale omes_version until someone fixes it up by hand. ([#254](https://github.com/ahliweb/omes/issues/254))
+
+### Documentation
+
+- Closed out the GitHub repository-progress projection for the Progres Hermes view: documentation across docs/architecture.md, docs/control-center-contracts.md, docs/control-center-and-integrations.md, docs/ui-ux-design-system.md, docs/control-center-release-closeout.md, and ADR-0030 now records that AWCMS consumption shipped in ahliweb/awcms PR #845 (squash 8de1782d), and architecture/capabilities.json moves provider.github.repository_progress's implementation_status from staged to delegated_upstream with the regenerated architecture-capabilities-view fixture. ([#249](https://github.com/ahliweb/omes/issues/249))
+
 ## [0.5.0](https://github.com/ahliweb/omes/releases/tag/v0.5.0) - 2026-09-27
 
 ### Security
