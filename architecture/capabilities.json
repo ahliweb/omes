@@ -624,14 +624,15 @@
       "disposition": "delegate",
       "plane": "business_control",
       "execution_semantics": "external_authority",
-      "implementation_status": "staged",
+      "implementation_status": "delegated_upstream",
       "omes_module": null,
       "duplication_allowed": false,
       "adr_reference": "ADR-0030",
       "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/ahliweb/omes/blob/main/docs/control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030",
-        "https://github.com/ahliweb/omes/blob/main/docs/adr/0030-repository-progress-projection.md"
+        "https://github.com/ahliweb/omes/blob/main/docs/adr/0030-repository-progress-projection.md",
+        "https://github.com/ahliweb/awcms/pull/845"
       ]
     },
     {

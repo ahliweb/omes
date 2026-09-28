@@ -309,7 +309,7 @@ OMES may sell a managed GitHub integration add-on, but it must not mirror GitHub
 
 ### 8.1 First concrete consumer: repository progress (issue #249, ADR-0030)
 
-Issue [#249](https://github.com/ahliweb/omes/issues/249) (split from issue #246 part 2) is the first concrete Control Center consumer of this GitHub observation model: the "Progres Hermes" view, showing milestone and issue progress for a tenant's configured repository. [ADR-0030](adr/0030-repository-progress-projection.md) decides the fetch path — **AWCMS polls the GitHub REST API** on a schedule (default 15 minutes), read-only, with authentication optional (none for a public repository; a read-only fine-grained token or GitHub App installation token via `secret_reference` otherwise) — rather than an OMES host worker fetching on AWCMS's behalf (wrong authority plane: repository progress is a GitHub observation for AWCMS to project, not host-control state OMES owns) or a static committed snapshot (a stale, false copy of provider truth). The wire contract, `repository-progress-view.schema.json`, is defined in [docs/control-center-contracts.md §2.12](control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030) and is implemented in this repository. **AWCMS consumption (the polling job, projection table, and screen) is not implemented yet (tracked in #249).**
+Issue [#249](https://github.com/ahliweb/omes/issues/249) (split from issue #246 part 2, closed) is the first concrete Control Center consumer of this GitHub observation model: the "Progres Hermes" view, showing milestone and issue progress for a tenant's configured repository. [ADR-0030](adr/0030-repository-progress-projection.md) decides the fetch path — **AWCMS polls the GitHub REST API** on a schedule (default 15 minutes), read-only, with authentication optional (none for a public repository; a read-only fine-grained token or GitHub App installation token via `secret_reference` otherwise) — rather than an OMES host worker fetching on AWCMS's behalf (wrong authority plane: repository progress is a GitHub observation for AWCMS to project, not host-control state OMES owns) or a static committed snapshot (a stale, false copy of provider truth). The wire contract, `repository-progress-view.schema.json`, is defined in [docs/control-center-contracts.md §2.12](control-center-contracts.md#212-repository-progress-view-issue-249-adr-0030) and is implemented in this repository. **AWCMS consumption is shipped** in `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (squash `8de1782d`): the polling job `omes:repository-progress:poll` (`*/15 * * * *`, ETag-conditional, rate-limit-aware, `ssrfSafeFetch`, fail-closed schema validation), migrations sql/166–167 (FORCE RLS), the routes under `/api/v1/omes/repository-progress`, and the screen `/admin/omes/progres-hermes` with unconfigured/fresh/stale/error states. Per ADR-0030, the `github_webhook` source, per-tenant distinct credentials, and GitHub App installation tokens remain deferred. A follow-up UI polish PR for that screen is in flight in `ahliweb/awcms`. Production rollout to `omes-cms.ahlikoding.com` is tracked separately in `ahliweb/serv-dinkesdocker` `docs/24`, not by this document.
 
 Authoritative sources:
 
@@ -433,13 +433,15 @@ its fixtures, its generator, and registry guard AV1 — see
 `339f2f37`), and the consuming AWCMS-side screen `/admin/omes/arsitektur` **shipped** in
 `ahliweb/awcms` PR [#836](https://github.com/ahliweb/awcms/pull/836) (`d9e1ef4b`, sql/165,
 permission `omes_control.architecture.read`). Full evidence is in
-[docs/control-center-release-closeout.md](control-center-release-closeout.md). Two items remain
-genuinely deferred and are tracked by their own issues, not by #246: the real GitHub
-repository-progress projection for Progres Hermes ([#249](https://github.com/ahliweb/omes/issues/249),
-open) and the sidebar clipping fix (`ahliweb/awcms#831`, open); the Hermes screen's `planner`/step
-`budget` fields are permanently not reported because Hermes, not OMES/AWCMS, owns model routing
-(ADR-0017). Production deployment of these AWCMS changes into `omes-cms.ahlikoding.com` is tracked
-separately in `ahliweb/serv-dinkesdocker` `docs/24`, not by this document.
+[docs/control-center-release-closeout.md](control-center-release-closeout.md). The real GitHub
+repository-progress projection for Progres Hermes ([#249](https://github.com/ahliweb/omes/issues/249))
+has since shipped in `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845)
+(`8de1782d`) and the sidebar clipping fix (`ahliweb/awcms#831`) has since shipped in
+`ahliweb/awcms` PR [#842](https://github.com/ahliweb/awcms/pull/842); the Hermes screen's
+`planner`/step `budget` fields are permanently not reported because Hermes, not OMES/AWCMS, owns
+model routing (ADR-0017). Production deployment of these AWCMS changes into
+`omes-cms.ahlikoding.com` is tracked separately in `ahliweb/serv-dinkesdocker` `docs/24`, not by
+this document.
 
 ### 11.2 Deferred Control Center work
 
@@ -450,13 +452,14 @@ All of the following, previously deferred, have shipped and are removed from thi
 - AI data-privacy boundary, machine-readable egress policy, restricted local-only inference posture, privacy-posture evidence and projection, and the matching regression coverage — **shipped**, commit `ce44b0a` (PR [`ahliweb/omes#231`](https://github.com/ahliweb/omes/pull/231), closing #213, #214, #215, #216, #217, #218). See [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 - AWCMS-side screen/API/database consumption of the AI privacy posture and egress-approval contracts (§2.10 of [docs/control-center-contracts.md](control-center-contracts.md)) — **shipped**, `ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830) (`37d4d818`), closing [#232](https://github.com/ahliweb/omes/issues/232).
 - Control Panel parity with the redesign: `.omes-cc` design system, and the Hermes, Orkestrasi langsung, Arsitektur, and Progres Hermes views — **shipped**, closing [#246](https://github.com/ahliweb/omes/issues/246). See §11.1 above and [docs/control-center-release-closeout.md](control-center-release-closeout.md).
+- The GitHub repository-progress projection for the Progres Hermes view — **shipped**, `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (`8de1782d`), closing [#249](https://github.com/ahliweb/omes/issues/249). See §8.1 above.
+- The Control Panel sidebar clipping fix — **shipped**, `ahliweb/awcms` PR [#842](https://github.com/ahliweb/awcms/pull/842), closing [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831).
 
 Genuinely still deferred:
 
 - A dedicated enrollment-token management screen (`omes_control.enrollments.manage`) — not implemented yet (tracked in [#233](https://github.com/ahliweb/omes/issues/233)).
 - Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
-- The GitHub repository-progress projection for the Progres Hermes view — not implemented yet (tracked in [#249](https://github.com/ahliweb/omes/issues/249)); the screen ships only an explicit empty state until this lands.
-- The Control Panel sidebar clipping fix — not implemented yet (tracked in [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831)); split out of #246 part 1b and does not block its closure.
+- The `github_webhook` source, per-tenant distinct credentials, and GitHub App installation tokens for the repository-progress projection — deferred per ADR-0030, not tracked by a numbered issue.
 
 ## 12. Related documents
 

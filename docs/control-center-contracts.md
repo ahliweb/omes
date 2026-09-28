@@ -34,7 +34,7 @@ concrete per entity, with actual JSON Schemas and fixtures under
 | Secrets (tokens, passwords, credentials) | never stores raw values; stores `secret_ref` pointers only | resolves `secret_ref` locally (env/file/vault/os-keyring); never returns raw values | resolves its own secrets from its own `.env`, unrelated to Control Center secrets |
 | AI privacy posture / egress policy-decision evidence (issue #217) | displays the projection; owns which tenant/actor may read it and who may approve an approval_required decision (RBAC/ABAC) | **owns** the evidence and the pure evaluation/projection logic (`lib/omes/py/privacy/`); never selects or calls a model provider | **owns** agent reasoning and model/provider routing; OMES only reads bounded facts through supported interfaces, never Hermes's private databases |
 | Layered reference architecture / capability registry evidence (issue #247; Architecture view issue #246, part 3) | displays the read-only `architecture-capabilities-view` projection; owns which tenant/actor may read it (RBAC/ABAC) | **owns** `architecture/capabilities.json` and the pure projection logic (`lib/omes/py/architecture/capabilities_view.py`); never stores a copy of AWCMS's own business/governance state | no knowledge (agent_runtime plane entries are read from the registry, never modified by Hermes) |
-| GitHub repository/milestone/issue progress (issue #249, ADR-0030; Progres Hermes view) | **owns**: polls the GitHub REST API, builds and stores the `repository-progress-view` projection, and owns which tenant/actor may read it (RBAC/ABAC) — not implemented yet (tracked in #249) | owns the wire contract only (`repository-progress-view.schema.json`); never fetches GitHub data itself | no knowledge |
+| GitHub repository/milestone/issue progress (issue #249, ADR-0030; Progres Hermes view) | **owns**: polls the GitHub REST API, builds and stores the `repository-progress-view` projection, and owns which tenant/actor may read it (RBAC/ABAC) — **shipped**, `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (`8de1782d`) | owns the wire contract only (`repository-progress-view.schema.json`); never fetches GitHub data itself | no knowledge |
 
 This matrix is the concrete instantiation of
 [docs/control-center-and-integrations.md](control-center-and-integrations.md)
@@ -667,8 +667,25 @@ for a public repository; a read-only fine-grained token or GitHub App
 installation token referenced by `secret_ref` otherwise) — never an OMES host
 worker, and never a static committed snapshot. This section, its schema, and
 its fixtures are **OMES-side only, and implemented in this repository**; the
-AWCMS-side polling job, projection table, and screen are **not implemented
-yet (tracked in #249)**.
+AWCMS-side polling job, projection table, and screen are **shipped** in
+`ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (squash
+`8de1782d`): migrations sql/166–167 (both projection tables FORCE RLS; the
+permission `omes_control.repository_progress.configure`, read reuses
+`omes_control.hermes_orchestration.read`), the routes
+`GET /api/v1/omes/repository-progress` and
+`GET`/`PUT`/`DELETE /api/v1/omes/repository-progress/config` (`PUT`/`DELETE`
+require an `Idempotency-Key` and are audited), the scheduled job
+`omes:repository-progress:poll` (`*/15 * * * *`, ETag-conditional,
+rate-limit-aware, `ssrfSafeFetch`, fail-closed schema validation, and a
+failing poll keeps the last good observation), and the screen
+`/admin/omes/progres-hermes` with unconfigured/fresh/stale/error states. The
+optional token is a `secret_ref` of
+`{"store":"env","key":"OMES_REPOSITORY_PROGRESS_GITHUB_TOKEN"}` — a v1
+simplification (one shared environment token, not per-tenant). Per
+ADR-0030, the `github_webhook` source, per-tenant distinct credentials, and
+GitHub App installation tokens remain deferred. Issue #249 is closed;
+production rollout to `omes-cms.ahlikoding.com` is tracked separately in
+`ahliweb/serv-dinkesdocker` `docs/24`.
 
 `repository-progress-view.schema.json` fixes the shape that job produces:
 
