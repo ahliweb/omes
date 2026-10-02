@@ -105,6 +105,7 @@ One issue, one branch, and one PR is the default. A cross-cutting documentation 
 - Change a Control Center contract in `contracts/control-center/v1/` here first, then re-vendor it upstream. AWCMS pins these files by SHA-256; editing its vendored copy is drift, not a fix.
 - Never add an operation to the safe-operation allowlist without updating `operation-request.schema.json`, its fixtures, and the upstream enum test together.
 - Read [docs/control-center-release-closeout.md](docs/control-center-release-closeout.md) before claiming any Control Center capability is shipped; it records what landed and what is still only an open pull request.
+- 3D Mission Control (epic #263, ADR-0031) is a composition, not an authority: a new scene object kind, state value, relation, or action must first be added to `contracts/control-center/v1/mission-control-source-map.json` (guard MC1–MC9), map to an existing authority and canonical 2D route, and never introduce a new executor, approval inbox, or operation name.
 - Keep `RegistrarAdapter` and `DnsAdapter` separate.
 - Resolve provider capability by account, extension, operation, and current provider configuration; suffix-only routing is insufficient.
 - Keep registrar, billing, entitlement, DNS, and deployment states separate.

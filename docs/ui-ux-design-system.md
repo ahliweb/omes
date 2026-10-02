@@ -7,7 +7,7 @@
 > committed `ui/control-center/data.js` is freshness-checked in CI.
 > Target epics and issues: [#195](https://github.com/ahliweb/omes/issues/195)–[#202](https://github.com/ahliweb/omes/issues/202), [#192](https://github.com/ahliweb/omes/issues/192), [#183](https://github.com/ahliweb/omes/issues/183), [#211](https://github.com/ahliweb/omes/issues/211).
 >
-> **Implementation status.** `/admin/omes/*` screens are implemented in `ahliweb/awcms`: the original nine under [#200](https://github.com/ahliweb/omes/issues/200) and [#201](https://github.com/ahliweb/omes/issues/201), the `/admin/omes/ai-privacy` screen shipped under [#232](https://github.com/ahliweb/omes/issues/232) (`ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830), `37d4d818`), and — closing [#246](https://github.com/ahliweb/omes/issues/246) — the Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur screens (`ahliweb/awcms` PRs [#834](https://github.com/ahliweb/awcms/pull/834) `1dde8027`, [#835](https://github.com/ahliweb/awcms/pull/835) `221cf599`, [#837](https://github.com/ahliweb/awcms/pull/837) `4a7416ac`, and [#836](https://github.com/ahliweb/awcms/pull/836) `d9e1ef4b`); the `omes_control` module is `active` there. Every view in the redesign's parity table now has a working screen with real projections or an explicit empty state: Progres Hermes now renders the real GitHub repository-progress projection, shipped in `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (`8de1782d`), closing [#249](https://github.com/ahliweb/omes/issues/249) (a follow-up UI polish PR for that screen is in flight), and the Hermes screen reports the redesign's `planner`/step `budget` fields as "not reported" because Hermes, not OMES/AWCMS, owns model routing (ADR-0017). A dedicated enrollment-token management screen (Screen 9 here) is still not among them — Servers renders read-only enrollment/trust evidence instead. The `.omes-cc` design system refresh (parts 1/1b of #246) shipped in `ahliweb/awcms` PR [#829](https://github.com/ahliweb/awcms/pull/829) (`2d40f5ce`) and PR [#832](https://github.com/ahliweb/awcms/pull/832) (`6d3bf18b`, polish); sidebar clipping shipped in `ahliweb/awcms` PR [#842](https://github.com/ahliweb/awcms/pull/842), closing [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831). Merge evidence: [control-center-and-integrations.md](control-center-and-integrations.md) §11.1 and [control-center-release-closeout.md](control-center-release-closeout.md).
+> **Implementation status.** `/admin/omes/*` screens are implemented in `ahliweb/awcms`: the original eight under [#200](https://github.com/ahliweb/omes/issues/200) and [#201](https://github.com/ahliweb/omes/issues/201), the `/admin/omes/ai-privacy` screen shipped under [#232](https://github.com/ahliweb/omes/issues/232) (`ahliweb/awcms` PR [#830](https://github.com/ahliweb/awcms/pull/830), `37d4d818`), and — closing [#246](https://github.com/ahliweb/omes/issues/246) — the Hermes, Orkestrasi langsung, Progres Hermes, and Arsitektur screens (`ahliweb/awcms` PRs [#834](https://github.com/ahliweb/awcms/pull/834) `1dde8027`, [#835](https://github.com/ahliweb/awcms/pull/835) `221cf599`, [#837](https://github.com/ahliweb/awcms/pull/837) `4a7416ac`, and [#836](https://github.com/ahliweb/awcms/pull/836) `d9e1ef4b`); the `omes_control` module is `active` there. Every view in the redesign's parity table now has a working screen with real projections or an explicit empty state: Progres Hermes now renders the real GitHub repository-progress projection, shipped in `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (`8de1782d`), closing [#249](https://github.com/ahliweb/omes/issues/249) (a follow-up UI polish PR for that screen is in flight), and the Hermes screen reports the redesign's `planner`/step `budget` fields as "not reported" because Hermes, not OMES/AWCMS, owns model routing (ADR-0017). The dedicated enrollment-token management screen (Screen 9 here) **shipped** under [#233](https://github.com/ahliweb/omes/issues/233) (`ahliweb/awcms` PR [#825](https://github.com/ahliweb/awcms/pull/825), merged as `eff72e87`) as `/admin/omes/enrollments`; together these are the 14-screen baseline listed in §5 (verified 2026-10-02 against `ahliweb/awcms` `main` `76f5ded`). Servers still renders read-only enrollment/trust evidence alongside it. The `.omes-cc` design system refresh (parts 1/1b of #246) shipped in `ahliweb/awcms` PR [#829](https://github.com/ahliweb/awcms/pull/829) (`2d40f5ce`) and PR [#832](https://github.com/ahliweb/awcms/pull/832) (`6d3bf18b`, polish); sidebar clipping shipped in `ahliweb/awcms` PR [#842](https://github.com/ahliweb/awcms/pull/842), closing [`ahliweb/awcms#831`](https://github.com/ahliweb/awcms/issues/831). Merge evidence: [control-center-and-integrations.md](control-center-and-integrations.md) §11.1 and [control-center-release-closeout.md](control-center-release-closeout.md).
 >
 > The redesign v2 of this in-repository prototype, driven by v1 contract fixtures, **shipped** in commit `0820e6e` (PR [#212](https://github.com/ahliweb/omes/pull/212), closing [#211](https://github.com/ahliweb/omes/issues/211)): generated fixture-backed data, a `live` Hermes orchestration-tree screen, and WCAG-AA contrast/focus-visible/keyboard-reachability fixes. Everything below describes the v2 prototype now on `main`.
 
@@ -108,6 +108,29 @@ An accessible, keyboard-invocable modal drawer providing instant access to allow
 
 The Control Center comprises **9 core operational screens** and **3 diagnostic companion views**.
 
+### Canonical AWCMS route inventory (14 screens)
+
+The reference prototype below describes 9 operational screens and 3 diagnostic views. The shipped implementation in `ahliweb/awcms` is the following **14** routes, verified on 2026-10-02 against `ahliweb/awcms` `main` (`76f5ded`; navigation orders 90–103 in `src/modules/omes-control/module.ts`). This table is the canonical inventory that deep links, the 3D Mission Control source map ([`contracts/control-center/v1/mission-control-source-map.json`](../contracts/control-center/v1/mission-control-source-map.json), guard MC1–MC9), and the documentation must agree with; the owning issue records which issue shipped each screen.
+
+| Route | Screen | Owning issue |
+|---|---|---|
+| `/admin/omes` | Overview | [#200](https://github.com/ahliweb/omes/issues/200) |
+| `/admin/omes/servers` | Servers | [#200](https://github.com/ahliweb/omes/issues/200) |
+| `/admin/omes/deployments` | Deployments | [#200](https://github.com/ahliweb/omes/issues/200) |
+| `/admin/omes/operations` | Operations | [#200](https://github.com/ahliweb/omes/issues/200) |
+| `/admin/omes/jobs` | Jobs | [#200](https://github.com/ahliweb/omes/issues/200) |
+| `/admin/omes/health` | Health | [#201](https://github.com/ahliweb/omes/issues/201) |
+| `/admin/omes/backups` | Backups and recovery | [#201](https://github.com/ahliweb/omes/issues/201) |
+| `/admin/omes/audit` | Audit | [#201](https://github.com/ahliweb/omes/issues/201) |
+| `/admin/omes/enrollments` | Enrollments (Screen 9) | [#233](https://github.com/ahliweb/omes/issues/233) (`ahliweb/awcms` PR [#825](https://github.com/ahliweb/awcms/pull/825), `eff72e87`) |
+| `/admin/omes/ai-privacy` | AI Privacy | [#232](https://github.com/ahliweb/omes/issues/232) |
+| `/admin/omes/orkestrasi-langsung` | Live Orchestration | [#246](https://github.com/ahliweb/omes/issues/246) |
+| `/admin/omes/hermes` | Hermes | [#246](https://github.com/ahliweb/omes/issues/246) |
+| `/admin/omes/progres-hermes` | Hermes Repository Progress | [#246](https://github.com/ahliweb/omes/issues/246), [#249](https://github.com/ahliweb/omes/issues/249) |
+| `/admin/omes/arsitektur` | Architecture | [#246](https://github.com/ahliweb/omes/issues/246) |
+
+Approval decisions are not an OMES screen: they are made in the AWCMS workflow-approval inbox at `/admin/approvals` (OMES destructive operations start a workflow instance under `omes_control.destructive_operation`; the Operations screen deep-links to it).
+
 ### Screen 1: Overview / Fleet
 - **Backlog**: Issue [#200](https://github.com/ahliweb/omes/issues/200), [README.md](../README.md).
 - **Core Widgets**:
@@ -179,6 +202,19 @@ The Control Center comprises **9 core operational screens** and **3 diagnostic c
     ```
   - **Worker Telemetry**: Polling interval (e.g. 15s), jitter, mTLS certificate expiry, last seen timestamp.
   - **Zero-Inbound Security Verification**: Confirms that target host has no inbound ports open to the control plane.
+
+### Mission Control (planned, #265)
+
+- **Backlog**: Epic [#263](https://github.com/ahliweb/omes/issues/263), contract and source map [#264](https://github.com/ahliweb/omes/issues/264) ([ADR-0031](adr/0031-mission-control-compositional-projection.md)), workspace [#265](https://github.com/ahliweb/omes/issues/265), replay [#266](https://github.com/ahliweb/omes/issues/266), contextual actions [#267](https://github.com/ahliweb/omes/issues/267).
+- **Status**: the workspace, replay mode, and contextual actions are not implemented yet (tracked in #265, #266, #267). The OMES-side contracts and source map exist (#264).
+- **Role**: an *additional* integrated workspace at `/admin/omes/mission-control`, not a replacement for any screen in the inventory above. Every scene object deep-links to its canonical 2D screen (or `/admin/approvals`), which remains the authoritative detail view. It shows only references plus bounded label/state/freshness; it adds no authority, no mission/task lifecycle, and no new operation, approval inbox, or executor. Hermes agents are read-only.
+- **Accessibility requirements** (extending §9; all are acceptance criteria for #265, not optional polish):
+  - A synchronized, keyboard-operable accessible object list mirrors every 3D object; selecting in either view selects in both.
+  - Keyboard selection and navigation of objects without a pointer, with visible focus (`:focus-visible`) on both list items and the focused 3D object.
+  - `prefers-reduced-motion: reduce` disables camera and object animation; animation never carries state.
+  - A complete no-WebGL fallback (the list plus the 2D screens) when WebGL2 is unavailable or fails.
+  - Status is never conveyed by color alone: every `visual_state` has a text label and a distinct shape/icon, and the stale/unknown states are announced.
+  - Remains usable at 200% zoom and at phone width without horizontal page scroll.
 
 ---
 
