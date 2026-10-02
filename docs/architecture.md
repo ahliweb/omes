@@ -1438,11 +1438,13 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   `contracts/control-center/v1/mission-control-source-map.json` and
   [ADR-0031](adr/0031-mission-control-compositional-projection.md), with the wire contracts in
   [docs/control-center-contracts.md §2.13](control-center-contracts.md#213-mission-control-scene-view-and-replay-window-issue-264-adr-0031).
-  The OMES-side contracts, source map, and guard are implemented in this repository (#264); the
-  AWCMS workspace, replay mode, and contextual actions are not implemented yet (tracked in
-  [#265](https://github.com/ahliweb/omes/issues/265),
-  [#266](https://github.com/ahliweb/omes/issues/266),
-  [#267](https://github.com/ahliweb/omes/issues/267)).
+  The OMES-side contracts, source map, and guard are implemented in this repository (#264, OMES
+  PR [#268](https://github.com/ahliweb/omes/pull/268), pending merge); the AWCMS workspace, history
+  mode, and contextual actions (#265, #266, #267) are **shipped** in `ahliweb/awcms` PRs
+  [#880](https://github.com/ahliweb/awcms/pull/880),
+  [#881](https://github.com/ahliweb/awcms/pull/881), and
+  [#882](https://github.com/ahliweb/awcms/pull/882); see
+  [docs/control-center-release-closeout.md](control-center-release-closeout.md) §6.2.
 
 ### 18.7 Standards crosswalk
 

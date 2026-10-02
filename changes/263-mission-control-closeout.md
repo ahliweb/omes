@@ -1,0 +1,5 @@
+---
+issue: 263
+type: docs
+---
+Closed out epic #263 (3D Mission Control) documentation: recorded that the AWCMS implementation has shipped in `ahliweb/awcms` (PR #880 workspace, #265; PR #881 history mode, #266; PR #882 contextual actions, #267; prerequisite dependency-override fix PR #879) with merge evidence, measured client-asset budgets, the source-action matrix, and the vendored-contract pin to OMES commit `a4026e6` pending the merge of OMES PR #268. Updated the release close-out, the Control Center integration, contract, UI/UX, security, architecture, and testing documents, corrected ADR-0031 so that action availability is a separate advisory actions endpoint (not part of the scene contract) and added its "Consumption (shipped)" record, and marked threats CC11-CC19 implemented upstream while adding CC20 (forged action via the advisory endpoint) and CC21 (existence oracle). Enforcing stale-target, decommissioned-target, and unverified-backup conditions in the canonical endpoints is recorded as an untracked follow-up proposal.

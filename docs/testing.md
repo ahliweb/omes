@@ -235,11 +235,12 @@ python3 scripts/generate-control-center-data.py --check   # fails if it is stale
 
 `ui/control-center/index.html` is a reference-only, presentation prototype in
 this repository, not a shipping interface. The functional Control
-Center screens (a verified 14-screen baseline) **are implemented**, upstream in
+Center screens (a verified 14-screen baseline plus the additional Mission Control
+workspace, the 15th) **are implemented**, upstream in
 `ahliweb/awcms` ([#200](https://github.com/ahliweb/omes/issues/200)/[#201](https://github.com/ahliweb/omes/issues/201),
 [#232](https://github.com/ahliweb/omes/issues/232), [#233](https://github.com/ahliweb/omes/issues/233),
 [#246](https://github.com/ahliweb/omes/issues/246), [#249](https://github.com/ahliweb/omes/issues/249),
-all closed) - not in this repository, and not as this prototype. Its example
+all closed; Mission Control [#265](https://github.com/ahliweb/omes/issues/265)/[#266](https://github.com/ahliweb/omes/issues/266)/[#267](https://github.com/ahliweb/omes/issues/267) shipped in `ahliweb/awcms` PRs #880/#881/#882, with issue state recorded in the close-out) - not in this repository, and not as this prototype. Its example
 data is generated - not hand-typed - from
 `contracts/control-center/v1/fixtures/*/valid-*.json` (the same fixtures
 §2.1a's `scripts/check-contracts.py` validates) plus
