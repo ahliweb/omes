@@ -12,7 +12,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import runner, schema, store
+from . import reconcile, runner, schema, store
 
 EX_OK = 0
 EX_ERROR = 1
@@ -155,6 +155,31 @@ def cmd_expire(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def cmd_reconcile(args: argparse.Namespace) -> int:
+    """Reconciles orphaned `running` jobs (issue #271). Exit 0 when the
+    reconciliation itself completed - including when it moved a job to
+    `failed` (that is the safe, intended outcome for an unverifiable run);
+    exit 1 for an unknown job or a job outside the local tenant/server scope."""
+    try:
+        result = reconcile.reconcile(job_id=args.job, actor=args.actor)
+    except store.UnknownJobError:
+        print(f"error: unknown job {args.job}", file=sys.stderr)
+        return EX_ERROR
+    except store.CrossTenantError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
+    if args.json:
+        # stdout stays machine-readable; human-oriented logs go to stderr.
+        for entry in result["reconciled"]:
+            print(f"reconciled {entry['job_id']}: {entry['state']} ({entry['reason']}, {entry['classification']})", file=sys.stderr)
+        _print_json(result)
+    else:
+        print(f"reconciled: {len(result['reconciled'])}  unchanged: {len(result['unchanged'])}")
+        for entry in result["reconciled"]:
+            print(f"  ! {entry['job_id']}  {entry['state']}  {entry['reason']}")
+    return EX_OK
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="omes job")
     sub = parser.add_subparsers(dest="subcommand", required=True)
@@ -195,6 +220,15 @@ def build_parser() -> argparse.ArgumentParser:
     p_expire = sub.add_parser("expire", help="expire queued/approved jobs older than the TTL")
     p_expire.add_argument("--json", action="store_true")
     p_expire.set_defaults(func=cmd_expire)
+
+    p_reconcile = sub.add_parser(
+        "reconcile",
+        help="reconcile orphaned `running` jobs via read-back (never reports success without evidence)",
+    )
+    p_reconcile.add_argument("--job", default=None, help="reconcile only this job id (default: every running job in scope)")
+    p_reconcile.add_argument("--actor", default="system")
+    p_reconcile.add_argument("--json", action="store_true")
+    p_reconcile.set_defaults(func=cmd_reconcile)
 
     return parser
 

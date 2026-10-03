@@ -20,13 +20,19 @@ from typing import Any
 from jobs import paths, schema as schema_mod
 
 SCHEMA_VERSION = "1.0.0"
-HERMES_BASELINE = "v2026.9.24"
 DEFAULT_STALE_THRESHOLD_SECONDS = 300
 
 ACTIVE_STATES = frozenset({"PENDING", "STARTING", "RUNNING"})
 TERMINAL_SUCCESS_STATES = frozenset({"SUCCEEDED"})
 TERMINAL_FAILURE_STATES = frozenset({"FAILED", "INTERRUPTED", "CANCELLED"})
-TERMINAL_STATES = TERMINAL_SUCCESS_STATES | TERMINAL_FAILURE_STATES
+# Hermes marks a child that was running when its process restarted `UNKNOWN`:
+# Hermes cannot prove which side effects happened (upstream delegation docs).
+# OMES consumes that as terminal and NON-success (ADR-0032 rule 3, issue
+# #271): it is never counted as completed, never reverted to an active state
+# by a late/out-of-order event, and counts in `failed_count` (the tree
+# contract has no separate counter and is SHA-pinned, so none is added).
+UNKNOWN_STATES = frozenset({"UNKNOWN"})
+TERMINAL_STATES = TERMINAL_SUCCESS_STATES | TERMINAL_FAILURE_STATES | UNKNOWN_STATES
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _SCHEMAS_DIR = _REPO_ROOT / "contracts" / "control-center" / "v1"
@@ -112,6 +118,28 @@ def atomic_write_json(path: Path, data: dict[str, Any]) -> None:
         raise
 
 
+def _accept_state(current_state: str, new_state: str) -> bool:
+    """Whether an event carrying `new_state` may replace `current_state`.
+
+    - Terminal states never revert to an active state (late start event).
+    - `UNKNOWN` is sticky: once a node is `UNKNOWN`, no later event changes
+      its state. The evidence of what happened was lost, so a later
+      out-of-order or replayed `SUCCEEDED` must not turn it into a success;
+      clearing it is a manual-review decision, not an observer inference.
+    - A late `UNKNOWN` never downgrades a node that already has a definite
+      terminal state (`SUCCEEDED`/`FAILED`/`INTERRUPTED`/`CANCELLED`).
+    Other transitions keep the previous behaviour (last event wins, so
+    out-of-order completion is tolerated).
+    """
+    if current_state in UNKNOWN_STATES:
+        return False
+    if current_state in TERMINAL_STATES and new_state in ACTIVE_STATES:
+        return False
+    if current_state in TERMINAL_STATES and new_state in UNKNOWN_STATES:
+        return False
+    return True
+
+
 def ingest_event(
     event: dict[str, Any],
     state_root: Path | None = None,
@@ -194,11 +222,7 @@ def ingest_event(
     new_state = event["state"]
     current_state = node.get("state", "PENDING")
 
-    # If already terminal, do not revert to active on late-arriving start event
-    if current_state in TERMINAL_STATES and new_state in ACTIVE_STATES:
-        # Keep terminal state, but update metadata if missing
-        pass
-    else:
+    if _accept_state(current_state, new_state):
         node["state"] = new_state
 
     # Tool and step update
@@ -212,7 +236,9 @@ def ingest_event(
     # Timing
     if event["event_type"] == "subagent_start":
         node["started_at"] = now_str
-    elif event["event_type"] == "subagent_stop" or new_state in TERMINAL_STATES:
+    elif (event["event_type"] == "subagent_stop" or new_state in TERMINAL_STATES) and node["state"] not in UNKNOWN_STATES:
+        # An UNKNOWN node has no known completion time: leave it null rather
+        # than presenting the moment OMES learned of the ambiguity as one.
         if not node.get("completed_at"):
             node["completed_at"] = now_str
 
@@ -299,6 +325,7 @@ def build_tree(
             completed_count += 1
             duration = float(raw.get("duration_seconds", 0.0))
         else:
+            # FAILED, INTERRUPTED, CANCELLED and UNKNOWN: terminal, non-success.
             failed_count += 1
             duration = float(raw.get("duration_seconds", 0.0))
 
