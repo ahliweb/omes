@@ -674,6 +674,47 @@ To reduce the ACP tool surface, configure Hermes itself (set `platform_toolsets.
 `terminal` and `execute_code`, or add them to `agent.disabled_toolsets`); OMES does not write Hermes
 configuration or approve ACP prompts for you.
 
+### 17.3 Budget and run-limit posture (issue #275)
+
+`omes health budget` ([`lib/omes/py/health/budget_posture.py`](../lib/omes/py/health/budget_posture.py);
+see [docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks)) reports the
+**configured** run-budget limits of Hermes and states what is not observable. The governance model
+(who decides, who enforces, what is observable) is in
+[multi-agent-control-patterns §4.1](multi-agent-control-patterns.md#41-budget-and-resource-governance-model-issue-275).
+Budget policy is AWCMS's; enforcement is Hermes's and infrastructure's
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 8); OMES is not a second LLM router
+and never meters model calls ([ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md)).
+
+Upstream facts the check relies on (Hermes `v2026.9.24`,
+[CLI reference](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/reference/cli-commands.md)):
+
+- `agent.max_turns` and `agent.run_budget_seconds` default to null (unlimited);
+  `agent.loop_caps.max_subagents` and `agent.loop_caps.max_web_searches` default to 50 per turn. All four
+  are readable through `hermes config get <key> --json`.
+- No configuration key defines a token, spend or cost ceiling. `hermes insights` has no JSON output.
+  `hermes usage --json` reports provider rate-limit windows for a few providers through a network call that
+  uses the operator's provider credentials.
+
+What OMES reads and reports, through the shared reader of §17.1 (`hermes config get <key> --json`, no
+`--raw`, no Hermes files or databases):
+
+- The four keys above, with `budget.unlimited_turns` and `budget.no_run_time_budget` (warn) when the
+  required key is an explicit null, and `budget.loop_cap_configured` (info). An explicit null, an absent
+  key and an unreadable key are three different states; an absent or unreadable required key makes the
+  status `unknown` (never `ok`) because OMES hardcodes no Hermes default. The report is labelled
+  `scope: "configured"`: environment overrides and runtime state are not observed.
+- `usage` is always `{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"}`, with the
+  finding `budget.token_spend_unobservable`. It is never 0. `hermes usage` and `hermes insights` are never
+  run, so no network call and no provider credential is involved.
+- `host_limits` is always `"not_collected"`. The systemd `MemoryMax`, `CPUQuota` and `TasksMax` values
+  OMES renders (`modules/hermes-gateway/hardening.sh`) are enforced by infrastructure and are not read back
+  by this command; `omes doctor` prints the gateway unit's `MemoryMax` and `TasksMax`.
+- Delegation limits are reported by `omes health agent-runtime` (§17.1) and are not read again.
+
+OMES enforces no spend ceiling. To change a limit, configure Hermes itself (`agent.max_turns`,
+`agent.run_budget_seconds`, `agent.loop_caps.*`, `delegation.*`) or the provider's own billing controls;
+OMES does not write Hermes configuration for you.
+
 ## 18. Exposure audit (issue #80)
 
 `omes audit exposure` ([`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh),

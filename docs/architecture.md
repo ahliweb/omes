@@ -1467,7 +1467,7 @@ The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native to
 | ACP (inbound) | Hermes | Delegated upstream (`hermes acp`); read-only configured tool-surface posture implemented as `omes health acp` ([#273](https://github.com/ahliweb/omes/issues/273)); live session exposure is not observable and is reported as unknown |
 | ACP (outbound client) | Hermes | Deferred to upstream proposal [hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257) |
 | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | Not implemented yet (tracked in [#274](https://github.com/ahliweb/omes/issues/274)) |
-| Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
+| Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Governance model defined ([multi-agent-control-patterns §4.1](multi-agent-control-patterns.md#41-budget-and-resource-governance-model-issue-275)); read-only configured run-limit posture implemented as `omes health budget` ([#275](https://github.com/ahliweb/omes/issues/275)); token, spend and cost usage are not observable and are reported as unknown, never zero; OMES meters and enforces nothing |
 | Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; drift and egress verification not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
 | Mission Control projection | AWCMS | Not implemented yet (tracked in [#277](https://github.com/ahliweb/omes/issues/277)) |
 

@@ -30,7 +30,12 @@
 #                                      prints "Config key not set: <key>" to stderr
 #                                      and exits 1, like upstream Hermes. The env
 #                                      value is printed verbatim, so for --json
-#                                      callers supply JSON text (10, true, "").
+#                                      callers supply JSON text (10, true, "", null).
+#                                      A nested key maps all dots (issue #275:
+#                                      agent.loop_caps.max_subagents =>
+#                                      SHIM_HERMES_CONFIG_GET_AGENT_LOOP_CAPS_MAX_SUBAGENTS).
+#                                      An explicit JSON null needs the literal text
+#                                      `null`; an empty value is treated as unset.
 #   SHIM_HERMES_CONFIG_GET_JSON_UNSUPPORTED  1 => `config get ... --json` fails with
 #                                      "unrecognized arguments: --json" and exit 2
 #                                      (simulates an older Hermes without --json)

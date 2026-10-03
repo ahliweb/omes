@@ -258,3 +258,109 @@ assert d["session_exposure"] == "unknown"
   [[ "$output" == *"health acp: status=ok scope=configured"* ]]
   [[ "$output" == *"session exposure"*"unknown"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# omes health budget (issue #275): configured Hermes run-budget limits. Logic
+# is covered by tests/py/health/test_budget_posture.py; these assert the
+# bash <-> python wiring through tests/shims/hermes. Token usage, spend and
+# cost are never observable and must always be reported as unknown, never 0;
+# `hermes usage` and `hermes insights` must never be invoked.
+# ---------------------------------------------------------------------------
+
+_budget_export_finite_config() {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_AGENT_MAX_TURNS=90
+  export SHIM_HERMES_CONFIG_GET_AGENT_RUN_BUDGET_SECONDS=3600
+  export SHIM_HERMES_CONFIG_GET_AGENT_LOOP_CAPS_MAX_SUBAGENTS=50
+  export SHIM_HERMES_CONFIG_GET_AGENT_LOOP_CAPS_MAX_WEB_SEARCHES=50
+}
+
+@test "omes health budget is unknown (exit 7) when Hermes cannot answer config get, and usage stays unknown" {
+  omes_run_stdout_only "$OMES_BIN" health budget --json
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "unknown", d["status"]
+assert d["scope"] == "configured"
+assert d["usage"] == {"tokens": "unknown", "cost": "unknown", "source": "none", "confidence": "none"}, d["usage"]
+assert d["host_limits"] == "not_collected"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health budget reports ok for finite limits, never reads usage or insights, never passes --raw" {
+  _budget_export_finite_config
+  omes_run_stdout_only "$OMES_BIN" health budget --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "ok", d
+assert d["keys"]["agent.max_turns"] == {"state": "value", "value": 90}
+assert d["keys"]["agent.loop_caps.max_subagents"] == {"state": "value", "value": 50}
+ids = [f["id"] for f in d["findings"]]
+assert "budget.token_spend_unobservable" in ids, ids
+assert "budget.policy_authority_awcms" in ids, ids
+assert d["usage"]["tokens"] == "unknown" and d["usage"]["cost"] == "unknown"
+'
+  [ "$status" -eq 0 ]
+  run grep -c -- "^hermes config get agent.max_turns --json$" "$SHIM_LOG"
+  [ "$output" = "1" ]
+  run grep -c -- "^hermes config get agent.loop_caps.max_web_searches --json$" "$SHIM_LOG"
+  [ "$output" = "1" ]
+  run grep -c -- "--raw" "$SHIM_LOG"
+  [ "$output" = "0" ]
+  run grep -c -E -- "^hermes (usage|insights)" "$SHIM_LOG"
+  [ "$output" = "0" ]
+  run grep -v -- "^hermes config get .* --json$" "$SHIM_LOG"
+  [ -z "$output" ]
+}
+
+@test "omes health budget warns (exit 0) on explicit null limits and treats an absent required key as unknown" {
+  _budget_export_finite_config
+  export SHIM_HERMES_CONFIG_GET_AGENT_MAX_TURNS=null
+  export SHIM_HERMES_CONFIG_GET_AGENT_RUN_BUDGET_SECONDS=null
+  omes_run_stdout_only "$OMES_BIN" health budget --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "warn", d
+assert d["keys"]["agent.max_turns"] == {"state": "value", "value": None}, d["keys"]
+ids = [f["id"] for f in d["findings"]]
+assert "budget.unlimited_turns" in ids, ids
+assert "budget.no_run_time_budget" in ids, ids
+'
+  [ "$status" -eq 0 ]
+  # An absent required key is unknown (exit 7), not unlimited and not ok.
+  unset SHIM_HERMES_CONFIG_GET_AGENT_MAX_TURNS
+  omes_run_stdout_only "$OMES_BIN" health budget --json
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "unknown", d
+assert d["keys"]["agent.max_turns"] == {"state": "absent"}, d["keys"]
+assert "budget.unlimited_turns" not in [f["id"] for f in d["findings"]]
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health budget rejects an unknown argument with a usage error" {
+  run "$OMES_BIN" health budget --bogus
+  [ "$status" -eq 2 ]
+}
+
+@test "omes health budget human output states the configured scope and unknown usage" {
+  _budget_export_finite_config
+  run "$OMES_BIN" health budget
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"health budget: status=ok scope=configured"* ]]
+  [[ "$output" == *"usage"*"tokens=unknown cost=unknown"* ]]
+  [[ "$output" == *"host limits"*"not_collected"* ]]
+}
