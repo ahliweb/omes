@@ -1464,7 +1464,7 @@ The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native to
 | Agent-run durability and restart (`unknown`) | Hermes | Delegated upstream; OMES consumption not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
 | Orphaned host-job reconciliation | OMES | Not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
 | Cross-plane correlation/trace envelope | OMES contract (observability plane) | Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)) |
-| ACP (inbound) | Hermes | Delegated upstream (`hermes acp`); posture evidence not implemented yet (tracked in [#273](https://github.com/ahliweb/omes/issues/273)) |
+| ACP (inbound) | Hermes | Delegated upstream (`hermes acp`); read-only configured tool-surface posture implemented as `omes health acp` ([#273](https://github.com/ahliweb/omes/issues/273)); live session exposure is not observable and is reported as unknown |
 | ACP (outbound client) | Hermes | Deferred to upstream proposal [hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257) |
 | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | Not implemented yet (tracked in [#274](https://github.com/ahliweb/omes/issues/274)) |
 | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
