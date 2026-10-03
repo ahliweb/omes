@@ -24,6 +24,11 @@ Checks:
   8. Canonical documentation invariants D1-D2: no unsupported-OS "support" claim
      in the six canonical docs, and docs/architecture.md carries the
      reference-architecture marker, a mermaid diagram, and the required phrase.
+  9. Mission Control guards MC1-MC9 (issue #264, ADR-0031): the
+     mission-control-source-map.json, scene-view and replay-window schemas stay
+     consistent with each other, the source contracts they reference, the
+     operation-request allowlist, the canonical /admin/omes routes, the forbidden
+     field terms, and every valid-*.json Mission Control fixture.
 
 Exit codes:
   0: all architecture boundaries and registry checks passed.

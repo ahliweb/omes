@@ -36,6 +36,16 @@ Provides machine-checkable enforcement of:
     part 3) is not stale relative to architecture/capabilities.json - it is
     regenerated in memory via lib/omes/py/architecture/capabilities_view.py
     and diffed against the fixture on disk.
+  - Mission Control guards MC1-MC9 (issue #264, ADR-0031; implemented in
+    lib/omes/py/architecture/mission_control.py): MC1 source-map shape; MC2
+    kind/source/relation/visual-state/version bijection with the scene-view and
+    replay-window schemas; MC3 referenced source contracts exist; MC4 every
+    upstream state enum value is mapped (anti-drift); MC5 routes are additive
+    and point at canonical screens; MC6 relation endpoints are known kinds; MC7
+    candidate actions are known and every operation.* action is in the
+    operation-request allowlist; MC8 valid fixture semantics (derived
+    visual_state, detail routes, relations, ordering); MC9 no forbidden field
+    terms (prompt, transcript, tool_args, ...) in allowed fields.
 """
 from __future__ import annotations
 
@@ -53,6 +63,7 @@ if str(PY_ROOT) not in sys.path:
 
 from jobs import schema as schema_mod  # noqa: E402
 from architecture import capabilities_view  # noqa: E402
+from architecture import mission_control  # noqa: E402
 
 STANDARD_PRECEDENCE = ("delegate", "port", "adapt", "defer", "reject")
 
@@ -792,5 +803,6 @@ def check_all(repo_root: Path | None = None) -> list[str]:
     all_errors.extend(check_control_center_contracts(root))
     all_errors.extend(check_canonical_documentation(root))
     all_errors.extend(check_architecture_capabilities_view(root, reg_data))
+    all_errors.extend(mission_control.check_mission_control(root))
 
     return all_errors
