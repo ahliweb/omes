@@ -27,6 +27,14 @@
 #   SHIM_DOCKER_COMPOSE_LOGS_OUTPUT stdout text for `logs` (default a fixed line)
 #   SHIM_DOCKER_COMPOSE_LOGS_EXIT   exit code for `logs` (default 0)
 #
+# Isolation drift knobs (#276; `docker inspect` / `docker network inspect`):
+#   SHIM_DOCKER_INSPECT_OUTPUT          stdout for `docker inspect ...` (default empty)
+#   SHIM_DOCKER_INSPECT_EXIT            exit code for `docker inspect ...` (default 1,
+#                                       i.e. "No such container", so an unconfigured
+#                                       test can never look like evidence)
+#   SHIM_DOCKER_NETWORK_INSPECT_OUTPUT  stdout for `docker network inspect ...` (default empty)
+#   SHIM_DOCKER_NETWORK_INSPECT_EXIT    exit code for `docker network inspect ...` (default 1)
+#
 # `logs` never actually streams/blocks here regardless of `--follow` being
 # passed (it always prints once and exits) - the shim only needs to prove
 # the CLI *asked* for `--no-color --tail <n>` (and `--follow`, when given),
@@ -71,6 +79,29 @@ case "${1:-}" in
   info)
     printf '%s\n' "${SHIM_DOCKER_SECURITY_OPTIONS:-[name=seccomp,profile=default name=rootless]}"
     exit 0
+    ;;
+  inspect)
+    if [[ "${SHIM_DOCKER_INSPECT_EXIT:-1}" != "0" ]]; then
+      printf '%s\n' "Error: No such container" >&2
+      exit "${SHIM_DOCKER_INSPECT_EXIT:-1}"
+    fi
+    printf '%s\n' "${SHIM_DOCKER_INSPECT_OUTPUT:-}"
+    exit 0
+    ;;
+  network)
+    case "${2:-}" in
+      inspect)
+        if [[ "${SHIM_DOCKER_NETWORK_INSPECT_EXIT:-1}" != "0" ]]; then
+          printf '%s\n' "Error: No such network" >&2
+          exit "${SHIM_DOCKER_NETWORK_INSPECT_EXIT:-1}"
+        fi
+        printf '%s\n' "${SHIM_DOCKER_NETWORK_INSPECT_OUTPUT:-}"
+        exit 0
+        ;;
+      *)
+        exit 0
+        ;;
+    esac
     ;;
   compose)
     shift

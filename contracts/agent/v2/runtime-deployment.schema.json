@@ -179,6 +179,11 @@
         "readOnlyRootfs": {
           "type": "boolean"
         },
+        "egress": {
+          "type": "string",
+          "enum": ["open", "none"],
+          "description": "Network egress mode (issue #276). 'open' (default when omitted) is a plain bridge with outbound access. 'none' renders the compose network with 'internal: true' (no route to the outside world); all-or-nothing, no per-destination allowlist, and cannot be combined with 'ports'."
+        },
         "volumes": {
           "type": "array",
           "items": {
