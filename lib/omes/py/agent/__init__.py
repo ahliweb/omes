@@ -18,5 +18,7 @@ Modules:
                     history, provenance).
   health          - health aggregation for a deployed agent, reusing
                     lib/omes/py/health's layered model.
+  isolation_drift - read-only declared-versus-running compose isolation
+                    check against `docker inspect` (issue #276).
   cli             - argparse entry point invoked by lib/omes/cmd/agent.sh.
 """

@@ -860,6 +860,7 @@ omes agent plan <name> [--json]
 omes agent apply <name> [--dry-run] [--yes] [--json]
 omes agent status <name> [--json]
 omes agent health <name> [--json]
+omes agent isolation-drift <name> [--json]       # compose backend only; read-only (issue #276)
 omes agent restart <name> [--json]
 omes agent logs <name> [journalctl-args...]      # systemd backend
 omes agent logs <name> [--tail N] [--follow]     # compose backend (docker compose logs)
@@ -868,14 +869,15 @@ omes agent remove <name> [--yes] [--json]        # compose backend only
 omes agent orchestration --session <id> [--tenant <id>] [--server <id>] [--json]
 ```
 
+- `isolation-drift` (issue #276, compose backend only) compares the declared compose isolation posture (image, `uid:gid`, `cap_drop: [ALL]`, read-only rootfs, `no-new-privileges`, network `internal` flag, memory/cpu/pids limits, no Docker-socket or undeclared mounts) with the running container reported by `docker inspect` and `docker network inspect`. It is read-only (fixed argv, no restart, no `sudo`). `--json` prints `{status, findings: [{field, declared, observed, severity}], unverified, skipped, reason, ...}` on stdout; `status` is `ok`, `drift` or `unknown` (docker unavailable, container missing or stopped, malformed output, or unverifiable fields), and `ok` is never reported without evidence. Details and limits: [docs/agent-deployment.md section 9.7](agent-deployment.md).
 - `orchestration` inspects live Hermes delegated-task subagent process trees reconstructed from `hermes.observer.v1` observer telemetry (issue #183, ADR-0028). Returns hierarchical process trees with step counts, active tools, elapsed durations, and freshness states.
 
-**Exit codes:** 0 ok; 2 usage error (including `remove` against a
-non-compose backend, which is not implemented); 4 preflight failed
+**Exit codes:** 0 ok; 2 usage error (including `remove` and `isolation-drift`
+against a non-compose backend, which are not implemented); 4 preflight failed
 (missing/invalid manifest, or - for `backend: "compose"` - a rootful
 Docker daemon/socket/docker-group-only access); 5 privilege error
 (`serviceMode` vs. current EUID mismatch); 6 apply/mutation failed; 7
-verification/health failed; 9 backup step failed; 10 rollback/remove
+verification/health failed (for `isolation-drift`, both `drift` and `unknown`); 9 backup step failed; 10 rollback/remove
 teardown failed; 1 other errors (e.g. an unconfirmed mutating call).
 `doctor` always exits 0 (it is a read-only report; per-agent failure is
 surfaced in its `ok`/`error` fields, not the process exit code - see

@@ -14,8 +14,11 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from . import _pathfix  # noqa: F401
+
+from agent import compose as compose_mod  # noqa: E402
 
 OMES_ROOT = Path(_pathfix.OMES_ROOT)
 PY_ROOT = OMES_ROOT / "lib" / "omes" / "py"
@@ -292,6 +295,135 @@ class TestComposeTopology(ComposeCliTestCase):
         rem_proc = self._run("remove", "analyst-shared-1", "--yes", "--json")
         self.assertEqual(rem_proc.returncode, 0, rem_proc.stderr)
         self.assertTrue(shared_compose_file.exists())
+
+
+class TestComposeEgressAndIsolationDrift(ComposeCliTestCase):
+    """Egress mode and the read-only `isolation-drift` command (issue #276),
+    driven against tests/shims/docker."""
+
+    def _plan(self, name="compose-worker"):
+        # Computed in-process (pure function) with the subprocess's state
+        # directories, so the declared mounts match what the CLI computes.
+        # `omes agent plan` itself is privilege-gated and is not needed here.
+        keys = ("HOME", "XDG_CONFIG_HOME", "XDG_STATE_HOME", "OMES_CONFIG_DIR", "OMES_STATE_DIR")
+        manifest_data = json.loads((self.manifests_dir / f"{name}.json").read_text(encoding="utf-8"))
+        with mock.patch.dict(os.environ, {k: self.env[k] for k in keys}):
+            return compose_mod.build_plan(manifest_data)
+
+    def _inspect_json(self, plan, **host_overrides):
+        mem = {"K": 1024, "M": 1024 ** 2, "G": 1024 ** 3}[plan["resources"]["memory"][-1]] * int(plan["resources"]["memory"][:-1])
+        host = {
+            "CapDrop": ["ALL"],
+            "ReadonlyRootfs": True,
+            "SecurityOpt": ["no-new-privileges:true"],
+            "Memory": mem,
+            "NanoCpus": int(round(float(plan["resources"]["cpu"]) * 1e9)),
+            "PidsLimit": plan["resources"]["pids"],
+        }
+        host.update(host_overrides)
+        return json.dumps([{
+            "State": {"Running": True},
+            "Config": {"Image": plan["image"], "User": plan["user"]},
+            "HostConfig": host,
+            "Mounts": [
+                {"Type": "bind", "Source": v["hostPath"], "Destination": v["containerPath"], "RW": not v.get("readOnly", False)}
+                for v in plan["volumes"]
+            ],
+            "NetworkSettings": {"Networks": {f"{plan['project']}_{plan['network']}": {}}},
+        }])
+
+    def _drift_env(self, inspect_output, internal=False, log=None):
+        env = dict(self.env)
+        env["SHIM_DOCKER_INSPECT_EXIT"] = "0"
+        env["SHIM_DOCKER_INSPECT_OUTPUT"] = inspect_output
+        env["SHIM_DOCKER_NETWORK_INSPECT_EXIT"] = "0"
+        env["SHIM_DOCKER_NETWORK_INSPECT_OUTPUT"] = json.dumps([{"Internal": internal}])
+        if log:
+            env["SHIM_LOG"] = str(log)
+        return env
+
+    def test_isolation_drift_ok(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        env = self._drift_env(self._inspect_json(self._plan()))
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["status"], "ok")
+        self.assertEqual(out["findings"], [])
+
+    def test_isolation_drift_reports_drift_with_exit_7(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        env = self._drift_env(self._inspect_json(self._plan(), ReadonlyRootfs=False, CapDrop=None))
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["status"], "drift")
+        self.assertEqual({f["field"] for f in out["findings"]}, {"readOnlyRootfs", "capDrop"})
+
+    def test_isolation_drift_egress_none_against_open_network(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-egress-none.json"))
+        env = self._drift_env(self._inspect_json(self._plan()), internal=False)
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        findings = {f["field"]: f for f in json.loads(proc.stdout)["findings"]}
+        self.assertEqual(findings["network.internal"]["declared"], True)
+
+    def test_isolation_drift_without_container_is_unknown_exit_7(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        proc = self._run("isolation-drift", "compose-worker", "--json")  # shim: inspect fails by default
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["status"], "unknown")
+        self.assertEqual(out["findings"], [])
+
+    def test_isolation_drift_malformed_inspect_is_unknown(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        env = self._drift_env("this is not json")
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 7)
+        self.assertEqual(json.loads(proc.stdout)["status"], "unknown")
+
+    def test_isolation_drift_without_docker_on_path_is_unknown(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        env = dict(self.env)
+        env["PATH"] = str(Path(sys.executable).parent)  # python only: no docker
+        proc = subprocess.run(
+            [sys.executable, "-m", "agent.cli", "isolation-drift", "compose-worker", "--json"],
+            cwd=str(OMES_ROOT), env=env, capture_output=True, text=True, timeout=30, check=False,
+        )
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout)["status"], "unknown")
+
+    def test_isolation_drift_is_read_only(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        log = Path(self._tmp) / "docker.log"
+        env = self._drift_env(self._inspect_json(self._plan()), log=log)
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        calls = log.read_text(encoding="utf-8").splitlines()
+        self.assertTrue(calls)
+        for call in calls:
+            self.assertTrue(call.startswith("docker inspect ") or call.startswith("docker network inspect "), call)
+        compose_dir = self.state_home / "agents" / "compose-worker"
+        self.assertFalse((compose_dir / "compose" / "compose.yaml").exists())
+
+    def test_isolation_drift_text_output(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        env = self._drift_env(self._inspect_json(self._plan(), ReadonlyRootfs=False))
+        proc = self._run("isolation-drift", "compose-worker", env=env)
+        self.assertEqual(proc.returncode, 7)
+        self.assertIn("isolation drift", proc.stdout)
+        self.assertIn("readOnlyRootfs", proc.stdout)
+
+    def test_isolation_drift_not_implemented_for_systemd_backend(self):
+        self._write_manifest("researcher", self._fixture("valid-generic-user.json"))
+        proc = self._run("isolation-drift", "researcher", "--json")
+        self.assertEqual(proc.returncode, 2)
+        self.assertIn("only implemented for backend=compose", proc.stderr)
+
+    def test_isolation_drift_missing_manifest_exit_4(self):
+        proc = self._run("isolation-drift", "nope", "--json")
+        self.assertEqual(proc.returncode, 4)
 
 
 if __name__ == "__main__":

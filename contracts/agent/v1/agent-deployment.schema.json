@@ -155,6 +155,11 @@
               "type": "boolean",
               "description": "Defaults to true when omitted."
             },
+            "egress": {
+              "type": "string",
+              "enum": ["open", "none"],
+              "description": "Network egress mode (issue #276). 'open' (default when omitted) renders the compose network as a plain bridge with outbound access, exactly as before. 'none' renders it with 'internal: true' so Docker gives the network no route to the outside world; this is all-or-nothing (no per-destination allowlist) and cannot be combined with 'ports'."
+            },
             "volumes": {
               "type": "array",
               "items": {

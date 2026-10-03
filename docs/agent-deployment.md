@@ -166,6 +166,7 @@ omes agent apply <name> [--dry-run] [--yes]
 omes agent migrate <name> [--dry-run] [--output <path>] [--json] # migrates v1 manifest to v2 with audit
 omes agent status <name> [--json]
 omes agent health <name> [--json]
+omes agent isolation-drift <name> [--json] # compose backend only: read-only declared-vs-running isolation check (#276)
 omes agent restart <name>
 omes agent logs <name>                   # journalctl passthrough, scoped to the agent's unit
 omes agent rollback <name> [--yes]
@@ -485,6 +486,10 @@ automatically mounts `<state-dir>/agents/<name>/data` (dedicated) or
 `readOnlyRootfs: true` configure standard tmpfs mounts for `/run` and `/tmp`
 to support in-container s6 supervision.
 
+`spec.compose.egress` (and `compose.egress` in RuntimeDeployment v2) selects
+the network egress mode: `"open"` (default when omitted) or `"none"`; see
+section 9.6.
+
 `spec.compose.project` and `.network` default to `omes-agent-<name>` and
 `omes-agent-<name>-net` (or `omes-shared-hermes` and `omes-shared-hermes-net`
 in shared topology) when omitted. `spec.compose.capDrop` defaults to
@@ -571,6 +576,108 @@ reference **names** only. The rendered compose service references
 values - so a secret value never appears in the compose file, in
 `omes agent plan`'s output, or in any log line.
 
+### 9.6 Per-deployment egress mode (issue #276)
+
+`spec.compose.egress` (v1) / `compose.egress` (v2) is an optional enum, `"open"`
+or `"none"`. It lives in the compose spec next to `network` (it configures that
+network), so it applies to both manifest versions; the v2 `security` object is
+host-systemd hardening and was deliberately not extended.
+
+| Value | Rendered network | Effect |
+|---|---|---|
+| omitted or `"open"` | `driver: bridge`, `internal: false` | Unchanged from before #276: outbound access through the Docker bridge. This stays the default, so existing manifests re-render byte-identically; defaulting to `"none"` would break every existing deployment that needs a model provider, and there is no repository precedent for a breaking secure-by-default change here. |
+| `"none"` | `driver: bridge`, `internal: true` | Docker gives the network no route to the outside world: no external egress at all. |
+
+Exact behavior and limits:
+
+- `"none"` is all-or-nothing, Docker's `internal: true`. **There is no
+  per-destination allowlist.** An allowlist would need a proxy or firewall
+  layer plus capability detection; that is Not implemented yet (tracked in
+  [#276](https://github.com/ahliweb/omes/issues/276)), and unsupported values
+  such as `"allowlist"` are rejected rather than silently approximated.
+- `"none"` also cuts the container off from model providers and from any
+  service on the host, including a host-loopback Ollama, so it only fits agents
+  whose model and tools are reachable inside the container's own network. The
+  `provider` health layer probes from inside the container and will report
+  `fail` for such an agent if `OMES_OLLAMA_ENABLED=1`.
+- `"none"` cannot be combined with `ports`: Docker does not publish host ports
+  for a container attached only to an internal network, so the manifest is
+  rejected (`spec.compose.egress`) instead of rendering a port mapping that does
+  nothing.
+- All existing refusals are unchanged (rootless daemon required, no Docker
+  socket, no `privileged`/host PID/host network, loopback-only ports,
+  digest-pinned images, host paths under the agent's state directory).
+- This is a declaration that `apply` renders; it is not proven by a packet
+  probe. `omes agent isolation-drift` (section 9.7) checks that the running
+  network's `Internal` flag matches it.
+- Only the compose backend has this option. The systemd backend's equivalent is
+  the opt-in `hermes-restricted` module (`IPAddressDeny=any`).
+
+Fixtures: `valid-compose-egress-none.json` and `invalid-compose-egress-unknown.json`
+under `contracts/agent/v1/fixtures/agent-deployment/` and
+`contracts/agent/v2/fixtures/runtime-deployment/`, plus
+`invalid-compose-egress-none-with-ports.json` under
+`contracts/agent/v1/fixtures-semantic/agent-deployment/`.
+
+### 9.7 Declared-versus-running isolation drift check (issue #276)
+
+```bash
+omes agent isolation-drift <name> [--json]
+```
+
+Implemented in
+[`lib/omes/py/agent/isolation_drift.py`](../lib/omes/py/agent/isolation_drift.py)
+for `backend: "compose"` only (any other backend exits 2). It is strictly
+read-only: it computes the declared plan (`compose.build_plan`) and runs exactly
+two fixed-argv, timeout-bounded commands, never a shell string, never a
+restart, never `sudo`:
+
+```text
+docker inspect --type container <container name>
+docker network inspect <project>_<network>
+```
+
+It compares these fields, each reported as a finding
+`{field, declared, observed, severity}`:
+
+| Field | Declared | Severity when it differs |
+|---|---|---|
+| `image` | the digest-pinned reference | high |
+| `user` | `compose.user` (skipped, and listed under `skipped`, when the manifest omits it) | critical if the container runs as root, else high |
+| `capDrop` | `["ALL"]` | high |
+| `readOnlyRootfs` | the plan value (default `true`) | high |
+| `noNewPrivileges` | always `true` | high |
+| `network.internal` | `true` only for `egress: "none"` | high when `none` was declared but the network is not internal; low when the network is stricter than declared |
+| `network.attached` | exactly the plan's `<project>_<network>` | high |
+| `memory`, `cpus`, `pidsLimit` | `resources.memory`/`cpu`/`pids` | medium |
+| `mounts.dockerSocket` | no mount whose source or destination contains `docker.sock` | critical |
+| `mounts.undeclared`, `mounts.mode[...]`, `mounts.missing` | the plan's bind mounts | high / high or medium / medium |
+| `privileged`, `networkMode`, `pidMode` | never privileged, never host network or host PID | critical |
+
+Overall `status`:
+
+- `ok`: every field was observed and matches. Never reported without evidence.
+- `drift`: at least one finding. Positive evidence of drift wins over fields
+  that could not be observed.
+- `unknown`: docker is not installed, the daemon is unreachable, the inspect
+  call fails or times out, the container does not exist or is not running, the
+  output is malformed, or no drift was seen but some fields could not be
+  observed (they are listed under `unverified`).
+
+`--json` prints one object on stdout (`status`, `findings`, `unverified`,
+`skipped`, `reason`, `container`, `project`, `network`, `egress`, `running`,
+`readOnly: true`); errors and diagnostics go to stderr. Exit codes: `0` only for `ok`; `7` for both `drift` and `unknown`
+(the `status` field tells them apart); `4` for a missing or invalid manifest;
+`2` for a non-compose backend.
+
+Limits (Not implemented yet, tracked in
+[#276](https://github.com/ahliweb/omes/issues/276)): the check proves the
+configuration the container engine holds, not runtime behavior (no egress packet
+probe); there is no per-destination allowlist to verify; it is not wired into
+`omes agent doctor` or any scheduled job; and it has been exercised only against
+the Docker shim, never a real rootless daemon (see section 12). Logical isolation
+(Hermes sessions, memory, worktrees) is Hermes-owned and is not inspected.
+
 ## 11. `omes doctor` integration and `omes agent logs` (compose)
 
 ### 11.1 `omes doctor` integration (issue #87/#96 follow-up)
@@ -649,6 +756,14 @@ section 9.4/7a above rather than here.
   enforcement (`mem_limit`/`cpus`/`pids_limit`) on an actual rootless
   daemon. Real-host verification for both backends is tracked as
   follow-up (see the PR body).
+- **Compose backend (#276) - real-daemon evidence and egress allowlist**:
+  `omes agent isolation-drift` and `egress: "none"` are tested only against
+  `tests/shims/docker`; there is no run against a real rootless daemon, so the
+  `docker inspect` field names are asserted from Docker's documented output, not
+  observed live (Not implemented yet, tracked in
+  [#276](https://github.com/ahliweb/omes/issues/276)). A per-destination egress
+  allowlist and a runtime egress probe are likewise Not implemented yet (tracked
+  in #276).
 - **Compatibility recording** (#83) and a dedicated **provenance**
   issue (#84) are referenced by `provenance.collect()` but not
   otherwise integrated here.
@@ -679,5 +794,8 @@ section 9.4/7a above rather than here.
   lifecycle state and live health of every agent under the state
   directory; they do not detect a manifest that was edited after the
   last `apply` (i.e. "declared spec no longer matches what is running").
-  Detecting that drift is a natural extension of `omes agent doctor` but
-  is not implemented here.
+  For compose agents, `omes agent isolation-drift` (section 9.7, issue
+  #276) now compares the declared isolation posture with the running
+  container on demand; it is not run by `omes agent doctor`, and
+  manifest-versus-last-applied drift for the systemd backend (and for
+  compose fields other than isolation) is still not implemented.

@@ -262,7 +262,7 @@ file path are all derived from the manifest and `OMES_STATE_DIR`/
 `OMES_CONFIG_DIR`, never from a separate override. See
 [docs/agent-deployment.md section 8](agent-deployment.md) for the
 manifest's own `spec.compose` fields (image, project, network, user,
-capDrop, readOnlyRootfs, volumes, ports) and
+capDrop, readOnlyRootfs, egress, volumes, ports) and
 [docs/testing.md](testing.md) for `tests/shims/docker`'s
 `SHIM_DOCKER_*` test-only knobs.
 

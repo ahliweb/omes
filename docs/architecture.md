@@ -1468,7 +1468,7 @@ The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native to
 | ACP (outbound client) | Hermes | Deferred to upstream proposal [hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257) |
 | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | Not implemented yet (tracked in [#274](https://github.com/ahliweb/omes/issues/274)) |
 | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
-| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; drift and egress verification not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
+| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; compose `egress: "none"` and the read-only `omes agent isolation-drift` declared-versus-running check implemented (shim-tested). Per-destination egress allowlist, runtime egress probe and real rootless-daemon evidence not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
 | Mission Control projection | AWCMS | Not implemented yet (tracked in [#277](https://github.com/ahliweb/omes/issues/277)) |
 
 Threats for these patterns are recorded as `MA-01`..`MA-11` in [docs/threat-model.md](threat-model.md). Standards references in ADR-0032 are alignment only; no compliance or certification is claimed.
