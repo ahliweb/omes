@@ -361,7 +361,8 @@ built-in commands.
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]` /
 `omes health agent-runtime [--json] [--profile-home <path>]` /
-`omes health acp [--json] [--profile-home <path>]`
+`omes health acp [--json] [--profile-home <path>]` /
+`omes health budget [--json] [--profile-home <path>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -594,6 +595,51 @@ Exit codes: 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
 omes health acp
 omes health acp --json | jq -r '.status'
 omes health acp --profile-home /path/to/profile-home --json
+```
+
+`omes health budget [--json] [--profile-home <path>]` (issue
+[#275](https://github.com/ahliweb/omes/issues/275), epic [#269](https://github.com/ahliweb/omes/issues/269),
+via [`lib/omes/py/health/budget_posture.py`](../lib/omes/py/health/budget_posture.py))
+reports the **configured** Hermes run-budget limits and states what is not observable. Budget policy
+belongs to AWCMS; enforcement belongs to Hermes and infrastructure
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 8; the model is in
+[multi-agent-control-patterns §4.1](multi-agent-control-patterns.md#41-budget-and-resource-governance-model-issue-275)).
+OMES enforces no spend ceiling, meters no model call and routes no model
+([ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md)). The command uses the same shared
+allowlisted reader as `agent-runtime` (`hermes config get <key> --json`; `--raw` is never passed, no
+Hermes file or database is read, and `hermes usage` and `hermes insights` are never run), with the same
+profile resolution (`--profile-home`, else `OMES_HERMES_HOME`, else `~/.hermes`).
+
+Keys read: `agent.max_turns` and `agent.run_budget_seconds` (required; a positive integer, or an
+explicit `null` that means unlimited) and the per-turn `agent.loop_caps.max_subagents` and
+`agent.loop_caps.max_web_searches` (optional; a positive integer). Each key is `value`, `absent` or
+`unknown` with a bounded reason code. An explicit `null` is `{"state":"value","value":null}` and is a
+different fact from `absent` (Hermes reports the key as unset; OMES hardcodes no default, so an absent
+required key makes the status `unknown`) and from `unknown` (unreadable or invalid, never echoed).
+Delegation limits are not read again: they are reported by `omes health agent-runtime`
+(`related_checks`).
+
+Findings: `budget.unlimited_turns` (warn; `agent.max_turns` is null), `budget.no_run_time_budget`
+(warn; `agent.run_budget_seconds` is null), `budget.loop_cap_configured` (info, one per readable cap),
+`budget.optional_key_unavailable` (info), `budget.token_spend_unobservable` (info, always) and
+`budget.policy_authority_awcms` (info, always). `status` is `ok` (both required keys read and finite),
+`warn` or `unknown` (a required key absent, unreadable or invalid); `unknown` is never reported as `ok`,
+and `ok` does not mean spend is bounded.
+
+`usage` is always `{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"}`: no Hermes
+configuration key defines a token, spend or cost ceiling and no supported interface reports usage, so it
+is never reported as 0. `host_limits` is always `"not_collected"`: the systemd `MemoryMax`, `CPUQuota`
+and `TasksMax` drop-in values are not read by this command (`omes doctor` prints the gateway unit's
+`MemoryMax` and `TasksMax`).
+
+Exit codes: 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
+
+**JSON schema:** `{"check":"budget_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"agent.max_turns":{"state":"value","value":90|null}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.run_budget_seconds":{...},"agent.loop_caps.max_subagents":{...},"agent.loop_caps.max_web_searches":{...}},"usage":{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"},"host_limits":"not_collected","related_checks":{"delegation_limits":"omes health agent-runtime"},"findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
+
+```bash
+omes health budget
+omes health budget --json | jq -r '.status'
+omes health budget --profile-home /path/to/profile-home --json
 ```
 
 ## 4.14 `omes audit` (security audits)

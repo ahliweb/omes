@@ -383,8 +383,12 @@ To keep security claims honest and bounded to what OMES actually controls:
 - OMES does **not** control Hermes's own agent decision-making (when it chooses to call a
   tool, what it treats as authorization) — that is upstream Hermes behavior. OMES configures
   the environment Hermes runs in, not its reasoning.
-- OMES does **not** set a hard ceiling on LLM provider spend. That control exists only at the
-  provider's dashboard/billing settings.
+- OMES does **not** set a hard ceiling on LLM provider spend, does not meter model calls and cannot
+  observe token usage or cost through any supported Hermes interface. That control exists only at the
+  provider's dashboard/billing settings (and, for turn and run-time limits, in Hermes configuration).
+  `omes health budget` reports the configured Hermes run limits and always reports usage as `unknown`,
+  never zero; the governance model (AWCMS policy, Hermes and infrastructure enforcement) is in
+  [`docs/multi-agent-control-patterns.md` §4.1](./multi-agent-control-patterns.md#41-budget-and-resource-governance-model-issue-275).
 - OMES does **not** guarantee protection against a determined operator overriding a documented
   default (e.g., manually adding a user to the `docker` group, disabling the firewall). OMES's
   responsibility ends at making the safe path the default and any deviation explicit, logged,
