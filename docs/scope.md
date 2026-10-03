@@ -112,6 +112,7 @@ OMES explicitly does **not**:
 15. Implement RAG, embedding, or retrieval pipelines as OMES core. Retrieval/knowledge territory belongs to Hermes or a specialized service, never an `authority: omes` registry entry.
 16. Claim general Debian, Fedora, RHEL, CentOS, Rocky Linux, AlmaLinux, openSUSE, macOS, or Windows support. See the supported-platform summary below and [docs/compatibility-matrix.md](compatibility-matrix.md); those platforms are explicitly out of scope.
 17. Ship a bundled SIEM. Optional SIEM integration (e.g. Wazuh) is an external, optional capability OMES may export evidence to; it is never shipped as core.
+18. Be a multi-agent orchestration framework, coordinator, or ACP proxy. Hermes Agent owns delegation (including coordinator/worker model tiering) and the Agent Client Protocol; OMES only reconciles host-control state around them ([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md), [docs/multi-agent-control-patterns.md](multi-agent-control-patterns.md)).
 
 See [docs/architecture.md §18](architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary) for the full layered reference architecture, the deterministic execution boundary, and the guardrail ownership matrix that these non-goals follow from.
 

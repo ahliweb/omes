@@ -26,7 +26,10 @@ Provides machine-checkable enforcement of:
        "Llama Index", "Crew AI", "Auto Gen", "Lang Graph"); R9 reserves the
        hermes.* id namespace and Hermes runtime terms, matching a reserved
        term (e.g. "model_routing") across space/underscore/hyphen/
-       concatenated spellings in both the capability_id and the title.
+       concatenated spellings in both the capability_id and the title; the
+       reserved terms also include acp/agent_client_protocol/coordinator/
+       subagent/subagents because coordinator/worker delegation and the
+       Agent Client Protocol server are Hermes-owned (#269, ADR-0032).
   - Control Center contract safety C1 (no raw shell-command escape hatch in
     any contracts/control-center/v1 schema) and C2 (operation-request.schema.json
     allowlist/required-field shape).
@@ -83,6 +86,7 @@ _RAG_TERMS = frozenset({
 
 _HERMES_RESERVED_TERMS = frozenset({
     "reasoning", "model_routing", "memory", "delegation", "sessions",
+    "acp", "agent_client_protocol", "coordinator", "subagent", "subagents",
 })
 
 _SECOND_AGENT_FRAMEWORK_RE = re.compile(
@@ -502,7 +506,7 @@ def validate_semantic_invariants(
             errors.append(
                 f"R9 capability '{cap_id}': authority 'omes' must not own a Hermes-reserved runtime "
                 f"concern (matched reserved term '{reserved_match}' in the id or title; reserved: "
-                "reasoning/model_routing/memory/delegation/sessions)"
+                f"{'/'.join(sorted(_HERMES_RESERVED_TERMS))})"
             )
 
     return errors

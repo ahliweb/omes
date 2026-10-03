@@ -151,7 +151,7 @@ Key properties:
 - **Observer Hook Ingestion**: Collects read-only events from `hermes.observer.v1` (`subagent_start`, `subagent_stop`, `subagent_step`) and validates against `contracts/control-center/v1/hermes-orchestration-event.schema.json`.
 - **Hierarchical Process Trees**: Assembles nested parent-child hierarchies from opaque correlation IDs (`session_id`, `parent_subagent_id`, `subagent_id`).
 - **Privacy & Sanitization**: Prohibits chain-of-thought, raw prompts, full transcripts, shell commands, or credentials. Binds goals and summaries to 512 characters with HTML escaping.
-- **Freshness & Staleness**: Transitions active subagents to `stale` or `unknown` when unconfirmed by heartbeats or observer events.
+- **Freshness & Staleness**: The tree reports `freshness: stale` when an active subagent has not been observed for more than 300 seconds (there is no per-node `STALE` state yet; tracked in [#271](https://github.com/ahliweb/omes/issues/271)).
 
 ## 5. Domain provider abstraction
 
