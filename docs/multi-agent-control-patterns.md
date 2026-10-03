@@ -5,7 +5,10 @@
 > multi-agent control patterns OMES adopts, delegates, defers or rejects, and
 > which verified gaps become child issues. **No runtime behavior changes in
 > this phase.** Every capability marked "Not implemented yet" below stays
-> unimplemented until its child issue lands. Owning issue:
+> unimplemented until its child issue lands. The one exception so far is the
+> read-only delegation-limits posture check of
+> [#270](https://github.com/ahliweb/omes/issues/270) (`omes health
+> agent-runtime`), which reports configuration and changes no Hermes state. Owning issue:
 > [#269](https://github.com/ahliweb/omes/issues/269).
 
 OMES is host control (deterministic). Hermes Agent owns agent runtime behavior
@@ -28,6 +31,7 @@ pages below; anything not stated there is marked unverified.
 | Octop architecture | <https://github.com/TencentCloud/Octop/blob/main/docs/architecture.md> | Control-plane DB vs workspace files, single process |
 | Octop ACP | <https://github.com/TencentCloud/Octop/blob/main/docs/acp.md> | Inbound server, outbound runners, `trusted` flag |
 | Hermes delegation (`v2026.9.24`) | <https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/delegation.md> | `delegate_task`, limits, global model pin, restart to `unknown` |
+| Hermes CLI reference (`v2026.9.24`) | <https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/reference/cli-commands.md> | `hermes config get <key> [--json] [--raw]`, the supported read path for the #270 posture check |
 | Hermes ACP (`v2026.9.24`) | <https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md> | `hermes acp`, curated toolset, approval prompts |
 | Hermes outbound ACP proposal | <https://github.com/NousResearch/hermes-agent/issues/5257> | Open proposal (P4); not shipped |
 | OMES repository audit | files cited inline (2026-10-03) | Current state and gaps |
@@ -65,12 +69,12 @@ yet (tracked in #N)" means no code or contract exists today.
 
 | Capability | Authority | Verified current state | Disposition | Tracked in |
 |---|---|---|---|---|
-| Team-host coordinator | Hermes | Hermes `delegate_task` with `orchestrator` and `leaf` roles; `max_spawn_depth` default 1 (flat), up to 3 ([delegation](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/delegation.md)). OMES has no coordinator and R9 forbids one. | DELEGATE | [#270](https://github.com/ahliweb/omes/issues/270) (policy and capability audit; posture check not implemented yet) |
-| Opus to Sonnet delegation tiering | Hermes | Global delegation `model`/`provider` pin only: "`delegate_task` has no per-task model parameter" (same page). Per-task tiering is a verified upstream gap. | DELEGATE_UPSTREAM, then ADAPT (separate Hermes profiles), then SPECIALIZED_SERVICE, then DEFER | [#270](https://github.com/ahliweb/omes/issues/270) |
+| Team-host coordinator | Hermes | Hermes `delegate_task` with `orchestrator` and `leaf` roles; `max_spawn_depth` default 1 (flat), up to 3 ([delegation](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/delegation.md)). OMES has no coordinator and R9 forbids one. | DELEGATE | [#270](https://github.com/ahliweb/omes/issues/270) (policy and capability audit; configured-limits posture check implemented as `omes health agent-runtime`, see §3.1) |
+| Opus to Sonnet delegation tiering | Hermes | Global delegation `model`/`provider` pin only: "`delegate_task` has no per-task model parameter" (same page). Per-task tiering is a verified upstream gap. The posture check reports whether `delegation.model` is pinned (§3.1). | DELEGATE_UPSTREAM, then ADAPT (separate Hermes profiles), then SPECIALIZED_SERVICE, then DEFER | [#270](https://github.com/ahliweb/omes/issues/270) |
 | Opus to Haiku delegation tiering | Hermes | Same as the row above. | Same as the row above | [#270](https://github.com/ahliweb/omes/issues/270) |
 | Per-agent workspace | Hermes (logical); OMES (host paths) | Hermes `worktree_isolation` exists, default `false`. OMES manages host paths and permissions only. | DELEGATE | [#276](https://github.com/ahliweb/omes/issues/276) |
 | Per-agent memory | Hermes | Children start with fresh context; the parent receives only the final summary (delegation page). OMES must not touch internal Hermes databases (registry rule). | DELEGATE | None |
-| Asynchronous/parallel dispatch | Hermes | Parallel children with `delegation.max_concurrent_children` default 10; `max_iterations`; `child_timeout_seconds` (0 means no timeout). | DELEGATE | [#270](https://github.com/ahliweb/omes/issues/270) |
+| Asynchronous/parallel dispatch | Hermes | Parallel children with `delegation.max_concurrent_children` default 10; `max_iterations`; `child_timeout_seconds` (0 means no timeout). The configured values are reported by `omes health agent-runtime` (§3.1); OMES hardcodes no default. | DELEGATE | [#270](https://github.com/ahliweb/omes/issues/270) |
 | Agent isolation | Hermes (logical); OMES/infrastructure (OS) | Implemented host isolation: hardening profiles (`modules/hermes-gateway/hardening.sh`), rootless Compose with non-root, `capDrop`, read-only rootfs, `no-new-privileges` and no Docker socket (`lib/omes/py/agent/compose.py`). | DELEGATE (logical), OMES (OS) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | MCP tool boundary | Logical boundary | Registry entry `boundary.tool_gateway.mcp` is `logical_boundary`; OMES ships no MCP gateway (architecture §16.2.1, scope non-goal 14). | DEFER (stays logical) | None |
 | ACP | Hermes | `hermes acp` is a stdio JSON-RPC server with a curated `hermes-acp` toolset; dangerous terminal commands go to editor approval prompts ([acp](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md)). Outbound ACP client is an open proposal ([#5257](https://github.com/NousResearch/hermes-agent/issues/5257)). OMES adds no listener. | DELEGATE (inbound), DEFER (outbound) | [#273](https://github.com/ahliweb/omes/issues/273) (posture evidence; not implemented yet) |
@@ -89,6 +93,35 @@ yet (tracked in #N)" means no code or contract exists today.
 | Workload isolation | OMES/infrastructure (OS); Hermes (logical) | Hardening profiles, rootless Compose (#96), opt-in `hermes-restricted` egress `IPAddressDeny=any`. Gaps in §4, G5. | OMES (OS) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | Node/process restart recovery | Hermes (agent runs); OMES (host jobs) | Hermes: running child becomes `unknown` after restart. OMES: no orphan reconciliation for host jobs (§4, G1). | DELEGATE / OMES | [#271](https://github.com/ahliweb/omes/issues/271) |
 
+### 3.1 Delegation-limits posture check and the tiering ADAPT path (issue #270)
+
+Implemented: `omes health agent-runtime` ([docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks),
+[docs/hermes-integration.md §17.1](hermes-integration.md#171-delegation-limits-posture-and-the-config-read-path-issue-270)).
+It reads the non-secret `delegation.*` keys (`max_concurrent_children`, `max_spawn_depth`,
+`max_iterations`, `child_timeout_seconds`, `subagent_auto_approve`, `model`, `provider` and three
+informational keys) through `hermes config get <key> --json` and reports `ok`, `warn` or `unknown`
+with findings: no per-child timeout, auto-approval of subagents, spawn depth above 1, and no pinned
+delegation model. What it does not do:
+
+- It reports **configured** values only. Hermes can override limits from environment variables
+  (for example `DELEGATION_MAX_CONCURRENT_CHILDREN`) and OMES cannot observe that, so the output is
+  labelled `scope: "configured"` and is not proof of the limits a running gateway enforces.
+- It enforces and changes nothing, schedules nothing and routes no models. OMES remains neither a
+  coordinator nor a delegation owner (R9, ADR-0032 rules 1 and 2).
+- It hardcodes no Hermes default. Upstream documentation and code disagree on some defaults
+  (observed while reading the `v2026.9.24` source), so only live values are reported.
+- It is a point-in-time read: it is not budget governance ([#275](https://github.com/ahliweb/omes/issues/275))
+  and not a record of what any run actually did.
+
+Per-task model tiering (a high-capability coordinator with cheaper workers) remains an **upstream
+gap** (G8): `delegate_task` has no per-task model parameter and the global `delegation.model` pin
+applies to every child. The resolution order stays `DELEGATE_UPSTREAM -> ADAPT -> SPECIALIZED_SERVICE
+-> DEFER`. The recommended ADAPT path is separate Hermes profiles per worker tier, each with its
+own `delegation.model`/`delegation.provider`, selected by the operator through Hermes itself;
+`omes health agent-runtime --profile-home <profile home>` reviews each profile. OMES does not
+route models, choose providers or write `delegation.model` (ADR-0029, ADR-0032 rule 2), and no
+OMES-side tier mapping exists. A request for per-task tiering belongs upstream.
+
 ## 4. Verified gaps
 
 Evidence is from the repository audit of 2026-10-03. Line numbers refer to
@@ -103,15 +136,16 @@ that tree and may move; the file and symbol names are the stable reference.
 | G5 | No unified policy/capability decision envelope; policy facts are spread across `operation-request.permission`, AI-egress decisions and job approval sets. | `lib/omes/py/jobs/store.py:112-114` (`DESTRUCTIVE_OPERATIONS`, `DEFAULT_AUTO_APPROVE`); `lib/omes/py/privacy/egress_policy.py` (`AI_EGRESS_*`) | [#274](https://github.com/ahliweb/omes/issues/274) |
 | G6 | No token, usage or spend concept; OMES documents that it sets no LLM-spend ceiling. | `docs/security.md` (non-guarantees list); `lib/omes/py/jobs/entitlement.py:25-32` (`RESOURCE_KEYS` has no budget key) | [#275](https://github.com/ahliweb/omes/issues/275) |
 | G7 | Compose network is a plain bridge with `internal: false`, so there is no per-container egress control. There is no real rootless-daemon evidence and no declared-versus-running drift detection. | `lib/omes/py/agent/compose.py:400-403`; compare opt-in `modules/hermes-restricted/module.sh:467` (`IPAddressDeny=any`) | [#276](https://github.com/ahliweb/omes/issues/276) |
-| G8 | Hermes per-task model selection does not exist upstream at the pinned baseline. | Delegation page, quote in §3 | [#270](https://github.com/ahliweb/omes/issues/270) |
+| G8 | Hermes per-task model selection does not exist upstream at the pinned baseline. The posture check (§3.1) can only report that no delegation model is pinned; the gap itself is unresolved and stays an upstream request, with separate Hermes profiles as the ADAPT workaround. | Delegation page, quote in §3 | [#270](https://github.com/ahliweb/omes/issues/270) |
 
 ## 5. Child issue plan
 
-All children are **Not implemented yet** as of 2026-10-03.
+All children are **Not implemented yet** as of 2026-10-03, except the read-only configured-limits
+posture check of #270 (`omes health agent-runtime`, §3.1); #270's per-task tiering gap stays open upstream.
 
 | Issue | Title (summary) | Authority | Depends on | Deliverable |
 |---|---|---|---|---|
-| [#270](https://github.com/ahliweb/omes/issues/270) | Coordinator policy and Hermes capability audit | Hermes | This ADR | Documented coordinator/worker policy, per-task model gap resolution order, optional OMES posture check of delegation limits |
+| [#270](https://github.com/ahliweb/omes/issues/270) | Coordinator policy and Hermes capability audit | Hermes | This ADR | Documented coordinator/worker policy, per-task model gap resolution order, optional OMES posture check of delegation limits (posture check implemented, §3.1; per-task tiering unresolved upstream) |
 | [#271](https://github.com/ahliweb/omes/issues/271) | Restart/orphan reconciliation and consumption of Hermes `unknown` | OMES | None | Lease or heartbeat plus reconciliation of orphaned `running` host jobs; observer treats Hermes `unknown` as unknown, never success |
 | [#272](https://github.com/ahliweb/omes/issues/272) | Cross-plane correlation/event envelope and trace propagation | OMES contract (observability plane) | None | Schema with causation/trace identifiers, redaction state and convergence rules; evidence only |
 | [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp`; outbound deferred to upstream |
