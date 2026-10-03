@@ -884,6 +884,27 @@
         "https://github.com/ahliweb/omes/blob/main/docs/security.md",
         "https://documentation.wazuh.com/current/index.html"
       ]
+    },
+    {
+      "capability_id": "omes.observability.correlation_envelope",
+      "title": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": "main",
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "plane": "observability",
+      "execution_semantics": "observational",
+      "implementation_status": "implemented",
+      "omes_module": "observability",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/contracts/observability/v1/correlation-envelope.schema.json",
+        "https://github.com/ahliweb/omes/issues/272"
+      ]
     }
   ]
 }

@@ -5,7 +5,7 @@
 - **Decision maker:** @ahliweb
 - **Related:** [ADR-0017](0017-upstream-first-ownership-and-boundary-enforcement.md) (upstream-first ownership), [ADR-0027](0027-control-center-pull-worker-transport.md) (pull-worker transport), [ADR-0028](0028-hermes-orchestration-visualization.md) (Hermes orchestration observer), [ADR-0029](0029-ai-data-boundary-and-private-inference.md) (AI data boundary), ADR-0031 (Mission Control; pending in PR [#268](https://github.com/ahliweb/omes/pull/268)), [Epic #269](https://github.com/ahliweb/omes/issues/269), [docs/multi-agent-control-patterns.md](../multi-agent-control-patterns.md), [docs/threat-model.md](../threat-model.md) (§5.z, `MA-01`..`MA-11`)
 - **Supersedes / Amends:** None. Adds a decision record, two registry entries, and a wider R9 reserved-term list. It changes no runtime behavior. Number 0031 is reserved for the Mission Control ADR in PR #268.
-- **Implementation:** Phase 0 only (this record, the registry/linter guard, the threat delta, and the decomposition into [#270](https://github.com/ahliweb/omes/issues/270)–[#277](https://github.com/ahliweb/omes/issues/277)). Every child issue is **Not implemented yet** unless its own PR lands.
+- **Implementation:** Phase 0 only (this record, the registry/linter guard, the threat delta, and the decomposition into [#270](https://github.com/ahliweb/omes/issues/270)–[#277](https://github.com/ahliweb/omes/issues/277)). Every child issue is **Not implemented yet** unless its own PR lands. Child [#272](https://github.com/ahliweb/omes/issues/272) has landed its envelope contract, validator, convergence reducer and registry entry (`omes.observability.correlation_envelope`); its propagation through AWCMS, job and worker flows is Not implemented yet (tracked in #272).
 
 ---
 
