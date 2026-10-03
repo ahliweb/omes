@@ -1,0 +1,5 @@
+---
+issue: 270
+type: added
+---
+Added `omes health agent-runtime [--json] [--profile-home PATH]`, a read-only report of the configured Hermes delegation limits (max_concurrent_children, max_spawn_depth, max_iterations, child_timeout_seconds, subagent_auto_approve and the delegation model/provider pin) with an ok, warn or unknown status and findings for no per-child timeout, subagent auto-approval, nested spawn depth and an unpinned delegation model, read through the supported `hermes config get <key> --json` via a new shared allowlisted reader (lib/omes/py/health/hermes_config.py) that distinguishes a present value, an absent key and an unreadable one, never passes `--raw` and never reads Hermes files or databases; the report is labelled as configured scope because environment overrides are not observed, unknown is never reported as ok (exit 7), OMES does not route models and per-task model tiering remains an upstream Hermes gap with separate Hermes profiles as the documented ADAPT path, and the Hermes test shim now supports `config get --json` and the upstream "Config key not set" absent form (ADR-0032, epic #269).
