@@ -956,6 +956,7 @@ omes job status <job-id> [--json]
 omes job list [--state STATE] [--json]
 omes job cancel <job-id> --actor <id> [--json]
 omes job expire [--json]
+omes job reconcile [--job <job-id>] [--actor <id>] [--json]
 ```
 
 - `submit` validates `<file>` against
@@ -977,11 +978,26 @@ omes job expire [--json]
   — see docs/jobs.md's state machine for why).
 - `expire` moves every `queued`/`approved` job older than
   `OMES_JOBS_TTL_SECONDS` to `expired`.
+- `reconcile` (#271) finds `running` jobs whose runner process is provably gone
+  (host rebooted, pid dead, or pid reused by another process; a `running`
+  record without runner identity qualifies only after
+  `OMES_JOBS_ORPHAN_LEGACY_SECONDS`, default 3600) and re-runs the operation's
+  existing read-back. Desired == observed becomes `succeeded` (`rolled_back`
+  for a rollback); a mismatch becomes `failed` / `reconciliation_mismatch`;
+  anything unverifiable (including operations without a read-back, or a
+  read-back without a complete desired/observed pair) becomes `failed` /
+  `outcome_unknown`, never success. A live runner is never touched. Idempotent;
+  `--job` restricts it to one job (an out-of-scope tenant/server is refused;
+  a batch run skips and counts such jobs). With `--json`, stdout is
+  `{"reconciled": [...], "unchanged": [...], "skipped_out_of_scope": N}` and
+  logs go to stderr. See [docs/jobs.md](jobs.md) §7.1.
 
 **Exit codes:** 0 (success; for `run`, only when the job reached
-`succeeded`/`rolled_back`), 1 (error — schema validation failure,
-cross-tenant rejection, missing approval, invalid state transition,
-exhausted retries, job failed), 2 (usage error).
+`succeeded`/`rolled_back`; for `reconcile`, whenever reconciliation itself
+completed, even if it moved a job to `failed`), 1 (error — schema validation
+failure, cross-tenant rejection, unknown job for `reconcile --job`, missing
+approval, invalid state transition, exhausted retries, job failed), 2 (usage
+error).
 
 ### 4.17 Control Center pull-worker: `omes worker`
 

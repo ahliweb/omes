@@ -89,11 +89,16 @@ approved -> expired
 | `running` | `succeeded` | operation executed and (if applicable) read-back confirmed the desired state |
 | `running` | `failed` | operation failed (any classification), or read-back mismatched/timed out |
 | `running` | `rolled_back` | operation was `rollback` AND read-back confirmed the desired state |
+| `running` | `succeeded` / `rolled_back` / `failed` | `omes job reconcile`, only for an orphaned `running` record (executor proven gone) — see §7.1; same targets as above, no new state |
 | `failed` | `running` | `omes job run` called again, only when `error.retryable` is true and `attempts < max_attempts` (default 3) |
 
 `succeeded`, `cancelled`, `expired`, and `rolled_back` are always
 terminal. `failed` is terminal unless the failure was classified
 retryable and attempts remain — see §6.
+
+A `running` record whose executor has died is not left in `running`
+forever: `omes job reconcile` (§7.1) moves it to a terminal state using only
+the transitions already in this table. No new state exists.
 
 `omes job cancel` never accepts a `running` job: a synchronous
 `bin/omes` subprocess call cannot be safely interrupted mid-mutation
@@ -169,6 +174,8 @@ for the missing verb.
 | `bin/omes` exited any other non-zero code | `operation_failed` | `false` |
 | Read-back did not confirm desired state | `reconciliation_mismatch` | `false` |
 | Operation has no command mapping | `not_implemented` | `false` |
+| Orphaned `running` job whose read-back mismatched (`omes job reconcile`, §7.1) | `reconciliation_mismatch` | `false` |
+| Orphaned `running` job whose outcome could not be verified (`omes job reconcile`, §7.1) | `outcome_unknown` | `false` |
 
 A retryable failure may be retried by calling `omes job run <id>` again
 while `attempts < max_attempts` (default 3, `store.DEFAULT_MAX_ATTEMPTS`).
@@ -195,6 +202,81 @@ validates the result (`_compare_desired_observed()`):
   read-back confirms success — a `rollback` job whose read-back
   mismatches reports `failed`, never a false `rolled_back`.
 
+### 7.1 Orphaned `running` jobs (issue #271)
+
+`runner.run()` persists `running` before it executes the operation. If the
+`omes job run` process then dies (crash, `kill -9`, OOM, reboot), nothing else
+would ever move the record. `omes job reconcile` closes that gap without
+adding a state, a scheduler or a daemon. Status: **Implemented**
+(`lib/omes/py/jobs/identity.py`, `lib/omes/py/jobs/reconcile.py`).
+
+**Executor identity (replaces a lease or heartbeat).** When a job enters
+`running` the runner records, on the job record:
+
+```json
+"runner": {"pid": 4242, "boot_id": "<kernel boot id or null>",
+           "started_at": "2026-10-03T00:00:00Z", "pid_start_ticks": 1234567}
+```
+
+`boot_id` comes from `/proc/sys/kernel/random/boot_id` (`null` if
+unreadable); `pid_start_ticks` is the process start time from
+`/proc/<pid>/stat` (`null` if unreadable) and exists only so a recycled pid is
+not mistaken for the original runner. `runner` is internal to the local job
+record: it is not part of `job-status.response` (whose `additionalProperties`
+is `false`; its `state` enum is unchanged), is not in `omes job list --json`
+summaries, and is never sent to the Control Center. `omes job status --json`
+prints the raw local record, which already carries non-wire fields such as
+`attempts` and `history`, so it now includes `runner` too.
+
+**Orphan detection (`reconcile.assess`)** is deterministic and conservative:
+if an orphan cannot be proven, the job is left alone.
+
+| Evidence | Verdict |
+|---|---|
+| Recorded `boot_id` differs from the current one (both known) | orphan (`boot_id_changed`): the host rebooted |
+| Recorded pid does not exist (`os.kill(pid, 0)` raises `ProcessLookupError`) | orphan (`pid_not_alive`) |
+| Pid exists but its start time differs from `pid_start_ticks` | orphan (`pid_reused`): not this job's runner |
+| Pid exists and start time matches or cannot be compared | **not** orphaned (`runner_alive`) |
+| Liveness cannot be determined (other `OSError`) | **not** orphaned (`indeterminate`) |
+| No usable `runner` (record written before #271) | orphan candidate (`legacy_record_stale`) only if `updated_at` is older than `OMES_JOBS_ORPHAN_LEGACY_SECONDS` (default `3600`); otherwise **not** orphaned |
+
+A process that is gone cannot write to the record, so a proven orphan cannot
+race with its own runner; a live runner is never touched.
+
+**Reconciliation (`omes job reconcile [--job <id>]`).** For every orphaned
+`running` job the operation's existing read-back command is re-run
+(`runner.readback_argv()`, the same `status --json` used after `backup`,
+`restore` and `rollback`) and only what it proves is reported:
+
+| Read-back result | Terminal state | `error` |
+|---|---|---|
+| Complete `desired`/`observed` pair, equal | `succeeded` (`rolled_back` for a `rollback` job, as in a normal run), `evidence.readback` attached, history note `reconciled after orphaned run` | `null` |
+| Pair present and unequal, or `ok: false` | `failed` | `reconciliation_mismatch`, `retryable: false` |
+| Read-back unavailable, unsupported (`preflight`/`status`/unmapped operations have no read-back), timed out, failed to execute, unparseable, or without a complete `desired`/`observed` pair | `failed` | `outcome_unknown`, `retryable: false`, message ends `manual review required` |
+
+Reconciliation is deliberately **stricter** than a normal run: after a normal
+run an exit code of 0 plus a bare `ok: true` status is accepted (§7), but for
+an orphan there is no exit code and no proof the mutation ever finished, so a
+bare `ok: true` cannot prove anything about this job and yields
+`outcome_unknown`. A job is never reported `succeeded` without read-back
+evidence, and time passing is never evidence. A reconciled `failed` job is
+not retryable: an operator resubmits (new idempotency key) after reviewing it.
+
+Every reconciled job transitions via `store.apply_transition()`, is saved
+with `evidence.reconciliation` (orphan reason, classification, previous
+runner identity), and appends one hash-chained `reconciled_orphan` audit
+entry (`from: running`). Reconciliation is idempotent: a second run finds no
+`running` job, executes no command, writes nothing and appends no audit
+entry. Tenant/server scope follows `submit`: with `OMES_JOBS_TENANT_ID` /
+`OMES_JOBS_SERVER_ID` set, a batch run skips (and counts) jobs of another
+tenant/server, and `--job <id>` on such a job is refused.
+
+Confirmed cancellation of a `running` job (intent versus verified stop) is
+Not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271));
+`omes job cancel` still rejects `running`. `reconcile` is operator-invoked:
+nothing runs it automatically (no timer, boot hook or daemon ships with it),
+and no issue currently owns adding one.
+
 ## 8. Idempotency and audit
 
 - Every request must carry `idempotency_key` (enforced by the
@@ -203,7 +285,8 @@ validates the result (`_compare_desired_observed()`):
   returns the original job record unchanged and appends a `replayed`
   audit entry — the operation is never executed twice for the same key.
 - Every transition (`submitted`, `replayed`, `approved`, `run_started`,
-  `succeeded`, `failed`, `rolled_back`, `cancelled`, `expired`) is
+  `succeeded`, `failed`, `rolled_back`, `cancelled`, `expired`,
+  `reconciled_orphan`) is
   appended to `audit.jsonl` as one hash-chained line
   (`entry["line_hash"] = sha256(json.dumps(entry_without_hash,
   sort_keys=True) + prev_hash)`), so any rewrite of an earlier line is

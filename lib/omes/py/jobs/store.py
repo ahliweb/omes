@@ -188,6 +188,24 @@ def local_server_id() -> str | None:
     return os.environ.get("OMES_JOBS_SERVER_ID") or None
 
 
+def assert_record_in_local_scope(record: dict[str, Any]) -> None:
+    """Same tenant/server scope rule `submit()` applies to a request, applied
+    to an existing job record (used by orphan reconciliation, issue #271): if
+    OMES_JOBS_TENANT_ID / OMES_JOBS_SERVER_ID are set, a record belonging to
+    another tenant or server must not be touched. Raises CrossTenantError."""
+    tenant = local_tenant_id()
+    if tenant is not None and record.get("tenant_id") != tenant:
+        raise CrossTenantError(
+            f"job tenant_id={record.get('tenant_id')!r} does not match local tenant {tenant!r}"
+        )
+    server_id = local_server_id()
+    record_server = (record.get("target") or {}).get("server_id")
+    if server_id is not None and record_server not in (None, server_id):
+        raise CrossTenantError(
+            f"job target.server_id={record_server!r} does not match local server {server_id!r}"
+        )
+
+
 def auto_approve_allowlist() -> frozenset[str]:
     raw = os.environ.get("OMES_JOBS_AUTO_APPROVE")
     if raw is None:
