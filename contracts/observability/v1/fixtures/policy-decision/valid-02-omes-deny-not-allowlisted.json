@@ -1,0 +1,29 @@
+{
+  "schema_version": "1.0.0",
+  "decision_id": "dec-omes-0001",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-2026-10-03-deploy-0001",
+  "actor": {
+    "type": "service",
+    "id": "awcms-control-center"
+  },
+  "resource": {
+    "kind": "host",
+    "id": "host-edge-01"
+  },
+  "requested_action": "run_shell",
+  "deciding_authority": "omes",
+  "decision": "deny",
+  "policy_id": "omes.jobs.allowlist",
+  "reason_code": "OPERATION_NOT_ALLOWLISTED",
+  "evidence": {
+    "version": "policy-2026.10.1",
+    "observed_at": "2026-10-03T10:00:00Z",
+    "freshness": "live"
+  },
+  "approval_ref": null,
+  "expires_at": null,
+  "idempotency_key": "idem-deploy-0001",
+  "classification": "INTERNAL",
+  "redaction_state": "none_required"
+}

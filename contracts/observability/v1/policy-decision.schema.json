@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/observability/v1/policy-decision.schema.json",
+  "title": "policy-decision",
+  "description": "Versioned policy/capability DECISION ENVELOPE (issue #274, ADR-0032 rule 7). It RECORDS a decision that an existing authority (AWCMS, OMES, Hermes, infrastructure, a provider) already made, so that decisions about one action can be composed (lib/omes/py/observability/policy_decision.py). It is not a policy engine: it carries no rule, no rule input and no free-text explanation, only identifiers, a closed decision, a machine-readable reason code, evidence freshness and an opaque reference to an approval that lives in its own authority. It never carries prompts, commands, argv, headers, credentials or reasoning, and it never creates or grants an approval. `approval_required` points at an EXISTING approval through `approval_ref`; it is never an approval object. Timestamps are UTC (`Z`) RFC 3339 strings because `format` is not in the supported validator subset; calendar validity and the composition rules that the subset cannot express (stale evidence or a past `expires_at` means `unavailable`) are enforced in code.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "decision_id",
+    "tenant_id",
+    "correlation_id",
+    "actor",
+    "resource",
+    "requested_action",
+    "deciding_authority",
+    "decision",
+    "policy_id",
+    "reason_code",
+    "evidence",
+    "classification",
+    "redaction_state"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Contract version. Only major version 1 exists; a consumer MUST fail closed on any other major version.",
+      "enum": ["1.0.0"]
+    },
+    "decision_id": {
+      "type": "string",
+      "description": "Producer-unique decision identifier; the deduplication key. Reusing a decision_id with different content is rejected by the composer.",
+      "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "description": "Same identifier space as the correlation envelope (contracts/observability/v1/correlation-envelope.schema.json).",
+      "pattern": "^[A-Za-z0-9_.:-]{8,256}$"
+    },
+    "actor": {
+      "type": "object",
+      "description": "Who asked. Identifier only.",
+      "required": ["type", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["user", "service", "agent"]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "description": "What the action targets. Kind and identifier only.",
+      "required": ["kind", "id"],
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_.-]{0,63}$"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+        }
+      }
+    },
+    "requested_action": {
+      "type": "string",
+      "description": "Allowlisted operation or capability NAME only (never a command line or free text).",
+      "pattern": "^[a-z][a-z0-9_.:-]{0,63}$"
+    },
+    "deciding_authority": {
+      "type": "string",
+      "description": "Which authority made this decision (mirrors the authority enum of contracts/architecture/v1/capabilities.schema.json). OMES composes decisions; it does not make them on behalf of other authorities.",
+      "enum": ["omes", "hermes", "omarchy", "awcms", "graphify", "provider", "platform", "external"]
+    },
+    "decision": {
+      "type": "string",
+      "description": "Closed vocabulary. `unavailable` means the authority could not decide (or its evidence cannot be trusted); it is never treated as allow.",
+      "enum": ["allow", "deny", "approval_required", "unavailable"]
+    },
+    "policy_id": {
+      "type": "string",
+      "description": "Identifier of the authority's policy that produced the decision (a name, not the policy body).",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "reason_code": {
+      "type": "string",
+      "description": "Stable machine-readable reason code in the AI_EGRESS_* style (upper snake case). There is deliberately no free-text reason field.",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "evidence": {
+      "type": "object",
+      "description": "What the decision was based on, as freshness metadata only. Anything other than `live` is treated as `unavailable` by the composer.",
+      "required": ["version", "observed_at", "freshness"],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "type": "string",
+          "description": "Version or revision label of the policy/evidence snapshot.",
+          "pattern": "^[A-Za-z0-9_.:-]{1,64}$"
+        },
+        "observed_at": {
+          "type": "string",
+          "description": "When the authority observed the evidence (UTC, RFC 3339, `Z` suffix).",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+        },
+        "freshness": {
+          "type": "string",
+          "description": "Producer's statement about the evidence. Missing or unverifiable evidence is `unknown`, never `live`.",
+          "enum": ["live", "stale", "unknown"]
+        }
+      }
+    },
+    "approval_ref": {
+      "type": ["string", "null"],
+      "description": "Opaque reference to an EXISTING approval held by its owning authority (for example an AWCMS approval record locator). Never an approval object, and never evidence that approval was granted.",
+      "pattern": "^[A-Za-z0-9_.:/#-]{1,256}$"
+    },
+    "expires_at": {
+      "type": ["string", "null"],
+      "description": "After this instant the decision is no longer valid (UTC, RFC 3339, `Z` suffix). Null means the authority set no expiry.",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "pattern": "^[A-Za-z0-9_.:-]{8,256}$"
+    },
+    "classification": {
+      "type": "string",
+      "description": "Data classification of the envelope per ADR-0029 / docs/ai-data-privacy-and-model-security.md section 4. Required; there is no default.",
+      "enum": ["PUBLIC", "INTERNAL", "CONFIDENTIAL", "RESTRICTED"]
+    },
+    "redaction_state": {
+      "type": "string",
+      "description": "none_required: carries only identifiers and enums; redacted: a sensitive value was removed before emission; withheld: the producer deliberately omitted detail.",
+      "enum": ["none_required", "redacted", "withheld"]
+    }
+  }
+}

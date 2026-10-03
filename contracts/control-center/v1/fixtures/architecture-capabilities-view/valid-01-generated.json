@@ -335,7 +335,7 @@
       "execution_semantics": "observational",
       "id": "omes.observability.correlation_envelope",
       "implementation_status": "implemented",
-      "name": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "name": "OMES Cross-Plane Evidence Envelopes: Correlation, Convergence and Policy Decision Composition",
       "omes_module": "observability",
       "plane": "observability",
       "upstream_project": "ahliweb/omes"
