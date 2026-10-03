@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "evt-hermes-sub-0042",
+  "source_authority": "hermes",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-2026-10-03-deploy-0001",
+  "causation_id": "evt-omes-job-0001",
+  "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+  "span_id": "00f067aa0ba902b7",
+  "task_id": "subagent-3",
+  "event_type": "subagent.stopped",
+  "observed_at": "2026-10-03T10:02:00Z",
+  "source_timestamp": "2026-10-03T10:01:58Z",
+  "freshness": "stale",
+  "status": "unknown",
+  "classification": "CONFIDENTIAL",
+  "redaction_state": "withheld"
+}

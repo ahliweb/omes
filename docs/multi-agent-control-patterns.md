@@ -81,7 +81,7 @@ yet (tracked in #N)" means no code or contract exists today.
 | Distributed OMES workers | OMES | Control Center pull worker exists for host-control jobs (ADR-0027, `lib/omes/py/jobs/worker.py`). It is not a distributed AI worker. | OMES (existing) | None |
 | Distributed agent workers | Hermes | No OMES capability. A broker or workflow engine needs measured requirements and a new ADR (ADR-0032 rule 4). Octop is itself single-process. | DEFER | None |
 | Event sourcing | OMES (per-domain audit only) | Hash-chained, append-only audit log in `lib/omes/py/jobs/audit.py`. No universal event store; none is planned. | REJECT (universal store) | None |
-| Tracing | OMES contract, observability plane | `correlation_id` is widespread; `event_id` exists on outbox/events. No `causation_id`, `trace_id`, `span_id` or `traceparent`, and no OpenTelemetry anywhere in `lib/`, `modules/` or `contracts/` (audit 2026-10-03). | ADAPT | [#272](https://github.com/ahliweb/omes/issues/272) (not implemented yet) |
+| Tracing | OMES contract, observability plane | `correlation_id` is widespread; `event_id` exists on outbox/events. The 2026-10-03 audit found no `causation_id`, `trace_id`, `span_id` or `traceparent`, and no OpenTelemetry in `lib/`, `modules/` or `contracts/`. Since then the versioned envelope contract `contracts/observability/v1/correlation-envelope.schema.json` and its validator/convergence reducer `lib/omes/py/observability/envelope.py` are implemented (see §4a). No OpenTelemetry SDK or exporter is added. Propagation of the identifiers through AWCMS, job and worker flows and any producer wiring: Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)). | ADAPT | [#272](https://github.com/ahliweb/omes/issues/272) (contract and reducer implemented; propagation not implemented yet) |
 | Policy engine | Existing authorities (AWCMS, OMES, Hermes, infrastructure) | `operation-request.permission` (`granted`, `policy_id`, `reason`, `requires_approval`); OMES re-derives it and never trusts `granted: true`. AI-egress decisions `allow`/`deny`/`approval_required` with `AI_EGRESS_*` reason codes. Job `DESTRUCTIVE_OPERATIONS`, `DEFAULT_AUTO_APPROVE` (`lib/omes/py/jobs/store.py`). No unified envelope. | ADAPT (envelope only; no new engine) | [#274](https://github.com/ahliweb/omes/issues/274) (not implemented yet) |
 | Capability permissions | AWCMS and OMES | Entitlement checks with `RESOURCE_KEYS` (`lib/omes/py/jobs/entitlement.py`); permission re-derivation as above. | OMES (existing) | [#274](https://github.com/ahliweb/omes/issues/274) |
 | Approval gates | AWCMS (business); Hermes (tool); OMES (job approve) | `omes job approve` for non-auto-approved operations; Hermes ACP approval prompts "allow once / allow always / deny"; AWCMS owns tenant approvals. | AWCMS / DELEGATE / OMES per scope | [#274](https://github.com/ahliweb/omes/issues/274) |
@@ -99,21 +99,65 @@ that tree and may move; the file and symbol names are the stable reference.
 | G1 | The job runner persists `running` before executing the operation, and nothing reconciles a `running` record whose process died. `expire_stale_jobs` only handles `queued`/`approved`; `cancel` rejects `running`; there is no per-job lease. | `lib/omes/py/jobs/runner.py:289-296` (`run_started` saved before execution); `lib/omes/py/jobs/store.py:396-402` (`cancel`), `lib/omes/py/jobs/store.py:405-420` (`expire_stale_jobs`) | [#271](https://github.com/ahliweb/omes/issues/271) |
 | G2 | No per-node `STALE` state. Staleness only affects tree-level freshness (`live`/`stale`/`unknown`, 300 s), although ADR-0028 (Decision 4) describes transitioning unconfirmed running subagents to `STALE`. This change adds an implementation note to ADR-0028 and corrects the matching sentence in `docs/control-center-and-integrations.md` §4; per-node `STALE` is not claimed. | `lib/omes/py/agent/orchestration.py:24` (`DEFAULT_STALE_THRESHOLD_SECONDS = 300`), `:285-293` (`is_any_stale` set at tree level) | [#271](https://github.com/ahliweb/omes/issues/271) |
 | G3 | `ingest_event` has no production caller or transport in this repository, so the orchestration projection has no live event source. The `HERMES_BASELINE` constant is defined but unused. | `lib/omes/py/agent/orchestration.py:115` (`ingest_event`), `:23` (`HERMES_BASELINE`); repository-wide search found no non-test caller | [#271](https://github.com/ahliweb/omes/issues/271), [#272](https://github.com/ahliweb/omes/issues/272) |
-| G4 | No cross-plane causation or trace identifiers; no OpenTelemetry. | Search of `lib/`, `modules/`, `contracts/` for `traceparent`, `trace_id`, `span_id`, `causation_id`, `opentelemetry` returned nothing | [#272](https://github.com/ahliweb/omes/issues/272) |
+| G4 | No cross-plane causation or trace identifiers; no OpenTelemetry. **Partly closed:** the envelope contract (with `causation_id`, W3C-shaped `trace_id` and `span_id`) and a deterministic convergence reducer now exist (§4a). **Still open:** no producer emits the envelope, and nothing propagates the identifiers across AWCMS, job and worker flows. Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)). | At audit time, a search of `lib/`, `modules/`, `contracts/` for `traceparent`, `trace_id`, `span_id`, `causation_id`, `opentelemetry` returned nothing. Now: `contracts/observability/v1/correlation-envelope.schema.json`, `lib/omes/py/observability/envelope.py`; a repository search still finds no producer or propagation caller outside tests and fixtures | [#272](https://github.com/ahliweb/omes/issues/272) |
 | G5 | No unified policy/capability decision envelope; policy facts are spread across `operation-request.permission`, AI-egress decisions and job approval sets. | `lib/omes/py/jobs/store.py:112-114` (`DESTRUCTIVE_OPERATIONS`, `DEFAULT_AUTO_APPROVE`); `lib/omes/py/privacy/egress_policy.py` (`AI_EGRESS_*`) | [#274](https://github.com/ahliweb/omes/issues/274) |
 | G6 | No token, usage or spend concept; OMES documents that it sets no LLM-spend ceiling. | `docs/security.md` (non-guarantees list); `lib/omes/py/jobs/entitlement.py:25-32` (`RESOURCE_KEYS` has no budget key) | [#275](https://github.com/ahliweb/omes/issues/275) |
 | G7 | Compose network is a plain bridge with `internal: false`, so there is no per-container egress control. There is no real rootless-daemon evidence and no declared-versus-running drift detection. | `lib/omes/py/agent/compose.py:400-403`; compare opt-in `modules/hermes-restricted/module.sh:467` (`IPAddressDeny=any`) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | G8 | Hermes per-task model selection does not exist upstream at the pinned baseline. | Delegation page, quote in §3 | [#270](https://github.com/ahliweb/omes/issues/270) |
 
+## 4a. Cross-plane correlation envelope (issue #272, implemented parts)
+
+ADR-0032 rule 5: the envelope is **evidence, not authority**. It records that
+an authority observed something; it never grants permission, approves,
+mutates, or carries prompts, transcripts, commands, tool arguments/results,
+headers, credentials or reasoning. A user or operator can still reach Hermes
+directly, so the envelope stream cannot be complete for agent activity (see
+the architecture §18.2 limitation).
+
+| Element | State | Where |
+|---|---|---|
+| Contract `correlation-envelope` (area `observability/v1`, `additionalProperties: false`) | Implemented | `contracts/observability/v1/correlation-envelope.schema.json`; fixtures under `contracts/observability/v1/fixtures/correlation-envelope/` |
+| Fail-closed validation (unsupported major version, forbidden raw/free-text field names, secret-shaped values, calendar-invalid timestamps) | Implemented | `lib/omes/py/observability/envelope.py` (`validate`), reusing `lib/omes/py/jobs/schema.py` |
+| Deterministic, order-independent convergence reducer (dedupe by `event_id`, cross-tenant rejection, `(source_timestamp, event_id)` order, terminal status final) | Implemented | `envelope.reduce_events` (pure function; projection is rebuildable from the event set) |
+| Registry entry `omes.observability.correlation_envelope` (authority `omes`, plane `observability`, `observational`) | Implemented | `architecture/capabilities.json` |
+| Propagation of `correlation_id`, `causation_id`, `trace_id`, `span_id` through AWCMS to job to worker flows | Not implemented yet (tracked in #272) | none |
+| Any producer that emits envelopes (OMES job runner, Hermes observer, AWCMS) and any consumer or store | Not implemented yet (tracked in #272) | none |
+| OpenTelemetry SDK, collector or exporter | Not implemented; none is planned by this change | none |
+
+Design notes:
+
+- **Status is a closed enum**, not free text: `pending`, `running`,
+  `succeeded`, `failed`, `cancelled`, `interrupted`, `expired`, `rolled_back`,
+  `unknown`. Convergence needs a machine-known terminal/non-terminal
+  partition, and a closed vocabulary leaves no free-text channel. `unknown`
+  means the source cannot prove the outcome and is never promoted to success
+  (ADR-0032 rule 3). Producers map their own vocabularies onto it (for
+  example job `queued`/`approved` to `pending`, Hermes `UNKNOWN` to `unknown`).
+- **Timestamps are UTC `Z` strings** (the validator subset forbids `format`).
+  Ordering parses them; strings with different fraction lengths do not sort
+  chronologically, so the reducer never compares them as text.
+- **Projection key** is `(tenant_id, correlation_id, run_id, task_id)` with an
+  absent `run_id`/`task_id` as null. A retry that must be tracked separately
+  should use a new `run_id`; a terminal status is final for its key.
+- **Terminal handling:** later non-terminal events, including `unknown`, never
+  revert a terminal status. The earliest terminal event decides; a later,
+  different terminal status is not adopted and is surfaced as
+  `conflicting_terminal: true` for review.
+- **Fail closed:** any invalid envelope, `event_id` reused with different
+  content, or a `correlation_id` shared by more than one tenant makes the
+  whole reduction fail with no projection.
+- The projection `classification` is the maximum over its events, so it
+  never under-classifies (ADR-0029).
+
 ## 5. Child issue plan
 
-All children are **Not implemented yet** as of 2026-10-03.
+All children are **Not implemented yet** as of 2026-10-03, except the parts of #272 marked Implemented in the table below (contract, validator and convergence reducer only).
 
 | Issue | Title (summary) | Authority | Depends on | Deliverable |
 |---|---|---|---|---|
 | [#270](https://github.com/ahliweb/omes/issues/270) | Coordinator policy and Hermes capability audit | Hermes | This ADR | Documented coordinator/worker policy, per-task model gap resolution order, optional OMES posture check of delegation limits |
 | [#271](https://github.com/ahliweb/omes/issues/271) | Restart/orphan reconciliation and consumption of Hermes `unknown` | OMES | None | Lease or heartbeat plus reconciliation of orphaned `running` host jobs; observer treats Hermes `unknown` as unknown, never success |
-| [#272](https://github.com/ahliweb/omes/issues/272) | Cross-plane correlation/event envelope and trace propagation | OMES contract (observability plane) | None | Schema with causation/trace identifiers, redaction state and convergence rules; evidence only |
+| [#272](https://github.com/ahliweb/omes/issues/272) | Cross-plane correlation/event envelope and trace propagation | OMES contract (observability plane) | None | Schema with causation/trace identifiers, redaction state and convergence rules; evidence only. **Implemented:** schema, fixtures, validator, convergence reducer, registry entry. **Not implemented yet (tracked in #272):** propagation and producer wiring |
 | [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp`; outbound deferred to upstream |
 | [#274](https://github.com/ahliweb/omes/issues/274) | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | #272 | Composition schema; deny/unavailable wins; no new policy engine |
 | [#275](https://github.com/ahliweb/omes/issues/275) | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | #270 | Policy contract and evidence; unknown usage is not zero |
