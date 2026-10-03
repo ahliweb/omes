@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime] [options]
+Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|acp] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -63,6 +63,16 @@ Targets:
             environment overrides are not observed. OMES reports posture;
             Hermes owns delegation and OMES never routes models.
             Options: --json  --profile-home <path>
+  acp       Read-only report of the CONFIGURED tool surface of Hermes'
+            inbound ACP server (`hermes acp`): platform_toolsets.acp and
+            agent.disabled_toolsets read through `hermes config get <key>
+            --json`, plus a `hermes acp --version` installability hint
+            (never evidence of exposure). Warns when the ACP tool surface
+            includes terminal or code execution. Whether an ACP session is
+            live or exposed through a bridge is not observable and is
+            reported as unknown (issue #273, ADR-0032 rule 6). OMES is not
+            an ACP server, client or proxy.
+            Options: --json  --profile-home <path>
   ai-privacy prune  Retention/rotation for evidence persisted by
             --persist above (issue #234). Deletes records older than
             --max-age-days and/or beyond --max-count, confined to the
@@ -97,6 +107,7 @@ Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4
             ai-privacy prune: 0 ok, 1 a delete failed, 2 usage error (including an
             invalid/out-of-range --max-age-days/--max-count).
             agent-runtime: 0 status is ok/warn, 7 status is unknown.
+            acp: 0 status is ok/warn, 7 status is unknown, 2 usage error.
 EOF
 }
 
@@ -846,6 +857,107 @@ _health_run_agent_runtime() {
 # END omes health agent-runtime (issue #270)
 # =============================================================================
 
+# =============================================================================
+# BEGIN omes health acp (issue #273) - see
+# docs/multi-agent-control-patterns.md and ADR-0032 rule 6
+# =============================================================================
+#
+# `omes health acp` reports the CONFIGURED tool surface of Hermes' inbound ACP
+# server (`hermes acp`). Hermes owns ACP; OMES is not an ACP server, client
+# or proxy and this only reports posture. Values come from `hermes config get
+# <key> --json` through lib/omes/py/health/hermes_config.py (the shared,
+# allowlisted reader); no Hermes file or database is read. Live ACP session
+# exposure is not observable and is always reported as unknown.
+
+# _health_print_acp_human <json>
+_health_print_acp_human() {
+  OMES_HEALTH_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_JSON"])
+except ValueError:
+    print("[omes] health acp: the posture checker did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] health acp: status=%s scope=%s" % (d.get("status"), d.get("scope")))
+for key, entry in d.get("keys", {}).items():
+    if entry.get("state") == "value":
+        print("[omes]   %-26s %s" % (key, json.dumps(entry.get("value"))))
+    else:
+        print("[omes]   %-26s %s %s" % (key, entry.get("state"), entry.get("reason") or ""))
+print("[omes]   %-26s %s" % ("hermes acp installability", (d.get("installability") or {}).get("state")))
+print("[omes]   %-26s %s" % ("session exposure", d.get("session_exposure")))
+for f in d.get("findings", []):
+    print("[omes]   %s %s: %s" % (f.get("severity", "").upper(), f.get("id"), f.get("message")))
+print("[omes]   note: %s" % d.get("scope_note"))
+'
+}
+
+# _health_run_acp [--json] [--profile-home <path>]
+_health_run_acp() {
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+  local profile_home=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      --profile-home)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health acp: --profile-home requires a value"
+        profile_home="$2"
+        shift 2
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health acp: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  # Same Hermes profile resolution as `omes health agent` (OMES_HERMES_HOME,
+  # else ~/.hermes) unless --profile-home overrides it.
+  [[ -n "$profile_home" ]] || profile_home="$(runtime_home hermes)"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health acp: python3 not found (required for lib/omes/py/health/acp_posture.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_py_script acp_posture.py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health acp: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local output rc=0
+  output="$(python3 "$script" --profile-home "$profile_home" 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    log_error "health acp: the posture checker produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_acp_human "$output"
+  fi
+
+  exit "$rc"
+}
+# =============================================================================
+# END omes health acp (issue #273)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
@@ -867,6 +979,12 @@ cmd_health() {
   if [[ "${1:-}" == "agent-runtime" ]]; then
     shift
     _health_run_agent_runtime "$@"
+    return 0
+  fi
+
+  if [[ "${1:-}" == "acp" ]]; then
+    shift
+    _health_run_acp "$@"
     return 0
   fi
 

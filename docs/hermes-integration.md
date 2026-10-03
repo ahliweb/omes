@@ -630,6 +630,50 @@ per-task parameter, is separate Hermes profiles per tier, each with its own `del
 `omes health agent-runtime --profile-home <profile home>` per profile to review each one. OMES does not route
 models, pick providers or pin `delegation.model` for you (ADR-0029, ADR-0032).
 
+### 17.2 ACP tool-surface posture (issue #273)
+
+`omes health acp` ([`lib/omes/py/health/acp_posture.py`](../lib/omes/py/health/acp_posture.py);
+see [docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks)) reports the
+**configured** tool surface of Hermes' inbound ACP server. Hermes owns ACP: inbound is `DELEGATE` to
+`hermes acp`, outbound is `DEFER` to upstream
+[hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257)
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 6). OMES is not an ACP server,
+client or proxy, adds no listener, and ACP traffic must never reach OMES host mutation; the typed,
+allowlisted `operation-request` stays the only mutation boundary.
+
+Upstream facts the check relies on (Hermes `v2026.9.24`:
+[ACP page](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md),
+[CLI reference](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/reference/cli-commands.md)):
+
+- `hermes acp` is an on-demand stdio JSON-RPC server launched by an editor or a bridge. There is no
+  daemon and no configuration key that enables or disables it; installability depends on the optional
+  `acp` extra.
+- The tool surface is `platform_toolsets.acp` (not in the defaults; when absent the curated
+  `hermes-acp` toolset applies and includes terminal and `execute_code`) minus
+  `agent.disabled_toolsets`. An explicit list, even an empty one, can still gain enabled plugin
+  toolsets. Approval prompts offer allow once, allow always and deny, and some bridges auto-approve
+  `allow_once`.
+
+What OMES reads and reports, all through the shared reader of §17.1 (`hermes config get <key> --json`,
+no `--raw`, no Hermes files or databases):
+
+- `platform_toolsets.acp` and `agent.disabled_toolsets`, with `acp.default_toolset_includes_execution`
+  (warn) when the effective ACP surface can include terminal or code execution,
+  `acp.toolset_restricted` (info) otherwise, and `unknown` (never `ok`) when either key cannot be read
+  or is not a bounded list of strings. The report is labelled `scope: "configured"`.
+- `hermes acp --version` as an installability hint only (exit 0 is `installed`, anything else is
+  `not_installed_or_unknown`). The text is never parsed, the result never changes the status, and it
+  is never exposure evidence. `hermes acp --check` is not used because its output format is
+  undocumented.
+- Live session exposure is **not observable** through any supported interface, so the report always
+  carries `session_exposure: "unknown"` and the finding `acp.session_exposure_unobservable`. Whether a
+  bridge such as an editor integration is attached, or auto-approves prompts, is outside what OMES can
+  see; this is not proof that no ACP session is running.
+
+To reduce the ACP tool surface, configure Hermes itself (set `platform_toolsets.acp` to a list without
+`terminal` and `execute_code`, or add them to `agent.disabled_toolsets`); OMES does not write Hermes
+configuration or approve ACP prompts for you.
+
 ## 18. Exposure audit (issue #80)
 
 `omes audit exposure` ([`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh),

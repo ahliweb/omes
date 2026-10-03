@@ -6,9 +6,11 @@
 > which verified gaps become child issues. **No runtime behavior changes in
 > this phase.** Every capability marked "Not implemented yet" below stays
 > unimplemented until its child issue lands. The one exception so far is the
-> read-only delegation-limits posture check of
+> read-only posture checks of
 > [#270](https://github.com/ahliweb/omes/issues/270) (`omes health
-> agent-runtime`), which reports configuration and changes no Hermes state. Owning issue:
+> agent-runtime`, delegation limits) and
+> [#273](https://github.com/ahliweb/omes/issues/273) (`omes health acp`, inbound ACP tool
+> surface), which report configuration and change no Hermes state. Owning issue:
 > [#269](https://github.com/ahliweb/omes/issues/269).
 
 OMES is host control (deterministic). Hermes Agent owns agent runtime behavior
@@ -54,7 +56,7 @@ stable upstream interface), **REJECT** (contradicts scope).
 | Per-agent workspace, checkpoint and memory isolation | Per-agent files under `~/.octop/agents/<agent_id>/`, per-agent LangGraph checkpointing, row-level agent ownership ([architecture](https://github.com/TencentCloud/Octop/blob/main/docs/architecture.md)) | Hermes (sessions, memory, `worktree_isolation`); OMES for OS isolation | DELEGATE (logical), OMES (host) | systemd hardening profiles, rootless Compose (#96) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | Multi-user isolation and separate control-plane DB | Control-plane data (users, agents, providers, channels, cron, sessions) in SQLite/PostgreSQL, separate from workspace files (same page) | AWCMS (tenant identity, RLS) | AWCMS | Tenant scope in the job store and observer; Control Center contracts | [#272](https://github.com/ahliweb/omes/issues/272) (identifiers only) |
 | MCP boundary | Not a distinct Octop claim relied on here | Logical boundary (not OMES-shipped) | DEFER (stays a logical boundary) | Registry `boundary.tool_gateway.mcp` (`logical_boundary`) | None |
-| Bidirectional ACP | Inbound `octop acp` server; outbound runners flagged `"trusted": true`; permission prompts surface in chat ([acp](https://github.com/TencentCloud/Octop/blob/main/docs/acp.md)) | Hermes (inbound `hermes acp`); outbound is upstream proposal #5257 | DELEGATE (inbound), DEFER (outbound) | Registry `hermes.agent.acp_server` (added by this change) | [#273](https://github.com/ahliweb/omes/issues/273) |
+| Bidirectional ACP | Inbound `octop acp` server; outbound runners flagged `"trusted": true`; permission prompts surface in chat ([acp](https://github.com/TencentCloud/Octop/blob/main/docs/acp.md)) | Hermes (inbound `hermes acp`); outbound is upstream proposal #5257 | DELEGATE (inbound), DEFER (outbound) | Registry `hermes.agent.acp_server` (added by this change); read-only `omes health acp` posture (§3.2) | [#273](https://github.com/ahliweb/omes/issues/273) |
 | Unified channel gateway | Web UI, CLI and IM share one runtime via `ChannelManager` (architecture page) | Hermes (channels, messaging) | DELEGATE; REJECT an OMES-owned gateway | `modules/hermes-gateway` handles service lifecycle only | None |
 | Mission-Control-like UI | Not relied on as a verified Octop claim | AWCMS (presentation; epic #263, ADR-0031 pending in PR [#268](https://github.com/ahliweb/omes/pull/268)) | AWCMS | Observer projection contract (ADR-0028) | [#277](https://github.com/ahliweb/omes/issues/277) |
 | Process-local in-flight tracking (limitation) | In-flight team-job tracking is in-process (`TeamJobTracker`); out-of-process inbox persistence is a v1 non-target and "restart loses in-flight tasks"; "The whole stack is one process. There is no separate worker, no external queue" | Hermes for agent runs; OMES for host jobs | Do not copy; OMES reconciles host jobs | Job store, idempotency index, hash-chained audit (`lib/omes/py/jobs/`) | [#271](https://github.com/ahliweb/omes/issues/271) |
@@ -77,7 +79,7 @@ yet (tracked in #N)" means no code or contract exists today.
 | Asynchronous/parallel dispatch | Hermes | Parallel children with `delegation.max_concurrent_children` default 10; `max_iterations`; `child_timeout_seconds` (0 means no timeout). The configured values are reported by `omes health agent-runtime` (§3.1); OMES hardcodes no default. | DELEGATE | [#270](https://github.com/ahliweb/omes/issues/270) |
 | Agent isolation | Hermes (logical); OMES/infrastructure (OS) | Implemented host isolation: hardening profiles (`modules/hermes-gateway/hardening.sh`), rootless Compose with non-root, `capDrop`, read-only rootfs, `no-new-privileges` and no Docker socket (`lib/omes/py/agent/compose.py`). | DELEGATE (logical), OMES (OS) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | MCP tool boundary | Logical boundary | Registry entry `boundary.tool_gateway.mcp` is `logical_boundary`; OMES ships no MCP gateway (architecture §16.2.1, scope non-goal 14). | DEFER (stays logical) | None |
-| ACP | Hermes | `hermes acp` is a stdio JSON-RPC server with a curated `hermes-acp` toolset; dangerous terminal commands go to editor approval prompts ([acp](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md)). Outbound ACP client is an open proposal ([#5257](https://github.com/NousResearch/hermes-agent/issues/5257)). OMES adds no listener. | DELEGATE (inbound), DEFER (outbound) | [#273](https://github.com/ahliweb/omes/issues/273) (posture evidence; not implemented yet) |
+| ACP | Hermes | `hermes acp` is a stdio JSON-RPC server with a curated `hermes-acp` toolset; dangerous terminal commands go to editor approval prompts ([acp](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md)). Outbound ACP client is an open proposal ([#5257](https://github.com/NousResearch/hermes-agent/issues/5257)). OMES adds no listener. The configured ACP tool surface is reported by `omes health acp` (§3.2); live session exposure is not observable. | DELEGATE (inbound), DEFER (outbound) | [#273](https://github.com/ahliweb/omes/issues/273) (posture evidence implemented; outbound deferred upstream) |
 | Unified IM gateway | Hermes | Channels and messaging are Hermes-owned (AGENTS.md §2). | DELEGATE; no OMES gateway | None |
 | Mission Control | AWCMS | OMES defines the read-only observer contract (ADR-0028); no Mission Control view exists in this repository. | AWCMS (blocked until sources exist) | [#277](https://github.com/ahliweb/omes/issues/277) |
 | Persistent host-operation jobs | OMES | Implemented: job store, idempotency index, hash-chained audit, read-back verification (`lib/omes/py/jobs/`). Gap: an orphaned `running` record is not reconciled after restart (see §4, G1). | OMES | [#271](https://github.com/ahliweb/omes/issues/271) |
@@ -122,6 +124,31 @@ own `delegation.model`/`delegation.provider`, selected by the operator through H
 route models, choose providers or write `delegation.model` (ADR-0029, ADR-0032 rule 2), and no
 OMES-side tier mapping exists. A request for per-task tiering belongs upstream.
 
+### 3.2 ACP tool-surface posture check (issue #273)
+
+Implemented: `omes health acp` ([docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks),
+[docs/hermes-integration.md §17.2](hermes-integration.md#172-acp-tool-surface-posture-issue-273)).
+Inbound ACP is `DELEGATE` to Hermes `hermes acp` (an on-demand stdio JSON-RPC server launched by an
+editor or a bridge; no daemon, no enable/disable key); outbound ACP is `DEFER` to upstream
+[hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257). The check reads
+`platform_toolsets.acp` and `agent.disabled_toolsets` through the shared `hermes config get <key> --json`
+reader and reports `ok`, `warn` or `unknown`: it warns when the key is absent (the curated `hermes-acp`
+default toolset includes terminal and `execute_code`) or lists execution toolsets that
+`agent.disabled_toolsets` does not disable. What it does not do:
+
+- It reports **configured** values only (`scope: "configured"`). An explicit toolset list can still gain
+  enabled plugin toolsets upstream, so even `ok` is not proof of the runtime tool surface.
+- It cannot see whether an ACP session is live or exposed through a bridge (some bridges auto-approve
+  `allow_once`): no supported interface exposes that, so `session_exposure` is always `unknown` and an
+  `acp.session_exposure_unobservable` finding says so.
+- `hermes acp --version` is run only as an installability hint (exit 0 is `installed`); its output is not
+  parsed and it is never exposure evidence. `hermes acp --check` is not used because its output format is
+  undocumented.
+- OMES is not an ACP server, client or proxy and adds no listener; ACP traffic never reaches OMES host
+  mutation, which stays the typed, allowlisted `operation-request` boundary (ADR-0032 rule 6, R9). OMES
+  does not write Hermes configuration or approve ACP prompts. Outbound ACP is not implemented (deferred
+  upstream).
+
 ## 4. Verified gaps
 
 Evidence is from the repository audit of 2026-10-03. Line numbers refer to
@@ -141,14 +168,16 @@ that tree and may move; the file and symbol names are the stable reference.
 ## 5. Child issue plan
 
 All children are **Not implemented yet** as of 2026-10-03, except the read-only configured-limits
-posture check of #270 (`omes health agent-runtime`, §3.1); #270's per-task tiering gap stays open upstream.
+posture check of #270 (`omes health agent-runtime`, §3.1; #270's per-task tiering gap stays open
+upstream) and the read-only inbound ACP posture check of #273 (`omes health acp`, §3.2; outbound ACP
+is deferred upstream).
 
 | Issue | Title (summary) | Authority | Depends on | Deliverable |
 |---|---|---|---|---|
 | [#270](https://github.com/ahliweb/omes/issues/270) | Coordinator policy and Hermes capability audit | Hermes | This ADR | Documented coordinator/worker policy, per-task model gap resolution order, optional OMES posture check of delegation limits (posture check implemented, §3.1; per-task tiering unresolved upstream) |
 | [#271](https://github.com/ahliweb/omes/issues/271) | Restart/orphan reconciliation and consumption of Hermes `unknown` | OMES | None | Lease or heartbeat plus reconciliation of orphaned `running` host jobs; observer treats Hermes `unknown` as unknown, never success |
 | [#272](https://github.com/ahliweb/omes/issues/272) | Cross-plane correlation/event envelope and trace propagation | OMES contract (observability plane) | None | Schema with causation/trace identifiers, redaction state and convergence rules; evidence only |
-| [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp`; outbound deferred to upstream |
+| [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp` (implemented, §3.2: configured tool surface, installability hint, exposure reported unknown); outbound deferred to upstream |
 | [#274](https://github.com/ahliweb/omes/issues/274) | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | #272 | Composition schema; deny/unavailable wins; no new policy engine |
 | [#275](https://github.com/ahliweb/omes/issues/275) | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | #270 | Policy contract and evidence; unknown usage is not zero |
 | [#276](https://github.com/ahliweb/omes/issues/276) | Workload isolation profile and verification | OMES/infrastructure (logical isolation: Hermes) | None | Declared-versus-running drift verification, egress findings |

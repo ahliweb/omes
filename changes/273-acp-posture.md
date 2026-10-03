@@ -1,0 +1,5 @@
+---
+issue: 273
+type: added
+---
+Added `omes health acp [--json] [--profile-home PATH]`, a read-only report of the configured tool surface of Hermes' inbound ACP server (`hermes acp`) that reads `platform_toolsets.acp` and `agent.disabled_toolsets` through the shared allowlisted `hermes config get <key> --json` reader (never `--raw`, no Hermes files or databases), warns when the ACP tool surface includes terminal or code execution (including when the key is absent and the curated `hermes-acp` default toolset applies), reports an ok, warn or unknown status with configured scope where unknown is never ok (exit 7), records `hermes acp --version` as an installability hint only whose output is never parsed and never counts as exposure evidence, and always reports live ACP session or bridge exposure as unknown because no supported Hermes interface exposes it; OMES remains neither an ACP server, client nor proxy, ACP traffic never reaches OMES host mutation, outbound ACP stays deferred to upstream hermes-agent#5257, and the Hermes test shim now supports `acp --version` (ADR-0032 rule 6, epic #269).
