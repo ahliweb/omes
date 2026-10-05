@@ -219,15 +219,35 @@ validates the result (`_compare_desired_observed()`):
 ## 9. Tenant and target scope
 
 `OMES_JOBS_TENANT_ID` names the tenant this OMES instance is enrolled
-under. If it is unset, `omes job submit` refuses **every** request —
-there is no implicit "any tenant is fine" default. If it is set, a
-request whose `tenant_id` does not match is rejected as
-`CrossTenantError` before any job record is created, and the rejection
-itself is not currently written to the job audit log (there is no job to
-attach it to) — a Control Center-side audit of the rejected call is the
-Control Center's own responsibility (see "What remains in awcms-one").
-`OMES_JOBS_SERVER_ID`, if set, applies the same check to
-`target.server_id`.
+under. The check is default-deny (issue #279):
+
+- If it is unset (or empty), `store.submit()` raises
+  `TenantNotConfiguredError` and `omes job submit` refuses **every**
+  request, emitting `{"error": "tenant_not_configured", "reason": ...}`
+  with `--json` and exiting 1 — there is no implicit "any tenant is fine"
+  default. Hosts that previously submitted jobs without the variable must
+  now set it.
+- If it is set, a request whose `tenant_id` does not match is rejected as
+  `CrossTenantError` (`{"error": "cross_tenant_rejected", ...}`).
+  `TenantNotConfiguredError` subclasses `CrossTenantError`, so any
+  handler of the latter stays fail-closed.
+
+Both rejections happen before the idempotency lookup and before anything
+is written: no job record, idempotency index entry, or audit line is
+created. The rejection itself is therefore not written to the job audit
+log (there is no job to attach it to) — a Control Center-side audit of
+the rejected call is the Control Center's own responsibility (see "What
+remains in awcms-one").
+
+The pull worker (`omes worker`, issue #192) does not read
+`OMES_JOBS_TENANT_ID`: it passes the tenant it was enrolled under
+(`omes worker enroll --tenant`, stored in its credentials) to
+`store.submit(enrolled_tenant_id=...)`, so the local check is against the
+enrolled tenant and works on hosts without the variable.
+
+`OMES_JOBS_SERVER_ID` stays optional: if set, it applies the same
+mismatch check to `target.server_id`; if unset, the target server is not
+checked.
 
 ## 10. What remains in awcms-one
 

@@ -62,6 +62,12 @@ def cmd_submit(args: argparse.Namespace) -> int:
 
     try:
         record, replayed = store.submit(request)
+    except store.TenantNotConfiguredError as exc:
+        if args.json:
+            _print_json({"error": "tenant_not_configured", "reason": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
     except store.CrossTenantError as exc:
         if args.json:
             _print_json({"error": "cross_tenant_rejected", "reason": str(exc)})
