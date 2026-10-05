@@ -140,6 +140,12 @@ class CrossTenantError(JobsError):
     pass
 
 
+class TenantNotConfiguredError(CrossTenantError):
+    """No local tenant is configured, so no request can be tenant-scoped.
+    Subclasses CrossTenantError so every existing `except CrossTenantError`
+    handler stays fail-closed (issue #279)."""
+
+
 class ValidationFailedError(JobsError):
     pass
 
@@ -318,18 +324,37 @@ def apply_transition(record: dict[str, Any], to_state: str, actor: str, note: st
 # ---------------------------------------------------------------------------
 
 
-def submit(request: dict[str, Any], root: Path | None = None, actor_for_audit: str | None = None) -> tuple[dict[str, Any], bool]:
+def submit(
+    request: dict[str, Any],
+    root: Path | None = None,
+    actor_for_audit: str | None = None,
+    *,
+    enrolled_tenant_id: str | None = None,
+) -> tuple[dict[str, Any], bool]:
     """Creates (or replays) a job for `request` (already schema-validated
-    by the caller). Returns (record, replayed). Enforces tenant scope
-    against OMES_JOBS_TENANT_ID: if that env var is set and does not
-    match the request's tenant_id, raises CrossTenantError (audited by
-    the caller, which has the request context for the audit entry)."""
-    paths.ensure_layout(root)
-    tenant = local_tenant_id()
-    if tenant is not None and request["tenant_id"] != tenant:
+    by the caller). Returns (record, replayed).
+
+    Tenant scope is default-deny (issue #279). The effective local tenant
+    is `enrolled_tenant_id` when the caller has one (the pull worker passes
+    its enrolled credentials' tenant), otherwise OMES_JOBS_TENANT_ID. If
+    neither is set, raises TenantNotConfiguredError; if the request's
+    tenant_id does not match, raises CrossTenantError. Neither rejection
+    is written to the job audit log (no job exists to attach it to). Both
+    checks run before anything is written and before the idempotency
+    replay lookup, so a rejected request leaves no job record, index
+    entry, or audit line. OMES_JOBS_SERVER_ID stays optional: when unset
+    the target server is not checked."""
+    tenant = enrolled_tenant_id or local_tenant_id()
+    if tenant is None:
+        raise TenantNotConfiguredError(
+            "no local tenant configured: set OMES_JOBS_TENANT_ID (or enroll the "
+            "pull worker with 'omes worker enroll --tenant') before submitting jobs"
+        )
+    if request["tenant_id"] != tenant:
         raise CrossTenantError(
             f"request tenant_id={request['tenant_id']!r} does not match local tenant {tenant!r}"
         )
+    paths.ensure_layout(root)
     server_id = local_server_id()
     if server_id is not None and request["target"].get("server_id") not in (None, server_id):
         raise CrossTenantError(

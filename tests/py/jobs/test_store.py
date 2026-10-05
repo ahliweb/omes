@@ -1,6 +1,7 @@
 """Tests for lib/omes/py/jobs/store.py (issue #90): idempotent submission,
 cross-tenant rejection, approval policy, state machine, TTL expiry."""
 import json
+import os
 import shutil
 import tempfile
 import unittest
@@ -32,8 +33,16 @@ class JobsStoreTestBase(unittest.TestCase):
         self._tmp = tempfile.mkdtemp(prefix="omes-jobs-test-")
         self.root = Path(self._tmp) / "state"
         store.paths.ensure_layout(self.root)
+        # submit() is default-deny without a local tenant (issue #279);
+        # configure the host tenant that make_request() uses.
+        self._saved_tenant = os.environ.get("OMES_JOBS_TENANT_ID")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
 
     def tearDown(self):
+        if self._saved_tenant is None:
+            os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        else:
+            os.environ["OMES_JOBS_TENANT_ID"] = self._saved_tenant
         shutil.rmtree(self._tmp, ignore_errors=True)
 
 
@@ -74,7 +83,7 @@ class TestCrossTenantRejection(JobsStoreTestBase):
             with self.assertRaises(store.CrossTenantError):
                 store.submit(request, root=self.root)
         finally:
-            del os.environ["OMES_JOBS_TENANT_ID"]
+            os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
 
     def test_matching_tenant_is_accepted(self):
         import os
@@ -85,7 +94,48 @@ class TestCrossTenantRejection(JobsStoreTestBase):
             record, replayed = store.submit(request, root=self.root)
             self.assertFalse(replayed)
         finally:
-            del os.environ["OMES_JOBS_TENANT_ID"]
+            os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
+
+    def test_unset_tenant_is_rejected_and_writes_nothing(self):
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        store.paths.ensure_layout(self.root)
+        before = sorted(str(p.relative_to(self.root)) for p in self.root.rglob("*"))
+        with self.assertRaises(store.TenantNotConfiguredError) as ctx:
+            store.submit(make_request(), root=self.root)
+        self.assertIn("OMES_JOBS_TENANT_ID", str(ctx.exception))
+        # Still a CrossTenantError so existing handlers fail closed.
+        self.assertIsInstance(ctx.exception, store.CrossTenantError)
+        after = sorted(str(p.relative_to(self.root)) for p in self.root.rglob("*"))
+        self.assertEqual(before, after)
+        self.assertEqual(list(self.root.rglob("job-*.json")), [])
+        self.assertEqual(store.list_jobs(self.root), [])
+        self.assertIsNone(store.find_job_by_idempotency_key("idem-0001", self.root))
+        self.assertFalse(any(p.suffix == ".jsonl" and p.stat().st_size for p in self.root.rglob("*.jsonl")))
+
+    def test_empty_tenant_env_is_treated_as_unset(self):
+        os.environ["OMES_JOBS_TENANT_ID"] = ""
+        with self.assertRaises(store.TenantNotConfiguredError):
+            store.submit(make_request(), root=self.root)
+
+    def test_unset_tenant_does_not_replay_existing_job(self):
+        record, _ = store.submit(make_request(), root=self.root)
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        with self.assertRaises(store.TenantNotConfiguredError):
+            store.submit(make_request(), root=self.root)
+        self.assertEqual(len(store.list_jobs(self.root)), 1)
+
+    def test_enrolled_tenant_is_accepted_without_env_var(self):
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        record, replayed = store.submit(make_request(), root=self.root, enrolled_tenant_id="tenant-acme")
+        self.assertFalse(replayed)
+        self.assertEqual(record["tenant_id"], "tenant-acme")
+
+    def test_enrolled_tenant_mismatch_is_rejected(self):
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        with self.assertRaises(store.CrossTenantError) as ctx:
+            store.submit(make_request(), root=self.root, enrolled_tenant_id="tenant-other")
+        self.assertNotIsInstance(ctx.exception, store.TenantNotConfiguredError)
+        self.assertEqual(store.list_jobs(self.root), [])
 
     def test_mismatched_server_id_is_rejected(self):
         import os
