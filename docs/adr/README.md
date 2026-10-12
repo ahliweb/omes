@@ -42,6 +42,7 @@ architecture and state model."
 | [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
 | [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
 | [0030](0030-repository-progress-projection.md) | GitHub repository progress projection for the Progres Hermes view | Accepted |
+| [0031](0031-browser-data-transfer-ownership-and-playwright-boundary.md) | Delegated AI browser transfer with constrained Playwright and existing AWCMS Control Center | Proposed |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
