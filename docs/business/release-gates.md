@@ -13,6 +13,17 @@ OMES is an independent, MIT-licensed, Omarchy-inspired compatibility layer and d
 toolkit for Ubuntu Server 26.04 LTS, Ubuntu Server 24.04 LTS, and Linux Mint 22.x, with Hermes Agent as the automation
 layer. It is not the official Omarchy project, and no release gate below waives that.
 
+**How CI evidence is produced (issue #312).** The GitHub Actions workflows run only on manual
+`workflow_dispatch`; they no longer run on pull requests, pushes or a schedule. Where a gate
+below cites "CI", the evidence is either a workflow run dispatched on the exact release commit
+(`gh workflow run lint.yml --ref <branch>`, `gh workflow run compatibility.yml --ref <branch>`)
+or the summary printed by `scripts/ci-local.sh` (`--profile full` for the compatibility
+matrix) for that commit. Local summaries are self-reported, not enforced by GitHub, so a gate
+reviewer should prefer the dispatched run for a release commit. `scripts/release.sh` queries
+the release commit's GitHub check runs and fails only on check runs that exist: a commit on
+which nothing was dispatched passes that query vacuously, so dispatch the workflows on the
+release commit and wait for them before cutting a release. See [docs/ci.md](../ci.md) section 1.
+
 ## 1. Release stages
 
 ### 1.1 Alpha
@@ -36,8 +47,9 @@ layer. It is not the official Omarchy project, and no release gate below waives 
   confirmation (`--yes`), and unsupported-platform detection (exit 3) happens before any
   mutation, proven jointly by #15 and #17.
 - Release provenance and commit integrity: release cut via `scripts/release.sh` (#168) from clean
-  `main` with green CI checks, matching VERSION/changelog/tag, and verified read-back of git tag
-  and GitHub Release.
+  `main` with green CI checks (workflow runs dispatched on that commit, see "How CI evidence is
+  produced" above), matching VERSION/changelog/tag, and verified read-back of git tag and
+  GitHub Release.
 - Release evidence bundle verified: SLSA provenance, SBOM, compatibility evidence, recovery evidence, security checks, and SHA256SUMS generated via `scripts/generate-release-bundle.py` and verified via `scripts/verify-release-bundle.py` (#173, ADR-0010). Missing evidence cannot be rendered as PASS; BLOCKED or NOT TESTED is required.
 - Upstream drift review clean or triaged: `python3 scripts/upstream-drift.py --check` passes or all actionable findings have tracked issues with documented disposition decisions (ADR-0026, #181).
 - Docs walkthrough by a second operator: someone other than ahliweb follows the published

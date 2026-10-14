@@ -2,18 +2,22 @@
 
 > Status: implemented. Describes the CI as it exists in this repository today —
 > `.github/workflows/lint.yml`, `.github/workflows/compatibility.yml`,
+> `.github/workflows/upstream-drift.yml`,
 > `.github/dependabot.yml`, `.gitleaks.toml`, `.yamllint.yml`, and the
 > `scripts/lint.sh` / `scripts/check-supply-chain.sh` / `scripts/check-links.py` /
 > `scripts/test-matrix.sh` scripts those workflows call, plus
 > `scripts/ci-local.sh`, which runs every one of those jobs on a developer
-> machine without GitHub Actions (§10). See
+> machine without GitHub Actions and is the **required per-PR check** (§1, §10).
+> The GitHub Actions workflows run **only on manual dispatch** (issue
+> [#312](https://github.com/ahliweb/omes/issues/312)). See
 > [docs/security.md](security.md) sections 6-7 for the supply-chain and
 > release-gate *requirements* this CI implements, and
 > [docs/testing.md](testing.md) for how `scripts/test-matrix.sh` maps onto the
 > compatibility-matrix support tiers.
 >
 > The core installer (`bin/omes`, `lib/omes/*.sh`, `modules/`, `tests/run.sh`,
-> `.shellcheckrc`) is implemented and present on `main`. Both workflows still
+> `.shellcheckrc`) is implemented and present on `main`. The lint and
+> compatibility workflows still
 > carry `if: hashFiles('<path>') != ''` guards around the steps that depend on
 > it — these are now inert no-op branches (the files always exist), kept only
 > so a stripped-down fork or an unusually early checkout does not hard-fail;
@@ -21,15 +25,55 @@
 
 ## 1. Workflows
 
+> **Where CI runs now (issue [#312](https://github.com/ahliweb/omes/issues/312)).**
+>
+> - **Local CI is the required per-PR check.** Run `scripts/ci-local.sh` (§10) before
+>   pushing and paste its summary table into the pull request description. Exit
+>   code 0 is a pass; 1 (a blocking job failed) and 3 (incomplete: a blocking job was
+>   skipped, for example no Docker or a shallow clone) are not. For installation,
+>   package, platform or rollback changes use `--profile full` as well.
+> - **GitHub Actions runs only on manual `workflow_dispatch`.** `lint.yml`,
+>   `compatibility.yml` and `upstream-drift.yml` have no `pull_request`, `push` or
+>   `schedule` trigger any more. Dispatch them by hand when GitHub check runs are
+>   wanted — for example on a pull request head when branch protection requires
+>   them, or on the release commit as a release gate:
+>
+>   ```bash
+>   gh workflow run lint.yml --ref <branch>
+>   gh workflow run compatibility.yml --ref <branch>
+>   gh workflow run upstream-drift.yml --ref main   # also creates/updates the drift tracking issue
+>   ```
+>
+>   Job names, steps, pinned actions and permissions are unchanged, so a dispatch
+>   produces the same check runs as before.
+> - **Owner action required — not done by this change.** Branch protection's
+>   *required status checks* are a repository setting that lives outside the
+>   repository files; nothing in this repository changes them. Until the repository
+>   owner updates them, a pull request that still requires the old check names has
+>   no check run to wait for and waits for someone to dispatch the workflows on its
+>   head (Dependabot's `github-actions` update pull requests included).
+> - **Trade-off.** A local summary is self-reported. GitHub does not enforce that
+>   `scripts/ci-local.sh` was run, that it passed, or that it ran on the commit being
+>   merged; the summary records the commit and whether the working tree was dirty so
+>   a reviewer can compare it with the pull request head, but that is evidence, not
+>   enforcement. The GitGuardian GitHub App check is a GitHub App rather than an
+>   Actions workflow, so this change does not affect it and it keeps running on pull
+>   requests.
+
 ### 1.1 `.github/workflows/lint.yml`
 
-Triggers: every pull request, and every push to `main`. Runs are
-cancelled and replaced when a newer commit lands on the same PR/branch
-(`concurrency` with `cancel-in-progress: true`). Every job requests only
-`permissions: contents: read` — no job in this workflow needs to write to
-the repository, comment on pull requests, or write security-events.
+Trigger: manual `workflow_dispatch` only (the `pull_request` and `push` triggers
+were removed by issue #312). Dispatching again on the same ref cancels and
+replaces the earlier run (`concurrency` with `cancel-in-progress: true`). Every
+job requests only `permissions: contents: read` — no job in this workflow needs
+to write to the repository, comment on pull requests, or write security-events.
 
-| Job | What it does | Blocks merge? |
+"Blocking" below is what each job reports: a failing blocking job fails the
+dispatched run, and `scripts/ci-local.sh` treats it as blocking. Whether a
+dispatched check also gates a *merge* depends on branch protection (see the owner
+action above).
+
+| Job | What it does | Blocking? |
 |---|---|---|
 | `shellcheck` | Runs `scripts/lint.sh shellcheck` — ShellCheck at `-S warning` (blocking) then `-S style` (reported, not blocking) over every shell file in scope (§2.1). | **Yes** (at `warning` severity and above). Style-level findings are printed but do not fail the job. |
 | `shfmt` | Runs `scripts/lint.sh shfmt` — `shfmt -i 2 -ci -bn -d` (diff mode) over the same file set. | **No.** `continue-on-error: true`. See §3 for why. |
@@ -47,8 +91,10 @@ the repository, comment on pull requests, or write security-events.
 
 ### 1.2 `.github/workflows/compatibility.yml`
 
-Triggers: every pull request, every push to `main`, a weekly schedule
-(Monday 03:17 UTC), and `workflow_dispatch` (manual run). Same
+Trigger: manual `workflow_dispatch` only (the `pull_request`, `push` and weekly
+Monday 03:17 UTC `schedule` triggers were removed by issue #312; the
+`graphify-real-smoke` job keeps its `if:` guard for `schedule`/`workflow_dispatch`,
+which now can only be satisfied by a manual dispatch). Same
 `concurrency`/`cancel-in-progress` policy as `lint.yml`. `permissions:
 contents: read` throughout. As of issue [#15](https://github.com/ahliweb/omes/issues/15),
 both jobs below run `scripts/test-matrix.sh` (§2.6 of this document,
@@ -58,7 +104,7 @@ script, which itself does its own `docker run`/`docker exec` against the
 target OS images (hence running on the GitHub-hosted runner directly, not
 inside a `container:` job).
 
-| Job | What it does | Blocks merge? |
+| Job | What it does | Blocking? |
 |---|---|---|
 | `matrix` | For each of `ubuntu:26.04` (tier 1), `ubuntu:24.04` (tier 1), `linuxmintd/mint22-amd64` (tier 1), and `ubuntu:22.04` (tier 2, `continue-on-error: true`): runs `scripts/test-matrix.sh` for that one image, covering all seven scenarios (`fresh`, `rerun`, `offline`, `partial-failure`, `reboot`, `rollback`, `dr`) against a **real** `apt-get`/`dpkg` inside a disposable container. Uploads `tests/matrix/results/` and `tests/matrix/logs/` as a build artifact per image. | **Yes** for the three tier-1 images; the tier-2 `ubuntu:22.04` row is advisory (`continue-on-error: true`). |
 | `real-install-ubuntu-26-04` | On `ubuntu:26.04` only, as root: `scripts/test-matrix.sh` restricted to `OMES_MATRIX_SCENARIOS="fresh rerun"` — a **real**, non-dry-run `apt-base` install run twice in a row to prove idempotency end to end. Uploads the same artifacts. | **Yes.** `continue-on-error: false` — blocking since issue #167. |
@@ -75,12 +121,35 @@ be tested "in CI containers **and** in a VM before every release" — this
 workflow is the CI-container half of that requirement; the VM half is
 `tests/vm/` (see compatibility-matrix.md section 7 and `docs/testing.md`).
 Tier 2 (`ubuntu:22.04`) is tested "periodically, not on every release" per
-that same table — today this workflow runs it on every PR/push in addition to
-the weekly schedule, a stricter cadence than the minimum required, not a
-shortfall. Promoting a new platform to Tier 1 requires adding it to this
-workflow's matrix, per compatibility-matrix.md section 6, step 6.
+that same table — since issue #312 there is no automatic cadence: it runs when
+`scripts/ci-local.sh --profile full` is run or this workflow is dispatched, so
+the periodic coverage the table asks for now depends on someone doing that
+(Not automated; an owner decision under #312). Tier-1 coverage "before every
+release" likewise needs this workflow dispatched on the release commit, or a
+`--profile full` summary for it (§8). Promoting a new platform to Tier 1
+requires adding it to this workflow's matrix, per compatibility-matrix.md
+section 6, step 6.
+
+### 1.3 `.github/workflows/upstream-drift.yml`
+
+Trigger: manual `workflow_dispatch` only (it ran weekly, Mondays 06:00 UTC,
+before issue #312). One job, `drift-review`: `python3
+scripts/upstream-drift.py --update-issue` inspects public upstream releases
+(Hermes, Omarchy, Graphify, Coolify) against `architecture/capabilities.json`
+([ADR-0026](adr/0026-upstream-drift-automation.md)) and creates or updates a
+single deduplicated tracking issue when the drift is actionable. That needs the
+workflow's `GITHUB_TOKEN` (`issues: write`), so **updating the tracking issue now
+requires dispatching this workflow by hand**. The local equivalent is report-only:
+`scripts/ci-local.sh --job upstream-drift` runs `python3
+scripts/upstream-drift.py` with no `--update-issue` and no token, prints the drift
+report and never writes to GitHub (§10.2). It is advisory: a blocked inspection
+(no network, API denied) is reported as `skipped`, not as a failure.
 
 ## 2. Running the checks locally
+
+`scripts/ci-local.sh` (§10) runs all of the checks below with the right blocking
+rules and is the required per-PR check; this section lists the underlying
+commands for running one of them on its own.
 
 ### 2.1 `scripts/lint.sh` — ShellCheck, shfmt, yamllint
 
@@ -164,7 +233,13 @@ Docker (`bats/bats:latest`) when `bats` is not installed locally.
 
 ## 3. What blocks merge vs. what is advisory
 
-**Blocking** (a failing job fails the PR check): `shellcheck` (at
+This classification is what each job reports, locally (`scripts/ci-local.sh`) and
+in a dispatched workflow alike. Since issue #312 nothing on GitHub forces the
+jobs to run: a job gates a merge only if the owner has required its check in
+branch protection *and* it has been dispatched (§1), or if the reviewer requires
+the pull request's pasted local summary to be `pass` (§10.3).
+
+**Blocking** (a failing job fails the run): `shellcheck` (at
 `warning` severity), `bats` (`tests/run.sh`, which also runs
 `scripts/release.sh --validate-fragments` — see §9), `gitleaks`, `yamllint`,
 `actionlint`, `supply-chain` (action pinning + unsafe-pipe checks),
@@ -177,7 +252,7 @@ job's `ubuntu:24.04`/`linuxmintd/mint22-amd64` (tier 1) rows, and the
 `real-install-ubuntu-24-04` job (blocking since issue #15 — `apt-base` gives
 it a real module to install and re-install idempotently).
 
-**Advisory** (reported, does not fail the PR check): `shfmt` — the
+**Advisory** (reported, does not fail the run): `shfmt` — the
 repository's shell code has landed but its formatting conventions are still
 being established; making `shfmt` blocking before there is an agreed,
 enforced style would make every future formatting-convention decision a
@@ -247,7 +322,10 @@ update." Concretely:
   moving tag. That PR goes through the same review and the same
   `lint.yml` checks (including `supply-chain`, which would fail the PR if
   Dependabot ever produced an unpinned or non-SHA reference) as any other
-  change before it can merge.
+  change before it can merge — which, since issue #312, means a local
+  `scripts/ci-local.sh` run on the PR branch or a manual dispatch of the
+  workflows on its head: Dependabot's pull requests no longer get automatic check
+  runs.
 - To resolve a tag to its commit SHA by hand (e.g. when adding a new
   action Dependabot doesn't cover yet, or verifying a Dependabot PR):
   `gh api repos/<owner>/<repo>/git/ref/tags/<tag>` and read `.object.sha`
@@ -315,7 +393,13 @@ scripts/release.sh <X.Y.Z> --publish
 
 `scripts/release.sh` enforces:
 - Execution on clean `main` branch with no uncommitted changes.
-- Pre-release check: verifies all required CI status checks on the target commit pass.
+- Pre-release check: queries the GitHub check runs of the target commit and refuses to
+  release when one of them failed or is still pending. It only sees check runs that
+  exist: since the workflows run on manual dispatch only (§1, issue #312), a commit on
+  which nothing was dispatched has no check runs and passes this query vacuously. Before
+  cutting a release, dispatch `lint.yml` and `compatibility.yml` on the release commit
+  and wait for them (or attach the `scripts/ci-local.sh --profile full` summary for that
+  exact commit — [docs/business/release-gates.md](business/release-gates.md)).
 - Compilation of all `changes/*.md` fragments into `CHANGELOG.md` and bump of `VERSION`.
 - Synchronization of `README.md` version claims.
 - Creation of an annotated git tag `v<X.Y.Z>` matching the exact release commit SHA.
@@ -331,8 +415,8 @@ release. `--validate-fragments` closes that gap by running the exact same
 fragment parser `scripts/release.sh` uses to compile `CHANGELOG.md` (both
 paths call the same `fragment_errors` shell function in
 `scripts/release.sh`, so CI and the release can never disagree about what a
-valid fragment looks like), on every pull request, before a bad fragment
-can merge.
+valid fragment looks like), in the local per-PR check and in the dispatched
+workflow, before a bad fragment can merge.
 
 ```bash
 scripts/release.sh --validate-fragments
@@ -349,9 +433,9 @@ main-branch, or CI-status preconditions apply. It exits 0 when `changes/`
 is empty, does not exist, or contains only a `README.md`/placeholder file.
 
 This check is blocking without any branch-protection change, by running
-in two places:
-- inside `tests/run.sh` (the required `bats` check in §1.1), so a
-  malformed fragment fails the same green check every other test failure
+in two places (both are part of `scripts/ci-local.sh`):
+- inside `tests/run.sh` (the `bats` job of §1.1), so a
+  malformed fragment fails the same check every other test failure
   does;
 - as its own named `validate-change-fragments` job in
   `.github/workflows/lint.yml`, so the failure is visible on its own line
@@ -371,11 +455,12 @@ developer machine or an agent sandbox, with the same command and the same
 blocking semantics as the workflow YAML, and prints one summary (a Markdown
 table, or JSON) that can be pasted into a pull request description.
 
-> **The GitHub Actions workflows remain the merge gate unless the repository
-> owner decides otherwise.** The local runner produces evidence; it does not
-> enforce anything on GitHub, and its results are self-reported. Replacing the
-> workflows as the required check is a separate owner decision, out of scope
-> for #312's implementation.
+> **This is the required per-PR check; GitHub Actions runs only on manual
+> dispatch** (§1). Paste the summary table into the pull request description. The
+> local runner produces evidence; it does not enforce anything on GitHub, and its
+> results are self-reported. The branch-protection settings that decide which
+> GitHub checks a merge waits for are the repository owner's to update — this
+> repository's files do not change them (§1, "Owner action required").
 
 ### 10.1 Usage
 
@@ -624,9 +709,12 @@ once with `git push --no-verify`.
   while the local fallbacks are the pinned container images.
 - Artifact upload (`tests/matrix/results/` and `tests/matrix/logs/` stay on disk,
   gitignored), the gitleaks SARIF report and job summary, workflow concurrency
-  cancellation, the weekly schedule, and `GITHUB_*` context.
-- Tracking-issue updates by `upstream-drift`, which need a token (§10.2).
-- Branch protection or any other GitHub-side setting.
+  cancellation, and `GITHUB_*` context. (There is no schedule to reproduce: the
+  workflows run on manual dispatch only.)
+- Tracking-issue updates by `upstream-drift`, which need a token — dispatch the
+  workflow for that (§1.3).
+- Enforcement. Nothing makes GitHub require or verify a local run; branch protection
+  and any other GitHub-side setting stay with the repository owner (§1).
 - Hardware, a real reboot and a Linux Mint desktop session — those remain in
   `tests/vm/` ([docs/testing.md](testing.md)).
 

@@ -43,7 +43,8 @@ open an issue.
 - The PR title format is `<type>: <summary> (#N)`.
 - The PR description must include: a summary of the change, `Closes #N`,
   and a "Verification" section listing the exact commands you ran and their
-  results (see §5 for what to run).
+  results, including the summary table printed by `./scripts/ci-local.sh`
+  (see §5 for what to run).
 - Do not bundle unrelated changes (e.g. a docs fix and a new module) into
   one PR — open separate issues/PRs instead.
 
@@ -63,7 +64,7 @@ One-line description of the user-visible change.
 `CHANGELOG.md` is compiled from these fragments at release time — do not
 edit `CHANGELOG.md` directly in a feature/docs PR.
 
-**Fragment rules (enforced by CI on every PR, see below):**
+**Fragment rules (enforced by `scripts/ci-local.sh` and `tests/run.sh`, see below):**
 
 - YAML-style frontmatter delimited by two literal `---` lines is required.
 - `issue:` must be a positive integer (the GitHub issue this PR closes or
@@ -83,11 +84,12 @@ edit `CHANGELOG.md` directly in a feature/docs PR.
   immediately followed by whitespace (`# `, `## `, ...) counts as heading
   markup.
 
-Every PR that adds or changes a fragment is validated on CI by
-`scripts/release.sh --validate-fragments` (issue #238), which runs the
-exact same parser `scripts/release.sh` uses to compile `CHANGELOG.md` at
-release time, so a fragment that passes CI cannot later break a release.
-Run it locally before opening a PR:
+Every PR that adds or changes a fragment is validated by
+`scripts/release.sh --validate-fragments` (issue #238) — part of
+`scripts/ci-local.sh` and `tests/run.sh`, and of the lint workflow when it is
+dispatched — which runs the exact same parser `scripts/release.sh` uses to
+compile `CHANGELOG.md` at release time, so a fragment that passes it cannot
+later break a release. Run it locally before opening a PR:
 
 ```bash
 scripts/release.sh --validate-fragments
@@ -132,14 +134,25 @@ installed locally, so local and CI results should not diverge:
 ./scripts/test-matrix.sh    # real apt-get/dpkg inside disposable containers, all supported OSes
 ```
 
-`./scripts/ci-local.sh` (issue [#312](https://github.com/ahliweb/omes/issues/312))
-runs every job of `.github/workflows/*.yml` without GitHub Actions and prints a
-summary table you can paste into the pull request description. A job it had to
+**`./scripts/ci-local.sh` is the required per-PR check** (issue
+[#312](https://github.com/ahliweb/omes/issues/312)). The GitHub Actions
+workflows in `.github/workflows/` run only on manual `workflow_dispatch` — they no
+longer run on pull requests, pushes or a schedule — so run it before you push and
+paste its summary table into the pull request description. It runs every
+workflow job locally with the same commands and blocking rules. A job it had to
 skip (for example because Docker is unavailable) makes the run `incomplete`
-(exit 3), which is not a pass. It runs `tests/run.sh` as a non-root uid, as the
-GitHub runner does. See [docs/ci.md](docs/ci.md) §10 for the job table, exit
-codes, the optional Docker Hub mirror (`OMES_CI_REGISTRY_MIRROR`), proxy settings
-and the opt-in pre-push hook (`./scripts/ci-local.sh --install-hook`).
+(exit 3), which is not a pass; a failed blocking job is exit 1. It runs
+`tests/run.sh` as a non-root uid, as the GitHub runner does. Add `--profile full`
+when your change touches installation, packages, platforms or rollback. See
+[docs/ci.md](docs/ci.md) §10 for the job table, exit codes, the optional Docker
+Hub mirror (`OMES_CI_REGISTRY_MIRROR`), proxy settings and the opt-in pre-push
+hook (`./scripts/ci-local.sh --install-hook`).
+
+Be aware of the trade-off: local results are self-reported and are not enforced
+by GitHub. A maintainer can dispatch the workflows on your pull request's head
+(`gh workflow run lint.yml --ref <branch>`) to get GitHub check runs, and the
+repository owner decides which GitHub checks, if any, branch protection still
+requires ([docs/ci.md](docs/ci.md) §1).
 
 If you want to run ShellCheck directly against a specific severity/image
 instead, run it against **both** images below — `scripts/lint.sh` pins the
@@ -174,8 +187,10 @@ too.
 Before opening a pull request:
 
 - [ ] One issue, one branch, one PR (§3); PR title `<type>: <summary> (#N)`.
-- [ ] `./scripts/ci-local.sh` reports `pass` (exit 0) and its summary is in the
-      PR description; `incomplete` (exit 3) is not a pass.
+- [ ] **Required:** `./scripts/ci-local.sh` reports `pass` (exit 0) and its
+      summary table is pasted into the PR description; `incomplete` (exit 3) is
+      not a pass. Add `--profile full` for installation, package, platform or
+      rollback changes.
 - [ ] `./tests/run.sh` passes.
 - [ ] `./scripts/lint.sh` passes (or the two ShellCheck images in §5, if you
       changed shell code specifically).

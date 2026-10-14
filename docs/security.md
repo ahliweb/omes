@@ -189,6 +189,12 @@ These gates map directly to the QA/security issues that produce the evidence:
 | Telegram allowlist behavior proven | Test asserts unauthorized users/groups are rejected and authorized ones are served, in both directions (see hermes-telegram-bot lessons: verify allowlisted groups still serve unknown *users* correctly) | #13, #15 |
 | Known limitations published | This document and `docs/threat-model.md` are current and linked from the release notes | #5, #18 |
 
+Where a row above names a CI job, the job is the one in `.github/workflows/`. Since issue
+[#312](https://github.com/ahliweb/omes/issues/312) those workflows run only on manual dispatch,
+so the evidence is a workflow run dispatched on the release commit or the summary of
+`scripts/ci-local.sh` for it ([docs/ci.md](ci.md) sections 1 and 10); a local summary is
+self-reported and is not enforced by GitHub.
+
 ## 8. Control Center and provider integration security
 
 The web Control Center and provider adapters are **not implemented in the current CLI branch**. The OMES-side control job runner (`omes job`, issue [#90](https://github.com/ahliweb/omes/issues/90), `lib/omes/py/jobs/`) IS implemented and already enforces several of the bullets below locally — see [docs/jobs.md](jobs.md) for what it does today. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are fully implemented (including the Control Center itself and a transport), the following are release requirements:

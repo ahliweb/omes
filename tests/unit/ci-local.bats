@@ -323,6 +323,27 @@ EOF
   [[ "$output" == *"yamllint: workflow does not run 'scripts/lint.sh yamllint'"* ]]
 }
 
+@test "the workflows are manual-only: workflow_dispatch is the single trigger (issue #312)" {
+  run python3 - "${OMES_TEST_ROOT}/.github/workflows" <<'EOF'
+import pathlib, re, sys
+seen = 0
+for wf in sorted(pathlib.Path(sys.argv[1]).glob("*.yml")):
+    lines = wf.read_text().splitlines()
+    start = next(i for i, l in enumerate(lines) if re.match(r"^on:\s*$", l))
+    triggers = []
+    for l in lines[start + 1:]:
+        if l and not l.startswith((" ", "#")):
+            break
+        m = re.match(r"^  ([a-z_]+):", l)
+        if m:
+            triggers.append(m.group(1))
+    assert triggers == ["workflow_dispatch"], (wf.name, triggers)
+    seen += 1
+assert seen >= 3, seen
+EOF
+  [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # Status semantics
 # ---------------------------------------------------------------------------

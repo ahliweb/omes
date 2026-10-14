@@ -240,8 +240,9 @@ used by `client.py`:
 
 If a future Coolify release changes one of the endpoints/methods §6.1
 actually calls, that is a `BREAKING_CHANGE`-classified finding for
-`scripts/upstream-drift.py` (ADR-0026) to catch on its next scheduled run,
-and must be re-verified against `client.py` (and, ideally, a real instance
+`scripts/upstream-drift.py` (ADR-0026) to catch on its next run (the workflow
+is manual-dispatch only since issue #312; `scripts/ci-local.sh --job
+upstream-drift` gives a report-only run), and must be re-verified against `client.py` (and, ideally, a real instance
 once live integration exists - see section 7) before the baseline is raised
 again.
 

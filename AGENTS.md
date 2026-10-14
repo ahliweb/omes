@@ -129,11 +129,20 @@ git diff --check
 ./scripts/ci-local.sh
 ```
 
-`./scripts/ci-local.sh` runs every CI job from `.github/workflows/` locally with
-the same commands and blocking rules (see [docs/ci.md](docs/ci.md) §10). Its exit
-code must be 0: `1` is a failed blocking job and `3` is `incomplete` (a blocking
-job was skipped, for example no Docker), which is never a pass. Report its
-summary, not a paraphrase.
+`./scripts/ci-local.sh` is the **required per-PR check**. The GitHub Actions
+workflows in `.github/workflows/` run only on manual `workflow_dispatch` since
+issue #312; they no longer run on pull requests, pushes or a schedule. The runner
+executes every one of those jobs locally with the same commands and blocking rules
+(see [docs/ci.md](docs/ci.md) §10). Its exit code must be 0: `1` is a failed
+blocking job and `3` is `incomplete` (a blocking job was skipped, for example no
+Docker), which is never a pass. Paste its summary table into the PR description and
+report it as printed, not paraphrased.
+
+Local results are self-reported and are not enforced by GitHub, and branch
+protection's required status checks are a repository setting that only the
+repository owner changes: never claim that setting was changed, and say so when a
+PR still waits for a check that only a manual dispatch can produce
+([docs/ci.md](docs/ci.md) §1).
 
 For installation, package, platform, or rollback changes, also run:
 
