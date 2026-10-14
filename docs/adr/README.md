@@ -42,7 +42,7 @@ architecture and state model."
 | [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
 | [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
 | [0030](0030-repository-progress-projection.md) | GitHub repository progress projection for the Progres Hermes view | Accepted |
-| [0031](0031-browser-data-transfer-ownership-and-playwright-boundary.md) | Delegated AI browser transfer with constrained Playwright and existing AWCMS Control Center | Proposed |
+| [0033](0033-browser-data-transfer-ownership-and-playwright-boundary.md) | Delegated AI browser transfer with constrained Playwright and existing AWCMS Control Center | Proposed |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -108,6 +108,13 @@ ADR 0030 was authored on 2026-09-27 as part of issue
 [#249](https://github.com/ahliweb/omes/issues/249), split from
 [#246](https://github.com/ahliweb/omes/issues/246) part 2, "feat(control-center):
 GitHub repository progress projection for the Progres Hermes view."
+
+ADR 0033 was authored on 2026-10-12 as part of issue
+[#295](https://github.com/ahliweb/omes/issues/295), "docs(browser-data-transfer):
+ADR, PRD, threat model and authority-safe execution design." It was first
+drafted as 0031 and renumbered before merge because 0031 (Mission Control
+projection, PR #268) and 0032 (multi-agent control patterns, PR #278) were
+already allocated by open pull requests.
 
 
 

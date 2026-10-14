@@ -1,4 +1,4 @@
-# ADR-0031: Delegate AI-assisted browser data transfer to Hermes and a constrained Playwright adapter
+# ADR-0033: Delegate AI-assisted browser data transfer to Hermes and a constrained Playwright adapter
 
 - **Status**: Proposed
 - **Date**: 2026-10-12
