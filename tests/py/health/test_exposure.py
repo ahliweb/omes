@@ -170,5 +170,63 @@ class TestRunIntegration(unittest.TestCase):
         self.assertFalse(result["firewall"]["available"])
 
 
+class TestCollectListeners(unittest.TestCase):
+    """exposure.collect_listeners() (issue #298): the same one `ss` probe as
+    run(), but it says whether the listener list is complete, so a consumer
+    that must fail closed can tell "nothing is listening" from "could not
+    tell"."""
+
+    def _collect(self, which, run_result):
+        with mock.patch.object(exposure.shutil, "which", side_effect=which):
+            with mock.patch.object(exposure, "_run", return_value=run_result):
+                return exposure.collect_listeners(1.0)
+
+    def test_complete_table_is_collected(self):
+        result = self._collect(lambda n: "/usr/bin/" + n, (0, SS_WILDCARD, ""))
+        self.assertTrue(result["collected"])
+        self.assertFalse(result["tool_missing"])
+        self.assertEqual([l["port"] for l in result["listeners"]], [8642])
+
+    def test_empty_but_successful_table_is_collected(self):
+        result = self._collect(lambda n: "/usr/bin/" + n, (0, "", ""))
+        self.assertEqual((result["collected"], result["listeners"]), (True, []))
+
+    def test_missing_ss_is_not_collected_and_flagged(self):
+        result = self._collect(lambda n: None, (0, "", ""))
+        self.assertEqual((result["collected"], result["tool_missing"], result["listeners"]), (False, True, []))
+
+    def test_failed_or_timed_out_ss_is_not_collected(self):
+        for rc in (1, -1, -2):
+            with self.subTest(rc=rc):
+                result = self._collect(lambda n: "/usr/bin/" + n, (rc, "", "boom"))
+                self.assertEqual((result["collected"], result["tool_missing"], result["listeners"]), (False, False, []))
+
+    def test_partial_output_with_a_nonzero_exit_is_parsed_but_not_complete(self):
+        result = self._collect(lambda n: "/usr/bin/" + n, (1, SS_LAN, ""))
+        self.assertFalse(result["collected"])
+        self.assertEqual([l["port"] for l in result["listeners"]], [9222])
+
+    def test_run_output_shape_and_failure_behaviour_are_unchanged(self):
+        """run() keeps its historical fail-open-looking results (exit 0 for an
+        unreadable table, exit 4 only for a missing ss) so `omes audit
+        exposure` is byte-for-byte what #80 shipped."""
+
+        def which(name):
+            return "/usr/bin/" + name
+
+        def failing_ss(cmd, timeout):
+            return (1, "", "boom") if cmd[0] == "ss" else (1, "", "")
+
+        with mock.patch.object(exposure.shutil, "which", side_effect=which):
+            with mock.patch.object(exposure, "_run", side_effect=failing_ss):
+                result = exposure.run([])
+        self.assertEqual(set(result), {"listeners", "findings", "firewall", "ok", "exit_code", "detail"})
+        self.assertEqual((result["listeners"], result["exit_code"], result["ok"]), ([], exposure.EXIT_OK, True))
+        with mock.patch.object(exposure.shutil, "which", return_value=None):
+            missing = exposure.run([])
+        self.assertEqual(set(missing), {"listeners", "findings", "firewall", "ok", "exit_code", "detail"})
+        self.assertEqual(missing["exit_code"], exposure.EXIT_TOOLS_MISSING)
+
+
 if __name__ == "__main__":
     unittest.main()
