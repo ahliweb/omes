@@ -8,6 +8,15 @@ This directory contains **sanitized metadata-only** JSON Schema wire contracts i
 - `transfer-record-event.schema.json`: sanitized per-record event projection. AWCMS remains the authoritative persistent record ledger and independently verifies writes. A transition to `verified_committed` requires separate destination read-back.
 - Fixtures `valid-*.json` must pass; `invalid-*.json` must fail for their recorded reason. Check with `python3 scripts/check-contracts.py`.
 
+## Producers
+
+| Contract | Producer | Status |
+|---|---|---|
+| `browser-worker-readiness` | `omes health browser-worker --json` ([`lib/omes/py/health/browser_worker.py`](../../../lib/omes/py/health/browser_worker.py), issue [#298](https://github.com/ahliweb/omes/issues/298); behaviour, state precedence and reason codes in [docs/browser-worker-readiness.md](../../../docs/browser-worker-readiness.md)) | Implemented as a read-only host-evidence producer. It validates every document against this schema before printing it and never emits an off-contract document. Because per-job isolation evidence is Not implemented yet (tracked in #298, depends on #276 / PR #282), `session_isolation` is reported `unknown` and `state` is never `ready` on a real host today. It exits `4` and prints nothing when a tenant, server or worker id is missing (it never invents one). |
+| `transfer-record-event` | none in OMES | AWCMS/worker-owned projection; OMES does not produce or store these events. |
+
+The producer fills `reason_codes` with a stable vocabulary (defined and tested in `browser_worker.REASONS`) and uses `browser_version` as a label (`chromium-<version>`, `chrome-<version>` or `playwright-chromium-<revision>`), never raw `--version` output. It does not read browser profiles, cookies or heartbeat contents.
+
 ## Transport/security contract
 
 1. AWCMS checks authenticated worker identity, tenant/job scope, approval, lease, version, replay and idempotency **outside JSON Schema**.

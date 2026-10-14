@@ -1428,6 +1428,18 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   this document. With this, `provider.github.repository_progress`'s `implementation_status` moves
   from `staged` to `delegated_upstream` in `architecture/capabilities.json`, and issue #249 is
   closed.
+- Issue [#298](https://github.com/ahliweb/omes/issues/298) (child of #294) registers
+  `omes.health.browser_worker_readiness` (`host_control` / `deterministic` / `implemented`, module
+  `health`): `omes health browser-worker`, the read-only producer of the
+  `contracts/browser-transfer/v1/browser-worker-readiness.schema.json` host-evidence document for an
+  **optional, separately installed** browser worker (see
+  [docs/browser-worker-readiness.md](browser-worker-readiness.md)). It extends the existing #71
+  Ollama probe, #80 exposure audit and #216 destination classifier instead of adding parallel
+  mechanisms, ships no browser, executor, adapter or listener, and is evidence only: the
+  business workflow, the worker and the record ledger stay with AWCMS and Hermes, and OMES still
+  does not mediate Hermes-native tool use outside that workflow. Per-job isolation evidence is Not
+  implemented yet (tracked in #298, depends on #276 / PR #282), so the reported state is never
+  `ready` on a real host today.
 
 ### 18.7 Standards crosswalk
 
