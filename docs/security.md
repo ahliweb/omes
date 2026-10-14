@@ -369,6 +369,34 @@ particular, **OMES does not mediate all Hermes-native tool execution** — a use
 Hermes through a Hermes-owned channel bypasses both AWCMS and OMES entirely, and no control in this
 document changes that.
 
+### 8.9 Inference endpoint observation controls (issue #292)
+
+`omes health inference-endpoint` ([docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks),
+[docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md)) is a read-only preflight
+observation of an operator-configured, non-secret endpoint reference. It is not an inference gateway, does not
+select or route a provider (Hermes remains authoritative, ADR-0017/ADR-0029), reads no credential and no Hermes
+private store, and an active prompt/tool probe is **Not implemented yet (tracked in #292)**. The controls below are
+all implemented and tested in `tests/py/health/test_inference_endpoint.py`; threats are AI-09 to AI-14 in
+[docs/threat-model.md §5.x](threat-model.md#5x-ai-model-and-data-egress-threat-delta-issue-213).
+
+| Control | Implemented in |
+|---|---|
+| Endpoint grammar allowlist: `http`/`https` only; userinfo, query, fragment, control characters/CRLF, non-ASCII and numeric-encoded hosts are rejected; a rejected value is printed as `[REDACTED]`, never echoed | `lib/omes/py/health/endpoint_guard.py` `parse_endpoint()`/`redact_endpoint()` |
+| SSRF policy: resolve once, classify **every** address, allow only loopback (and RFC 1918/ULA with the default `private` scope); public, link-local, instance-metadata, multicast, unspecified, shared/CGNAT, reserved and IPv4-embedding IPv6 forms are refused with no request sent; IPv4-mapped IPv6 is unwrapped; no override exists | `endpoint_guard.py` `classify_ip()`/`resolve_and_vet()` |
+| DNS-rebinding defence: the connection goes only to the vetted address (re-checked via the connected peer); the original name is still sent as `Host`/SNI and verified | `lib/omes/py/health/pinned_http.py` `get()` |
+| Redirects never followed; 3xx is `fail` and the `Location` is not echoed | `pinned_http.py` (http.client never follows), `inference_endpoint.py` `_interpret()` |
+| TLS 1.2+, certificate chain and host name verification always on (private CA via `--ca-file`); no HTTP request is sent over an unverified channel | `pinned_http.py` `make_ssl_context()` |
+| Bounded: one allowlisted `GET /v1/models` (no body, no `Authorization`/`Cookie`, `Accept-Encoding: identity`, proxy variables ignored), 1 MiB response cap enforced while reading, total deadline (default 10 s, max 30 s) enforced by a socket watchdog, so a slow-drip server cannot extend it | `pinned_http.py`, `inference_endpoint.py` |
+| Fail closed: `ready` requires every required layer `pass`; timeout, 401/403 (`auth_required`), 404, 3xx, malformed/oversized/unexpected responses, TLS failure, missing model, clock skew over 300 s and absent evidence are never ready | `inference_endpoint.py` `_overall()`; `model.py` `aggregate()` treats `unknown` as blocking |
+| Evidence freshness: `checked_at` and `freshness.expires_at`; `revalidate()` downgrades stale, future-dated or unparseable evidence to `unknown` | `inference_endpoint.py` `revalidate()` |
+| Redacted, fixed-string remediation; no endpoint, header, body or exception text is interpolated into output | `inference_endpoint.py` `_REMEDIATION` |
+
+Residual limits (documented, not hidden): a `pass` proves a policy-compliant endpoint advertises the model id, not
+that the model can generate, call tools or is the intended weights; OMES does not verify the serving process
+identity, its own authentication posture (an unauthenticated route on a private network is not detected), or model
+provenance beyond the existing `omes audit provenance` evidence; plain `http` to a non-loopback private address is
+permitted but flagged; an operator-trusted private CA is trusted for that endpoint only through the explicit CA file.
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
