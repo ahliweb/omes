@@ -43,6 +43,15 @@ a real reboot can prove.
 ./tests/run.sh
 ```
 
+To run this together with every other CI job — and, when you are root, as the
+non-root uid the suites expect — use `./scripts/ci-local.sh`
+([docs/ci.md](ci.md) §10). `./scripts/ci-local.sh --profile full` adds the
+container regression matrix of §2.2 below. The runner itself is covered by
+`tests/unit/ci-local.bats` (argument parsing, job listing, the workflow drift
+guard, pass/fail/advisory/skipped semantics, JSON shape, the pre-push hook) and
+`tests/unit/ci-local-docker.bats` (registry mirror, proxy and CA pass-through,
+redaction); both use stub scripts and a fake `docker`, never the real tools.
+
 Uses a locally installed `bats`/`shellcheck` when present, falling back to Docker
 (`koalaman/shellcheck:stable`, a derived `bats/bats:latest` image with `python3` and `git`
 layered on for the JSON-validity assertions and the `omes update` git tests - see

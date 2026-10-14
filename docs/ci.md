@@ -4,7 +4,9 @@
 > `.github/workflows/lint.yml`, `.github/workflows/compatibility.yml`,
 > `.github/dependabot.yml`, `.gitleaks.toml`, `.yamllint.yml`, and the
 > `scripts/lint.sh` / `scripts/check-supply-chain.sh` / `scripts/check-links.py` /
-> `scripts/test-matrix.sh` scripts those workflows call. See
+> `scripts/test-matrix.sh` scripts those workflows call, plus
+> `scripts/ci-local.sh`, which runs every one of those jobs on a developer
+> machine without GitHub Actions (§10). See
 > [docs/security.md](security.md) sections 6-7 for the supply-chain and
 > release-gate *requirements* this CI implements, and
 > [docs/testing.md](testing.md) for how `scripts/test-matrix.sh` maps onto the
@@ -122,15 +124,25 @@ See §5 below.
 ### 2.4 gitleaks (full history)
 
 ```bash
-docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:latest \
-  detect --source /repo --config /repo/.gitleaks.toml --no-banner --redact
+scripts/ci-local.sh --job gitleaks
 ```
 
-Run this from the actual repository root (not a `git worktree` whose
-`.git` file points outside the mounted volume — if it does, mount the
-parent repository path instead so the `gitdir:` link inside `.git`
-resolves). `--redact` keeps any genuine finding's secret value out of the
-command's own output.
+This runs the pinned gitleaks image (§6, §10.7) over the full git history with
+`.gitleaks.toml`, mounting the main repository's git directory as well when you
+are in a linked `git worktree`, and refuses to report a pass on a shallow
+clone. The equivalent by hand, from the repository root of a full clone:
+
+```bash
+docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo:ro" -w /repo \
+  -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0='*' \
+  zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f \
+  git --no-banner --redact -v --exit-code=2 --config /repo/.gitleaks.toml /repo
+```
+
+`--redact` keeps any genuine finding's secret value out of the command's own
+output. From a linked `git worktree`, also mount the main repository's `.git`
+directory at the same absolute path (`-v "$GIT_COMMON_DIR:$GIT_COMMON_DIR:ro"`)
+so the `gitdir:` link inside the worktree's `.git` file resolves.
 
 ### 2.5 actionlint
 
@@ -243,14 +255,17 @@ update." Concretely:
   — follow `.object.url` one more level, e.g.
   `gh api repos/<owner>/<repo>/git/tags/<sha>`, to reach the underlying
   commit SHA). Never guess or hand-type a SHA.
-- Docker images referenced by digest in `scripts/lint.sh` and in
-  `lint.yml`'s `actionlint` step (`image@sha256:...`) follow the same
+- Docker images referenced by digest in `scripts/lint.sh`, in
+  `lint.yml`'s `actionlint` step, and the gitleaks image in
+  `scripts/ci-local.sh` (`image@sha256:...`) follow the same
   spirit — pinned to an immutable digest, not a mutable tag like `:latest`
   or `:stable` — but are not `uses:` GitHub Action references, so they are
   not covered by `scripts/check-supply-chain.sh`'s action-pinning check or
   by Dependabot's `github-actions` ecosystem. Bumping one of these digests
   is a manual, reviewed edit (re-resolve with `docker inspect --format
-  '{{index .RepoDigests 0}}' <image>:<tag>` after pulling the tag you want).
+  '{{index .RepoDigests 0}}' <image>:<tag>` after pulling the tag you want;
+  for the multi-architecture gitleaks image use `docker buildx imagetools
+  inspect <image>:<tag>` and take the top-level index digest).
 
 ## 7. How to add a `.gitleaks.toml` allowlist entry
 
@@ -347,6 +362,273 @@ in two places:
 as part of `scripts/lint.sh` with no arguments), for parity with the
 other checks in this document that have both a `tests/run.sh` and a
 `scripts/lint.sh` entry point.
+
+## 10. Running the full CI locally (no GitHub Actions)
+
+Issue [#312](https://github.com/ahliweb/omes/issues/312).
+`scripts/ci-local.sh` reproduces every job of `.github/workflows/*.yml` on a
+developer machine or an agent sandbox, with the same command and the same
+blocking semantics as the workflow YAML, and prints one summary (a Markdown
+table, or JSON) that can be pasted into a pull request description.
+
+> **The GitHub Actions workflows remain the merge gate unless the repository
+> owner decides otherwise.** The local runner produces evidence; it does not
+> enforce anything on GitHub, and its results are self-reported. Replacing the
+> workflows as the required check is a separate owner decision, out of scope
+> for #312's implementation.
+
+### 10.1 Usage
+
+```bash
+scripts/ci-local.sh                         # --profile fast: every lint.yml job + workflow-sync
+scripts/ci-local.sh --profile full          # fast + the compatibility.yml container matrix (slow)
+scripts/ci-local.sh --job shellcheck --job bats   # only these jobs (repeatable; also comma-separated)
+scripts/ci-local.sh --job matrix:ubuntu:24.04     # one matrix image; `--job matrix` selects all of them
+scripts/ci-local.sh --list [--json]         # job names, commands and blocking status
+scripts/ci-local.sh --json                  # one JSON document on stdout; logs go to stderr
+scripts/ci-local.sh --fail-fast             # stop after the first blocking failure (default: --keep-going)
+scripts/ci-local.sh --log-dir DIR           # keep the per-job logs
+scripts/ci-local.sh --install-hook          # opt-in pre-push hook (§10.9)
+```
+
+`--with-matrix` is an alias for `--profile full`. `--job` ignores `--profile`.
+`graphify-real-smoke` and `upstream-drift` run only through `--job`, as in CI
+they run only on demand and never gate anything.
+
+### 10.2 Job table
+
+| Workflow job | Local job | What runs locally | Blocking | Profile |
+|---|---|---|---|---|
+| `lint.yml` `shellcheck` | `shellcheck` | `scripts/lint.sh shellcheck` | **yes** | fast |
+| `lint.yml` `shfmt` | `shfmt` | `scripts/lint.sh shfmt` | no — advisory, matches `continue-on-error: true` | fast |
+| `lint.yml` `bats` | `bats` | `tests/run.sh`, **as a non-root uid** (§10.6) | **yes** | fast |
+| `lint.yml` `gitleaks` | `gitleaks` | the pinned gitleaks image (§10.7): `git --redact -v --exit-code=2 --config .gitleaks.toml` over the full history | **yes** | fast |
+| `lint.yml` `yamllint` | `yamllint` | `scripts/lint.sh yamllint` | **yes** | fast |
+| `lint.yml` `actionlint` | `actionlint` | the `rhysd/actionlint@sha256:…` image whose digest is read from `lint.yml` (not duplicated) | **yes** | fast |
+| `lint.yml` `supply-chain` | `supply-chain` | `scripts/check-supply-chain.sh` | **yes** | fast |
+| `lint.yml` `check-links` | `check-links` | `python3 scripts/check-links.py` | **yes** | fast |
+| `lint.yml` `check-contracts` | `check-contracts` | `python3 scripts/check-contracts.py` | **yes** | fast |
+| `lint.yml` `check-architecture` | `check-architecture` | `python3 scripts/check-architecture.py` | **yes** | fast |
+| `lint.yml` `check-control-center-data` | `check-control-center-data` | `python3 scripts/generate-control-center-data.py --check` | **yes** | fast |
+| `lint.yml` `validate-change-fragments` | `validate-change-fragments` | `scripts/release.sh --validate-fragments` | **yes** | fast |
+| (none; runner-owned) | `workflow-sync` | the drift guard of §10.8 | **yes** | fast |
+| `compatibility.yml` `matrix` | `matrix:<image>` per `include` row | `scripts/test-matrix.sh` with `OMES_MATRIX_IMAGES=<image>`; image list, tier and `advisory` read from the workflow | tier 1 **yes**; `ubuntu:22.04` (tier 2) advisory | full |
+| `compatibility.yml` `real-install-ubuntu-26-04` | same name | `scripts/test-matrix.sh` with `OMES_MATRIX_IMAGES` and `OMES_MATRIX_SCENARIOS` read from the workflow (`fresh rerun`) | **yes** | full |
+| `compatibility.yml` `real-install-ubuntu-24-04` | same name | as above for `ubuntu:24.04` | **yes** | full |
+| `compatibility.yml` `graphify-real-smoke` | `graphify-real-smoke` | `tests/graphify/real-smoke.sh` (installs the real `graphifyy` package from PyPI) | no — advisory | opt-in |
+| `upstream-drift.yml` `drift-review` | `upstream-drift` | `python3 scripts/upstream-drift.py` — **report only**: no `--update-issue`, no token | no — advisory | opt-in |
+
+`upstream-drift` is the one job that talks to a network service of its own (it
+reads public upstream release metadata from the GitHub API, unauthenticated and
+read-only). Updating the drift tracking issue needs a token and stays a
+workflow job.
+
+### 10.3 Results and exit codes
+
+Each job ends as one of:
+
+- `pass` — the command exited 0.
+- `fail` — a **blocking** job's command exited non-zero.
+- `advisory_fail` — an **advisory** job's command exited non-zero. Reported, never blocking.
+- `skipped` — the job could not run: no Docker, daemon unreachable, an image could not be pulled, a shallow clone for gitleaks, a missing tool, or `--fail-fast` stopped the run. The reason is in the summary.
+
+A **skipped blocking job is never counted as a pass**: the overall result
+becomes `incomplete`. Failures from the environment rather than the code (a
+Docker Hub rate limit, an unreachable daemon, a bats image without
+`git`/`python3`) are recognised in the job output and reported as `skipped`
+with an `environment:` reason instead of `fail`, so a code failure and an
+environment failure are never confused.
+
+| Exit code | Overall result | Meaning |
+|---|---|---|
+| 0 | `pass` | every selected blocking job passed (advisory failures and advisory skips are allowed) |
+| 1 | `fail` | at least one blocking job failed (wins over `incomplete`) |
+| 2 | — | usage error: bad option, unknown job, invalid `OMES_CI_*` setting |
+| 3 | `incomplete` | no blocking job failed, but at least one was skipped |
+
+The Markdown summary (stdout) lists commit, working-tree state, profile or job
+selection, counts and one table row per job; paste it into the pull request
+description. With `--json`, stdout carries exactly one document
+(`"schema": "omes-ci-local/1"`: `result`, `exit_code`, `profile`, `git`,
+`mirror`, `counts`, and per job `name`, `workflow`, `workflow_job`, `blocking`,
+`status`, `reason`, `duration_seconds`, `command`) and all logs stay on stderr.
+A run restricted with `--job` says so (`"profile": "custom"`), so a partial run
+cannot be mistaken for the full profile.
+
+Jobs run with an environment scrubbed of `GITHUB_TOKEN`, `GH_TOKEN`,
+`GITLEAKS_LICENSE` and every `OMES_*` variable except `OMES_CI_*`, so a local run
+starts from the same clean slate as a GitHub runner and no credential reaches a
+job. The runner never reads or prints credentials and makes no GitHub API call of
+its own (the opt-in `upstream-drift` job's unauthenticated, read-only requests for
+public release metadata, §10.2, are the one exception, and it never runs by
+default).
+
+### 10.4 Docker, images and the registry mirror
+
+Jobs use a locally installed `shellcheck`, `shfmt`, `yamllint` and `bats` when
+present — exactly as `scripts/lint.sh` and `tests/run.sh` do — and otherwise the
+pinned container images. `actionlint`, `gitleaks` and the compatibility matrix
+always need Docker.
+
+Docker Hub rate-limits anonymous tag pulls (`429 Too Many Requests`). Set
+`OMES_CI_REGISTRY_MIRROR` (for example `mirror.gcr.io`) to rewrite Docker Hub
+references to the mirror:
+
+- **Digest-pinned references** (`name@sha256:…`, which is every image in
+  `scripts/lint.sh`, the `actionlint` step and the gitleaks pin) keep their digest
+  through the mirror, so the image identity is guaranteed: Docker refuses a
+  manifest whose digest differs. A `docker` wrapper that the runner puts first on
+  `PATH` rewrites these references for the scripts it does not own
+  (`scripts/lint.sh` is unchanged and keeps its constants).
+- **Tag-only references** (`ubuntu:24.04`, `koalaman/shellcheck:stable`,
+  `bats/bats:latest`, `linuxmintd/mint22-amd64`) are pulled from the mirror and
+  tagged locally under their canonical name. **A mirror tag is not
+  digest-verified**: it is whatever the mirror serves for that tag, exactly as
+  with Docker Hub tags.
+- An image already present locally under its canonical name is used as it is and
+  never replaced.
+
+`mirror.gcr.io` was verified to serve every digest-pinned image used by the
+runner at the digest requested (`koalaman/shellcheck`, `mvdan/shfmt`,
+`cytopia/yamllint`, `rhysd/actionlint`, `zricethezav/gitleaks`).
+
+### 10.5 Proxied networks (optional)
+
+None of the following has any effect unless the variable is set.
+
+- **Proxy variables.** `HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and their
+  lower-case forms are passed to containers started with `docker run`/`create`
+  (`-e NAME`) and to `docker build` (`--build-arg NAME`) **by name only**, so the
+  value is taken from the environment and never appears on a command line. Every
+  job's output also passes through a filter that blanks the configured proxy URLs,
+  their `host:port` and any `user:password@` in a URL, so a log cannot leak a proxy
+  credential.
+- **Loopback proxies.** A proxy on `127.0.0.1`/`localhost` is unreachable from a
+  container on a bridge network, and passing it would break clients that would
+  otherwise connect directly. Such variables are therefore *not* passed (the
+  runner says which, never the value) unless `OMES_CI_DOCKER_NETWORK=host` is set,
+  which adds `--network host` to `docker run`/`create`/`build` when the command
+  has no `--network` of its own.
+- **TLS-intercepting proxies.** `OMES_CI_EXTRA_CA_FILE=/path/to/bundle.pem` is
+  mounted read-only into every `docker run`/`create` container at
+  `/usr/local/share/ca-certificates/omes-ci-extra-ca.crt`, where
+  `update-ca-certificates` (Debian, Ubuntu, Alpine `ca-certificates`) picks it up
+  when the package is installed or refreshed, and is named by `SSL_CERT_FILE` and
+  `CURL_CA_BUNDLE` (OpenSSL-based clients such as `curl` and `apk`),
+  `REQUESTS_CA_BUNDLE` and `PIP_CERT` (Python and `pip`), `GIT_SSL_CAINFO` (`git`)
+  and `NODE_EXTRA_CA_CERTS`. `apt` has no environment variable for this, so a
+  read-only `Acquire::https::CaInfo` snippet is mounted at
+  `/etc/apt/apt.conf.d/99omes-ci-extra-ca`. Most of these variables *replace* the
+  default trust roots, so the file must be a **complete** bundle (system roots plus
+  the interception CA). The runner refuses a file that is unreadable, is not PEM,
+  or contains a private key.
+- **Limit.** The extra CA applies to `docker run`/`create` only. The Dockerfile
+  that `tests/run.sh` builds for the bats image arrives on stdin and has no build
+  context, so a proxy CA cannot be injected into its `RUN apk add` step; proxy
+  *variables* do reach the build. Where that build cannot succeed (for example the
+  network policy denies the Alpine package mirror), install `bats` natively — the
+  GitHub job does the same, and `tests/run.sh` prefers a native `bats`; when the
+  runner is root the binary must be readable by the unprivileged uid of §10.6 — or
+  pre-build the `omes-bats-python3-git:local` image that `tests/run.sh` reuses by
+  tag (its entrypoint must be `bats` and it needs `python3` and `git`; for example
+  a `FROM ubuntu:24.04` image that runs `apt-get install -y --no-install-recommends
+  bats python3 git ca-certificates` and sets `ENTRYPOINT ["bats"]`, which also
+  matches the `apt` bats the GitHub job uses). If the image the run ends up with
+  lacks `git`/`python3`, the job is reported as `skipped` with an `environment:`
+  reason, never as a pass.
+- Egress policy is not worked around: a host the proxy or DNS denies stays
+  denied, and the affected job is reported as `skipped` or `fail` with the reason.
+
+For example, in a sandbox whose containers reach the network only through a
+loopback HTTP proxy that intercepts TLS:
+
+```bash
+OMES_CI_DOCKER_NETWORK=host OMES_CI_EXTRA_CA_FILE=/path/to/full-ca-bundle.pem \
+  scripts/ci-local.sh --profile full
+```
+
+### 10.6 Why `bats` runs as a non-root uid
+
+The GitHub runner runs `tests/run.sh` as the unprivileged `runner` user, and its
+suites assert non-root behaviour (module scopes, `$HOME` write checks, refusing to
+apply a user-scoped service as root). Run as root, dozens of bats tests and 43
+Python tests fail for that reason alone. When `scripts/ci-local.sh` itself runs as
+root it therefore runs `tests/run.sh` through `setpriv` as uid/gid
+`65534:65534` (override with `OMES_CI_NONROOT_UID`/`OMES_CI_NONROOT_GID`), with:
+
+- a private `HOME`, `TMPDIR` and Python bytecode-cache directory owned by that uid
+  and removed on exit (the checkout itself stays root-owned and untouched, and no
+  host user is created);
+- the Docker socket's group as its only supplementary group, so the container
+  fallback keeps working (a socket owned by `root:root` makes the job `skipped`,
+  with that reason);
+- the same scrubbed environment as every other job.
+
+When the runner is invoked by an unprivileged user — the normal case — nothing
+changes: `tests/run.sh` runs as that user, as it does on the GitHub runner.
+
+### 10.7 gitleaks
+
+The `gitleaks` job runs `zricethezav/gitleaks@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f`
+(gitleaks v8.30.1, the multi-architecture index; the `v8.30.1` and `latest` tags
+resolved to this digest when it was pinned). The same digest was verified on Docker
+Hub and on `mirror.gcr.io`. It mirrors what `gitleaks/gitleaks-action` runs
+(`detect --redact -v --exit-code=2`, exit code 2 meaning leaks found) with the
+repository's `.gitleaks.toml`, but over **every** commit rather than a pull
+request's range, and without the SARIF artifact or job summary. The checkout is
+mounted read-only; in a linked worktree the main repository's git directory is
+mounted at its own path as well; `safe.directory` is set through the environment
+so a differently owned checkout still works. No token or license is passed.
+
+A shallow clone cannot be scanned in full, so the job is `skipped` (making the run
+`incomplete`) rather than passing on partial history. Fix it with
+`git fetch --unshallow`.
+
+### 10.8 Staying in sync with the workflows
+
+The runner keeps a small job registry. The `workflow-sync` job (part of the fast
+profile, no Docker needed) reads `.github/workflows/*.yml` and fails when:
+
+- a workflow job has no registry row (a new job, or a new workflow file);
+- a registry row points at a workflow job that no longer exists;
+- the blocking semantics differ (`continue-on-error` versus the registry's
+  blocking/advisory column; the matrix's `advisory` flag per image);
+- a job's `run:` line differs from the command the runner executes (for example a
+  flag added to a workflow command), or a custom job's workflow no longer has the
+  structure the runner relies on (gitleaks action, pinned actionlint digest,
+  `scripts/test-matrix.sh` with `OMES_MATRIX_IMAGES`).
+
+`tests/unit/ci-local.bats` checks this independently with its own parser and
+exercises each failure mode against modified copies of the workflows. When you add
+or change a workflow job, update the registry in `scripts/ci-local.sh`
+(`job_table`) in the same change.
+
+### 10.9 Opt-in pre-push hook
+
+```bash
+scripts/ci-local.sh --install-hook     # writes the pre-push hook (never done automatically)
+scripts/ci-local.sh --uninstall-hook
+```
+
+The hook runs `scripts/ci-local.sh --profile fast` before every `git push` and
+blocks the push on exit code 1 or 3. It is written to the repository's shared
+hooks directory (also from a linked worktree), refuses to overwrite a pre-push
+hook that is not its own, and `--uninstall-hook` removes only its own hook. Skip it
+once with `git push --no-verify`.
+
+### 10.10 What is not reproduced
+
+- The GitHub-hosted runner image (`ubuntu-24.04` with its preinstalled tools):
+  locally, the tools are whatever is installed, or the pinned images. In
+  particular the runner image ships ShellCheck and bats from distribution packages,
+  while the local fallbacks are the pinned container images.
+- Artifact upload (`tests/matrix/results/` and `tests/matrix/logs/` stay on disk,
+  gitignored), the gitleaks SARIF report and job summary, workflow concurrency
+  cancellation, the weekly schedule, and `GITHUB_*` context.
+- Tracking-issue updates by `upstream-drift`, which need a token (§10.2).
+- Branch protection or any other GitHub-side setting.
+- Hardware, a real reboot and a Linux Mint desktop session — those remain in
+  `tests/vm/` ([docs/testing.md](testing.md)).
 
 <!-- OMES-MERMAID: docs/ci.md -->
 

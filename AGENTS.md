@@ -126,13 +126,21 @@ bash -n $(find . -type f -name '*.sh' -not -path './.git/*')
 git diff --check
 ./tests/run.sh
 ./scripts/lint.sh
+./scripts/ci-local.sh
 ```
+
+`./scripts/ci-local.sh` runs every CI job from `.github/workflows/` locally with
+the same commands and blocking rules (see [docs/ci.md](docs/ci.md) §10). Its exit
+code must be 0: `1` is a failed blocking job and `3` is `incomplete` (a blocking
+job was skipped, for example no Docker), which is never a pass. Report its
+summary, not a paraphrase.
 
 For installation, package, platform, or rollback changes, also run:
 
 ```bash
 ./scripts/test-matrix.sh
 OMES_MATRIX_IMAGES="ubuntu:24.04" ./scripts/test-matrix.sh
+./scripts/ci-local.sh --profile full
 ```
 
 For documentation-only changes, the minimum required checks are the link checker, `git diff --check`, change-fragment validation, and a review for stale implementation claims. If Docker is unavailable, record the exact blocked checks; do not claim they passed.

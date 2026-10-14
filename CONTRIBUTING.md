@@ -125,10 +125,21 @@ checks CI runs and fall back to Docker automatically when a tool is not
 installed locally, so local and CI results should not diverge:
 
 ```bash
+./scripts/ci-local.sh       # EVERY lint.yml job locally, same commands and blocking rules (fast profile)
+./scripts/ci-local.sh --profile full   # + the compatibility.yml container matrix (slow; needs Docker)
 ./tests/run.sh              # ShellCheck (-S style) + tests/unit + tests/integration
 ./scripts/lint.sh           # ShellCheck + shfmt + yamllint (what .github/workflows/lint.yml runs)
 ./scripts/test-matrix.sh    # real apt-get/dpkg inside disposable containers, all supported OSes
 ```
+
+`./scripts/ci-local.sh` (issue [#312](https://github.com/ahliweb/omes/issues/312))
+runs every job of `.github/workflows/*.yml` without GitHub Actions and prints a
+summary table you can paste into the pull request description. A job it had to
+skip (for example because Docker is unavailable) makes the run `incomplete`
+(exit 3), which is not a pass. It runs `tests/run.sh` as a non-root uid, as the
+GitHub runner does. See [docs/ci.md](docs/ci.md) §10 for the job table, exit
+codes, the optional Docker Hub mirror (`OMES_CI_REGISTRY_MIRROR`), proxy settings
+and the opt-in pre-push hook (`./scripts/ci-local.sh --install-hook`).
 
 If you want to run ShellCheck directly against a specific severity/image
 instead, run it against **both** images below — `scripts/lint.sh` pins the
@@ -163,6 +174,8 @@ too.
 Before opening a pull request:
 
 - [ ] One issue, one branch, one PR (§3); PR title `<type>: <summary> (#N)`.
+- [ ] `./scripts/ci-local.sh` reports `pass` (exit 0) and its summary is in the
+      PR description; `incomplete` (exit 3) is not a pass.
 - [ ] `./tests/run.sh` passes.
 - [ ] `./scripts/lint.sh` passes (or the two ShellCheck images in §5, if you
       changed shell code specifically).
