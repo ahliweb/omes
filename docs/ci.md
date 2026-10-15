@@ -394,12 +394,12 @@ scripts/release.sh <X.Y.Z> --publish
 `scripts/release.sh` enforces:
 - Execution on clean `main` branch with no uncommitted changes.
 - Pre-release check: queries the GitHub check runs of the target commit and refuses to
-  release when one of them failed or is still pending. It only sees check runs that
-  exist: since the workflows run on manual dispatch only (§1, issue #312), a commit on
-  which nothing was dispatched has no check runs and passes this query vacuously. Before
-  cutting a release, dispatch `lint.yml` and `compatibility.yml` on the release commit
-  and wait for them (or attach the `scripts/ci-local.sh --profile full` summary for that
-  exact commit — [docs/business/release-gates.md](business/release-gates.md)).
+  release when one of them failed or is still pending, when the commit has no check runs
+  at all, or when the query itself fails. Since the workflows run on manual dispatch only
+  (§1, issue #312), dispatch `lint.yml` and `compatibility.yml` on the release commit and
+  wait for them before cutting a release. `--skip-ci-check` bypasses the query and is only
+  acceptable with the `scripts/ci-local.sh --profile full` summary for that exact commit
+  ([docs/business/release-gates.md](business/release-gates.md)).
 - Compilation of all `changes/*.md` fragments into `CHANGELOG.md` and bump of `VERSION`.
 - Synchronization of `README.md` version claims.
 - Creation of an annotated git tag `v<X.Y.Z>` matching the exact release commit SHA.

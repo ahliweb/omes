@@ -20,9 +20,9 @@ below cites "CI", the evidence is either a workflow run dispatched on the exact 
 or the summary printed by `scripts/ci-local.sh` (`--profile full` for the compatibility
 matrix) for that commit. Local summaries are self-reported, not enforced by GitHub, so a gate
 reviewer should prefer the dispatched run for a release commit. `scripts/release.sh` queries
-the release commit's GitHub check runs and fails only on check runs that exist: a commit on
-which nothing was dispatched passes that query vacuously, so dispatch the workflows on the
-release commit and wait for them before cutting a release. See [docs/ci.md](../ci.md) section 1.
+the release commit's GitHub check runs and fails closed: it refuses a commit whose check runs
+failed or are pending, a commit with no check runs at all, and an unreachable API, so dispatch
+the workflows on the release commit and wait for them before cutting a release. See [docs/ci.md](../ci.md) section 1.
 
 ## 1. Release stages
 
