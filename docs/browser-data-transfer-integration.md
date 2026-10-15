@@ -181,3 +181,5 @@ Test budget should track *record-level verified correctness* separately from *br
 - If the job affects financial, identity or medical records, default to stricter approval, masking, isolation and independent read-back.
 
 This design requires compatibility checks against the **actual pinned Hermes/Ollama/Playwright versions** and applicable licenses before implementation.
+
+Pinned version evidence, the Hermes native browser and Playwright MCP capability inventory, the A/B/C approach comparison with ADR-0017 classification, the adapter gap analysis, and the (currently BLOCKED) local-model benchmark protocol are recorded in [browser-transfer-compatibility-matrix.md](browser-transfer-compatibility-matrix.md) (#297); this design's compatibility requirement is satisfied only to the extent that document's open items are closed.
