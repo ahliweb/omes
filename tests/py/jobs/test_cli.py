@@ -1,5 +1,7 @@
 """Tests for lib/omes/py/jobs/cli.py (issue #90): schema-gated submission,
 including the "no free-form command execution" requirement."""
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -21,9 +23,16 @@ class CliTestBase(unittest.TestCase):
         # root (None), which resolves via paths.state_root() honoring
         # OMES_STATE_DIR - point it at a fresh temp dir for isolation.
         os.environ["OMES_STATE_DIR"] = str(Path(self._tmp) / "state-dir")
+        # submit is default-deny without a local tenant (issue #279).
+        self._saved_tenant = os.environ.get("OMES_JOBS_TENANT_ID")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
 
     def tearDown(self):
         del os.environ["OMES_STATE_DIR"]
+        if self._saved_tenant is None:
+            os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        else:
+            os.environ["OMES_JOBS_TENANT_ID"] = self._saved_tenant
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def _write_request(self, request: dict) -> str:
@@ -103,3 +112,38 @@ class TestSubmitAcceptsValidRequest(CliTestBase):
         exit_code = cli.cmd_submit(args)
         self.assertEqual(exit_code, cli.EX_OK)
         self.assertEqual(len(store.list_jobs()), 1)
+
+
+class TestSubmitTenantDefaultDeny(CliTestBase):
+    def _valid_request(self, tenant="tenant-acme"):
+        return {
+            "tenant_id": tenant,
+            "correlation_id": "corr-1",
+            "idempotency_key": "idem-0279",
+            "actor": {"type": "user", "id": "op-1"},
+            "operation": "status",
+            "target": {"server_id": "srv-1"},
+        }
+
+    def _submit_json(self, request):
+        path = self._write_request(request)
+        args = cli.build_parser().parse_args(["submit", "--file", path, "--json"])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            exit_code = cli.cmd_submit(args)
+        return exit_code, buf.getvalue()
+
+    def test_unset_tenant_emits_tenant_not_configured(self):
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        exit_code, out = self._submit_json(self._valid_request())
+        self.assertEqual(exit_code, cli.EX_ERROR)
+        doc = json.loads(out)
+        self.assertEqual(doc["error"], "tenant_not_configured")
+        self.assertIn("OMES_JOBS_TENANT_ID", doc["reason"])
+        self.assertEqual(store.list_jobs(), [])
+
+    def test_mismatch_still_emits_cross_tenant_rejected(self):
+        exit_code, out = self._submit_json(self._valid_request(tenant="tenant-other"))
+        self.assertEqual(exit_code, cli.EX_ERROR)
+        self.assertEqual(json.loads(out)["error"], "cross_tenant_rejected")
+        self.assertEqual(store.list_jobs(), [])
