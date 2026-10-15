@@ -296,8 +296,8 @@
       "title": "Graphify Codebase Knowledge Graph Extraction",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_supported",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -308,7 +308,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -316,8 +316,8 @@
       "title": "Graphify MCP Server and Hermes Skill Integration",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_supported",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -328,7 +328,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -336,8 +336,8 @@
       "title": "Graphify Upstream Hermes Skill Installer",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_unverified",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -348,7 +348,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -496,8 +496,8 @@
       "title": "Coolify Optional Deployment Adapter",
       "authority": "omes",
       "upstream_project": "coollabsio/coolify",
-      "supported_baseline": "v4.3.23",
-      "observed_upstream_revision": "v4.3.23",
+      "supported_baseline": "v4.4.6",
+      "observed_upstream_revision": "v4.4.6",
       "maturity": "released_supported",
       "disposition": "defer",
       "plane": "host_control",
@@ -509,8 +509,8 @@
       "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/coollabsio/coolify",
-        "https://github.com/coollabsio/coolify/releases/tag/v4.3.23",
-        "https://github.com/coollabsio/coolify/compare/v4.0.0...v4.3.23"
+        "https://github.com/coollabsio/coolify/releases/tag/v4.4.6",
+        "https://github.com/coollabsio/coolify/compare/v4.3.23...v4.4.6"
       ]
     },
     {
