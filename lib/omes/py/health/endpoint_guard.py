@@ -113,9 +113,18 @@ class Endpoint:
 
     @property
     def display(self) -> str:
-        """Redacted display form: no userinfo, query or fragment can be
-        present in a validated Endpoint, so this is a pure re-serialisation."""
-        return f"{self.scheme}://{self.host_header}{self.base_path}"
+        """Redacted display form. No userinfo, query or fragment can be
+        present in a validated Endpoint, but a path prefix can carry an
+        operator's gateway token (e.g. ``/sk-abc/v1``), so any prefix other
+        than the well-known ``/v1`` is printed as ``/[REDACTED]`` (keeping a
+        trailing ``/v1`` so the probed API version stays visible). The real
+        prefix is still used for the request itself (``probe_path``)."""
+        base = self.base_path
+        if base in ("", "/v1"):
+            shown = base
+        else:
+            shown = "/[REDACTED]" + ("/v1" if base.endswith("/v1") else "")
+        return f"{self.scheme}://{self.host_header}{shown}"
 
     @property
     def probe_path(self) -> str:

@@ -271,6 +271,20 @@ class TestParseEndpoint(unittest.TestCase):
             self.assertEqual(guard.redact_endpoint(raw), "[REDACTED]")
         self.assertEqual(guard.redact_endpoint("HTTP://LocalHost:8000/v1/"), "http://localhost:8000/v1")
 
+    def test_path_prefix_is_never_echoed(self):
+        """A path prefix may carry a gateway token; only "" and "/v1" are shown."""
+        cases = {
+            "http://127.0.0.1:8000": "http://127.0.0.1:8000",
+            "http://127.0.0.1:8000/v1": "http://127.0.0.1:8000/v1",
+            "http://127.0.0.1:8000/sk-CANARY123/v1": "http://127.0.0.1:8000/[REDACTED]/v1",
+            "http://127.0.0.1:8000/gateway/CANARY456": "http://127.0.0.1:8000/[REDACTED]",
+        }
+        for raw, shown in cases.items():
+            self.assertEqual(guard.redact_endpoint(raw), shown)
+            self.assertNotIn("CANARY", guard.redact_endpoint(raw))
+        # The real prefix is still what gets probed.
+        self.assertEqual(guard.parse_endpoint("http://127.0.0.1:8000/sk-CANARY123/v1").probe_path, "/sk-CANARY123/v1/models")
+
     def test_model_id_alphabet(self):
         self.assertEqual(guard.validate_model_id("org/model-7b:q4_K.M@v1"), "org/model-7b:q4_K.M@v1")
         for bad in ("", "a b", "a;b", "a\nb", "x" * 300, None, "$(id)", "a`b"):
