@@ -803,6 +803,27 @@
       ]
     },
     {
+      "capability_id": "omes.health.inference_endpoint_evidence",
+      "title": "OMES Read-Only Inference Endpoint Evidence (loopback/private OpenAI-compatible endpoints, metadata GET only)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": null,
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "plane": "observability",
+      "execution_semantics": "observational",
+      "implementation_status": "implemented",
+      "omes_module": "health",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-inference-serving-architecture.md",
+        "https://github.com/ahliweb/omes/issues/292"
+      ]
+    },
+    {
       "capability_id": "boundary.tool_gateway.mcp",
       "title": "MCP / API / tool integration boundary (logical)",
       "authority": "hermes",
