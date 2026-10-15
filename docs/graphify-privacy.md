@@ -3,7 +3,7 @@
 > Status: implemented, as described. This document is the privacy-specific companion to
 > [docs/graphify.md](graphify.md) (the integration's full technical reference) — it does not
 > repeat that document's install/workflow/export/sync mechanics except where needed to make the
-> privacy picture self-contained. Verified 2026-09-28 against graphify `0.9.71`
+> privacy picture self-contained. Verified 2026-10-14 against graphify `0.9.87`
 > (see [ADR-0014](adr/0014-graphify-integration-boundary.md)).
 
 ## 1. Local AST extraction vs. provider-backed semantic extraction
@@ -63,14 +63,30 @@ When `--mode semantic` runs (an explicit, operator-initiated action - never a de
 
 ## 3. Ignored paths: `.gitignore` and `.graphifyignore`
 
-Re-verified 2026-09-28 against graphify `0.9.71` (`docker run --rm python:3.12-slim bash -c 'pip install -q graphifyy && ...'`,
-a live `extract --code-only` run against a synthetic two-directory repo, once with only a
-`.gitignore` and once with only a `.graphifyignore`): **both mechanisms are honored by graphify
+Re-verified 2026-10-14 against graphify `0.9.87` (`pip install graphifyy==0.9.87` in a fresh Python 3.11 venv, with an
+isolated `HOME`; Docker was unavailable; a live `extract --code-only` run against a synthetic repo containing one
+directory named in `.gitignore` and a different directory named in `.graphifyignore`, with the same run repeated against
+`0.9.71` for comparison): **both mechanisms are honored by graphify
 BY DEFAULT, with no flag needed** — a file matched by either is excluded from extraction. Passing
 `--no-gitignore` additionally disables `.gitignore`/`.git/info/exclude` parsing specifically, "in
 favor of" `.graphifyignore` (per `graphify extract --help`'s own wording) — but `.graphifyignore`
 is not conditional on that flag; it is read either way. Both files use plain gitignore-style
 glob syntax.
+
+Upstream's release notes for `0.9.85` (unanchored ignore patterns now match only the entry name,
+so `*` no longer crosses `/`, and negations follow git) and `0.9.86` (git's global ignore file,
+`core.excludesFile`, is now also respected) change ignore matching after the `0.9.71` baseline.
+To confirm the bundled `.graphifyignore` template below still excludes what it claims, every
+pattern in `modules/graphify/templates/.graphifyignore` was exercised against both `0.9.71` and
+`0.9.87` with a synthetic repository (a shebang script at a path matching each file pattern, and
+a `.py` file at the top level and nested one directory down under each directory pattern, plus
+two control files that must stay indexed). With the template in place, **none** of the
+pattern-matching paths were indexed and both control files were, identically on `0.9.71` and
+`0.9.87`; with an empty `.graphifyignore` (negative control) the directory and SSH-key-style
+paths were indexed, so the check does discriminate. The global-ignore addition only widens what
+graphify skips; `omes graphify sync`'s change detection reads just the repository's own
+`.gitignore`/`.graphifyignore`, so a file skipped only by a global ignore can at worst trigger a
+harmless no-op `graphify update` (never a missed change).
 
 ### `omes graphify init-ignore <path> [--dry-run] [--yes] [--json]`
 
