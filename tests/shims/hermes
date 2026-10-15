@@ -25,6 +25,15 @@
 #                                      support this subcommand at all, unless
 #                                      SHIM_HERMES_CONFIG_GET_SUPPORTED=1 forces
 #                                      a plain "not set" failure instead)
+#                                      `--json` (and `--raw`) are accepted anywhere
+#                                      after `get`. With SUPPORTED=1 an unset key
+#                                      prints "Config key not set: <key>" to stderr
+#                                      and exits 1, like upstream Hermes. The env
+#                                      value is printed verbatim, so for --json
+#                                      callers supply JSON text (10, true, "").
+#   SHIM_HERMES_CONFIG_GET_JSON_UNSUPPORTED  1 => `config get ... --json` fails with
+#                                      "unrecognized arguments: --json" and exit 2
+#                                      (simulates an older Hermes without --json)
 
 set -Eeuo pipefail
 
@@ -53,14 +62,31 @@ case "${1:-}" in
     case "${1:-}" in
       get)
         shift || true
-        key="${1:-}"
+        # Accept `--json` / `--raw` anywhere after `get` (upstream:
+        # `hermes config get <key> [--json] [--raw]`); the key is the first
+        # non-flag argument. The shim never masks, so --raw is a no-op.
+        key=""
+        json_flag=0
+        for arg in "$@"; do
+          case "$arg" in
+            --json) json_flag=1 ;;
+            --raw) ;;
+            -*) ;;
+            *) [[ -n "$key" ]] || key="$arg" ;;
+          esac
+        done
         var_name="SHIM_HERMES_CONFIG_GET_$(printf '%s' "$key" | tr '.' '_' | tr '[:lower:]' '[:upper:]')"
+        if [[ "$json_flag" == "1" && "${SHIM_HERMES_CONFIG_GET_JSON_UNSUPPORTED:-0}" == "1" ]]; then
+          printf 'hermes config get: error: unrecognized arguments: --json\n' >&2
+          exit 2
+        fi
         if [[ -n "${!var_name:-}" ]]; then
           printf '%s\n' "${!var_name}"
           exit 0
         fi
         if [[ "${SHIM_HERMES_CONFIG_GET_SUPPORTED:-0}" == "1" ]]; then
-          printf 'not set\n' >&2
+          # Upstream wording for an unset key with no built-in default.
+          printf 'Config key not set: %s\n' "$key" >&2
           exit 1
         fi
         printf 'unknown command "get" for "hermes config"\n' >&2
