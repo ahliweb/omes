@@ -400,6 +400,109 @@ class TestReconcileOutcomes(ReconcileTestBase):
         self.assertEqual(cli._job_summary(failed).get("runner"), None)
 
 
+class TestReconcileStaleSnapshot(ReconcileTestBase):
+    """The batch path works from a snapshot; the real runner may save a
+    terminal state after it (or during the read-back). Never overwrite it."""
+
+    def finish_on_disk(self, job_id, state="succeeded"):
+        current = store.load_job(job_id, self.root)
+        store.apply_transition(current, state, "runner")
+        store.save_job(current, self.root)
+
+    def test_runner_finished_after_snapshot_is_unchanged_and_preserved(self):
+        record = self.make_running(runner=runner_info())
+        stale = store.load_job(record["job_id"], self.root)  # snapshot taken while `running`
+        self.finish_on_disk(record["job_id"])
+        on_disk = store.paths.job_record_path(record["job_id"], self.root).read_bytes()
+        audit_before = self.audit_lines()
+
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            result = reconcile.reconcile_job(stale, self.root)
+
+        run_argv.assert_not_called()
+        self.assertEqual(result["outcome"], "unchanged")
+        self.assertEqual(result["reason"], "no_longer_running")
+        self.assertEqual(result["state"], "succeeded")
+        self.assertEqual(store.paths.job_record_path(record["job_id"], self.root).read_bytes(), on_disk)
+        self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "succeeded")
+        self.assertEqual(self.audit_lines(), audit_before)
+
+    def test_batch_snapshot_does_not_overwrite_a_finished_job(self):
+        record = self.make_running(runner=runner_info())
+        real_list_jobs = store.list_jobs
+
+        def list_then_finish(root=None):
+            snapshot = real_list_jobs(root)
+            self.finish_on_disk(record["job_id"])
+            return snapshot
+
+        with self.host(liveness=identity.DEAD), \
+             mock.patch.object(store, "list_jobs", side_effect=list_then_finish), \
+             mock.patch.object(runner, "_run_argv") as run_argv:
+            result = reconcile.reconcile(self.root)
+
+        run_argv.assert_not_called()
+        self.assertEqual(result["reconciled"], [])
+        self.assertEqual(result["unchanged"][0]["reason"], "no_longer_running")
+        self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "succeeded")
+        self.assertNotIn("reconciled_orphan", [e["event"] for e in self.audit_lines()])
+
+    def test_state_changed_during_readback_is_unchanged_and_unaudited(self):
+        record = self.make_running(runner=runner_info())
+        job_id = record["job_id"]
+        audit_before = self.audit_lines()
+
+        def readback_while_runner_finishes(argv):
+            self.finish_on_disk(job_id)
+            return READBACK_MISMATCH
+
+        with self.host(liveness=identity.DEAD), \
+             mock.patch.object(runner, "_run_argv", side_effect=readback_while_runner_finishes) as run_argv:
+            result = reconcile.reconcile(self.root)
+
+        run_argv.assert_called_once()
+        self.assertEqual(result["reconciled"], [])
+        self.assertEqual(result["unchanged"][0]["reason"], "no_longer_running")
+        saved = store.load_job(job_id, self.root)
+        self.assertEqual(saved["state"], "succeeded")
+        self.assertIsNone(saved.get("error"))
+        self.assertNotIn("reconciliation", saved.get("evidence", {}))
+        self.assertEqual(self.audit_lines(), audit_before)
+        self.assertNotIn("reconciled_orphan", [e["event"] for e in self.audit_lines()])
+
+    def test_runner_identity_changed_during_readback_is_unchanged(self):
+        record = self.make_running(runner=runner_info())
+        job_id = record["job_id"]
+
+        def readback_while_job_restarts(argv):
+            current = store.load_job(job_id, self.root)
+            current["runner"] = runner_info(pid=9999, ticks=2000)  # a new run took over
+            store.save_job(current, self.root)
+            return READBACK_MATCH
+
+        with self.host(liveness=identity.DEAD), \
+             mock.patch.object(runner, "_run_argv", side_effect=readback_while_job_restarts):
+            result = reconcile.reconcile(self.root)
+
+        self.assertEqual(result["reconciled"], [])
+        self.assertEqual(result["unchanged"][0]["reason"], "no_longer_running")
+        saved = store.load_job(job_id, self.root)
+        self.assertEqual(saved["state"], "running")
+        self.assertEqual(saved["runner"]["pid"], 9999)
+        self.assertNotIn("reconciled_orphan", [e["event"] for e in self.audit_lines()])
+
+    def test_still_running_record_is_reconciled_from_the_fresh_copy(self):
+        record = self.make_running(runner=runner_info())
+        stale = store.load_job(record["job_id"], self.root)
+        stale["tampered_in_memory_only"] = True
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv", return_value=READBACK_MATCH):
+            result = reconcile.reconcile_job(stale, self.root)
+        self.assertEqual(result["outcome"], "reconciled")
+        saved = store.load_job(record["job_id"], self.root)
+        self.assertEqual(saved["state"], "succeeded")
+        self.assertNotIn("tampered_in_memory_only", saved)
+
+
 class TestReconcileScope(ReconcileTestBase):
     def test_other_tenant_job_is_not_touched_in_batch(self):
         mine = self.make_running(runner=runner_info(), key="idem-mine-1")

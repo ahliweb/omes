@@ -240,8 +240,21 @@ if an orphan cannot be proven, the job is left alone.
 | Liveness cannot be determined (other `OSError`) | **not** orphaned (`indeterminate`) |
 | No usable `runner` (record written before #271) | orphan candidate (`legacy_record_stale`) only if `updated_at` is older than `OMES_JOBS_ORPHAN_LEGACY_SECONDS` (default `3600`); otherwise **not** orphaned |
 
-A process that is gone cannot write to the record, so a proven orphan cannot
-race with its own runner; a live runner is never touched.
+A process that is gone cannot write to the record, so a proven orphan's own
+runner cannot overwrite a reconciliation; a live runner is never touched.
+The verdict is only as fresh as the record it was computed from, so
+`reconcile_job` does not trust the batch snapshot: it re-reads the record from
+disk before assessing it and returns `unchanged` with reason
+`no_longer_running` if the state is no longer `running`; it then runs the
+read-back (which may take up to `OMES_JOBS_TIMEOUT_SECONDS`) and re-reads the
+record once more immediately before writing. If the on-disk state is no longer
+`running`, or its `runner` identity differs from the one that was assessed
+(for example a retry started a new run), nothing is written and no audit
+entry is appended, so a terminal state saved by the real runner (or by a
+concurrent `omes job reconcile`) is never overwritten. The transition is
+applied to that freshly loaded record. This is a re-check, not a lock: the job
+store has no file locking, so a save landing in the short interval between the
+final re-read and the write is not excluded.
 
 **Reconciliation (`omes job reconcile [--job <id>]`).** For every orphaned
 `running` job the operation's existing read-back command is re-run

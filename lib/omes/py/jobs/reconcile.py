@@ -46,6 +46,7 @@ REASON_RUNNER_ALIVE = "runner_alive"
 REASON_INDETERMINATE = "indeterminate"
 REASON_LEGACY_RECENT = "legacy_record_recent"
 REASON_NOT_RUNNING = "not_running"
+REASON_NO_LONGER_RUNNING = "no_longer_running"
 
 NOTE_RECONCILED = "reconciled after orphaned run"
 
@@ -168,16 +169,63 @@ def _decide(record: dict[str, Any]) -> tuple[str, str | None, dict[str, Any]]:
     return classification, reason, evidence
 
 
+def _current_state(job_id: str, root: Path | None, fallback: dict[str, Any]) -> str | None:
+    try:
+        return store.load_job(job_id, root).get("state")
+    except (store.UnknownJobError, OSError, ValueError):
+        return fallback.get("state")
+
+
+def _reload_running(job_id: str, root: Path | None, expected_runner: Any = None, check_runner: bool = False) -> dict[str, Any] | None:
+    """Returns the CURRENT on-disk record if it is still `running` (and, when
+    `check_runner`, still carries exactly `expected_runner`), else None. A
+    record that disappeared, became unreadable, left `running`, or was taken
+    over by a different runner is never touched."""
+    try:
+        fresh = store.load_job(job_id, root)
+    except (store.UnknownJobError, OSError, ValueError):
+        return None
+    if fresh.get("state") != "running":
+        return None
+    if check_runner and fresh.get("runner") != expected_runner:
+        return None
+    return fresh
+
+
 def reconcile_job(record: dict[str, Any], root: Path | None = None, actor: str = "system") -> dict[str, Any]:
-    """Reconciles one job record in place. Returns a result dict:
+    """Reconciles one job. Returns a result dict:
     {"job_id", "outcome": "reconciled" | "unchanged", "state", "reason", ...}.
+
+    `record` may be a stale snapshot (the batch path loads every `running`
+    record once, and the read-back below can take up to
+    OMES_JOBS_TIMEOUT_SECONDS), so the on-disk record is re-read
+    (a) before the orphan assessment and (b) again immediately before the
+    transition is written. If it is no longer `running`, or its `runner`
+    identity differs from the one that was assessed, nothing is written and
+    no audit entry is appended: a terminal state saved by the job's real
+    runner is never overwritten. The transition is applied to the freshly
+    loaded record, not to the stale snapshot. This is a re-check, not a lock:
+    a write landing between the final re-read and `save_job` is not excluded.
     """
     job_id = record["job_id"]
+    if record.get("state") == "running":
+        fresh = _reload_running(job_id, root)
+        if fresh is None:
+            return {"job_id": job_id, "outcome": "unchanged", "state": _current_state(job_id, root, record), "reason": REASON_NO_LONGER_RUNNING}
+        record = fresh
+
     verdict = assess(record)
     if not verdict["orphaned"]:
         return {"job_id": job_id, "outcome": "unchanged", "state": record["state"], "reason": verdict["reason"]}
 
+    assessed_runner = record.get("runner")
     classification, reason, readback = _decide(record)
+
+    # The read-back may have run for a long time; re-check before writing.
+    latest = _reload_running(job_id, root, assessed_runner, check_runner=True)
+    if latest is None:
+        return {"job_id": job_id, "outcome": "unchanged", "state": _current_state(job_id, root, record), "reason": REASON_NO_LONGER_RUNNING}
+    record = latest
     previous_runner = record.get("runner")
 
     if classification == "match":
