@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # shellcheck shell=bash
 # scripts/release.sh - cut and verify an OMES release per docs/adr/0010 & issue #168:
-#   1. enforces clean main branch and required green checks on release commit,
+#   1. enforces clean main branch and a CI gate that FAILS CLOSED: every blocking
+#      job must have passed on the release commit (GitHub check runs or a local
+#      scripts/ci-local.sh evidence file); zero check runs is never a pass (#315),
 #   2. compiles changes/*.md fragments into a new CHANGELOG.md section,
 #   3. writes the new version to VERSION and synchronizes README status,
 #   4. removes the consumed fragments,
@@ -17,7 +19,19 @@
 #   --dry-run             Validate conditions and print actions without mutation
 #   --allow-non-main      Allow running on a non-main branch (for testing)
 #   --allow-dirty         Allow running on a dirty working tree (for testing)
-#   --skip-ci-check       Skip querying GitHub check-runs API
+#   --ci-evidence PATH    Local CI evidence file produced by
+#                         `scripts/ci-local.sh --profile full --json` on the
+#                         release commit (default: .omes-ci/ci-local-<sha>.json).
+#                         Accepted instead of GitHub check runs, or when `gh` is
+#                         absent; self-reported, bound to the commit SHA.
+#   --skip-ci-check       Explicitly skip the CI gate (never the default). Prints
+#                         a warning and is recorded in the tag message and the
+#                         GitHub Release notes. Without it, a release needs
+#                         acceptable evidence for EVERY blocking job: green GitHub
+#                         check runs for lint.yml and compatibility.yml
+#                         (`gh workflow run lint.yml --ref <ref>` and
+#                         `gh workflow run compatibility.yml --ref <ref>`), or
+#                         the local evidence file above. See docs/ci.md section 8.
 #   --bundle-dir DIR      Directory to write release evidence bundle in (default: dist/release-vX.Y.Z)
 #   --skip-bundle         Skip generating SLSA provenance and SBOM evidence bundle
 #   --push                Push the created tag to origin
@@ -45,6 +59,8 @@ dry_run=0
 allow_non_main=0
 allow_dirty=0
 skip_ci_check=0
+ci_evidence=""
+ci_gate_skip_note=""
 bundle_dir=""
 skip_bundle=0
 do_push=0
@@ -61,7 +77,7 @@ die() {
 }
 
 usage() {
-  sed -n '2,29p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  sed -n '2,/^#   -h, --help/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------------------
@@ -317,6 +333,13 @@ while [[ $# -gt 0 ]]; do
       skip_ci_check=1
       shift
       ;;
+    --ci-evidence)
+      [[ $# -ge 2 && -n "$2" ]] || die "--ci-evidence requires a path argument"
+      ci_evidence="$2"
+      # Resolve now: the script changes into the repository root below.
+      [[ "$ci_evidence" == /* ]] || ci_evidence="${PWD}/${ci_evidence}"
+      shift 2
+      ;;
     --bundle-dir)
       [[ $# -ge 2 ]] || die "--bundle-dir requires an argument"
       bundle_dir="$2"
@@ -406,50 +429,117 @@ if git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
   warn "tag ${tag_name} already exists and matches current HEAD"
 fi
 
-# 4. CI checks verification on current HEAD if not skipped
-if [[ "$skip_ci_check" -ne 1 && "$dry_run" -ne 1 ]] && command -v gh >/dev/null 2>&1; then
-  current_sha="$(git rev-parse HEAD)"
-  log "verifying GitHub CI checks for commit ${current_sha}..."
+# 4. CI gate on the commit being released (issue #315). It FAILS CLOSED: the
+# workflows are manual-only (issue #312), so a commit nobody dispatched them on
+# has ZERO check runs, and "no failing check run" is not evidence of anything.
+# The gate passes only when scripts/release-ci-gate.py finds acceptable evidence
+# that EVERY blocking job passed on this exact commit: green GitHub check runs,
+# or a local scripts/ci-local.sh --profile full --json evidence file. A missing
+# `gh` skips nothing; it only leaves the local-evidence source.
 
-  # Query commit check runs via GitHub API. Fail closed: with the workflows
-  # on manual dispatch only (issue #312), a commit nobody dispatched CI on has
-  # no check runs at all, and an unreachable API proves nothing either, so
-  # neither may be reported as green. Use --skip-ci-check only with other
-  # evidence for this exact commit (docs/business/release-gates.md).
-  if ! check_output="$(gh api "repos/:owner/:repo/commits/${current_sha}/check-runs" 2>/dev/null)"; then
-    die "could not query GitHub check runs for ${current_sha}; refusing to release without CI evidence (pass --skip-ci-check only with ci-local evidence for this exact commit)"
+# ci_gate MODE - MODE is "enforce" (die without evidence) or "report" (--dry-run:
+# no network, no failure; print what the gate requires and the local-evidence
+# verdict).
+ci_gate() {
+  local mode="$1" sha evidence ref gate_tmp jobs_file checks_file gate_out gate_rc=0 line
+  local checks_note="" ci_local="${repo_root}/scripts/ci-local.sh" gate_py="${repo_root}/scripts/release-ci-gate.py"
+  sha="$(git rev-parse HEAD)"
+  evidence="${ci_evidence:-${repo_root}/.omes-ci/ci-local-${sha}.json}"
+  ref="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+  if [[ -z "$ref" || "$ref" == "HEAD" ]]; then ref="<branch-or-tag>"; fi
+
+  # gate_unavailable REASON - the gate itself cannot run: fail closed, except
+  # in --dry-run where it is only reported.
+  gate_unavailable() {
+    if [[ "$mode" == "report" ]]; then
+      warn "[dry-run] CI gate cannot be evaluated here: $*"
+      return 0
+    fi
+    die "CI gate cannot be evaluated (failing closed): $*"
+  }
+
+  if [[ ! -f "$ci_local" || ! -f "$gate_py" ]]; then
+    gate_unavailable "scripts/ci-local.sh and scripts/release-ci-gate.py are required to derive the blocking jobs"
+    return 0
   fi
-  ci_verdict="$(printf '%s' "$check_output" | python3 -c '
-import json, sys
-try:
-    runs = json.load(sys.stdin).get("check_runs", [])
-except Exception:
-    print("ERROR: unparseable check-runs response")
-    sys.exit(0)
-if not runs:
-    print("NONE")
-    sys.exit(0)
-failing = [r.get("name", "?") for r in runs if r.get("status") == "completed" and r.get("conclusion") not in ("success", "neutral", "skipped")]
-pending = [r.get("name", "?") for r in runs if r.get("status") != "completed"]
-if failing:
-    print("FAIL: " + ", ".join(failing))
-elif pending:
-    print("PENDING: " + ", ".join(pending))
-else:
-    print("OK")
-')"
-  case "$ci_verdict" in
-    OK) ;;
-    NONE)
-      die "commit ${current_sha} has no GitHub check runs; dispatch lint.yml and compatibility.yml on it (gh workflow run <workflow> --ref <branch>) and wait for them, or pass --skip-ci-check only with ci-local evidence for this exact commit"
-      ;;
-    *)
-      die "CI checks on ${current_sha} have not passed: ${ci_verdict}"
-      ;;
-  esac
-  log "CI checks verified green for commit ${current_sha}"
-elif [[ "$skip_ci_check" -ne 1 && "$dry_run" -ne 1 ]]; then
-  warn "gh is not installed; GitHub CI checks for this commit were NOT verified"
+  if [[ -n "$(git status --porcelain -- .github/workflows scripts/ci-local.sh scripts/release-ci-gate.py 2>/dev/null || true)" ]]; then
+    gate_unavailable "the workflow files or the CI gate scripts differ from commit ${sha}; the required jobs must come from the release commit itself"
+    return 0
+  fi
+
+  gate_tmp="$(mktemp -d)"
+  # shellcheck disable=SC2064 # expand gate_tmp now: the variable is function-local
+  trap "rm -rf '${gate_tmp}'" EXIT
+  jobs_file="${gate_tmp}/jobs.json"
+  checks_file="${gate_tmp}/check-runs.json"
+
+  # The job list is read from the release commit; an inherited workflow-dir
+  # override must not be able to shrink the required set.
+  if ! env -u OMES_CI_WORKFLOWS_DIR bash "$ci_local" --list --json --profile full >"$jobs_file" 2>"${gate_tmp}/jobs.err"; then
+    gate_unavailable "scripts/ci-local.sh could not list the blocking jobs"
+    return 0
+  fi
+
+  if [[ "$mode" == "report" ]]; then
+    checks_note="GitHub check runs are not queried in --dry-run"
+    checks_file=""
+  elif command -v gh >/dev/null 2>&1; then
+    log "querying GitHub check runs for commit ${sha}..."
+    if ! gh api --paginate "repos/:owner/:repo/commits/${sha}/check-runs?per_page=100&filter=latest" >"$checks_file" 2>/dev/null; then
+      checks_file=""
+      checks_note="could not query GitHub check runs (gh not authenticated, offline or no access)"
+    fi
+  else
+    checks_file=""
+    checks_note="'gh' is not installed, so GitHub check runs could not be queried"
+  fi
+
+  local -a gate_args=(--sha "$sha" --jobs "$jobs_file" --evidence "$evidence")
+  if [[ -n "$checks_file" ]]; then
+    gate_args+=(--checks "$checks_file")
+  else
+    gate_args+=(--checks-note "$checks_note")
+  fi
+  gate_out="$(python3 "$gate_py" "${gate_args[@]}" 2>"${gate_tmp}/gate.err")" || gate_rc=$?
+
+  if [[ "$gate_rc" -eq 0 ]]; then
+    log "CI gate passed for commit ${sha}: ${gate_out}"
+    return 0
+  fi
+  if [[ "$gate_rc" -ne 1 ]]; then
+    gate_unavailable "$(tr '\n' ' ' <"${gate_tmp}/gate.err")"
+    return 0
+  fi
+
+  if [[ "$mode" == "report" ]]; then
+    warn "[dry-run] CI gate would currently FAIL for commit ${sha} (no acceptable CI evidence yet); a real release requires it:"
+    while IFS= read -r line; do warn "[dry-run]   ${line}"; done <<<"$gate_out"
+    return 0
+  fi
+
+  err "CI gate FAILED for commit ${sha}: no acceptable CI evidence (zero check runs is not a pass)"
+  while IFS= read -r line; do err "  ${line}"; done <<<"$gate_out"
+  err "Produce evidence for exactly this commit, by either:"
+  err "  1. GitHub: gh workflow run lint.yml --ref ${ref}  and  gh workflow run compatibility.yml --ref ${ref}"
+  err "     wait until both finish green, then run this release command again"
+  err "  2. Local:  mkdir -p .omes-ci && scripts/ci-local.sh --profile full --json > ${evidence}"
+  err "     on a clean, non-shallow checkout of this commit (self-reported, not enforced by GitHub; see docs/ci.md section 8)"
+  err "Only if you consciously accept releasing without CI evidence: --skip-ci-check (recorded in the tag and release notes)."
+  exit 1
+}
+
+if [[ "$skip_ci_check" -eq 1 ]]; then
+  ci_gate_skip_note="CI gate: SKIPPED with --skip-ci-check. No CI evidence was verified for commit $(git rev-parse HEAD) before this release."
+  warn "=============================================================="
+  warn "WARNING: --skip-ci-check is set. The CI gate is SKIPPED."
+  warn "No CI evidence is verified for $(git rev-parse HEAD); this release"
+  warn "is NOT known to have passed CI. It is recorded in the tag message"
+  warn "and in the GitHub Release notes."
+  warn "=============================================================="
+elif [[ "$dry_run" -eq 1 ]]; then
+  ci_gate report
+else
+  ci_gate enforce
 fi
 
 # ---------------------------------------------------------------------------
@@ -563,7 +653,11 @@ Compile changes/ fragments into CHANGELOG.md and bump VERSION."
   target_commit="$(git rev-parse HEAD)"
 
   if ! git rev-parse -q --verify "refs/tags/${tag_name}" >/dev/null; then
-    git tag -a "${tag_name}" -m "OMES ${tag_name}"
+    if [[ -n "$ci_gate_skip_note" ]]; then
+      git tag -a "${tag_name}" -m "OMES ${tag_name}" -m "$ci_gate_skip_note"
+    else
+      git tag -a "${tag_name}" -m "OMES ${tag_name}"
+    fi
     log "created annotated tag ${tag_name} -> ${target_commit}"
   fi
 
@@ -634,6 +728,10 @@ if start != -1:
         out.write(notes + '\n')
 "
 
+  if [[ -n "$ci_gate_skip_note" ]]; then
+    printf '\n> **%s**\n' "$ci_gate_skip_note" >>"$tmp_notes"
+  fi
+
   log "publishing GitHub Release for ${tag_name}..."
   if gh release view "${tag_name}" >/dev/null 2>&1; then
     gh release edit "${tag_name}" --title "OMES ${tag_name}" --notes-file "$tmp_notes"
@@ -660,4 +758,7 @@ if start != -1:
   log "GitHub Release published and verified: ${tag_name}"
 fi
 
+if [[ -n "$ci_gate_skip_note" ]]; then
+  warn "release v${version} completed WITHOUT a CI gate (--skip-ci-check)"
+fi
 log "release v${version} completed successfully"

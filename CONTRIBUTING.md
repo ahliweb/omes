@@ -112,7 +112,24 @@ git push origin main --follow-tags
 ```
 
 The script refuses to run on a dirty tree, on an existing tag, or when
-`changes/` is empty, and rejects malformed fragments. Create the GitHub
+`changes/` is empty, and rejects malformed fragments. It also **fails closed
+on CI evidence** (issue #315): because the GitHub workflows are manual-only,
+the release commit needs evidence that every blocking job passed, from
+either source (details in [docs/ci.md](docs/ci.md) §8.1):
+
+```bash
+# 1. GitHub check runs: dispatch both workflows on the release commit and wait
+gh workflow run lint.yml --ref <tag-or-branch>
+gh workflow run compatibility.yml --ref <tag-or-branch>
+# 2. or a local evidence file (clean, non-shallow checkout of that commit;
+#    self-reported, not enforced by GitHub)
+mkdir -p .omes-ci
+scripts/ci-local.sh --profile full --json > ".omes-ci/ci-local-$(git rev-parse HEAD).json"
+```
+
+Zero check runs is not a pass, and a missing `gh` does not skip the gate.
+`--skip-ci-check` is an explicit opt-out that prints a warning and is recorded
+in the tag message and release notes. Create the GitHub
 release from the tag afterwards (`gh release create vX.Y.Z --notes-from-tag`
 or paste the CHANGELOG section).
 
