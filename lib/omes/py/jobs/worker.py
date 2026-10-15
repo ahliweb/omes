@@ -421,7 +421,12 @@ def poll_and_dispatch_once(
     if job.get("rollback_ref"):
         req_doc["rollback_ref"] = job["rollback_ref"]
 
-    job_record, _replayed = store.submit(req_doc, root=state_dir, actor_for_audit="worker")
+    job_record, _replayed = store.submit(
+        req_doc,
+        root=state_dir,
+        actor_for_audit="worker",
+        enrolled_tenant_id=creds.tenant_id,
+    )
     job_id = job_record["job_id"]
 
     if not store.can_auto_approve(op_name):
