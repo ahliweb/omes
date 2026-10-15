@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import audit, store
+from . import audit, identity, store
 
 DEFAULT_TIMEOUT_SECONDS = 120
 
@@ -292,6 +292,9 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     else:
         raise store.InvalidTransitionError(state, "running")
 
+    # Executor identity (issue #271): lets `omes job reconcile` prove this
+    # record is orphaned if this process dies before reaching a terminal state.
+    record["runner"] = identity.runner_identity()
     store.save_job(record, root)
     audit.append(root, actor=actor, job_id=record["job_id"], event="run_started", to_state="running")
 
