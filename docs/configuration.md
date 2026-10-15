@@ -274,8 +274,8 @@ The OMES-side control job runner used by a future Control Center (issue
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `OMES_JOBS_TENANT_ID` | unset (default-deny) | Operator | The tenant this OMES instance is enrolled under. If unset, `omes job submit` refuses every request (no implicit tenant). If set, a request whose `tenant_id` does not match is rejected as cross-tenant and audited. Read by `lib/omes/py/jobs/store.py`. |
-| `OMES_JOBS_SERVER_ID` | unset (not checked) | Operator | If set, a request whose `target.server_id` does not match is rejected as cross-tenant and audited. |
+| `OMES_JOBS_TENANT_ID` | unset (default-deny) | Operator | The tenant this OMES instance is enrolled under. If unset, `omes job submit` refuses every request with `tenant_not_configured` (default-deny, no implicit tenant; hosts that submitted jobs without it must now set it). If set, a request whose `tenant_id` does not match is rejected as cross-tenant (`cross_tenant_rejected`). Neither rejection is written to the job audit log (no job exists to attach it to). The pull worker (`omes worker`) does not need this variable: it uses the tenant it was enrolled under (`omes worker enroll --tenant`). Read by `lib/omes/py/jobs/store.py`. |
+| `OMES_JOBS_SERVER_ID` | unset (not checked) | Operator | If set, a request whose `target.server_id` does not match is rejected as cross-tenant (not written to the job audit log). |
 | `OMES_JOBS_AUTO_APPROVE` | `preflight,status,backup` | Operator | Comma-separated allowlist of operation names that `omes job run` may auto-approve from `queued` without an explicit `omes job approve`. A destructive operation (`restore`, `rollback`, `stop`, `configure`) is never auto-approvable regardless of this list. |
 | `OMES_JOBS_TTL_SECONDS` | `3600` | Operator | Age (from `created_at`) after which `omes job expire` moves a `queued`/`approved` job to `expired`. |
 | `OMES_JOBS_TIMEOUT_SECONDS` | `120` | Operator | Per-command timeout for both the operation's execution and its read-back verification. A timeout is never reported as success. |
