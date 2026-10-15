@@ -371,6 +371,16 @@
       "upstream_project": "ahliweb/omes"
     },
     {
+      "authority": "omes",
+      "execution_semantics": "deterministic",
+      "id": "omes.rescue.evidence_contract",
+      "implementation_status": "staged",
+      "name": "Rescue AI Bounded Evidence Contract (external companion)",
+      "omes_module": null,
+      "plane": "host_control",
+      "upstream_project": "ahliweb/omes"
+    },
+    {
       "authority": "platform",
       "execution_semantics": "deterministic",
       "id": "platform.host.infrastructure",

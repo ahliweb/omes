@@ -369,6 +369,17 @@ particular, **OMES does not mediate all Hermes-native tool execution** — a use
 Hermes through a Hermes-owned channel bypasses both AWCMS and OMES entirely, and no control in this
 document changes that.
 
+### 8.x Rescue companion cloud-AI route (issue #261)
+
+The optional external Ventoy/Linux rescue companion ([docs/rescue-ai.md](rescue-ai.md)) may use
+OpenCode Go, a cloud model destination. That route is governed by the same classification and
+egress rules as every other AI path ([docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md),
+[ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md)): `restricted` data (credentials,
+private keys, secrets) is never sent to the cloud, and `confidential` data requires an explicit,
+referenced egress approval. The `contracts/rescue-ai/v1` evidence schema fails closed on these
+combinations, but it only validates recorded metadata; it does not intercept or gate the
+companion's model calls, which are not implemented in this repository (tracked in #261).
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
