@@ -1,0 +1,1 @@
+'allowlist' is not one of ['open', 'none']

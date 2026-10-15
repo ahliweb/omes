@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional
 from . import compose as compose_mod
 from . import compose_health
 from . import compose_preflight
+from . import isolation_drift
 from . import health as health_mod
 from . import manifest as manifest_mod
 from . import migration as migration_mod
@@ -858,6 +859,36 @@ def cmd_status(args: argparse.Namespace) -> int:
     return EX_OK
 
 
+def cmd_isolation_drift(args: argparse.Namespace) -> int:
+    """`omes agent isolation-drift <name>` (issue #276): read-only
+    comparison of the declared compose isolation posture with the running
+    container's `docker inspect` state. Exit 0 only for status `ok`;
+    `drift` and `unknown` both exit 7 (the JSON `status` tells them
+    apart). Never mutates anything."""
+    omes_root = _omes_root()
+    try:
+        manifest = _load_manifest(args.name, omes_root)
+    except manifest_mod.ManifestError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return EX_PREFLIGHT
+
+    if _backend(manifest) != "compose":
+        print("error: 'omes agent isolation-drift' is only implemented for backend=compose (see docs/agent-deployment.md)", file=sys.stderr)
+        return EX_USAGE
+
+    plan = compose_mod.build_plan(manifest)
+    result = isolation_drift.check(plan, timeout=_doctor_timeout())
+    if args.json:
+        _print(result, True)
+    else:
+        print(f"{args.name}: isolation {result['status']} (container {result['container']})")
+        for finding in result["findings"]:
+            print(f"  [{finding['severity']}] {finding['field']}: declared={finding['declared']!r} observed={finding['observed']!r}")
+        if result.get("reason"):
+            print(f"  reason: {result['reason']}")
+    return EX_OK if result["status"] == isolation_drift.STATUS_OK else EX_VERIFY
+
+
 def cmd_health(args: argparse.Namespace) -> int:
     omes_root = _omes_root()
     try:
@@ -1295,7 +1326,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_doctor.add_argument("--json", action="store_true")
     p_doctor.set_defaults(func=cmd_doctor)
 
-    for name, func in (("check", cmd_check), ("plan", cmd_plan), ("status", cmd_status), ("health", cmd_health), ("restart", cmd_restart)):
+    for name, func in (("check", cmd_check), ("plan", cmd_plan), ("status", cmd_status), ("health", cmd_health), ("isolation-drift", cmd_isolation_drift), ("restart", cmd_restart)):
         p = sub.add_parser(name)
         p.add_argument("agent_name", metavar="name")
         p.add_argument("--json", action="store_true")

@@ -104,7 +104,10 @@ and `compose up|ps|logs|down|exec` (lifecycle), each with an
 env-controlled failure mode (`SHIM_DOCKER_CONTEXT`,
 `SHIM_DOCKER_ENDPOINT`, `SHIM_DOCKER_SECURITY_OPTIONS`,
 `SHIM_DOCKER_COMPOSE_UP_EXIT`, `SHIM_DOCKER_COMPOSE_PS_OUTPUT`,
-`SHIM_DOCKER_COMPOSE_EXEC_EXIT`) - never a real Docker daemon.
+`SHIM_DOCKER_COMPOSE_EXEC_EXIT`, and for the isolation-drift check
+`SHIM_DOCKER_INSPECT_OUTPUT`/`SHIM_DOCKER_INSPECT_EXIT`/
+`SHIM_DOCKER_NETWORK_INSPECT_OUTPUT`/`SHIM_DOCKER_NETWORK_INSPECT_EXIT`) -
+never a real Docker daemon.
 Real-Docker/VM integration is opt-in-only follow-up (no rootless Docker
 daemon is available in this implementation environment) - see
 [docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)

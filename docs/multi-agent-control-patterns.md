@@ -86,7 +86,7 @@ yet (tracked in #N)" means no code or contract exists today.
 | Capability permissions | AWCMS and OMES | Entitlement checks with `RESOURCE_KEYS` (`lib/omes/py/jobs/entitlement.py`); permission re-derivation as above. | OMES (existing) | [#274](https://github.com/ahliweb/omes/issues/274) |
 | Approval gates | AWCMS (business); Hermes (tool); OMES (job approve) | `omes job approve` for non-auto-approved operations; Hermes ACP approval prompts "allow once / allow always / deny"; AWCMS owns tenant approvals. | AWCMS / DELEGATE / OMES per scope | [#274](https://github.com/ahliweb/omes/issues/274) |
 | Budget and token governance | AWCMS (policy); Hermes and infrastructure (enforcement) | No token, usage or spend concept in OMES. `docs/security.md` states OMES sets no LLM-spend ceiling. Hermes limits (`max_iterations`, `child_timeout_seconds`, depth, concurrency) and host cgroup limits exist. | AWCMS + DELEGATE | [#275](https://github.com/ahliweb/omes/issues/275) (not implemented yet) |
-| Workload isolation | OMES/infrastructure (OS); Hermes (logical) | Hardening profiles, rootless Compose (#96), opt-in `hermes-restricted` egress `IPAddressDeny=any`. Gaps in §4, G5. | OMES (OS) | [#276](https://github.com/ahliweb/omes/issues/276) |
+| Workload isolation | OMES/infrastructure (OS); Hermes (logical) | Implemented: hardening profiles, rootless Compose (#96), opt-in `hermes-restricted` egress `IPAddressDeny=any`, per-deployment compose `egress: "none"` (`internal: true`, all-or-nothing) and the read-only `omes agent isolation-drift` declared-versus-running check (`lib/omes/py/agent/isolation_drift.py`, shim-tested). Not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)): a per-destination egress allowlist, a runtime egress probe, real rootless-daemon evidence, and scheduled or `omes agent doctor` drift reporting. See §4, G7. | OMES (OS) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | Node/process restart recovery | Hermes (agent runs); OMES (host jobs) | Hermes: running child becomes `unknown` after restart. OMES: no orphan reconciliation for host jobs (§4, G1). | DELEGATE / OMES | [#271](https://github.com/ahliweb/omes/issues/271) |
 
 ## 4. Verified gaps
@@ -102,12 +102,13 @@ that tree and may move; the file and symbol names are the stable reference.
 | G4 | No cross-plane causation or trace identifiers; no OpenTelemetry. | Search of `lib/`, `modules/`, `contracts/` for `traceparent`, `trace_id`, `span_id`, `causation_id`, `opentelemetry` returned nothing | [#272](https://github.com/ahliweb/omes/issues/272) |
 | G5 | No unified policy/capability decision envelope; policy facts are spread across `operation-request.permission`, AI-egress decisions and job approval sets. | `lib/omes/py/jobs/store.py:112-114` (`DESTRUCTIVE_OPERATIONS`, `DEFAULT_AUTO_APPROVE`); `lib/omes/py/privacy/egress_policy.py` (`AI_EGRESS_*`) | [#274](https://github.com/ahliweb/omes/issues/274) |
 | G6 | No token, usage or spend concept; OMES documents that it sets no LLM-spend ceiling. | `docs/security.md` (non-guarantees list); `lib/omes/py/jobs/entitlement.py:25-32` (`RESOURCE_KEYS` has no budget key) | [#275](https://github.com/ahliweb/omes/issues/275) |
-| G7 | Compose network is a plain bridge with `internal: false`, so there is no per-container egress control. There is no real rootless-daemon evidence and no declared-versus-running drift detection. | `lib/omes/py/agent/compose.py:400-403`; compare opt-in `modules/hermes-restricted/module.sh:467` (`IPAddressDeny=any`) | [#276](https://github.com/ahliweb/omes/issues/276) |
+| G7 | Partly closed by #276. Originally the compose network was always a plain bridge with `internal: false` and nothing compared declared with running state. Implemented now: `compose.egress` (`"open"` default, unchanged; `"none"` renders `internal: true`) and the read-only `omes agent isolation-drift` command, both shim-tested. Still Not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)): a per-destination egress allowlist (Docker `internal: true` blocks all external egress and has no allowlist), a runtime egress probe, evidence from a real rootless daemon, and wiring drift into `omes agent doctor` or a schedule. | `lib/omes/py/agent/compose.py` (`EGRESS_MODES`, `render_compose_yaml`); `lib/omes/py/agent/isolation_drift.py`; compare opt-in `modules/hermes-restricted/module.sh:467` (`IPAddressDeny=any`) | [#276](https://github.com/ahliweb/omes/issues/276) |
 | G8 | Hermes per-task model selection does not exist upstream at the pinned baseline. | Delegation page, quote in §3 | [#270](https://github.com/ahliweb/omes/issues/270) |
 
 ## 5. Child issue plan
 
-All children are **Not implemented yet** as of 2026-10-03.
+All children are **Not implemented yet** as of 2026-10-03, except the parts of
+#276 recorded in its row below.
 
 | Issue | Title (summary) | Authority | Depends on | Deliverable |
 |---|---|---|---|---|
@@ -117,7 +118,7 @@ All children are **Not implemented yet** as of 2026-10-03.
 | [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp`; outbound deferred to upstream |
 | [#274](https://github.com/ahliweb/omes/issues/274) | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | #272 | Composition schema; deny/unavailable wins; no new policy engine |
 | [#275](https://github.com/ahliweb/omes/issues/275) | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | #270 | Policy contract and evidence; unknown usage is not zero |
-| [#276](https://github.com/ahliweb/omes/issues/276) | Workload isolation profile and verification | OMES/infrastructure (logical isolation: Hermes) | None | Declared-versus-running drift verification, egress findings |
+| [#276](https://github.com/ahliweb/omes/issues/276) | Workload isolation profile and verification | OMES/infrastructure (logical isolation: Hermes) | None | Declared-versus-running drift verification and per-deployment egress mode: implemented for the compose backend (shim-tested). Egress allowlist and real-daemon evidence: Not implemented yet (tracked in #276) |
 | [#277](https://github.com/ahliweb/omes/issues/277) | Mission Control projection | AWCMS presentation | #270–#276, PR [#268](https://github.com/ahliweb/omes/pull/268) | Read-only projection of existing sources |
 
 Sequencing: #272 (envelope) lands before #274 (decision envelope) and #277.
