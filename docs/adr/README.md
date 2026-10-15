@@ -43,6 +43,7 @@ architecture and state model."
 | [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
 | [0030](0030-repository-progress-projection.md) | GitHub repository progress projection for the Progres Hermes view | Accepted |
 | [0031](0031-mission-control-compositional-projection.md) | 3D Mission Control is a derived compositional projection, not an authority | Accepted |
+| [0032](0032-multi-agent-control-patterns-boundary.md) | Multi-agent control patterns adopted without a second agent runtime | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -114,7 +115,7 @@ ADR 0031 was authored on 2026-10-02 as part of issue
 [#263](https://github.com/ahliweb/omes/issues/263), "3D Mission Control:
 non-redundant organizational digital twin."
 
-
+ADR 0032 was authored on 2026-10-03 as part of epic [#269](https://github.com/ahliweb/omes/issues/269) (phase 0: gap analysis and decomposition into #270–#277).
 
 ## Conventions
 
