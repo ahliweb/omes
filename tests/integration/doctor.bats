@@ -93,3 +93,61 @@ EOF
   [ "$status" -eq 0 ]
   [[ "$output" == *"module:apt-base"*"WARN"*"requires root"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# Browser worker readiness (issue #298): opt-in via OMES_BROWSER_WORKER_ID,
+# advisory (WARN, never FAIL), and a pure reuse of `omes health
+# browser-worker` - see docs/browser-worker-readiness.md.
+# ---------------------------------------------------------------------------
+
+@test "doctor skips the browser worker check entirely when no worker is declared" {
+  unset OMES_BROWSER_WORKER_ID || true
+  run "$OMES_BIN" doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"browser_worker"* ]]
+}
+
+@test "doctor reports a declared but unconfigured browser worker as WARN and still exits 0" {
+  export OMES_BROWSER_WORKER_ID="worker-fixture"
+  unset OMES_JOBS_TENANT_ID OMES_JOBS_SERVER_ID || true
+  run "$OMES_BIN" doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"browser_worker"*"WARN"*"could not be evaluated"* ]]
+}
+
+@test "doctor surfaces the browser worker state and reason codes as WARN (isolation evidence is not integrated)" {
+  export OMES_BROWSER_WORKER_ID="worker-fixture"
+  export OMES_JOBS_TENANT_ID="tenant-fixture"
+  export OMES_JOBS_SERVER_ID="server-fixture"
+  export OMES_BROWSER_WORKER_CAPABILITY_PROFILE="deterministic"
+  export HOME="${OMES_TEST_TMPDIR}/home"
+  mkdir -p "$HOME"
+  export PLAYWRIGHT_BROWSERS_PATH="${OMES_TEST_TMPDIR}/no-playwright-cache"
+  run "$OMES_BIN" doctor
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"browser_worker"*"WARN"*"state="* ]]
+  [[ "$output" == *"ISOLATION_EVIDENCE_NOT_INTEGRATED"* ]]
+}
+
+@test "doctor --json includes the browser worker check with a valid level" {
+  export OMES_BROWSER_WORKER_ID="worker-fixture"
+  export OMES_JOBS_TENANT_ID="tenant-fixture"
+  export OMES_JOBS_SERVER_ID="server-fixture"
+  export HOME="${OMES_TEST_TMPDIR}/home"
+  mkdir -p "$HOME"
+  export PLAYWRIGHT_BROWSERS_PATH="${OMES_TEST_TMPDIR}/no-playwright-cache"
+  omes_run_stdout_only "$OMES_BIN" doctor --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+
+d = json.loads(os.environ["OMES_TEST_JSON"])
+checks = [c for c in d["checks"] if c["name"] == "browser_worker"]
+assert len(checks) == 1, checks
+assert checks[0]["level"] == "WARN", checks[0]
+assert "state=" in checks[0]["detail"], checks[0]
+assert d["ok"] is True
+'
+  [ "$status" -eq 0 ]
+}

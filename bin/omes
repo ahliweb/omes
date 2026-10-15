@@ -1127,6 +1127,39 @@ for a in data.get("agents", []):
     fi
   fi
 
+  # 4b. Browser worker readiness (issue #298). Opt-in and advisory: this
+  # check is skipped entirely (no WARN, no probe) unless the operator has
+  # declared a worker via OMES_BROWSER_WORKER_ID, so a plain server/desktop
+  # install is unaffected. It reuses `omes health browser-worker` - the
+  # single producer of the browser-worker-readiness contract document
+  # (lib/omes/py/health/browser_worker.py) - and never invents a second
+  # health mechanism. Read-only; a not-ready or not-configured worker is a
+  # WARN, never a FAIL, so it cannot change `omes doctor`'s exit code. With
+  # an ai_assisted worker it runs the #71 Ollama probe (bounded by
+  # OMES_HEALTH_TIMEOUT / OMES_OLLAMA_LOAD_TIMEOUT).
+  if [[ -n "${OMES_BROWSER_WORKER_ID:-}" ]] && [[ -r "${OMES_ROOT}/lib/omes/cmd/health.sh" ]] && command -v python3 >/dev/null 2>&1; then
+    local bw_json="" bw_rc=0 bw_row="" bw_state="" bw_codes=""
+    bw_json="$(_omes_run_extension_command health browser-worker --json 2>/dev/null)" || bw_rc=$?
+    if [[ ("$bw_rc" -ne 0 && "$bw_rc" -ne 7) || -z "$bw_json" ]]; then
+      _doctor_check "browser_worker" WARN "readiness could not be evaluated (exit ${bw_rc}; not configured or invalid value); run: omes health browser-worker"
+    else
+      bw_row="$(printf '%s' "$bw_json" | python3 -c '
+import json, sys
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+print("{}\t{}".format(d.get("state", "?"), ",".join(d.get("reason_codes", []))))
+' 2>/dev/null)"
+      IFS=$'\t' read -r bw_state bw_codes <<<"$bw_row" || true
+      if [[ "$bw_state" == "ready" ]]; then
+        _doctor_check "browser_worker" OK "state=ready"
+      else
+        _doctor_check "browser_worker" WARN "state=${bw_state:-unknown} reasons=${bw_codes:-unavailable}; run: omes health browser-worker"
+      fi
+    fi
+  fi
+
   # 5. Backup availability.
   local -a backups=()
   mapfile -t backups < <(backup_list)

@@ -236,11 +236,37 @@ def build_findings(listeners: list, allowlist: set, firewall: dict) -> list:
     return findings
 
 
-def run(argv: Optional[list] = None) -> dict:
-    timeout = _timeout()
+def collect_listeners(timeout: Optional[float] = None) -> dict:
+    """Runs the one fixed, read-only `ss -H -tulpn` probe and parses it.
+
+    Returns {"listeners": [...], "collected": bool, "tool_missing": bool}.
+    `collected` is False when `ss` is missing, timed out, or failed without
+    producing any output - i.e. when an EMPTY listener list means "could not
+    tell", not "nothing is listening". `run()` below deliberately keeps its
+    historical behaviour (an empty list in those cases) so the `omes audit
+    exposure` output is unchanged; a consumer that must fail closed on an
+    unreadable socket table (issue #298, `omes health browser-worker`) calls
+    this directly and checks `collected`.
+    """
+    effective_timeout = _timeout() if timeout is None else timeout
 
     ss_bin = _ss_bin()
     if shutil.which(ss_bin) is None:
+        return {"listeners": [], "collected": False, "tool_missing": True}
+
+    rc, out, err = _run([ss_bin, "-H", "-tulpn"], effective_timeout)
+    if rc not in (0, -2) and not out:
+        # A real failure (not merely "produced no listeners"); still not
+        # a missing-tool case, but there is nothing to report.
+        return {"listeners": [], "collected": False, "tool_missing": False}
+    return {"listeners": parse_ss(out), "collected": rc == 0, "tool_missing": False}
+
+
+def run(argv: Optional[list] = None) -> dict:
+    timeout = _timeout()
+
+    collected = collect_listeners(timeout)
+    if collected["tool_missing"]:
         return {
             "listeners": [],
             "findings": [],
@@ -250,13 +276,7 @@ def run(argv: Optional[list] = None) -> dict:
             "detail": "ss not found on PATH; cannot audit listener exposure",
         }
 
-    rc, out, err = _run([ss_bin, "-H", "-tulpn"], timeout)
-    if rc not in (0, -2) and not out:
-        # A real failure (not merely "produced no listeners"); still not
-        # a missing-tool case, but there is nothing to report.
-        listeners = []
-    else:
-        listeners = parse_ss(out)
+    listeners = collected["listeners"]
 
     allowlist = parse_allowlist()
     firewall = check_firewall(timeout)

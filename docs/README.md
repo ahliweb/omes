@@ -27,6 +27,7 @@ Grouped index of every document in this repository. See the top-level
 | [hermes-backup.md](hermes-backup.md) | `omes agent-backup`: Hermes data-class backup/restore, class-to-path mapping, secret exclusion. |
 | [telegram-security.md](telegram-security.md) | The Telegram allowlist model, safe chat-id discovery, token rotation, operator checklist. |
 | [ollama.md](ollama.md) | The optional local Ollama runtime: health checks, capability profiles, exposure policy. |
+| [browser-worker-readiness.md](browser-worker-readiness.md) | `omes health browser-worker`: read-only, metadata-only host-readiness evidence for an optional browser worker (#298) — state precedence, every reason code, what is checked, what is not implemented yet. |
 | [content-distribution.md](content-distribution.md) | The optional content distribution workflow (inbox, jobs, approvals, worker contract). |
 | [content-threat-model.md](content-threat-model.md) | Threat model for the content distribution workflow, cross-referenced with its design and test docs. |
 | [graphify.md](graphify.md) | The Graphify/Obsidian integration boundary: what OMES owns vs. what Graphify owns. |

@@ -803,6 +803,27 @@
       ]
     },
     {
+      "capability_id": "omes.health.browser_worker_readiness",
+      "title": "OMES Browser Worker Host-Readiness Evidence (read-only; no browser executor)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": "main",
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "plane": "host_control",
+      "execution_semantics": "deterministic",
+      "implementation_status": "implemented",
+      "omes_module": "health",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0017",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/browser-worker-readiness.md",
+        "https://github.com/ahliweb/omes/issues/298"
+      ]
+    },
+    {
       "capability_id": "boundary.tool_gateway.mcp",
       "title": "MCP / API / tool integration boundary (logical)",
       "authority": "hermes",

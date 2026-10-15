@@ -369,6 +369,28 @@ particular, **OMES does not mediate all Hermes-native tool execution** — a use
 Hermes through a Hermes-owned channel bypasses both AWCMS and OMES entirely, and no control in this
 document changes that.
 
+### 8.9 Browser worker host-readiness evidence controls implemented today (issue #298)
+
+`omes health browser-worker` ([docs/browser-worker-readiness.md](browser-worker-readiness.md)) produces
+sanitized, metadata-only host evidence for an **optional, separately installed** browser worker, as
+defined by the [#296 wire contract](../contracts/browser-transfer/v1/README.md). It is evidence, not
+enforcement: OMES does not sandbox, supervise or authorize the worker, and OMES does not mediate
+Hermes-native browser tool use reached through other Hermes entry points (§8.8). Per-job isolation
+evidence is **Not implemented yet (tracked in #298, depends on #276 / PR #282)**.
+
+| Control | Implemented in |
+|---|---|
+| Read-only, no mutation: no write, delete, chmod, signal, install or restart; it never launches a browser or imports an automation library (static AST guard + filesystem-snapshot test) | `lib/omes/py/health/browser_worker.py`; `tests/py/health/test_browser_worker.py` |
+| Fail closed: only the state `ready` is success; missing, unreadable or not-integrated evidence is `unknown`, never `ready`; the state precedence is `unsupported` > `blocked` > `unknown` > `degraded` > `ready`; a `ready` result is re-checked against its own fields | `browser_worker.decide_state()` / `assemble()` |
+| No public MCP/CDP/Ollama listener: any non-loopback bind of a CDP, MCP or Ollama listener is `blocked`, and `OMES_EXPOSURE_ALLOW` cannot approve it; an unreadable socket table is `unknown`, not `loopback` | reuses the #80 listener table via `exposure.collect_listeners()`; `browser_worker.probe_exposure()` |
+| No cloud model destination for an AI-assisted worker (local-only inference, ADR-0029); OMES reads Hermes routing and never rewrites it or adds a second router | reuses the #216 classifier via `ai_privacy.collect_destination_class()`; `probe_model()` |
+| Metadata only: the document carries closed-vocabulary enums, a version label, a timestamp and reason codes; it is validated against the published schema (`additionalProperties: false`) with the repository's stdlib validator before it is printed, and nothing off-contract is ever emitted | `browser_worker.validate_document()`; `contracts/browser-transfer/v1/browser-worker-readiness.schema.json` |
+| No cookies, session files or profile content in output, logs or backups: profile directories are never opened or listed beyond the root's immediate children, heartbeat content is never read (mtime only), process arguments are parsed locally and never emitted; canary tests assert none of it can surface | `probe_sessions()`, `probe_heartbeat()`; `TestReadOnlyAndNoSecrets` |
+| Profile root hygiene: a symlink, non-directory, foreign-owned or group/other-accessible root, or a symlink entry in it, is `blocked`; OMES never follows it | `probe_sessions()` |
+| Orphan sessions and leftover profiles block new leases but OMES never kills a process or deletes a profile it did not create; cleanup belongs to the worker's supervisor | `probe_sessions()` |
+| No fabricated identity: a missing tenant, server or worker id exits 4 with no stdout instead of defaulting; an id that does not match the contract pattern exits 2 | `browser_worker.load_config()` |
+| Runtime provenance: the browser version label must equal the operator's pin (explicit binary > Hermes-bundled Playwright cache > `PATH`); the bundled browser is found by name/marker only and never executed | `probe_browser()`. Cryptographic pinning of the executable is Not implemented yet (tracked in #298) |
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:
