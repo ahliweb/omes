@@ -35,6 +35,7 @@ concrete per entity, with actual JSON Schemas and fixtures under
 | AI privacy posture / egress policy-decision evidence (issue #217) | displays the projection; owns which tenant/actor may read it and who may approve an approval_required decision (RBAC/ABAC) | **owns** the evidence and the pure evaluation/projection logic (`lib/omes/py/privacy/`); never selects or calls a model provider | **owns** agent reasoning and model/provider routing; OMES only reads bounded facts through supported interfaces, never Hermes's private databases |
 | Layered reference architecture / capability registry evidence (issue #247; Architecture view issue #246, part 3) | displays the read-only `architecture-capabilities-view` projection; owns which tenant/actor may read it (RBAC/ABAC) | **owns** `architecture/capabilities.json` and the pure projection logic (`lib/omes/py/architecture/capabilities_view.py`); never stores a copy of AWCMS's own business/governance state | no knowledge (agent_runtime plane entries are read from the registry, never modified by Hermes) |
 | GitHub repository/milestone/issue progress (issue #249, ADR-0030; Progres Hermes view) | **owns**: polls the GitHub REST API, builds and stores the `repository-progress-view` projection, and owns which tenant/actor may read it (RBAC/ABAC) — **shipped**, `ahliweb/awcms` PR [#845](https://github.com/ahliweb/awcms/pull/845) (`8de1782d`) | owns the wire contract only (`repository-progress-view.schema.json`); never fetches GitHub data itself | no knowledge |
+| 3D Mission Control composition (epic #263, issue #264, ADR-0031) | **owns the composition and presentation only**: assembles a tenant-scoped `mission-control-scene-view` and bounded `mission-control-replay-window` pages from its existing authorized projections, and decides per request what the viewer may see and which existing actions are available; owns no new records, lifecycle, or approval inbox — **shipped**, `ahliweb/awcms` PRs [#880](https://github.com/ahliweb/awcms/pull/880) (`953414f`), [#881](https://github.com/ahliweb/awcms/pull/881) (`3c239ca`), and [#882](https://github.com/ahliweb/awcms/pull/882) (`27e62b3`) | **owns** the OMES contracts, `mission-control-source-map.json`, and guard MC1–MC9 that keep the composition a reference-only view; the underlying host, deployment, job, health, and backup evidence stays OMES's | owns only its own orchestration observations (ADR-0028); never a source of actions from Mission Control |
 
 This matrix is the concrete instantiation of
 [docs/control-center-and-integrations.md](control-center-and-integrations.md)
@@ -75,6 +76,8 @@ Each has at least one valid and one invalid fixture under
 | Hermes orchestration tree (issue #183, ADR-0028) | `hermes-orchestration-tree.schema.json` | OMES → Control Center |
 | Architecture capabilities view (issue #246, part 3) | `architecture-capabilities-view.schema.json` | OMES → Control Center |
 | Repository progress view (issue #249, ADR-0030) | `repository-progress-view.schema.json` | AWCMS (from GitHub) → Control Center |
+| Mission Control scene view (issue #264, ADR-0031) | `mission-control-scene-view.schema.json` | AWCMS (composed from existing projections) → Control Center UI |
+| Mission Control replay window (issue #264, ADR-0031) | `mission-control-replay-window.schema.json` | AWCMS (composed from existing projections) → Control Center UI |
 
 ### 2.1 Mutating-request common fields
 
@@ -733,6 +736,51 @@ projection with its own shape.
 |---|---|
 | Repository progress view | `repository-progress-view.schema.json` |
 
+### 2.13 Mission Control scene view and replay window (issue #264, ADR-0031)
+
+Epic [#263](https://github.com/ahliweb/omes/issues/263) delivers a 3D Mission Control workspace in AWCMS. [ADR-0031](adr/0031-mission-control-compositional-projection.md) decides that it is a **derived presentation/read-model composition, not a new authority**. Issue [#264](https://github.com/ahliweb/omes/issues/264) adds the OMES-side contract surface that keeps it that way: contracts, fixtures, a source map, and a guard, implemented in this repository (OMES PR [#268](https://github.com/ahliweb/omes/pull/268), **pending merge (approval required)**).
+
+**AWCMS consumption: shipped.** The three AWCMS routes below consume these contracts (see [docs/control-center-release-closeout.md](control-center-release-closeout.md) §6.2 for evidence):
+
+| Route (`ahliweb/awcms`) | Contract | Shipped in |
+|---|---|---|
+| `GET /api/v1/omes/mission-control/scene` (and `?as_of=` for history mode) | `mission-control-scene-view` | [#880](https://github.com/ahliweb/awcms/pull/880) (`953414f`, #265); `?as_of=` in [#881](https://github.com/ahliweb/awcms/pull/881) (`3c239ca`, #266) |
+| `GET /api/v1/omes/mission-control/replay?from&to&cursor` | `mission-control-replay-window` | [#881](https://github.com/ahliweb/awcms/pull/881) (`3c239ca`, #266) |
+| `GET /api/v1/omes/mission-control/actions?kind=&id=` | none: an advisory AWCMS-internal response, deliberately not part of the scene contract | [#882](https://github.com/ahliweb/awcms/pull/882) (`27e62b3`, #267) |
+
+The vendored copies in AWCMS are pinned by SHA-256 to OMES commit `a4026e6` (the #268 head). They will be re-pinned to #268's squash SHA after it merges; the content is identical, so the re-pin changes the recorded provenance only. Editing the vendored copy is drift, not a fix.
+
+**`mission-control-scene-view.schema.json`** is the single-tenant, read-only wire shape of one scene: `schema_version`, `source_map_version`, `tenant_id`, `generated_at`, `mode` (`live` or `historical`), `as_of`, `sources[]` (which authority was consulted and whether it was `available`, `stale`, or `unavailable`), `nodes[]` (at most 500), `relations[]` (at most 1000), and `truncated` counts so a clipped scene says so. Each node is a **reference**: an opaque `node_id` (used only by relations), a `kind`, the source authority's own opaque `source_id`, a bounded `label` (untrusted: output-encode, never inject as HTML), the echoed `source_state`, the derived `visual_state`, `freshness` (`live`, `stale`, `unknown`), `observed_at`, and the canonical existing `detail_route`. It carries no layout coordinates, no mission/task lifecycle, no authorization decision, no action availability, and no raw log, prompt, transcript, or tool payload. `additionalProperties: false` at every object level makes that structural (registry guard C1).
+
+**`mission-control-replay-window.schema.json`** is one bounded, keyset-paginated page of already-retained evidence for historical mode: `window` (`from`/`to`), `events[]` (at most 500, each referencing `evidence_kind` plus an opaque `evidence_id`), `evidence_gaps[]`, and an opaque `next_cursor`. Events are deduplicated by `(evidence_kind, evidence_id)`, ordered by `(at, evidence_kind, evidence_id)`, and labelled `provenance: observed` or `late_arrival`. Gaps are explicit (`not_retained`, `retention_expired`, `source_unavailable`, `before_first_observation`) and are never interpolated into a state. It is a read projection over evidence AWCMS already retains, not a new event store, and it does not extend retention.
+
+**`mission-control-source-map.json`** is the single version-controlled anti-redundancy map. For each of the 11 scene object kinds (`server`, `deployment`, `job`, `health_report`, `backup`, `hermes_subagent`, `architecture_plane`, `capability`, `repository_milestone`, `ai_privacy_posture`, `approval_item`) it records exactly one existing authority and source contract, the opaque id field, the freshness basis, the allowed display fields, the canonical 2D detail route, the candidate **existing** actions, the replay basis, and the deterministic state map. It also lists the 14 canonical `/admin/omes/*` screens plus `/admin/approvals`. An object kind, state value, relation, action, or source that is absent from the map is unsupported and must fail closed (render `unknown`, offer no action).
+
+**State rule.** `visual_state = state_map[kind][source_state]` (an unmapped value is `unknown`), then: freshness `unknown` gives `unknown`; freshness `stale` keeps `failed` or `warning` (a last-known problem never disappears) and otherwise becomes `stale` (a last-known success is never shown as current). Animation never changes `visual_state`, and Hermes subagents use only the eight v1 states (`PENDING`, `STARTING`, `RUNNING`, `SUCCEEDED`, `FAILED`, `INTERRUPTED`, `CANCELLED`, `UNKNOWN`) with no inferred reasoning or hidden state.
+
+**Freshness budgets.** Each source in the map carries one `stale_after_seconds` budget, aligned to the constants AWCMS already uses wherever one exists, so Mission Control never invents a second definition of "stale":
+
+| Source | Budget | Basis |
+|---|---|---|
+| Server inventory | 300 s | Last worker heartbeat (AWCMS `STALE_HEARTBEAT_THRESHOLD_MS`) |
+| Deployment view | 1800 s | `last_reconciled_at` (AWCMS `STALE_RECONCILIATION_THRESHOLD_MS`) |
+| Job status | 300 s while non-terminal | A non-terminal job inherits its target server's heartbeat freshness; terminal job states are final evidence and never go stale |
+| Hermes orchestration | 120 s | AWCMS `classifyOrchestrationFreshness` (`DEFAULT_TREE_FRESHNESS_WINDOW_SECONDS`) |
+| Backup status | 86400 s | AWCMS `BACKUP_FRESHNESS_THRESHOLD_MS` |
+| Repository progress | 1800 s | 15-minute poll interval times grace multiplier 2 (ADR-0030) |
+| Health readiness | 1800 s | **New rule introduced by ADR-0031**: AWCMS has no existing health staleness rule, so Mission Control defines a documented budget on the latest `captured_at` |
+| Architecture snapshot, AI privacy posture, workflow approvals | none | The architecture snapshot is a pinned release snapshot (never stale, never live host evidence); AI privacy posture uses its own `evidence_freshness` field; approvals are read on every request |
+
+**Actions are not part of the scene contract.** The source map lists *candidate* actions per kind, each pointing at an existing AWCMS path (`POST /api/v1/omes/operations`, `POST /api/v1/omes/jobs/{id}/cancel`, `POST /api/v1/omes/jobs/{id}/approve`, `POST /api/v1/omes/backups/{id}/restore`, or a deep link into `/admin/approvals`). AWCMS computes actual availability server-side per selected object at selection time from existing permission and capability evidence, and every mutation goes through the existing endpoint with its own `Idempotency-Key`, audit record, and workflow approval. In the shipped AWCMS implementation that availability is a **separate advisory endpoint** (`GET /api/v1/omes/mission-control/actions?kind=&id=`, strict parameters; an unknown, other-tenant, or unreadable-source target returns `not_found`), never a field of the scene. It mirrors what the existing endpoints enforce; the endpoints re-authorize every request, so the advisory grants nothing. Approval decisions are made only in the canonical `/admin/approvals` inbox, Hermes agents are read-only, no new operation name is introduced, and there is no global "kill all AI" action. Historical mode exposes no actions.
+
+**Guard MC1–MC9** (`lib/omes/py/architecture/mission_control.py`, run by `scripts/check-architecture.py`) keeps the map consistent: MC1 source-map shape, MC2 bijection of kinds, sources, relations, visual states, and versions with the two schemas, MC3 every referenced source contract exists, MC4 every state value in each source contract's state enum is mapped (anti-drift: a new upstream state fails CI until it is classified), MC5 detail routes are limited to the 14-screen inventory plus `/admin/approvals` and the workspace replaces no screen, MC6 relation endpoints are known kinds, MC7 candidate actions resolve to the existing allowlist and `operation.*` actions are members of the `operation-request` operation enum only, MC8 every valid fixture's `visual_state` equals the deterministic derivation, and MC9 forbidden raw/sensitive field terms (prompt, transcript, reasoning, tool arguments, shell, token, secret, and similar) never appear in allowed fields. AWCMS re-vendors these files through its SHA-256 pin (`contracts:omes:sync`), done in [#265](https://github.com/ahliweb/omes/issues/265); editing the vendored copy upstream is drift, not a fix. No `architecture/capabilities.json` entry is added because Mission Control introduces no authority (ADR-0031 decision 4).
+
+| Contract | Schema file |
+|---|---|
+| Mission Control scene view | `mission-control-scene-view.schema.json` |
+| Mission Control replay window | `mission-control-replay-window.schema.json` |
+| Mission Control source map (not a JSON Schema; guard input) | `mission-control-source-map.json` |
+
 ## 3. Versioned events (v1)
 
 Every event uses a common envelope (`contracts/control-center/v1/events/*.schema.json`):
@@ -845,6 +893,18 @@ This document defines the contract; it does not redefine or duplicate:
   live GitHub App, API client, or webhook receiver to this repository. See
   [ADR-0030](adr/0030-repository-progress-projection.md) for the fetch-path
   decision.
+- **#263–#267** (3D Mission Control epic and children) — §2.13's
+  `mission-control-scene-view`, `mission-control-replay-window`, and
+  `mission-control-source-map.json` are a read-only composition over the
+  contracts above. They do not redefine any source contract, add a mission/task
+  domain, add an operation to `operation-request`, or add an approval inbox.
+  #264 (this contract surface, ADR-0031) is implemented here (OMES PR #268,
+  pending merge); #265 (AWCMS workspace), #266 (replay mode), and #267
+  (contextual actions) are **shipped** in `ahliweb/awcms` PRs #880, #881, and
+  #882 (evidence in
+  [control-center-release-closeout.md](control-center-release-closeout.md)
+  §6.2). See
+  [ADR-0031](adr/0031-mission-control-compositional-projection.md).
 
 See [docs/control-center-threat-model.md](control-center-threat-model.md)
 for the STRIDE analysis of this boundary.
