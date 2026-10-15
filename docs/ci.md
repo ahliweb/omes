@@ -523,6 +523,9 @@ other checks in this document that have both a `tests/run.sh` and a
 
 ## 10. Running the full CI locally (no GitHub Actions)
 
+The decision behind this section, its options and its consequences are recorded in
+[ADR-0034](adr/0034-local-ci-as-the-per-pr-check.md).
+
 Issue [#312](https://github.com/ahliweb/omes/issues/312).
 `scripts/ci-local.sh` reproduces every job of `.github/workflows/*.yml` on a
 developer machine or an agent sandbox, with the same command and the same

@@ -42,6 +42,7 @@ architecture and state model."
 | [0028](0028-hermes-orchestration-visualization.md) | Hermes delegated-task orchestration and live subagent visualization | Accepted |
 | [0029](0029-ai-data-boundary-and-private-inference.md) | AI data boundary and private-inference architecture | Accepted |
 | [0030](0030-repository-progress-projection.md) | GitHub repository progress projection for the Progres Hermes view | Accepted |
+| [0034](0034-local-ci-as-the-per-pr-check.md) | Local CI as the per-PR check; GitHub Actions manual-only | Accepted |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an
@@ -107,6 +108,12 @@ ADR 0030 was authored on 2026-09-27 as part of issue
 [#249](https://github.com/ahliweb/omes/issues/249), split from
 [#246](https://github.com/ahliweb/omes/issues/246) part 2, "feat(control-center):
 GitHub repository progress projection for the Progres Hermes view."
+
+ADR 0034 was authored on 2026-10-15 as part of issue
+[#312](https://github.com/ahliweb/omes/issues/312) (local CI and manual-only
+workflows) and [#315](https://github.com/ahliweb/omes/issues/315) (fail-closed
+release gate). Numbers 0031-0033 are taken by open pull requests #268, #278
+and #307.
 
 
 
