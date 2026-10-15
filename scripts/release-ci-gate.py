@@ -7,6 +7,14 @@ nobody dispatched the workflows on has zero check runs. This gate therefore
 fails CLOSED. It accepts a release commit only when at least one of two
 evidence sources proves that EVERY blocking job passed on that exact commit.
 
+Rule that overrides both sources: any COMPLETED check run on the release commit
+with conclusion failure, timed_out or action_required blocks the release,
+whichever app posted it and whether or not its job is required (a failing
+GitGuardian run means a leaked secret), even when valid local evidence exists.
+The one exception is a failed GitHub Actions run of a known advisory workflow
+job (continue-on-error by design). A still-running run that is not a required
+job only produces a warning. Output starts with `BLOCKED` in that case.
+
 Source 1 - GitHub check runs (`gh api .../commits/<sha>/check-runs`, fetched by
 release.sh): for every blocking lint.yml / compatibility.yml job there is a
 check run with the job's display name, created by GitHub Actions for this
@@ -30,7 +38,7 @@ Usage:
 
 Exit status: 0 evidence accepted, 1 no acceptable evidence, 2 usage or internal
 error (callers must treat it as a failed gate). stdout is a short report:
-`PASS <source>` or `FAIL` followed by one `github:` / `local:` line per reason.
+`PASS <source>`, `BLOCKED` or `FAIL` followed by one `github:` / `local:` line per reason.
 No token, header or raw API response is ever printed.
 """
 from __future__ import annotations
@@ -53,6 +61,8 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$")
 JOB_STATUSES = {"pass", "fail", "advisory_fail", "skipped"}
 ACTIONS_APP_SLUG = "github-actions"
+# A completed check run with one of these conclusions blocks a release (see scan_runs).
+BLOCKING_CONCLUSIONS = {"failure", "timed_out", "action_required"}
 
 
 class GateError(Exception):
@@ -84,8 +94,8 @@ def read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def load_required(path: Path) -> tuple[list[str], list[str], list[str]]:
-    """Return (local job names, GitHub check names, GitHub-name problems)."""
+def load_required(path: Path) -> tuple[list[str], list[str], list[str], set[str]]:
+    """Return (local job names, GitHub check names, GitHub-name problems, advisory check names)."""
     try:
         data = strict_loads(read_text(path))
     except (OSError, ValueError, UnicodeDecodeError) as exc:
@@ -95,9 +105,14 @@ def load_required(path: Path) -> tuple[list[str], list[str], list[str]]:
     local: list[str] = []
     github: list[str] = []
     problems: list[str] = []
+    advisory: set[str] = set()
     for job in data["jobs"]:
         if not isinstance(job, dict):
             raise GateError("the required-job list holds a non-object job")
+        if job.get("blocking") is False and job.get("workflow") != "-":
+            check = job.get("check_name")
+            if isinstance(check, str) and check:
+                advisory.add(check)
         if job.get("selected") is not True or job.get("blocking") is not True:
             continue
         name = job.get("name")
@@ -113,7 +128,7 @@ def load_required(path: Path) -> tuple[list[str], list[str], list[str]]:
                 problems.append(f"{name}: no GitHub check-run name could be derived from {workflow}")
     if not local:
         raise GateError("the required-job list names no blocking job")
-    return local, github, problems
+    return local, github, problems, advisory
 
 
 def parse_documents(text: str) -> list[object]:
@@ -136,6 +151,47 @@ def describe_run(run: dict) -> str:
     if status != "completed":
         return f"not finished (status: {status})"
     return f"completed with conclusion {run.get('conclusion')}"
+
+
+def scan_runs(sha: str, required: list[str], advisory: set[str], checks: Path | None) -> tuple[list[str], list[str]]:
+    """Return (blockers, warnings) from EVERY check run on the commit.
+
+    A completed run with conclusion failure, timed_out or action_required blocks
+    the release whichever app posted it and whether or not its job is required
+    (a failing GitGuardian run means a leaked secret). The only exception is a
+    failed GitHub Actions run of a known advisory workflow job (continue-on-error
+    by design: shfmt, Tier 2, graphify smoke). A run that is still running and is
+    not a required job only warns. An unreadable response yields nothing here:
+    evaluate_github already reports it.
+    """
+    if checks is None:
+        return [], []
+    try:
+        docs = parse_documents(read_text(checks))
+    except (OSError, ValueError, UnicodeDecodeError):
+        return [], []
+    blockers: list[str] = []
+    warnings: list[str] = []
+    for doc in docs:
+        if not isinstance(doc, dict) or not isinstance(doc.get("check_runs"), list):
+            continue
+        for run in doc["check_runs"]:
+            if not isinstance(run, dict):
+                continue
+            head = run.get("head_sha")
+            if head is not None and head != sha:
+                continue
+            name = str(run.get("name"))
+            app = run.get("app") if isinstance(run.get("app"), dict) else {}
+            slug = app.get("slug")
+            if run.get("status") == "completed":
+                if run.get("conclusion") in BLOCKING_CONCLUSIONS:
+                    if slug == ACTIONS_APP_SLUG and name in advisory:
+                        continue
+                    blockers.append(f"{name}: completed with conclusion {run.get('conclusion')} (app: {slug})")
+            elif name not in required:
+                warnings.append(f"{name}: not finished (status: {run.get('status')}, app: {slug}); it does not block the release")
+    return blockers, warnings
 
 
 def evaluate_github(sha: str, required: list[str], name_problems: list[str], checks: Path | None, note: str) -> list[str]:
@@ -283,15 +339,30 @@ def main(argv: list[str]) -> int:
 
     if not SHA_RE.match(args.sha):
         raise GateError("--sha must be a full lowercase 40-hex commit SHA")
-    local, github, name_problems = load_required(args.jobs)
+    local, github, name_problems, advisory = load_required(args.jobs)
+
+    # A red check run on the exact commit contradicts any other evidence, so it
+    # blocks in both evidence paths before either is looked at.
+    blockers, warnings = scan_runs(args.sha, github, advisory, args.checks)
+    if blockers:
+        print("BLOCKED")
+        for blocker in blockers:
+            print(f"blocked: {blocker}")
+        for warning in warnings:
+            print(f"WARN {warning}")
+        return 1
 
     gh_reasons = evaluate_github(args.sha, github, name_problems, args.checks, args.checks_note)
     if not gh_reasons:
         print("PASS github-check-runs")
+        for warning in warnings:
+            print(f"WARN {warning}")
         return 0
     ev_reasons = evaluate_evidence(args.sha, local, args.evidence)
     if not ev_reasons:
         print(f"PASS local-evidence {args.evidence}")
+        for warning in warnings:
+            print(f"WARN {warning}")
         return 0
 
     print("FAIL")

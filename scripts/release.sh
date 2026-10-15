@@ -503,7 +503,10 @@ ci_gate() {
   gate_out="$(python3 "$gate_py" "${gate_args[@]}" 2>"${gate_tmp}/gate.err")" || gate_rc=$?
 
   if [[ "$gate_rc" -eq 0 ]]; then
-    log "CI gate passed for commit ${sha}: ${gate_out}"
+    log "CI gate passed for commit ${sha}: $(head -n 1 <<<"$gate_out")"
+    while IFS= read -r line; do
+      if [[ "$line" == "WARN "* ]]; then warn "CI gate: ${line#WARN }"; fi
+    done <<<"$gate_out"
     return 0
   fi
   if [[ "$gate_rc" -ne 1 ]]; then
@@ -515,6 +518,19 @@ ci_gate() {
     warn "[dry-run] CI gate would currently FAIL for commit ${sha} (no acceptable CI evidence yet); a real release requires it:"
     while IFS= read -r line; do warn "[dry-run]   ${line}"; done <<<"$gate_out"
     return 0
+  fi
+
+  if [[ "$(head -n 1 <<<"$gate_out")" == "BLOCKED" ]]; then
+    err "CI gate BLOCKED for commit ${sha}: a failing check run on the release commit blocks the release, whatever other evidence exists"
+    while IFS= read -r line; do
+      case "$line" in
+        blocked:*) err "  ${line}" ;;
+        WARN\ *) warn "CI gate: ${line#WARN }" ;;
+      esac
+    done <<<"$gate_out"
+    err "Fix the failure (a failing GitGuardian run means a possible leaked secret: rotate it first), re-run the job on this commit, then run this release command again."
+    err "Only if you consciously accept releasing past a failing check: --skip-ci-check (recorded in the tag and release notes)."
+    exit 1
   fi
 
   err "CI gate FAILED for commit ${sha}: no acceptable CI evidence (zero check runs is not a pass)"

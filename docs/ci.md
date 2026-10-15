@@ -436,6 +436,19 @@ gh workflow run lint.yml --ref <tag-or-branch>
 gh workflow run compatibility.yml --ref <tag-or-branch>
 ```
 
+**A failing check run blocks in both paths.** Whichever source supplies the evidence, any
+*completed* check run on the release commit with conclusion `failure`, `timed_out` or
+`action_required` blocks the release, whichever app posted it and whether or not its job is
+required; the error (`CI gate BLOCKED`) names the run and its app. The motivating case is a
+failing GitGuardian run, which means a leaked secret. A red check on the exact commit also
+overrides valid local evidence, because it contradicts it. This needs `gh` to see the runs: when
+`gh` is absent or the query fails there is nothing to block on, and only the local-evidence
+checks apply. Exceptions: a failed GitHub Actions run of a known advisory workflow job
+(`shfmt`, the Tier 2 matrix row, `graphify-real-smoke`; `continue-on-error` by design), and
+`--skip-ci-check`. A run that is still running and is not a required job does not block; the
+release prints a warning naming it. Cancelled, skipped and neutral runs of non-required jobs
+are ignored.
+
 **Source 2 - local CI evidence file.** `scripts/ci-local.sh --profile full --json` run on
 a clean, full-depth checkout of the release commit, saved to
 `.omes-ci/ci-local-<sha>.json` (git-ignored; `--ci-evidence PATH` overrides the path):

@@ -111,7 +111,7 @@ if kind == "checks":
         runs.append(run)
     if "only_gitguardian" in opts:
         runs = []
-    if "only_gitguardian" in opts or "with_gitguardian" in opts:
+    if "only_gitguardian" in opts or "with_gitguardian" in opts or "gg_conclusion" in opts:
         # GitGuardian is a GitHub App: it posts a successful check run on every
         # commit by itself, so the run set is never empty even when nobody
         # dispatched the manual workflows.
@@ -121,8 +121,19 @@ if kind == "checks":
                 "name": "GitGuardian Security Checks",
                 "head_sha": sha,
                 "status": "completed",
-                "conclusion": "success",
+                "conclusion": opts.get("gg_conclusion", "success"),
                 "app": {"slug": "gitguardian"},
+            }
+        )
+    if "pending_other" in opts:
+        runs.append(
+            {
+                "id": 9001,
+                "name": "Some Other App Check",
+                "head_sha": sha,
+                "status": "in_progress",
+                "conclusion": None,
+                "app": {"slug": "some-other-app"},
             }
         )
     json.dump({"total_count": len(runs), "check_runs": runs}, open(out, "w"))
@@ -297,6 +308,70 @@ assert_released() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"github-check-runs"* ]]
   assert_released
+}
+
+@test "a failing GitGuardian run blocks the release even when every required run is green" {
+  checks gg_conclusion=failure
+  release
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"CI gate BLOCKED"* ]]
+  [[ "$output" == *"GitGuardian Security Checks: completed with conclusion failure (app: gitguardian)"* ]]
+  assert_not_released
+}
+
+@test "a failing GitGuardian run blocks the release even when valid local evidence exists" {
+  evidence
+  checks gg_conclusion=failure
+  release
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"CI gate BLOCKED"* ]]
+  [[ "$output" == *"GitGuardian Security Checks"* ]]
+  assert_not_released
+}
+
+@test "a timed_out or action_required run from any app blocks the release" {
+  local c
+  for c in timed_out action_required; do
+    checks gg_conclusion="$c"
+    release
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"GitGuardian Security Checks: completed with conclusion ${c}"* ]]
+    assert_not_released
+  done
+}
+
+@test "a failing required job blocks the release even when valid local evidence exists" {
+  evidence
+  checks "fail=bats unit + integration (tests/run.sh)"
+  release
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"CI gate BLOCKED"* ]]
+  [[ "$output" == *"bats unit + integration (tests/run.sh): completed with conclusion failure"* ]]
+  assert_not_released
+}
+
+@test "a failing run does not block --skip-ci-check, which is the explicit opt-out" {
+  checks gg_conclusion=failure
+  release --skip-ci-check
+  [ "$status" -eq 0 ]
+  assert_released
+}
+
+@test "an in-progress run that is not a required job does not block but warns" {
+  checks pending_other=1
+  release
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"CI gate passed"* ]]
+  [[ "$output" == *"CI gate: Some Other App Check: not finished (status: in_progress"* ]]
+  assert_released
+}
+
+@test "an in-progress non-required run does not rescue a missing required run" {
+  checks pending_other=1 "drop=actionlint"
+  release
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"actionlint: missing"* ]]
+  assert_not_released
 }
 
 @test "an empty check-runs list written as a real response also fails" {

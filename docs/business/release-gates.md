@@ -30,7 +30,11 @@ run is not a substitute), or (2) a local evidence file
 produced by `scripts/ci-local.sh --profile full --json` on that exact commit (clean tree,
 non-shallow clone, result `pass`, every blocking job including the matrix and real-install jobs
 passed, timestamp not in the future; default `.omes-ci/ci-local-<sha>.json`, or
-`--ci-evidence PATH`). Zero check runs is never a pass, and a missing `gh` does not skip the gate:
+`--ci-evidence PATH`). Whichever source is used, a completed check run on the release commit
+with conclusion `failure`, `timed_out` or `action_required` blocks the release regardless of app
+or whether its job is required (a failing GitGuardian run means a leaked secret, and a red check
+contradicts local evidence); a failing advisory Actions job is the only exception, and a
+still-running non-required run only warns. Zero check runs is never a pass, and a missing `gh` does not skip the gate:
 only the local evidence file can pass without it. The local file is self-reported, bound to the
 commit SHA and not enforced by GitHub. `--skip-ci-check` is an explicit operator opt-out, never
 the default: it prints a warning and is recorded in the tag message and the GitHub Release
