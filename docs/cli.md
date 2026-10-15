@@ -360,7 +360,8 @@ built-in commands.
 
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]` /
-`omes health agent-runtime [--json] [--profile-home <path>]`
+`omes health agent-runtime [--json] [--profile-home <path>]` /
+`omes health acp [--json] [--profile-home <path>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -548,6 +549,51 @@ Exit codes (mirrors `ai-privacy`): 0 status is `ok`/`warn`, 7 status is `unknown
 omes health agent-runtime
 omes health agent-runtime --json | jq -r '.status'
 omes health agent-runtime --profile-home /path/to/profile-home --json
+```
+
+`omes health acp [--json] [--profile-home <path>]` (issue
+[#273](https://github.com/ahliweb/omes/issues/273), epic [#269](https://github.com/ahliweb/omes/issues/269),
+via [`lib/omes/py/health/acp_posture.py`](../lib/omes/py/health/acp_posture.py))
+reports the **configured** tool surface of Hermes' inbound ACP server. `hermes acp` is an
+on-demand stdio JSON-RPC server that an editor or a bridge launches
+([upstream ACP page](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md));
+it has no daemon and no config key that enables or disables it. Hermes owns it
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 6): OMES is not an ACP server,
+client or proxy, adds no listener, and ACP traffic never reaches OMES host mutation. The command
+only reports posture, through the same shared allowlisted reader as `agent-runtime`
+(`hermes config get <key> --json`; `--raw` is never passed and no Hermes file or database is read),
+with the same profile resolution (`--profile-home`, else `OMES_HERMES_HOME`, else `~/.hermes`).
+
+Keys read: `platform_toolsets.acp` and `agent.disabled_toolsets` (each a list of short toolset names;
+`value`, `absent` or `unknown` with a bounded reason code; anything that is not a bounded list of
+strings is `unknown` and is not echoed). When `platform_toolsets.acp` is absent, upstream applies the
+curated `hermes-acp` toolset, which includes terminal and `execute_code`.
+
+Findings: `acp.default_toolset_includes_execution` (warn; the key is absent, or lists `terminal`,
+`execute_code`, `code_execution` or `hermes-acp`, and `agent.disabled_toolsets` does not disable that
+toolset), `acp.toolset_restricted` (info; explicitly set without execution toolsets, with the caveat
+that upstream still adds enabled plugin toolsets, so this is configured intent, not the runtime tool
+surface), `acp.session_exposure_unobservable` (info, always) and `acp.outbound_not_supported_upstream`
+(info, always; outbound ACP is deferred to
+[hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257)). `status` is `ok`,
+`warn` (at least one warning) or `unknown` (either key unreadable or invalid); `unknown` is never
+reported as `ok`.
+
+An `installability` field records `hermes acp --version` (fixed argv, bounded timeout): exit 0 is
+`installed`, anything else is `not_installed_or_unknown`. It reflects the optional `acp` extra only;
+its output is never parsed, it never changes `status`, and it is not evidence that ACP is running or
+exposed. `hermes acp --check` is not used because its output format is undocumented.
+`session_exposure` is always `unknown`: whether an ACP session is live, or reachable through a bridge
+(some bridges auto-approve `allow_once`), is not observable through any supported Hermes interface.
+
+Exit codes: 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
+
+**JSON schema:** `{"check":"acp_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"platform_toolsets.acp":{"state":"value","value":["..."]}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.disabled_toolsets":{...}},"installability":{"state":"installed|not_installed_or_unknown|not_probed","meaning":"..."},"session_exposure":"unknown","findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
+
+```bash
+omes health acp
+omes health acp --json | jq -r '.status'
+omes health acp --profile-home /path/to/profile-home --json
 ```
 
 ## 4.14 `omes audit` (security audits)
