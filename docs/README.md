@@ -44,6 +44,7 @@ Grouped index of every document in this repository. See the top-level
 | Document | What it covers |
 |---|---|
 | [architecture.md](architecture.md) | The module contract, execution model, state/backup model, exit codes, privilege model. |
+| [browser-data-transfer-integration.md](browser-data-transfer-integration.md) | **Proposed only:** AI-assisted browser source-to-target transfer design, Hermes/Playwright/AWCMS ownership, policy checks, record reconciliation, monitoring, and threat tests (#294/#295). |
 | [security.md](security.md) | The security baseline: least-privilege defaults, Telegram/firewall/update policy, secret handling. |
 | [ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) | AI data classification, local/private vs cloud-model boundary, model egress rules, RAG/embedding privacy, and governance references. |
 | [multi-agent-control-patterns.md](multi-agent-control-patterns.md) | Octop-inspired multi-agent control patterns: gap analysis, authority decision matrix and child issues #270–#277 for epic #269 (ADR-0032). |
