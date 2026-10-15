@@ -483,6 +483,55 @@ class SemanticInvariantTests(unittest.TestCase):
         errs = registry.validate_semantic_invariants(_registry_of(cap))
         self.assertEqual([e for e in errs if e.startswith("R9 ")], [])
 
+    def test_r9_omes_coordinator_and_acp_terms_fail(self) -> None:
+        # #269 / ADR-0032: coordinator/worker delegation and the Agent
+        # Client Protocol server are Hermes-owned; authority omes must not
+        # own a capability whose id or title touches them.
+        cases = [
+            ("omes.agent.acp_proxy", "OMES ACP Proxy"),
+            ("omes.agent.agent_client_protocol", "OMES Editor Bridge"),
+            ("omes.agent.scheduler", "OMES Coordinator Scheduler"),
+            ("omes.agent.subagent_runner", "OMES Runner"),
+            ("omes.agent.runner", "OMES Subagents Runner"),
+        ]
+        for cap_id, title in cases:
+            with self.subTest(cap_id=cap_id, title=title):
+                cap = _base_cap(
+                    capability_id=cap_id,
+                    title=title,
+                    authority="omes",
+                    plane="host_control",
+                    execution_semantics="deterministic",
+                    implementation_status="staged",
+                )
+                errs = registry.validate_semantic_invariants(_registry_of(cap))
+                self.assertTrue(
+                    any(e.startswith("R9 ") for e in errs), (cap_id, title, errs)
+                )
+
+    def test_r9_hermes_acp_server_passes(self) -> None:
+        cap = _base_cap(
+            capability_id="hermes.agent.acp_server",
+            title="Hermes Agent Client Protocol (ACP) Server for Editor Integration",
+            authority="hermes",
+            execution_semantics="deterministic",
+            adr_reference="ADR-0032",
+        )
+        errs = registry.validate_semantic_invariants(_registry_of(cap))
+        self.assertEqual([e for e in errs if e.startswith("R9 ")], [])
+
+    def test_hermes_delegation_and_acp_registered_in_real_registry(self) -> None:
+        caps = {c["capability_id"]: c for c in registry.load_registry()["capabilities"]}
+        for cap_id in ("hermes.agent.delegation", "hermes.agent.acp_server"):
+            with self.subTest(cap_id=cap_id):
+                self.assertIn(cap_id, caps)
+                self.assertEqual(caps[cap_id]["authority"], "hermes")
+                self.assertEqual(caps[cap_id]["disposition"], "delegate")
+                self.assertEqual(caps[cap_id]["adr_reference"], "ADR-0032")
+
+    def test_current_repository_passes_check_all(self) -> None:
+        self.assertEqual(registry.check_all(REPO_ROOT), [])
+
     # -- current repository ------------------------------------------
     def test_current_repository_registry_has_no_semantic_invariant_errors(self) -> None:
         reg_data = registry.load_registry()
