@@ -68,3 +68,7 @@ We adopt **Option B**:
 6. **Control Center UI Integration:**
    - Render live delegation batches and process-tree reference data within Control Center Screen 6 (`isHermes` in `ui/control-center/index.html`).
    - Keep the reference prototype's accessibility claims bounded to the semantics it actually emits. Full ARIA tree interaction and live event ingestion belong to the functional AWCMS implementation tracked by #201/#198; they are not claimed as shipped by this prototype.
+
+## Implementation note (2026-10-03)
+
+The Decision text above says unconfirmed running subagents transition to `STALE`. As implemented, `lib/omes/py/agent/orchestration.py` has no per-node `STALE` state: staleness is reported only as the tree-level `freshness: stale` (an active node unobserved for more than 300 seconds), and upstream Hermes v2026.9.24 marks a running child interrupted by a process restart as `unknown`. Mapping that upstream `unknown` attempt state and any per-node staleness is tracked in [#271](https://github.com/ahliweb/omes/issues/271); see [ADR-0032](0032-multi-agent-control-patterns-boundary.md).
