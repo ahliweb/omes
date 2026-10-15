@@ -301,7 +301,7 @@ is required to execute an unmapped baseline without verification, recording prov
 For each published release, OMES generates and verifies a complete, reproducible evidence bundle (`dist/release-v<version>/`):
 
 1. **`release-manifest.json`**: Conforms to `contracts/provenance/v1/release-manifest.schema.json`. Records version, tag, exact commit SHA, release date, repository URL, and an artifact inventory table.
-2. **`sbom.json`**: Machine-readable Software Bill of Materials distinguishing managed distributions (OMES source, Hermes `v2026.9.24`, Omarchy `v4.0.4`, Graphify `0.9.71`) from discovered host packages.
+2. **`sbom.json`**: Machine-readable Software Bill of Materials distinguishing managed distributions (OMES source, Hermes `v2026.9.24`, Omarchy `v4.0.4`, Graphify `0.9.87`) from discovered host packages.
 3. **`provenance.slsa.json`**: SLSA/in-toto compatible build provenance attestation binding the release tag, commit SHA, build definition, and resolved upstream dependencies.
 4. **`compatibility-evidence.json`**: Platform compatibility matrix evidence for Tier 1 (Ubuntu 24.04/26.04, Linux Mint 22) and Tier 2. Enforces fail-closed evaluation: missing evidence cannot be rendered as `PASS`.
 5. **`recovery-evidence.json`**: Rollback, backup/restore, and disaster recovery gate statuses (`PASS`, `FAIL`, `WARN`, `BLOCKED`, `NOT TESTED`).

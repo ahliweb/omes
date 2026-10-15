@@ -995,8 +995,8 @@ omes job reconcile [--job <job-id>] [--actor <id>] [--json]
 **Exit codes:** 0 (success; for `run`, only when the job reached
 `succeeded`/`rolled_back`; for `reconcile`, whenever reconciliation itself
 completed, even if it moved a job to `failed`), 1 (error — schema validation
-failure, cross-tenant rejection, unknown job for `reconcile --job`, missing
-approval, invalid state transition, exhausted retries, job failed), 2 (usage
+failure, cross-tenant rejection or `tenant_not_configured` (unset
+`OMES_JOBS_TENANT_ID`), unknown job for `reconcile --job`, missing approval, invalid state transition, exhausted retries, job failed), 2 (usage
 error).
 
 ### 4.17 Control Center pull-worker: `omes worker`

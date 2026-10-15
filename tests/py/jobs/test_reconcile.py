@@ -63,6 +63,8 @@ class ReconcileTestBase(unittest.TestCase):
         store.paths.ensure_layout(self.root)
         for var in ("OMES_JOBS_TENANT_ID", "OMES_JOBS_SERVER_ID", "OMES_JOBS_ORPHAN_LEGACY_SECONDS"):
             os.environ.pop(var, None)
+        # submit() is default-deny without a local tenant (#279); match make_request()'s tenant_id.
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
 
     def tearDown(self):
         for var in ("OMES_JOBS_TENANT_ID", "OMES_JOBS_SERVER_ID", "OMES_JOBS_ORPHAN_LEGACY_SECONDS"):
@@ -70,7 +72,17 @@ class ReconcileTestBase(unittest.TestCase):
         shutil.rmtree(self._tmp, ignore_errors=True)
 
     def make_running(self, *, runner=_MISSING, updated_at=None, key="idem-0001", **request_overrides) -> dict:
-        record, _ = store.submit(make_request(idempotency_key=key, **request_overrides), root=self.root)
+        request = make_request(idempotency_key=key, **request_overrides)
+        # Seed the job as its own tenant would have submitted it (#279 default-deny).
+        saved = os.environ.get("OMES_JOBS_TENANT_ID")
+        os.environ["OMES_JOBS_TENANT_ID"] = request["tenant_id"]
+        try:
+            record, _ = store.submit(request, root=self.root)
+        finally:
+            if saved is None:
+                os.environ.pop("OMES_JOBS_TENANT_ID", None)
+            else:
+                os.environ["OMES_JOBS_TENANT_ID"] = saved
         store.apply_transition(record, "approved", "t")
         store.apply_transition(record, "running", "t")
         if runner is not _MISSING:
