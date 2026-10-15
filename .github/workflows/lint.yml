@@ -1,8 +1,8 @@
 name: Lint
 
-# Runs shell linting, secret scanning, and supply-chain checks on every pull
-# request and every push to main. See docs/ci.md for what each job does, how
-# to run it locally, and what blocks merge vs. what is advisory.
+# Runs shell linting, secret scanning, and supply-chain checks. See docs/ci.md
+# for what each job does, how to run it locally, and what blocks merge vs. what
+# is advisory.
 #
 # The core installer (bin/omes, lib/omes/*.sh, modules/, tests/run.sh,
 # .shellcheckrc) is tracked separately in issue #6 and may not exist yet on
@@ -10,10 +10,12 @@ name: Lint
 # `if: hashFiles(...) != ''` so this workflow works both before and after
 # issue #6 merges.
 
+# Manual-only since issue #312: this workflow no longer runs on pull_request or
+# push. The per-PR check is the local runner, scripts/ci-local.sh, whose summary
+# goes in the PR description (docs/ci.md section 10). Dispatch this workflow by
+# hand when GitHub check runs are wanted, for example on a PR head or as a
+# release gate:  gh workflow run lint.yml --ref <branch>
 on:
-  pull_request:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 concurrency:

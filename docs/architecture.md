@@ -165,8 +165,10 @@ tests/integration/*.bats        # Integration tests executing bin/omes against s
 tests/vm/                       # VM-based compatibility test definitions.
 tests/fixtures/                 # Fixtures, e.g. tests/fixtures/os-release/ variants.
 tests/shims/                    # Fake apt-get/systemctl/sudo/hermes/curl for integration tests.
-.github/workflows/lint.yml      # ShellCheck + bats CI.
-.github/workflows/compatibility.yml # OS/profile compatibility matrix CI.
+.github/workflows/lint.yml      # ShellCheck + bats CI (manual dispatch only since #312).
+.github/workflows/compatibility.yml # OS/profile compatibility matrix CI (manual dispatch only since #312).
+.github/workflows/upstream-drift.yml # Upstream drift review (manual dispatch only since #312).
+scripts/ci-local.sh             # Runs every CI job locally; the per-PR check (docs/ci.md section 10).
 docs/architecture.md            # This document.
 docs/adr/*.md                   # Architecture Decision Records.
 docs/business/*.md              # Business plan and go-to-market documents.
@@ -1101,7 +1103,7 @@ The registry gained four new entries describing boundaries and infrastructure th
 
 ### 16.3 Automated upstream drift review and deprecation tracking
 
-Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml`.
+Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml` (a workflow that runs by manual dispatch only since issue [#312](https://github.com/ahliweb/omes/issues/312); `scripts/ci-local.sh --job upstream-drift` is the local, report-only equivalent).
 
 The drift inspection engine:
 - Compares latest released upstream versions against `architecture/capabilities.json` supported baselines.

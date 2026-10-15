@@ -1,14 +1,17 @@
 name: Upstream Drift Review
 
-# Scheduled and manual upstream capability drift review (ADR-0026, issue #181).
+# Upstream capability drift review (ADR-0026, issue #181).
 # Inspects public upstream releases (Hermes, Omarchy, Graphify, Coolify) against
 # architecture/capabilities.json. Manages a single deduplicated tracking issue
 # when actionable drift exists.
 
+# Manual-only since issue #312: this workflow no longer runs on the weekly
+# schedule it used to. Run it by hand to inspect upstream and to create or update
+# the tracking issue (that step needs this workflow's GITHUB_TOKEN):
+#   gh workflow run upstream-drift.yml --ref main
+# The local, report-only equivalent is scripts/ci-local.sh --job upstream-drift
+# (docs/ci.md section 10); it never writes to GitHub.
 on:
-  schedule:
-    # Run weekly on Mondays at 06:00 UTC
-    - cron: '0 6 * * 1'
   workflow_dispatch:
 
 concurrency:
