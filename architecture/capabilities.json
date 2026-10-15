@@ -887,7 +887,7 @@
     },
     {
       "capability_id": "omes.observability.correlation_envelope",
-      "title": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "title": "OMES Cross-Plane Evidence Envelopes: Correlation, Convergence and Policy Decision Composition",
       "authority": "omes",
       "upstream_project": "ahliweb/omes",
       "supported_baseline": "unreleased-main",
@@ -903,7 +903,9 @@
       "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/ahliweb/omes/blob/main/contracts/observability/v1/correlation-envelope.schema.json",
-        "https://github.com/ahliweb/omes/issues/272"
+        "https://github.com/ahliweb/omes/blob/main/contracts/observability/v1/policy-decision.schema.json",
+        "https://github.com/ahliweb/omes/issues/272",
+        "https://github.com/ahliweb/omes/issues/274"
       ]
     }
   ]

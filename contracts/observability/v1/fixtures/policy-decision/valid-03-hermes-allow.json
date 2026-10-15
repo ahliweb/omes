@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0.0",
+  "decision_id": "dec-hermes-0001",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-2026-10-03-deploy-0001",
+  "actor": {
+    "type": "agent",
+    "id": "agent-worker-3"
+  },
+  "resource": {
+    "kind": "tool",
+    "id": "web_search"
+  },
+  "requested_action": "tool.invoke",
+  "deciding_authority": "hermes",
+  "decision": "allow",
+  "policy_id": "hermes.tool.approval",
+  "reason_code": "TOOL_ALLOWED_BY_PROFILE",
+  "evidence": {
+    "version": "policy-2026.10.1",
+    "observed_at": "2026-10-03T10:00:00Z",
+    "freshness": "live"
+  },
+  "approval_ref": null,
+  "expires_at": "2026-10-03T10:30:00Z",
+  "classification": "INTERNAL",
+  "redaction_state": "none_required"
+}

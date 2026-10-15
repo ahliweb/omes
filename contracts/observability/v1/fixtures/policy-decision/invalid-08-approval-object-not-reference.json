@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0.0",
+  "decision_id": "dec-awcms-0001",
+  "tenant_id": "tenant-acme",
+  "correlation_id": "corr-2026-10-03-deploy-0001",
+  "actor": {
+    "type": "user",
+    "id": "user-4821"
+  },
+  "resource": {
+    "kind": "deployment",
+    "id": "deploy-web-01"
+  },
+  "requested_action": "restore",
+  "deciding_authority": "awcms",
+  "decision": "approval_required",
+  "policy_id": "awcms.approval.destructive",
+  "reason_code": "APPROVAL_REQUIRED_DESTRUCTIVE_OPERATION",
+  "evidence": {
+    "version": "policy-2026.10.1",
+    "observed_at": "2026-10-03T10:00:00Z",
+    "freshness": "live"
+  },
+  "approval_ref": {
+    "id": "apr-1",
+    "granted": true
+  },
+  "expires_at": "2026-10-03T11:00:00Z",
+  "idempotency_key": "idem-deploy-0001",
+  "classification": "INTERNAL",
+  "redaction_state": "none_required"
+}
