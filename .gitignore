@@ -31,3 +31,8 @@ dist/
 
 # Scratch redesign archives
 redesign/
+
+# Local CI evidence for the release CI gate (scripts/ci-local.sh --profile full
+# --json, consumed by scripts/release.sh --ci-evidence; issue #315) - per-run,
+# self-reported evidence, never committed.
+/.omes-ci/
