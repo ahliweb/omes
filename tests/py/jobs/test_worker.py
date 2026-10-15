@@ -8,6 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 PY_ROOT = REPO_ROOT / "lib" / "omes" / "py"
@@ -204,6 +205,57 @@ class TestWorkerTransport(unittest.TestCase):
         finally:
             os.environ.pop("OMES_JOBS_TEST_MODE", None)
             os.environ.pop("OMES_JOBS_TEST_ARGV_OVERRIDE", None)
+
+    def test_worker_uses_enrolled_tenant_without_env_var(self) -> None:
+        """Issue #279: the worker passes its enrolled tenant to store.submit
+        and does not depend on OMES_JOBS_TENANT_ID."""
+        saved = os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        creds = worker.WorkerCredentials(
+            tenant_id="tenant-acme",
+            server_id="srv-test-01",
+            worker_id="wrk-001",
+            control_center_endpoint="https://control-center.example.com",
+            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
+            private_key="priv12345",
+        )
+        job_payload = {
+            "tenant_id": "tenant-acme",
+            "correlation_id": "corr-job-279",
+            "idempotency_key": "idem-job-status-27927927",
+            "actor": {"type": "service", "id": "control-center"},
+            "operation": "status",
+            "target": {"server_id": "srv-test-01"},
+            "permission": {"granted": True, "policy_id": "pol-allow-all", "requires_approval": False},
+        }
+        mock_handlers = {
+            "/api/v1/worker/poll": {
+                "status": "job_available",
+                "server_id": "srv-test-01",
+                "tenant_id": "tenant-acme",
+                "job": job_payload,
+                "poll_interval_seconds": 10,
+            },
+            "/api/v1/worker/result": {
+                "job_id": "cc-job-0279",
+                "status": "recorded",
+                "reconciled": True,
+                "recorded_at": "2026-09-21T12:06:00Z",
+            },
+        }
+        client = worker.HttpClient(mock_handlers=mock_handlers)
+        os.environ["OMES_JOBS_TEST_MODE"] = "1"
+        os.environ["OMES_JOBS_TEST_ARGV_OVERRIDE"] = json.dumps(["true"])
+        try:
+            with mock.patch.object(worker.store, "submit", wraps=worker.store.submit) as submit_spy:
+                res = worker.poll_and_dispatch_once(creds, state_dir=self.state_dir, client=client)
+            self.assertEqual(res["status"], "executed")
+            self.assertEqual(res["state"], "succeeded")
+            self.assertEqual(submit_spy.call_args.kwargs.get("enrolled_tenant_id"), "tenant-acme")
+        finally:
+            os.environ.pop("OMES_JOBS_TEST_MODE", None)
+            os.environ.pop("OMES_JOBS_TEST_ARGV_OVERRIDE", None)
+            if saved is not None:
+                os.environ["OMES_JOBS_TENANT_ID"] = saved
 
     def test_scope_mismatch_rejection(self) -> None:
         """Scenario: Job targeting another server_id is rejected without local execution."""

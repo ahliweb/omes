@@ -103,6 +103,16 @@
     {
       "authority": "hermes",
       "execution_semantics": "deterministic",
+      "id": "hermes.agent.acp_server",
+      "implementation_status": "delegated_upstream",
+      "name": "Hermes Agent Client Protocol (ACP) Server for Editor Integration",
+      "omes_module": null,
+      "plane": "agent_runtime",
+      "upstream_project": "NousResearch/hermes-agent"
+    },
+    {
+      "authority": "hermes",
+      "execution_semantics": "deterministic",
       "id": "hermes.agent.backup",
       "implementation_status": "delegated_upstream",
       "name": "Hermes Profile Backup and Restore",
@@ -116,6 +126,16 @@
       "id": "hermes.agent.bot_mode",
       "implementation_status": "delegated_upstream",
       "name": "Hermes Bot Mode Specialist Personas and Routines",
+      "omes_module": null,
+      "plane": "agent_runtime",
+      "upstream_project": "NousResearch/hermes-agent"
+    },
+    {
+      "authority": "hermes",
+      "execution_semantics": "probabilistic",
+      "id": "hermes.agent.delegation",
+      "implementation_status": "delegated_upstream",
+      "name": "Hermes Subagent Delegation (delegate_task, orchestrator/leaf roles, concurrency and depth limits)",
       "omes_module": null,
       "plane": "agent_runtime",
       "upstream_project": "NousResearch/hermes-agent"
