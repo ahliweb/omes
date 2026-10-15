@@ -38,6 +38,14 @@ EOF
   [ "$output" -eq 1 ]
 }
 
+@test "omes job submit is refused (default-deny) when OMES_JOBS_TENANT_ID is unset" {
+  unset OMES_JOBS_TENANT_ID
+  _write_request status idem-0279
+  run "$OMES_BIN" job submit --file "$REQ" --json
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"tenant_not_configured"* ]]
+}
+
 @test "omes job submit is idempotent: replayed request returns the original job" {
   _write_request "status" "idem-dup"
   run "$OMES_BIN" job submit --file "$REQ" --json
