@@ -514,6 +514,27 @@
       ]
     },
     {
+      "capability_id": "omes.rescue.evidence_contract",
+      "title": "Rescue AI Bounded Evidence Contract (external companion)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "n/a",
+      "observed_upstream_revision": null,
+      "maturity": "released_unverified",
+      "disposition": "defer",
+      "plane": "host_control",
+      "execution_semantics": "deterministic",
+      "implementation_status": "staged",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/rescue-ai.md",
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-data-privacy-and-model-security.md"
+      ]
+    },
+    {
       "capability_id": "awcms.commercial.billing",
       "title": "AWCMS Commercial Subscriptions and Invoicing",
       "authority": "awcms",

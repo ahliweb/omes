@@ -1,9 +1,10 @@
 # Optional USB Rescue AI companion
 
-> Status: staged in issue [#261](https://github.com/ahliweb/omes/issues/261). The
-> contract is implemented in `contracts/rescue-ai/v1/`; the external collector,
-> Ventoy media builder, and `omes rescue` CLI are not implemented in this
-> repository yet.
+> Status: staged in issue [#261](https://github.com/ahliweb/omes/issues/261). This
+> repository currently contains only the `contracts/rescue-ai/v1/` schema and
+> fixtures plus this document. The external collector, Ventoy media builder, and
+> `omes rescue` CLI are not implemented here (Not implemented yet, tracked in #261);
+> the rescue companion itself is an external operator-run system.
 
 ## Boundary
 
@@ -40,6 +41,37 @@ It rejects prompts, model responses, raw logs, credentials, private keys,
 arbitrary command fields, and extra properties. Raw evidence belongs in an
 operator-controlled store and must not be sent to OpenCode Go when classified
 `restricted`.
+
+### Cloud egress is fail-closed in the contract
+
+OpenCode Go is a cloud destination, so the contract applies the classification x
+destination rules of
+[docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md)
+(section 4, [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md)).
+`classification` uses the lowercase egress classes `public`, `internal`,
+`confidential`, `restricted`. The schema (a `oneOf` over mutually exclusive
+branches, because the repository's stdlib validator has no `if/then`) accepts
+`ai_analysis_status: completed` only when all of the following hold:
+
+- `ai_provider.destination_class` is `cloud` (an `unknown` destination is
+  denied, matching the evaluator's fail-closed unknown-destination rule);
+- `classification` is `public`, `internal`, or `confidential`. **`restricted`
+  can never be recorded as a completed cloud analysis**, with or without a
+  decision reference, matching `AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED`;
+- `egress_decision_ref` is present and names the recorded `allow` outcome from
+  the ai-egress policy evaluator (`policy_version`, `classification`,
+  `destination: cloud_sanitized`, `decision: allow`, `reason_code`), with a
+  `classification` and `reason_code` matching the branch. For `confidential`
+  data (cloud is deny-by-default, `approval_required` in the evaluator)
+  `egress_decision_ref.approval_id` must additionally reference the owner
+  approval recorded through the Control Center approval contract.
+
+`not_run`, `manual_intervention`, and `blocked` statuses record that nothing was
+sent to a model and are accepted for any classification. The reference is
+metadata only: this contract does not evaluate egress policy, verify the
+referenced decision exists, or verify sanitization. Those remain the
+evaluator's and the owner's responsibility (Not implemented yet: the
+`omes rescue validate` cross-check, tracked in #261).
 
 ## OpenCode Go procedure
 
@@ -92,7 +124,7 @@ backup/image reference, rollback plan, and post-action read-back verification.
 
 | Stage | Deliverable | Status |
 |---|---|---|
-| 1 | `rescue-ai/v1` bounded schema and valid/invalid fixtures | Implemented in this branch |
+| 1 | `rescue-ai/v1` bounded schema and valid/invalid fixtures | Contract and fixtures present in this repository; no runtime consumer |
 | 2 | Read-only validator and typed `omes rescue validate` command | Planned in #261 |
 | 3 | Provenance recording for media/tools/provider identity | Planned in #261 |
 | 4 | External ARM64 collector and report writer | Separate companion workstream |
@@ -106,6 +138,9 @@ Before calling the integration ready:
 - contract fixtures pass through `scripts/check-contracts.py`;
 - raw prompt/response/credential/arbitrary-command fixtures fail for the
   intended reason;
+- restricted + cloud + completed, confidential + cloud without an egress
+  decision/approval reference, and completed with an unknown destination fixtures
+  fail the schema;
 - validator never executes discovered files or commands;
 - checksum mismatch fails closed;
 - network failure still permits evidence collection and produces

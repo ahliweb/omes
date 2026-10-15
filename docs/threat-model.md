@@ -199,6 +199,14 @@ contains repeated numeric identifiers from independently landed implementation s
 | AI-07 | A provider claim such as "not used for training" is treated as a complete privacy guarantee | Information Disclosure | Separate assurance for retention, human access, subprocessors, residency/transfer, deletion and incident terms | Implemented ([#237](https://github.com/ahliweb/omes/issues/237)): [contracts/ai-egress/v1/provider-assurance-evidence.schema.json](../contracts/ai-egress/v1/provider-assurance-evidence.schema.json) records the section 5 due-diligence checklist as structured, versioned evidence (bounded status + opaque evidence reference per item - never a raw provider response), embedded as `provider_assurance` in an egress-decision-request; `lib/omes/py/privacy/egress_policy.py` denies `cloud_sanitized` (`AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE`/`AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE`) whenever this evidence is missing or any of the 9 required items is not `verified`, fail-closed, regardless of provider posture or sanitization evidence, and further denies (`AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH`) unless `provider_posture.provider_id` is present and exactly equals `provider_assurance.provider_id`, so adequate evidence recorded for one provider can never approve egress to a different one. Residual limit: the evaluator trusts the caller's recorded status: it has no way to verify that a `verified` item is actually true of the provider - see docs/ai-data-privacy-and-model-security.md section 5. |
 | AI-08 | Model-generated text is executed as arbitrary shell/API action | Tampering, Elevation of Privilege | Existing typed/fixed-argv job runner and pull-worker; negative regression tests | Existing boundary #90/#192; AI regression coverage implemented (#218, `tests/py/privacy/test_privacy_boundary_regression.py`) |
 
+Rescue companion note (issue #261): the staged external rescue companion
+([docs/rescue-ai.md](rescue-ai.md)) is an additional AI-01/AI-05 surface because it can route
+sanitized evidence to the cloud provider OpenCode Go. The `contracts/rescue-ai/v1` schema
+rejects any record of a completed cloud analysis of `restricted` data, requires an egress decision
+reference for `public`/`internal`/`confidential` cloud analyses (plus an approval reference for
+`confidential`), and carries no prompt, response, log, or credential fields. This is a recorded-metadata
+control only: no OMES code enforces the companion's egress at run time (Not implemented yet, tracked in #261).
+
 ### 5.y Architecture/authority-boundary threat delta (issue #247)
 
 The following threats are governed by
