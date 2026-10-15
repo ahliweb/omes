@@ -869,7 +869,8 @@ class TestNoCanarySurvivesIntoLogsStateOrBackups(unittest.TestCase):
         self.state_dir = Path(tempfile.mkdtemp(prefix="omes-218-state-"))
         self._saved_env = {k: os.environ.get(k) for k in ("OMES_STATE_DIR", "OMES_JOBS_TENANT_ID", "OMES_JOBS_SERVER_ID")}
         os.environ["OMES_STATE_DIR"] = str(self.state_dir)
-        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        # submit is default-deny without a local tenant (issue #279).
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-a"
         os.environ.pop("OMES_JOBS_SERVER_ID", None)
 
     def tearDown(self):
