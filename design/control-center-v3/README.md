@@ -44,11 +44,10 @@ canvas the files were authored in.
 | [`AvatarKit.dc.html`](AvatarKit.dc.html) | 09 · Avatar kit and settings: agent, 3D/2D style, status, animation, sizes, usage rules | yes |
 | [`Avatar.dc.html`](Avatar.dc.html) | Shared avatar component (`agent`, `state`, `look`, `size`, `animate`, `badge`) imported by screens 07–09 | — |
 
-The audit page expects three screenshots of the v2 prototype in `assets/`
+The audit page uses three screenshots of the v2 prototype in `assets/`
 (`prototype-v2-overview.png`, `prototype-v2-servers.png`,
-`prototype-v2-mobile-390.png`), and static renders of each v3 screen belong in
-`previews/`. These binary files are not part of this commit; until they are
-added, the audit page shows empty image frames. Animations respect
+`prototype-v2-mobile-390.png`), and `previews/` holds a static PNG render of
+each v3 screen. Animations respect
 `prefers-reduced-motion`, and the office view has a pause control.
 
 ## Data provenance
