@@ -1,8 +1,7 @@
 name: Compatibility
 
 # Runs scripts/test-matrix.sh (issue #15) against the OS containers from
-# docs/compatibility-matrix.md on every pull request, every push to main,
-# weekly on a schedule, and on demand. The core installer (bin/omes,
+# docs/compatibility-matrix.md. The core installer (bin/omes,
 # lib/omes/*.sh, modules/, profiles/) is tracked separately in issue #6 and
 # may not exist yet on a given branch; the matrix job is guarded with
 # `if: hashFiles('scripts/test-matrix.sh') != ''` so this workflow is a
@@ -15,13 +14,17 @@ name: Compatibility
 # runner directly (Docker preinstalled there) rather than inside a
 # `container:` job - nesting Docker inside a `container:` job is not
 # supported the same way.
+#
+# The graphify-real-smoke job below keeps its `if:` guard (schedule or
+# workflow_dispatch); with the schedule trigger gone it can only run when
+# dispatched by hand.
 
+# Manual-only since issue #312: this workflow no longer runs on pull_request,
+# push or the weekly schedule. The per-PR check is the local runner,
+# scripts/ci-local.sh --profile full (docs/ci.md section 10). Dispatch this
+# workflow by hand when GitHub check runs or a release-gate run are wanted:
+#   gh workflow run compatibility.yml --ref <branch>
 on:
-  pull_request:
-  push:
-    branches: [main]
-  schedule:
-    - cron: "17 3 * * 1"  # weekly, Monday 03:17 UTC
   workflow_dispatch:
 
 concurrency:

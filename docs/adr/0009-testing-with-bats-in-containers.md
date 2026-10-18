@@ -132,7 +132,10 @@ that CI and contributors both use.
   whatever the test expected" — shim drift from real tool behavior is a
   known risk this ADR accepts and expects `tests/vm/` to catch.
 - `.github/workflows/lint.yml` runs ShellCheck + bats on every PR; a
-  failing run blocks merge per the brief's working rules.
+  failing run blocks merge per the brief's working rules. *(Amended by
+  issue #312: the workflow now runs only on manual dispatch and
+  `scripts/ci-local.sh` is the per-PR check; see
+  [docs/ci.md](../ci.md) sections 1 and 10.)*
 - VM-based testing (`tests/vm/`) remains the authority for real-host
   behavior (actual `apt`, actual `systemctl`, actual hardware for the
   desktop profile) and is not replaced by the shim-based suite this ADR

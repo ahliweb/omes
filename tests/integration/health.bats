@@ -92,3 +92,84 @@ assert "gateway" in d["layers"]
   run "$OMES_BIN" health agent
   [[ "$output" == *"health: ready="*"connected="* ]]
 }
+
+# ---------------------------------------------------------------------------
+# omes health agent-runtime (issue #270): configured Hermes delegation limits
+# read through `hermes config get <key> --json`. Logic is covered by
+# tests/py/health/test_agent_runtime_posture.py and test_hermes_config.py;
+# these assert the bash <-> python wiring through tests/shims/hermes.
+# ---------------------------------------------------------------------------
+
+_agent_runtime_export_good_config() {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_MAX_CONCURRENT_CHILDREN=4
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_MAX_SPAWN_DEPTH=1
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_MAX_ITERATIONS=100
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_CHILD_TIMEOUT_SECONDS=600
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_SUBAGENT_AUTO_APPROVE=false
+}
+
+@test "omes health agent-runtime is unknown (exit 7) when Hermes cannot answer config get" {
+  # Without SHIM_HERMES_CONFIG_GET_SUPPORTED the shim behaves like a Hermes
+  # build that rejects `config get`: that must never read as ok.
+  omes_run_stdout_only "$OMES_BIN" health agent-runtime --json
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "unknown", d["status"]
+assert d["scope"] == "configured"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health agent-runtime reports ok with configured scope when every limit is read" {
+  _agent_runtime_export_good_config
+  omes_run_stdout_only "$OMES_BIN" health agent-runtime --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "ok", d
+assert d["scope"] == "configured"
+assert "not observed" in d["scope_note"]
+assert d["keys"]["delegation.max_concurrent_children"] == {"state": "value", "value": 4}
+'
+  [ "$status" -eq 0 ]
+  # Only the supported read form was used: --json always, --raw never.
+  run grep -c -- "config get delegation\." "$SHIM_LOG"
+  [[ "$output" -ge 5 ]]
+  run grep -c -- "--raw" "$SHIM_LOG"
+  [ "$output" = "0" ]
+  run grep -v -- "--json" "$SHIM_LOG"
+  [ -z "$output" ]
+}
+
+@test "omes health agent-runtime warns (exit 0) when no per-child timeout is configured" {
+  _agent_runtime_export_good_config
+  export SHIM_HERMES_CONFIG_GET_DELEGATION_CHILD_TIMEOUT_SECONDS=0
+  omes_run_stdout_only "$OMES_BIN" health agent-runtime --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "warn", d["status"]
+assert "delegation.no_child_timeout" in [f["id"] for f in d["findings"]]
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health agent-runtime rejects an unknown argument with a usage error" {
+  run "$OMES_BIN" health agent-runtime --bogus
+  [ "$status" -eq 2 ]
+}
+
+@test "omes health agent-runtime human output states the configured scope" {
+  _agent_runtime_export_good_config
+  run "$OMES_BIN" health agent-runtime
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"health agent-runtime: status=ok scope=configured"* ]]
+}
