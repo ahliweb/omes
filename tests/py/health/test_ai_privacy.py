@@ -11,6 +11,7 @@ surfaces in the evidence output.
 from __future__ import annotations
 
 import importlib.util
+import io
 import json
 import os
 import sys
@@ -273,7 +274,10 @@ class TestRunEndToEnd(unittest.TestCase):
     CANARY = "CANARY_SECRET_" + "sk_live_" + "should_never_appear_in_evidence"
 
     def test_run_never_raises_and_degrades_to_blocked_without_hermes(self):
-        with mock.patch.object(ai_privacy.shutil, "which", return_value=None):
+        # run() reads state facts from a non-TTY stdin; never let it block on
+        # the test runner's real stdin (an open pipe never reaches EOF, #320).
+        with mock.patch.object(ai_privacy.shutil, "which", return_value=None), \
+             mock.patch.object(sys, "stdin", io.StringIO("")):
             result = ai_privacy.run([])
         self.assertIn(result["status"], ("BLOCKED", "FAIL", "WARN", "PASS"))
         self.assertEqual(result["destination_class"], "unknown")

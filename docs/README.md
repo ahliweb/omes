@@ -37,7 +37,7 @@ Grouped index of every document in this repository. See the top-level
 | [rollback.md](rollback.md) | Backup layout, `omes backup`/`omes restore`/`omes uninstall`, what is and isn't reversible. |
 | [disaster-recovery.md](disaster-recovery.md) | Scenario-driven recovery walkthroughs exercised by the integration test suite. |
 | [testing.md](testing.md) | The test pyramid (unit/integration bats, container matrix, VM matrix, manual checklist) and how to run each layer. |
-| [ci.md](ci.md) | What runs in GitHub Actions, what blocks a PR vs. is advisory, how to run every check locally. |
+| [ci.md](ci.md) | The CI jobs (GitHub Actions on manual dispatch only), the local runner `scripts/ci-local.sh` that is the per-PR check, what blocks vs. is advisory, and how to run every check locally. |
 | [packages.md](packages.md) | `lib/omes/pkg.sh`: package-name mapping, repository validation, the no-PPA-unless-allowlisted policy. |
 
 ## Design & security
@@ -45,6 +45,7 @@ Grouped index of every document in this repository. See the top-level
 | Document | What it covers |
 |---|---|
 | [architecture.md](architecture.md) | The module contract, execution model, state/backup model, exit codes, privilege model. |
+| [browser-data-transfer-integration.md](browser-data-transfer-integration.md) | **Proposed only:** AI-assisted browser source-to-target transfer design, Hermes/Playwright/AWCMS ownership, policy checks, record reconciliation, monitoring, and threat tests (#294/#295). |
 | [security.md](security.md) | The security baseline: least-privilege defaults, Telegram/firewall/update policy, secret handling. |
 | [ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) | AI data classification, local/private vs cloud-model boundary, model egress rules, RAG/embedding privacy, and governance references. |
 | [multi-agent-control-patterns.md](multi-agent-control-patterns.md) | Octop-inspired multi-agent control patterns: gap analysis, authority decision matrix and child issues #270–#277 for epic #269 (ADR-0032). |

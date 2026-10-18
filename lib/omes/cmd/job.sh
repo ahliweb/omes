@@ -29,7 +29,7 @@ cmd_job() {
   fi
 
   if [[ "$#" -eq 0 ]]; then
-    printf '[omes] usage: omes job <submit|approve|run|status|list|cancel|expire> [args...]\n' >&2
+    printf '[omes] usage: omes job <submit|approve|run|status|list|cancel|expire|reconcile> [args...]\n' >&2
     return 2
   fi
 

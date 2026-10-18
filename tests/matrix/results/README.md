@@ -29,8 +29,9 @@ committed, so the directory itself still exists in a fresh checkout.
 
 ## How these are produced and archived
 
-Run `scripts/test-matrix.sh` locally, or let `.github/workflows/compatibility.yml`
-run it in CI. Locally, the files land here and stay on disk until you delete
+Run `scripts/test-matrix.sh` locally (or `scripts/ci-local.sh --profile full`), or
+dispatch `.github/workflows/compatibility.yml` by hand to run it in CI (the workflow
+has no automatic trigger since issue #312). Locally, the files land here and stay on disk until you delete
 them or re-run the matrix (each run overwrites its own `<image>-<scenario>.json`,
 it does not accumulate history). In CI, the whole `tests/matrix/results/` and
 `tests/matrix/logs/` directories are uploaded as a build artifact per run (see
