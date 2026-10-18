@@ -126,7 +126,8 @@ that same table — since issue #312 there is no automatic cadence: it runs when
 the periodic coverage the table asks for now depends on someone doing that
 (Not automated; an owner decision under #312). Tier-1 coverage "before every
 release" likewise needs this workflow dispatched on the release commit, or a
-`--profile full` summary for it (§8). Promoting a new platform to Tier 1
+`--profile full` evidence file for it; `scripts/release.sh` refuses to cut a release
+without one of the two (§8). Promoting a new platform to Tier 1
 requires adding it to this workflow's matrix, per compatibility-matrix.md
 section 6, step 6.
 
@@ -393,18 +394,91 @@ scripts/release.sh <X.Y.Z> --publish
 
 `scripts/release.sh` enforces:
 - Execution on clean `main` branch with no uncommitted changes.
-- Pre-release check: queries the GitHub check runs of the target commit and refuses to
-  release when one of them failed or is still pending, when the commit has no check runs
-  at all, or when the query itself fails. Since the workflows run on manual dispatch only
-  (§1, issue #312), dispatch `lint.yml` and `compatibility.yml` on the release commit and
-  wait for them before cutting a release. `--skip-ci-check` bypasses the query and is only
-  acceptable with the `scripts/ci-local.sh --profile full` summary for that exact commit
-  ([docs/business/release-gates.md](business/release-gates.md)).
+- A **CI gate that fails closed** (issue [#315](https://github.com/ahliweb/omes/issues/315)).
+  The workflows run on manual dispatch only (§1, issue #312), so a commit nobody dispatched
+  them on has *zero* check runs. The earlier gate only failed on completed non-success runs,
+  so it passed with zero check runs, and it skipped itself silently when `gh` was not
+  installed. Now a release passes the gate only when the commit being released (HEAD when
+  `release.sh` starts) has acceptable evidence from **at least one** of two sources (§8.1).
+  With neither, `release.sh` exits 1, names the jobs that lack evidence and shows how to
+  produce it. A missing `gh` skips nothing: only the local evidence source can pass without
+  it. See also [docs/business/release-gates.md](business/release-gates.md).
 - Compilation of all `changes/*.md` fragments into `CHANGELOG.md` and bump of `VERSION`.
 - Synchronization of `README.md` version claims.
 - Creation of an annotated git tag `v<X.Y.Z>` matching the exact release commit SHA.
 - Refusal to retarget or force-move existing public release tags.
 - Post-publish read-back verification: reads back the pushed git tag and the published GitHub Release.
+
+### 8.1 The CI gate in detail
+
+**Required jobs.** Every *blocking* job of the full profile, derived from the release
+commit's own `scripts/ci-local.sh --list --json --profile full` (its job table, which the
+`workflow-sync` job keeps equal to `lint.yml` and `compatibility.yml`; there is no second
+workflow parser). Advisory jobs (`shfmt`, the Tier 2 `ubuntu:22.04` matrix row,
+`graphify-real-smoke`) are not required. `--list --json` reports each job's GitHub
+check-run name as `check_name`. An inherited `OMES_CI_WORKFLOWS_DIR` is ignored, and the
+gate refuses to run when `.github/workflows`, `scripts/ci-local.sh` or
+`scripts/release-ci-gate.py` differ from the release commit.
+
+**Source 1 - GitHub check runs.** One `gh api --paginate
+"repos/:owner/:repo/commits/<sha>/check-runs?per_page=100&filter=latest"` call (the same
+call as before, now paginated; no other network call). For **every** required `lint.yml`
+and `compatibility.yml` job there must be a check run with its display name, created by
+GitHub Actions for that commit, with status `completed` and conclusion `success`. A job
+that is missing, failed, cancelled, skipped, neutral or still running is no evidence; so is
+a truncated response and a failing or unauthenticated `gh` call. Check runs from other
+GitHub Apps never substitute for them: GitGuardian posts a successful check run on every
+commit by itself, so a commit on which only GitGuardian ran still has no evidence. Produce
+it with:
+
+```bash
+gh workflow run lint.yml --ref <tag-or-branch>
+gh workflow run compatibility.yml --ref <tag-or-branch>
+```
+
+**A failing check run blocks in both paths.** Whichever source supplies the evidence, any
+*completed* check run on the release commit with conclusion `failure`, `timed_out` or
+`action_required` blocks the release, whichever app posted it and whether or not its job is
+required; the error (`CI gate BLOCKED`) names the run and its app. The motivating case is a
+failing GitGuardian run, which means a leaked secret. A red check on the exact commit also
+overrides valid local evidence, because it contradicts it. This needs `gh` to see the runs: when
+`gh` is absent or the query fails there is nothing to block on, and only the local-evidence
+checks apply. Exceptions: a failed GitHub Actions run of a known advisory workflow job
+(`shfmt`, the Tier 2 matrix row, `graphify-real-smoke`; `continue-on-error` by design), and
+`--skip-ci-check`. A run that is still running and is not a required job does not block; the
+release prints a warning naming it. Cancelled, skipped and neutral runs of non-required jobs
+are ignored.
+
+**Source 2 - local CI evidence file.** `scripts/ci-local.sh --profile full --json` run on
+a clean, full-depth checkout of the release commit, saved to
+`.omes-ci/ci-local-<sha>.json` (git-ignored; `--ci-evidence PATH` overrides the path):
+
+```bash
+mkdir -p .omes-ci
+scripts/ci-local.sh --profile full --json > ".omes-ci/ci-local-$(git rev-parse HEAD).json"
+```
+
+`scripts/release-ci-gate.py` validates it strictly; anything malformed or missing is *no
+evidence*. All of these must hold: valid JSON (no duplicate keys, no `NaN`) with `schema`
+`omes-ci-local/1`; `result` `pass`, `exit_code` 0 and `profile` `full` (a `--job` or fast
+run is rejected); `git.head` equal to the release commit SHA, `git.dirty` `false` and
+`git.shallow` `false` (unknown does not count); `counts.fail` and `counts.blocking_skipped`
+0, and no blocking job in any status but `pass`; every required blocking job present and
+`pass`, including each `matrix:<image>` and `real-install-*` job; and a `generated_at` UTC
+timestamp that is not in the future (a 5 minute clock-skew allowance). The file is
+**self-reported**: it is bound to the commit SHA, but GitHub does not enforce, sign or
+verify it, so it is exactly as trustworthy as the person who produced it (§10).
+
+**Explicit opt-out.** `--skip-ci-check` still exists for an operator who consciously
+accepts releasing without CI evidence. It is never the default, prints a prominent warning,
+is written into the annotated tag message and appended to the GitHub Release notes
+(`CI gate: SKIPPED with --skip-ci-check ...`), and is repeated in the final log line.
+
+**`--dry-run`** stays non-mutating and network-free: it never calls `gh`. It prints the
+local-evidence verdict and, when the gate would currently fail, a `[dry-run] CI gate would
+currently FAIL` warning with the missing jobs, but it does not fail the dry run.
+
+Tests: `tests/unit/release-ci-gate.bats` (fake `gh`: `tests/shims/gh`).
 
 ## 9. `scripts/release.sh --validate-fragments` (issue #238)
 
@@ -448,6 +522,9 @@ other checks in this document that have both a `tests/run.sh` and a
 `scripts/lint.sh` entry point.
 
 ## 10. Running the full CI locally (no GitHub Actions)
+
+The decision behind this section, its options and its consequences are recorded in
+[ADR-0034](adr/0034-local-ci-as-the-per-pr-check.md).
 
 Issue [#312](https://github.com/ahliweb/omes/issues/312).
 `scripts/ci-local.sh` reproduces every job of `.github/workflows/*.yml` on a
@@ -534,11 +611,15 @@ environment failure are never confused.
 The Markdown summary (stdout) lists commit, working-tree state, profile or job
 selection, counts and one table row per job; paste it into the pull request
 description. With `--json`, stdout carries exactly one document
-(`"schema": "omes-ci-local/1"`: `result`, `exit_code`, `profile`, `git`,
+(`"schema": "omes-ci-local/1"`: `result`, `exit_code`, `generated_at`, `profile`, `git`,
 `mirror`, `counts`, and per job `name`, `workflow`, `workflow_job`, `blocking`,
 `status`, `reason`, `duration_seconds`, `command`) and all logs stay on stderr.
 A run restricted with `--job` says so (`"profile": "custom"`), so a partial run
-cannot be mistaken for the full profile.
+cannot be mistaken for the full profile. `generated_at` is the UTC time the summary was
+written. `--list --json` additionally gives each workflow job's GitHub `check_name` (the
+display name of its check run; `null` for the runner-only `workflow-sync`). The JSON of a
+`--profile full` run on the release commit is the local evidence `scripts/release.sh`
+accepts for its CI gate (§8.1).
 
 Jobs run with an environment scrubbed of `GITHUB_TOKEN`, `GH_TOKEN`,
 `GITLEAKS_LICENSE` and every `OMES_*` variable except `OMES_CI_*`, so a local run
