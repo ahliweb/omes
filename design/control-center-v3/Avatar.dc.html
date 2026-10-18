@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Avatar agen</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+body{margin:0}
+</style>
+</helmet>
+<div style="{{ wrap }}">
+  <svg viewBox="0 0 62 100" width="{{ w }}" height="{{ h }}" role="img" aria-label="{{ label }}" style="display: block; overflow: visible">
+    <defs>
+      <linearGradient id="{{ gBody }}" x1="0" y1="0" x2="1" y2="0.3">
+        <stop offset="0" stop-color="{{ dark }}"></stop>
+        <stop offset="0.55" stop-color="{{ color }}"></stop>
+        <stop offset="1" stop-color="{{ light }}"></stop>
+      </linearGradient>
+      <radialGradient id="{{ gHead }}" cx="0.35" cy="0.28" r="0.85">
+        <stop offset="0" stop-color="#FFFFFF"></stop>
+        <stop offset="0.5" stop-color="#E1E7ED"></stop>
+        <stop offset="1" stop-color="#8E9BA8"></stop>
+      </radialGradient>
+      <radialGradient id="{{ gVisor }}" cx="0.3" cy="0.25" r="0.9">
+        <stop offset="0" stop-color="#2A3644"></stop>
+        <stop offset="1" stop-color="#05080B"></stop>
+      </radialGradient>
+    </defs>
+
+    <ellipse cx="31" cy="96" rx="19" ry="4" fill="#000000" opacity="{{ shadowOpacity }}"></ellipse>
+
+    <g style="{{ bobStyle }}">
+      <sc-if value="{{ isBot }}" hint-placeholder-val="{{ true }}">
+        <g>
+          <path d="M13 94 C13 73 18 61 31 61 C44 61 49 73 49 94 Z" fill="{{ bodyFill }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></path>
+          <rect x="27" y="53" width="8" height="9" rx="2" fill="#5E6B78"></rect>
+          <line x1="31" y1="14" x2="31" y2="6" stroke="#8D9BA8" stroke-width="2" stroke-linecap="round"></line>
+          <circle cx="31" cy="5" r="3.2" fill="{{ color }}" style="{{ antennaStyle }}"></circle>
+          <rect x="9" y="14" width="44" height="41" rx="15" fill="{{ headFill }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></rect>
+          <circle cx="9" cy="35" r="4" fill="{{ color }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></circle>
+          <circle cx="53" cy="35" r="4" fill="{{ color }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></circle>
+          <rect x="14" y="24" width="34" height="19" rx="9.5" fill="{{ visorFill }}"></rect>
+          <g style="{{ blinkStyle }}">
+            <rect x="21" y="30" width="6" height="7" rx="3" fill="{{ color }}"></rect>
+            <rect x="35" y="30" width="6" height="7" rx="3" fill="{{ color }}"></rect>
+          </g>
+          <sc-if value="{{ is3d }}" hint-placeholder-val="{{ true }}">
+            <ellipse cx="22" cy="20" rx="7" ry="3" fill="#FFFFFF" opacity="0.55"></ellipse>
+          </sc-if>
+
+          <sc-if value="{{ isLead }}" hint-placeholder-val="{{ true }}">
+            <g fill="none" stroke="#0D1115" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M24 72 L31 77 L38 72"></path>
+              <path d="M24 78 L31 83 L38 78"></path>
+            </g>
+          </sc-if>
+          <sc-if value="{{ isCode }}" hint-placeholder-val="{{ false }}">
+            <g fill="none" stroke="#0D1115" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M24 72 L20 77 L24 82"></path>
+              <path d="M38 72 L42 77 L38 82"></path>
+              <path d="M33 70 L29 84"></path>
+            </g>
+          </sc-if>
+          <sc-if value="{{ isLint }}" hint-placeholder-val="{{ false }}">
+            <g fill="none" stroke="#0D1115" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M31 68 L39 71 V77 C39 81 35 84 31 85 C27 84 23 81 23 77 V71 Z"></path>
+              <path d="M27 77 L30 80 L35 74"></path>
+            </g>
+          </sc-if>
+          <sc-if value="{{ isContract }}" hint-placeholder-val="{{ false }}">
+            <g fill="none" stroke="#0D1115" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M25 68 H34 L38 72 V85 H25 Z"></path>
+              <path d="M28 75 H35 M28 79 H35"></path>
+            </g>
+          </sc-if>
+        </g>
+      </sc-if>
+
+      <sc-if value="{{ isHuman }}" hint-placeholder-val="{{ false }}">
+        <g>
+          <path d="M12 94 C12 72 18 62 31 62 C44 62 50 72 50 94 Z" fill="{{ bodyFill }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></path>
+          <path d="M25 62 L31 72 L37 62" fill="#E8EEF3" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></path>
+          <rect x="27" y="50" width="8" height="12" rx="3" fill="#A3B0BC"></rect>
+          <circle cx="31" cy="34" r="17" fill="{{ skinFill }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></circle>
+          <path d="M14 33 C14 20 22 15 31 15 C41 15 48 21 48 32 C44 26 37 24 31 25 C24 25 18 28 14 33 Z" fill="#3B4652"></path>
+          <sc-if value="{{ is3d }}" hint-placeholder-val="{{ true }}">
+            <ellipse cx="24" cy="30" rx="5" ry="3" fill="#FFFFFF" opacity="0.35"></ellipse>
+          </sc-if>
+          <rect x="35" y="72" width="9" height="12" rx="2" fill="#E8EEF3" stroke="#0D1115" stroke-width="1.2"></rect>
+        </g>
+      </sc-if>
+    </g>
+
+    <sc-if value="{{ badge }}" hint-placeholder-val="{{ true }}">
+      <g>
+        <circle cx="52" cy="14" r="8" fill="#0D1115"></circle>
+        <circle cx="52" cy="14" r="6.5" fill="{{ stateColor }}"></circle>
+        <sc-if value="{{ sRun }}" hint-placeholder-val="{{ true }}">
+          <path d="M50 10.5 L56 14 L50 17.5 Z" fill="#0D1115"></path>
+        </sc-if>
+        <sc-if value="{{ sDone }}" hint-placeholder-val="{{ false }}">
+          <path d="M49 14 L51.3 16.3 L55.5 11.8" fill="none" stroke="#0D1115" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"></path>
+        </sc-if>
+        <sc-if value="{{ sFail }}" hint-placeholder-val="{{ false }}">
+          <path d="M49.5 11.5 L54.5 16.5 M54.5 11.5 L49.5 16.5" stroke="#0D1115" stroke-width="1.8" stroke-linecap="round"></path>
+        </sc-if>
+        <sc-if value="{{ sWait }}" hint-placeholder-val="{{ false }}">
+          <path d="M52 10.5 V14 L54.5 15.5" fill="none" stroke="#0D1115" stroke-width="1.8" stroke-linecap="round"></path>
+        </sc-if>
+        <sc-if value="{{ sUnknown }}" hint-placeholder-val="{{ false }}">
+          <path d="M50.2 12.2 C50.2 10.2 53.8 10.2 53.8 12.4 C53.8 13.8 52 14 52 15.4 M52 17.4 V17.5" fill="none" stroke="#0D1115" stroke-width="1.6" stroke-linecap="round"></path>
+        </sc-if>
+      </g>
+    </sc-if>
+  </svg>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"agent":{"editor":"enum","options":["lead","code","lint","contract","owner"],"default":"lead"},"look":{"editor":"enum","options":["3d","2d"],"default":"3d"},"state":{"editor":"enum","options":["run","done","fail","wait","unknown"],"default":"run"},"size":{"editor":"int","min":24,"max":320,"default":200},"animate":{"editor":"boolean","default":false},"badge":{"editor":"boolean","default":true},"$preview":{"width":124,"height":200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const R = {
+      lead: { c: '#5FC8D6', d: '#2A7D89', l: '#A6E4EC', name: 'Lead Planner' },
+      code: { c: '#C79BEF', d: '#7A4CA6', l: '#E4CCF8', name: 'Analis Kode' },
+      lint: { c: '#6FA8F5', d: '#2C5FA8', l: '#B5D2FA', name: 'Lint Checker' },
+      contract: { c: '#EF8FB8', d: '#A2466E', l: '#F8C6DB', name: 'Contract Tester' },
+      owner: { c: '#6E7C8A', d: '#3E4955', l: '#9AA7B4', name: 'Owner (manusia)' }
+    };
+    const S = {
+      run: { c: '#7FD3DE', t: 'berjalan' },
+      done: { c: '#7DD89A', t: 'selesai' },
+      fail: { c: '#F49A8B', t: 'gagal' },
+      wait: { c: '#E8B44A', t: 'menunggu' },
+      unknown: { c: '#A3B0BC', t: 'tak diketahui' }
+    };
+    const key = R[this.props.agent] ? this.props.agent : 'lead';
+    const r = R[key];
+    const st = S[this.props.state] ? this.props.state : 'run';
+    const s = S[st];
+    const look3d = (this.props.look ?? '3d') !== '2d';
+    const size = Number(this.props.size ?? 200) || 200;
+    const w = Math.round(size * 0.62);
+    const anim = this.props.animate === true || this.props.animate === 'true';
+    const badge = !(this.props.badge === false || this.props.badge === 'false');
+    const live = anim && st === 'run';
+    const suffix = key + (look3d ? '3' : '2');
+    return {
+      wrap: 'position:relative;width:' + w + 'px;height:' + size + 'px',
+      w: w, h: size,
+      label: r.name + ', ' + s.t,
+      gBody: 'avb-' + suffix, gHead: 'avh-' + suffix, gVisor: 'avv-' + suffix,
+      color: r.c, dark: r.d, light: r.l,
+      bodyFill: look3d ? 'url(#avb-' + suffix + ')' : r.c,
+      headFill: look3d ? 'url(#avh-' + suffix + ')' : '#E8EEF3',
+      visorFill: look3d ? 'url(#avv-' + suffix + ')' : '#0D1115',
+      skinFill: look3d ? 'url(#avh-' + suffix + ')' : '#C9D2DA',
+      outline: look3d ? 'none' : '#0D1115',
+      outlineW: look3d ? 0 : 1.6,
+      shadowOpacity: look3d ? 0.45 : 0.25,
+      is3d: look3d,
+      isBot: key !== 'owner', isHuman: key === 'owner',
+      isLead: key === 'lead', isCode: key === 'code', isLint: key === 'lint', isContract: key === 'contract',
+      bobStyle: live ? 'animation:avBob 2.4s ease-in-out infinite' : (anim ? 'animation:avBreath 4.8s ease-in-out infinite' : ''),
+      blinkStyle: anim ? 'transform-box:fill-box;transform-origin:50% 50%;animation:avBlink 4.2s infinite' : '',
+      antennaStyle: live ? 'animation:avPulse 1.4s ease-in-out infinite' : '',
+      badge: badge, stateColor: s.c,
+      sRun: st === 'run', sDone: st === 'done', sFail: st === 'fail', sWait: st === 'wait', sUnknown: st === 'unknown'
+    };
+  }
+}
+</script>
+</body>
+</html>

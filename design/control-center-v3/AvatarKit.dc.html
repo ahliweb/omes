@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Kit dan pengaturan avatar agen</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0D1115;color:#E8EEF3;font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7FD3DE}a:hover{color:#A6E4EC}
+:focus-visible{outline:2px solid #7FD3DE;outline-offset:2px;border-radius:6px}
+@keyframes avBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes avBreath{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+@keyframes avBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes avPulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes kitSpinFlat{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+@keyframes kitRise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+</style>
+</helmet>
+
+<div style="width: 1440px; min-height: 1080px; box-sizing: border-box; padding: 48px 56px; background: #0D1115; display: flex; flex-direction: column; gap: 32px">
+  <header style="display: flex; flex-direction: column; gap: 8px; max-width: 900px">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #7FD3DE">komponen Avatar.dc.html · dipakai di kantor, papan tugas, dan agenda</span>
+    <h1 style="margin: 0; font-size: 36px; font-weight: 700; letter-spacing: -0.02em">Kit &amp; pengaturan avatar</h1>
+    <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #B7C3CE">Agen AI digambar sebagai robot bervisor dan manusia sebagai siluet, supaya keduanya tidak tertukar. Ubah agen, gaya, status, dan animasi untuk melihat setiap varian.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: 560px minmax(0, 1fr); gap: 32px; align-items: start">
+    <section aria-label="Pratinjau avatar" style="background: #10151A; border: 1px solid #252E38; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column">
+      <div style="position: relative; height: 420px; perspective: 900px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 70px; box-sizing: border-box; background: #0B0F13">
+        <div style="position: absolute; left: 50%; bottom: 40px; width: 300px; height: 300px; margin-left: -150px; transform-style: preserve-3d; transform: rotateX(72deg)">
+          <div style="position: absolute; inset: 0; border-radius: 50%; background: #141A20; border: 1px solid #2A3644; box-shadow: 0 0 60px rgba(95,200,214,0.12)"></div>
+          <div style="{{ spin }}"></div>
+          <div style="position: absolute; inset: 70px; border-radius: 50%; border: 1px solid #2A3644"></div>
+        </div>
+        <div key="{{ previewKey }}" style="position: relative; animation: kitRise .35s ease-out both">
+          <dc-import name="Avatar" agent="{{ agent }}" state="{{ state }}" look="{{ look }}" size="260" animate="{{ animate }}" badge="{{ badge }}" hint-size="161px,260px"></dc-import>
+        </div>
+      </div>
+      <div style="display: flex; align-items: flex-end; justify-content: space-around; gap: 16px; padding: 18px 24px; border-top: 1px solid #1C242C">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <dc-import name="Avatar" agent="{{ agent }}" state="{{ state }}" look="{{ look }}" size="24" animate="{{ false }}" badge="{{ false }}" hint-size="15px,24px"></dc-import>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">24</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <dc-import name="Avatar" agent="{{ agent }}" state="{{ state }}" look="{{ look }}" size="40" animate="{{ false }}" badge="{{ true }}" hint-size="25px,40px"></dc-import>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">40</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <dc-import name="Avatar" agent="{{ agent }}" state="{{ state }}" look="{{ look }}" size="72" animate="{{ false }}" badge="{{ true }}" hint-size="45px,72px"></dc-import>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">72</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 6px">
+          <dc-import name="Avatar" agent="{{ agent }}" state="{{ state }}" look="{{ look }}" size="120" animate="{{ false }}" badge="{{ true }}" hint-size="74px,120px"></dc-import>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">120</span>
+        </div>
+      </div>
+      <div style="padding: 14px 24px 18px; border-top: 1px solid #1C242C; display: flex; flex-direction: column; gap: 4px">
+        <span style="font-size: 12px; font-weight: 600; color: #8D9BA8">Label pembaca layar (otomatis)</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #E8EEF3">aria-label="{{ ariaText }}"</span>
+      </div>
+    </section>
+
+    <section aria-label="Pengaturan avatar" style="display: flex; flex-direction: column; gap: 22px">
+      <fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px">
+        <legend style="font-size: 14px; font-weight: 700; margin-bottom: 10px">Agen</legend>
+        <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px">
+          <sc-for list="{{ agentOpts }}" as="o" hint-placeholder-count="5">
+            <button onClick="{{ o.pick }}" aria-pressed="{{ o.pressed }}" style="{{ o.style }}">
+              <span style="height: 64px; display: flex; align-items: flex-end">
+                <dc-import name="Avatar" agent="{{ o.key }}" state="{{ o.state }}" look="{{ look }}" size="64" animate="{{ false }}" badge="{{ false }}" hint-size="40px,64px"></dc-import>
+              </span>
+              <span style="font-size: 13px; font-weight: 700">{{ o.name }}</span>
+              <span style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8D9BA8"><span style="{{ o.swatch }}"></span>{{ o.hex }}</span>
+            </button>
+          </sc-for>
+        </div>
+      </fieldset>
+
+      <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px">
+        <fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px">
+          <legend style="font-size: 14px; font-weight: 700; margin-bottom: 10px">Gaya</legend>
+          <div style="display: flex; gap: 4px; background: #141A20; border: 1px solid #252E38; border-radius: 10px; padding: 4px">
+            <button onClick="{{ set3d }}" aria-pressed="{{ p3d }}" style="{{ b3d }}">3D berbayang</button>
+            <button onClick="{{ set2d }}" aria-pressed="{{ p2d }}" style="{{ b2d }}">2D datar</button>
+          </div>
+          <span style="font-size: 12px; line-height: 1.5; color: #8D9BA8">3D untuk kantor isometrik dan profil; 2D untuk daftar padat, kartu, dan ekspor cetak.</span>
+        </fieldset>
+        <fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 12px">
+          <legend style="font-size: 14px; font-weight: 700; margin-bottom: 10px">Perilaku</legend>
+          <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 14px; cursor: pointer">
+            <input type="checkbox" checked="{{ animate }}" onChange="{{ toggleAnim }}" style="width: 18px; height: 18px; margin: 0; accent-color: #5FC8D6">
+            <span>Animasi idle (kedip, napas, antena berdenyut saat berjalan)</span>
+          </label>
+          <label style="display: flex; align-items: center; gap: 10px; min-height: 32px; font-size: 14px; cursor: pointer">
+            <input type="checkbox" checked="{{ badge }}" onChange="{{ toggleBadge }}" style="width: 18px; height: 18px; margin: 0; accent-color: #5FC8D6">
+            <span>Lencana status di bahu</span>
+          </label>
+        </fieldset>
+      </div>
+
+      <fieldset style="margin: 0; padding: 0; border: none; display: flex; flex-direction: column; gap: 10px">
+        <legend style="font-size: 14px; font-weight: 700; margin-bottom: 10px">Status</legend>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <sc-for list="{{ stateOpts }}" as="s" hint-placeholder-count="5">
+            <button onClick="{{ s.pick }}" aria-pressed="{{ s.pressed }}" style="{{ s.style }}">
+              <span style="{{ s.dot }}"></span>{{ s.label }}
+            </button>
+          </sc-for>
+        </div>
+      </fieldset>
+
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 700">Aturan pemakaian</h2>
+        <ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.55; color: #B7C3CE">
+          <li><strong style="color: #E8EEF3">AI tidak menyamar sebagai manusia.</strong> Agen selalu bervisor dan berantena; manusia selalu bersiluet tanpa wajah realistis.</li>
+          <li><strong style="color: #E8EEF3">Status tidak hanya warna.</strong> Lencana berbentuk (segitiga, centang, silang, jam, tanda tanya) dan teks status di sampingnya.</li>
+          <li><strong style="color: #E8EEF3">Warna peran ≠ warna status.</strong> Cyan, orkid, biru, dan merah muda menandai peran; status memakai palet v3.</li>
+          <li><strong style="color: #E8EEF3">Gerak bermakna.</strong> Bob dan antena berdenyut hanya saat berjalan; semua dimatikan oleh prefers-reduced-motion atau tombol Jeda.</li>
+          <li><strong style="color: #E8EEF3">Ukuran.</strong> Minimum 24 px; di bawah 40 px lencana disembunyikan dan status pindah ke teks.</li>
+        </ol>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { agent: 'lead', look: '3d', st: 'run', animate: true, badge: true };
+  }
+  renderVals() {
+    const S = this.state;
+    const R = [
+      ['lead', 'Lead Planner', '#5FC8D6', 'run'],
+      ['code', 'Analis Kode', '#C79BEF', 'run'],
+      ['lint', 'Lint Checker', '#6FA8F5', 'done'],
+      ['contract', 'Contract Tester', '#EF8FB8', 'done'],
+      ['owner', 'Owner', '#6E7C8A', 'wait']
+    ];
+    const ST = [['run', 'Berjalan', '#7FD3DE'], ['done', 'Selesai', '#7DD89A'], ['wait', 'Menunggu', '#E8B44A'], ['fail', 'Gagal', '#F49A8B'], ['unknown', 'Tak diketahui', '#A3B0BC']];
+    const role = R.find((r) => r[0] === S.agent) || R[0];
+    const stl = ST.find((x) => x[0] === S.st) || ST[0];
+    const segOn = 'flex:1;min-height:40px;border:none;border-radius:7px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;background:#5FC8D6;color:#071417';
+    const segOff = 'flex:1;min-height:40px;border:none;border-radius:7px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;background:transparent;color:#B7C3CE';
+    return {
+      agent: S.agent, look: S.look, state: S.st, animate: S.animate, badge: S.badge,
+      previewKey: S.agent + S.look,
+      ariaText: role[1] + ', ' + stl[1].toLowerCase(),
+      spin: 'position:absolute;inset:24px;border-radius:50%;border:2px dashed ' + role[2] + '88;' + (S.animate ? 'animation:kitSpinFlat 14s linear infinite' : ''),
+      agentOpts: R.map((r) => ({
+        key: r[0], name: r[1], hex: r[2], state: r[3],
+        pressed: S.agent === r[0] ? 'true' : 'false',
+        pick: () => this.setState({ agent: r[0], st: r[3] }),
+        swatch: 'width:10px;height:10px;border-radius:3px;background:' + r[2],
+        style: 'display:flex;flex-direction:column;align-items:center;gap:6px;padding:12px 8px;border-radius:12px;font:inherit;color:#E8EEF3;cursor:pointer;' + (S.agent === r[0] ? 'background:#1A2832;border:1px solid ' + r[2] : 'background:#141A20;border:1px solid #252E38')
+      })),
+      stateOpts: ST.map((x) => ({
+        label: x[1], pressed: S.st === x[0] ? 'true' : 'false',
+        pick: () => this.setState({ st: x[0] }),
+        dot: 'width:10px;height:10px;border-radius:50%;background:' + x[2],
+        style: 'display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:0 14px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;' + (S.st === x[0] ? 'background:#1A2832;border:1px solid ' + x[2] + ';color:#E8EEF3;font-weight:700' : 'background:transparent;border:1px solid #252E38;color:#B7C3CE;font-weight:500')
+      })),
+      set3d: () => this.setState({ look: '3d' }), set2d: () => this.setState({ look: '2d' }),
+      b3d: S.look === '3d' ? segOn : segOff, b2d: S.look === '2d' ? segOn : segOff,
+      p3d: S.look === '3d' ? 'true' : 'false', p2d: S.look === '2d' ? 'true' : 'false',
+      toggleAnim: () => this.setState({ animate: !S.animate }),
+      toggleBadge: () => this.setState({ badge: !S.badge })
+    };
+  }
+}
+</script>
+</body>
+</html>

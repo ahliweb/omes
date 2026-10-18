@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>On-call ponsel — OMES Control Center v3</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0D1115;color:#E8EEF3;font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7FD3DE}a:hover{color:#A6E4EC}
+</style>
+</helmet>
+
+<div style="width: 390px; height: 844px; box-sizing: border-box; background: #0D1115; display: flex; flex-direction: column; overflow: hidden">
+  <header style="display: flex; align-items: center; gap: 10px; padding: 16px 16px 12px">
+    <div style="width: 28px; height: 28px; border-radius: 7px; background: #5FC8D6; color: #071417; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 600; font-size: 13px">o</div>
+    <button style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; min-height: 44px; background: #141A20; border: 1px solid #252E38; border-radius: 10px; padding: 0 12px; color: #E8EEF3; font: inherit; font-size: 14px; font-weight: 600; text-align: left">
+      <span style="width: 8px; height: 8px; border-radius: 50%; background: #F07A68; flex: none"></span>
+      <span style="flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap">Ahliweb Production</span>
+      <svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#8D9BA8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5"></path><path d="m7 9 5-5 5 5"></path></svg>
+    </button>
+    <button aria-label="Cari" style="width: 44px; height: 44px; border-radius: 10px; background: #141A20; border: 1px solid #252E38; color: #B7C3CE; display: flex; align-items: center; justify-content: center">
+      <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>
+    </button>
+  </header>
+
+  <div style="flex: 1; overflow-y: auto; padding: 4px 16px 16px; display: flex; flex-direction: column; gap: 14px">
+    <div style="display: flex; flex-direction: column; gap: 4px">
+      <h1 style="margin: 0; font-size: 24px; font-weight: 700; letter-spacing: -0.02em">Perlu tindakan</h1>
+      <span role="status" style="font-size: 13px; color: #8D9BA8">6 item · 12 host · disinkron 5 dtk lalu</span>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 22px; font-weight: 700; color: #E8B44A">3</span>
+        <span style="font-size: 12px; color: #8D9BA8">drift</span>
+      </div>
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 22px; font-weight: 700; color: #C3CDD6">1</span>
+        <span style="font-size: 12px; color: #8D9BA8">tak diketahui</span>
+      </div>
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px">
+        <span style="font-size: 22px; font-weight: 700; color: #B4BFFA">1</span>
+        <span style="font-size: 12px; color: #8D9BA8">persetujuan</span>
+      </div>
+    </div>
+
+    <a href="Operations.dc.html" style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; background: #141A20; border: 1px solid #5A2E28; color: #E8EEF3; text-decoration: none">
+      <span style="display: flex; align-items: center; gap: 8px">
+        <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(240,122,104,0.14); color: #F49A8B; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8z"></path></svg>Kritis</span>
+        <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">omes-app-01</span>
+      </span>
+      <span style="font-size: 15px; font-weight: 600; line-height: 1.4">Firewall membuka Postgres 5432/tcp ke publik</span>
+      <span style="font-size: 13px; color: #7FD3DE; font-weight: 600">Tinjau rencana →</span>
+    </a>
+
+    <a href="Health.dc.html" style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; background: #141A20; border: 1px solid #252E38; color: #E8EEF3; text-decoration: none">
+      <span style="display: flex; align-items: center; gap: 8px">
+        <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(163,176,188,0.14); color: #C3CDD6; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-dasharray="3 3"><circle cx="12" cy="12" r="9"></circle></svg>Tak diketahui</span>
+        <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">omes-mint-01</span>
+      </span>
+      <span style="font-size: 15px; font-weight: 600; line-height: 1.4">Heartbeat terakhir 2 j 14 m lalu</span>
+    </a>
+
+    <div style="display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px; background: #141A20; border: 1px solid #252E38">
+      <span style="display: flex; align-items: center; gap: 8px">
+        <span style="display: inline-flex; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(154,168,248,0.14); color: #B4BFFA; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6"><circle cx="12" cy="12" r="9"></circle></svg>Menunggu</span>
+        <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">corr-op-0001</span>
+      </span>
+      <span style="font-size: 15px; font-weight: 600; line-height: 1.4">restart → server-acme-01</span>
+      <span style="font-size: 13px; color: #8D9BA8">Rencana belum dilampirkan · persetujuan dikunci</span>
+      <a href="Operations.dc.html" style="display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 8px; border: 1px solid #344250; color: #E8EEF3; font-size: 14px; font-weight: 600; text-decoration: none">Buka di Operasi</a>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px; padding: 14px; border-radius: 12px; background: #141A20; border: 1px solid #252E38">
+      <span style="display: inline-flex; align-self: flex-start; align-items: center; gap: 5px; padding: 2px 8px 2px 6px; border-radius: 999px; background: rgba(232,180,74,0.14); color: #E8B44A; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linejoin="round"><path d="M12 3 2 20h20z"></path></svg>Perhatian · 3</span>
+      <span style="font-size: 14px; line-height: 1.5; color: #B7C3CE">Rollback deploy 1.5.0 · disk omes-bak-01 88% · beban omes-app-03</span>
+    </div>
+  </div>
+
+  <nav aria-label="Navigasi utama" style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-top: 1px solid #1C242C; background: #10151A; padding: 6px 8px 10px">
+    <a href="Mobile.dc.html" aria-current="page" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 52px; color: #7FD3DE; font-size: 12px; font-weight: 700; text-decoration: none">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01"></path></svg>Tindakan</a>
+    <a href="Main.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 52px; color: #8D9BA8; font-size: 12px; font-weight: 500; text-decoration: none">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="1.5"></rect><rect x="3" y="13" width="18" height="7" rx="1.5"></rect></svg>Armada</a>
+    <a href="Operations.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 52px; color: #8D9BA8; font-size: 12px; font-weight: 500; text-decoration: none; position: relative">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>Operasi · 1</a>
+    <a href="Health.dc.html" style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; min-height: 52px; color: #8D9BA8; font-size: 12px; font-weight: 500; text-decoration: none">
+      <svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3-8 4 16 3-8h4"></path></svg>Kesehatan</a>
+  </nav>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {};
+  }
+}
+</script>
+</body>
+</html>
