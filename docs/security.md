@@ -189,6 +189,12 @@ These gates map directly to the QA/security issues that produce the evidence:
 | Telegram allowlist behavior proven | Test asserts unauthorized users/groups are rejected and authorized ones are served, in both directions (see hermes-telegram-bot lessons: verify allowlisted groups still serve unknown *users* correctly) | #13, #15 |
 | Known limitations published | This document and `docs/threat-model.md` are current and linked from the release notes | #5, #18 |
 
+Where a row above names a CI job, the job is the one in `.github/workflows/`. Since issue
+[#312](https://github.com/ahliweb/omes/issues/312) those workflows run only on manual dispatch,
+so the evidence is a workflow run dispatched on the release commit or the summary of
+`scripts/ci-local.sh` for it ([docs/ci.md](ci.md) sections 1 and 10); a local summary is
+self-reported and is not enforced by GitHub.
+
 ## 8. Control Center and provider integration security
 
 The web Control Center and provider adapters are **not implemented in the current CLI branch**. The OMES-side control job runner (`omes job`, issue [#90](https://github.com/ahliweb/omes/issues/90), `lib/omes/py/jobs/`) IS implemented and already enforces several of the bullets below locally — see [docs/jobs.md](jobs.md) for what it does today. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are fully implemented (including the Control Center itself and a transport), the following are release requirements:
@@ -213,7 +219,7 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Contract schema validation fails closed on unsupported keywords (`$ref`, `format`, `if`/`then`, etc.) with `SchemaError`; annotations are explicitly allowlisted; raw-secret detection operates independently | `lib/omes/py/jobs/schema.py`, `lib/omes/py/agent/jsonschema_lite.py`, `scripts/check-contracts.py` (#172) |
 | Idempotent submission; a replay never re-executes | `lib/omes/py/jobs/store.py`'s `submit()`, `idempotency.json` index |
 | Destructive operations (`restore`, `rollback`, `stop`, `configure`) require explicit approval | `lib/omes/py/jobs/store.py`'s `is_destructive()`/`can_auto_approve()`, enforced in `runner.run()` |
-| Cross-tenant/cross-target rejection, audited | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks |
+| Default-deny tenant scope (unset `OMES_JOBS_TENANT_ID` refuses every submission) and cross-tenant/cross-target rejection, before any state is written (the rejection itself is not in the job audit log) | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks; the pull worker passes its enrolled tenant |
 | Append-only, hash-chained audit log | `lib/omes/py/jobs/audit.py` (`append()`/`verify_chain()`) |
 | Redacted logs and capped command-output tails, with a bounded-backtracking redaction regex (fixed during #90's own test suite — see docs/threat-model.md T40) | `lib/omes/py/jobs/audit.py`'s `redact_structure()`/`capped_redacted_tail()` |
 | Read-back verification; a timeout is never reported as success | `lib/omes/py/jobs/runner.py`'s `_compare_desired_observed()` |

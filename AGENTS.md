@@ -52,6 +52,7 @@ Rules enforced by CI (`scripts/check-architecture.py`):
 - The system is layered into planes with distinct `execution_semantics`: business/governance (AWCMS and registrars, `external_authority`), host control (OMES, `deterministic`), agent runtime (Hermes, `probabilistic`), tool/data (MCP adapters and RAG — logical boundaries, not OMES-shipped), infrastructure (the OS/platform, `deterministic`), and observability (OMES evidence, AWCMS projection, optional external SIEM, `observational`). See [docs/architecture.md §18](docs/architecture.md#18-layered-reference-architecture-and-deterministic-execution-boundary).
 - `architecture/capabilities.json` (schema `1.1.0`) requires every capability to declare `plane`, `execution_semantics`, and `implementation_status` (`implemented | delegated_upstream | staged | optional_external | logical_boundary`) alongside the existing `authority` field (now also allowing `platform` and `external`). `lib/omes/py/architecture/registry.py` enforces this fail-closed (invariants R1–R9), plus Control Center contract guards (C1–C2) and canonical-documentation guards (D1–D2) — see `docs/architecture.md §16.2.1`.
 - **OMES does not mediate all Hermes-native tool execution.** Users and operators can reach Hermes Agent directly through Hermes-owned channels, bypassing both AWCMS and OMES; never describe or implement OMES as a universal interception point for Hermes tool calls.
+- Multi-agent control patterns (epic #269, ADR-0032): coordinator/worker delegation (Opus → Sonnet/Haiku), agent-run durability and ACP are Hermes-owned; OMES must not add a scheduler, ACP proxy/server/client, agent memory, or broker. Linter rule R9 reserves `acp`, `agent_client_protocol`, `coordinator` and `subagent(s)` from OMES authority. See [docs/multi-agent-control-patterns.md](docs/multi-agent-control-patterns.md).
 
 The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Control Center, registrar adapters, GitHub integration, and Coolify are staged work unless their implementation issue has landed.
 
@@ -126,13 +127,30 @@ bash -n $(find . -type f -name '*.sh' -not -path './.git/*')
 git diff --check
 ./tests/run.sh
 ./scripts/lint.sh
+./scripts/ci-local.sh
 ```
+
+`./scripts/ci-local.sh` is the **required per-PR check**. The GitHub Actions
+workflows in `.github/workflows/` run only on manual `workflow_dispatch` since
+issue #312; they no longer run on pull requests, pushes or a schedule. The runner
+executes every one of those jobs locally with the same commands and blocking rules
+(see [docs/ci.md](docs/ci.md) §10). Its exit code must be 0: `1` is a failed
+blocking job and `3` is `incomplete` (a blocking job was skipped, for example no
+Docker), which is never a pass. Paste its summary table into the PR description and
+report it as printed, not paraphrased.
+
+Local results are self-reported and are not enforced by GitHub, and branch
+protection's required status checks are a repository setting that only the
+repository owner changes: never claim that setting was changed, and say so when a
+PR still waits for a check that only a manual dispatch can produce
+([docs/ci.md](docs/ci.md) §1).
 
 For installation, package, platform, or rollback changes, also run:
 
 ```bash
 ./scripts/test-matrix.sh
 OMES_MATRIX_IMAGES="ubuntu:24.04" ./scripts/test-matrix.sh
+./scripts/ci-local.sh --profile full
 ```
 
 For documentation-only changes, the minimum required checks are the link checker, `git diff --check`, change-fragment validation, and a review for stale implementation claims. If Docker is unavailable, record the exact blocked checks; do not claim they passed.

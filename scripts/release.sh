@@ -411,29 +411,45 @@ if [[ "$skip_ci_check" -ne 1 && "$dry_run" -ne 1 ]] && command -v gh >/dev/null 
   current_sha="$(git rev-parse HEAD)"
   log "verifying GitHub CI checks for commit ${current_sha}..."
 
-  # Query commit check runs via GitHub API
-  check_output="$(gh api "repos/:owner/:repo/commits/${current_sha}/check-runs" 2>/dev/null || true)"
-  if [[ -n "$check_output" ]]; then
-    failing_checks="$(python3 -c "
-import sys, json
-try:
-    data = json.loads('''$check_output''')
-    runs = data.get('check_runs', [])
-    failing = [r['name'] for r in runs if r.get('conclusion') not in ('success', 'neutral', 'skipped') and r.get('status') == 'completed']
-    in_progress = [r['name'] for r in runs if r.get('status') != 'completed']
-    if failing:
-        print('FAIL: ' + ', '.join(failing))
-    elif in_progress:
-        print('PENDING: ' + ', '.join(in_progress))
-except Exception as e:
-    pass
-" 2>/dev/null || true)"
-
-    if [[ -n "$failing_checks" ]]; then
-      die "CI checks on ${current_sha} have not passed: ${failing_checks}"
-    fi
-    log "CI checks verified green for commit ${current_sha}"
+  # Query commit check runs via GitHub API. Fail closed: with the workflows
+  # on manual dispatch only (issue #312), a commit nobody dispatched CI on has
+  # no check runs at all, and an unreachable API proves nothing either, so
+  # neither may be reported as green. Use --skip-ci-check only with other
+  # evidence for this exact commit (docs/business/release-gates.md).
+  if ! check_output="$(gh api "repos/:owner/:repo/commits/${current_sha}/check-runs" 2>/dev/null)"; then
+    die "could not query GitHub check runs for ${current_sha}; refusing to release without CI evidence (pass --skip-ci-check only with ci-local evidence for this exact commit)"
   fi
+  ci_verdict="$(printf '%s' "$check_output" | python3 -c '
+import json, sys
+try:
+    runs = json.load(sys.stdin).get("check_runs", [])
+except Exception:
+    print("ERROR: unparseable check-runs response")
+    sys.exit(0)
+if not runs:
+    print("NONE")
+    sys.exit(0)
+failing = [r.get("name", "?") for r in runs if r.get("status") == "completed" and r.get("conclusion") not in ("success", "neutral", "skipped")]
+pending = [r.get("name", "?") for r in runs if r.get("status") != "completed"]
+if failing:
+    print("FAIL: " + ", ".join(failing))
+elif pending:
+    print("PENDING: " + ", ".join(pending))
+else:
+    print("OK")
+')"
+  case "$ci_verdict" in
+    OK) ;;
+    NONE)
+      die "commit ${current_sha} has no GitHub check runs; dispatch lint.yml and compatibility.yml on it (gh workflow run <workflow> --ref <branch>) and wait for them, or pass --skip-ci-check only with ci-local evidence for this exact commit"
+      ;;
+    *)
+      die "CI checks on ${current_sha} have not passed: ${ci_verdict}"
+      ;;
+  esac
+  log "CI checks verified green for commit ${current_sha}"
+elif [[ "$skip_ci_check" -ne 1 && "$dry_run" -ne 1 ]]; then
+  warn "gh is not installed; GitHub CI checks for this commit were NOT verified"
 fi
 
 # ---------------------------------------------------------------------------
