@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# shellcheck shell=bash
+# tests/shims/gh - fake GitHub CLI for bats tests (issue #315, the release CI gate
+# in scripts/release.sh). It never touches the network and never reads a token.
+#
+# Records every invocation (space-joined argv) to $SHIM_LOG.
+#
+#   gh api ...             prints the contents of $SHIM_GH_CHECK_RUNS_FILE
+#                          (default: an empty check-runs document, i.e. a commit
+#                          nobody dispatched the manual workflows on). Exits
+#                          $SHIM_GH_API_EXIT (default 0) without output when it
+#                          is non-zero, like an unauthenticated or offline gh.
+#   gh release view TAG    exits 1 until `gh release create` ran (state kept in
+#                          $SHIM_GH_STATE_DIR, default $TMPDIR or /tmp); then
+#                          prints a small JSON document.
+#   gh release create ...  copies the --notes-file to $SHIM_GH_NOTES_OUT when set.
+#   gh release edit/upload accept and do nothing.
+#
+# Anything else fails, so an unexpected call is a test failure, not a pass.
+
+set -Eeuo pipefail
+
+if [[ -n "${SHIM_LOG:-}" ]]; then
+  printf 'gh %s\n' "$*" >>"$SHIM_LOG"
+fi
+
+state_dir="${SHIM_GH_STATE_DIR:-${TMPDIR:-/tmp}}"
+
+case "${1:-}" in
+  api)
+    if [[ "${SHIM_GH_API_EXIT:-0}" != "0" ]]; then
+      exit "$SHIM_GH_API_EXIT"
+    fi
+    if [[ -n "${SHIM_GH_CHECK_RUNS_FILE:-}" && -f "$SHIM_GH_CHECK_RUNS_FILE" ]]; then
+      cat "$SHIM_GH_CHECK_RUNS_FILE"
+    else
+      printf '{"total_count": 0, "check_runs": []}\n'
+    fi
+    ;;
+  release)
+    case "${2:-}" in
+      view)
+        if [[ -f "${state_dir}/gh-release-created" ]]; then
+          printf '{"tagName": "%s", "name": "release", "publishedAt": "2026-01-01T00:00:00Z", "assets": []}\n' "${3:-}"
+        else
+          exit 1
+        fi
+        ;;
+      create)
+        : >"${state_dir}/gh-release-created"
+        notes=""
+        shift 2
+        while [[ $# -gt 0 ]]; do
+          if [[ "$1" == "--notes-file" ]]; then
+            notes="$2"
+            shift
+          fi
+          shift
+        done
+        if [[ -n "$notes" && -n "${SHIM_GH_NOTES_OUT:-}" ]]; then
+          cp "$notes" "$SHIM_GH_NOTES_OUT"
+        fi
+        ;;
+      edit | upload) ;;
+      *) exit 1 ;;
+    esac
+    ;;
+  *)
+    printf 'gh shim: unsupported command: %s\n' "$*" >&2
+    exit 1
+    ;;
+esac
