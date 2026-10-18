@@ -170,6 +170,46 @@
       ]
     },
     {
+      "capability_id": "hermes.agent.delegation",
+      "title": "Hermes Subagent Delegation (delegate_task, orchestrator/leaf roles, concurrency and depth limits)",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.24",
+      "observed_upstream_revision": "v2026.9.24",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "plane": "agent_runtime",
+      "execution_semantics": "probabilistic",
+      "implementation_status": "delegated_upstream",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/delegation.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.acp_server",
+      "title": "Hermes Agent Client Protocol (ACP) Server for Editor Integration",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.24",
+      "observed_upstream_revision": "v2026.9.24",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "plane": "agent_runtime",
+      "execution_semantics": "deterministic",
+      "implementation_status": "delegated_upstream",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md"
+      ]
+    },
+    {
       "capability_id": "omarchy.release.channels",
       "title": "Omarchy Release Channel Update Specification",
       "authority": "omarchy",
