@@ -285,21 +285,34 @@ def reconcile_job(record: dict[str, Any], root: Path | None = None, actor: str =
     }
 
 
-def reconcile(root: Path | None = None, job_id: str | None = None, actor: str = "system") -> dict[str, Any]:
+def reconcile(
+    root: Path | None = None,
+    job_id: str | None = None,
+    actor: str = "system",
+    *,
+    enrolled_tenant_id: str | None = None,
+) -> dict[str, Any]:
     """Reconciles one job (`job_id`) or every `running` job in local scope.
 
+    Tenant scope is default-deny (issue #318), resolved by the same
+    `store.resolve_local_tenant()` that `store.submit()` uses, and checked
+    FIRST: if no local tenant is configured (neither `enrolled_tenant_id`
+    nor OMES_JOBS_TENANT_ID) this raises store.TenantNotConfiguredError
+    before any job is loaded, listed, read back, written or audited.
+
     With `job_id`: raises store.UnknownJobError for an unknown job and
-    store.CrossTenantError for a job outside OMES_JOBS_TENANT_ID /
+    store.CrossTenantError for a job outside the local tenant /
     OMES_JOBS_SERVER_ID. Without it, out-of-scope `running` jobs are left
     untouched and only counted.
     """
+    store.resolve_local_tenant(enrolled_tenant_id, action="reconciling jobs")
     reconciled: list[dict[str, Any]] = []
     unchanged: list[dict[str, Any]] = []
     skipped_out_of_scope = 0
 
     if job_id is not None:
         record = store.load_job(job_id, root)
-        store.assert_record_in_local_scope(record)
+        store.assert_record_in_local_scope(record, enrolled_tenant_id=enrolled_tenant_id)
         records = [record]
     else:
         records = [r for r in store.list_jobs(root) if r.get("state") == "running"]
@@ -307,7 +320,9 @@ def reconcile(root: Path | None = None, job_id: str | None = None, actor: str = 
     for record in records:
         if job_id is None:
             try:
-                store.assert_record_in_local_scope(record)
+                store.assert_record_in_local_scope(record, enrolled_tenant_id=enrolled_tenant_id)
+            except store.TenantNotConfiguredError:
+                raise
             except store.CrossTenantError:
                 skipped_out_of_scope += 1
                 continue
