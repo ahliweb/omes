@@ -170,7 +170,11 @@ Test budget should track *record-level verified correctness* separately from *br
 | P4 | AWCMS | Existing admin UI, live status, report and audit projection | Reconciled counts, no second dashboard |
 | P5 | Integration QA | Fake-site end-to-end, performance, chaos, threat testing | Signed test evidence & go/no-go |
 
+**OMES host-readiness scope (P1, [#298](https://github.com/ahliweb/omes/issues/298)).** The OMES-owned P1 host deliverable is `omes health browser-worker` ([docs/browser-worker-readiness.md](browser-worker-readiness.md)): read-only, metadata-only host evidence emitted as the `browser-worker-readiness` document of [`contracts/browser-transfer/v1`](../contracts/browser-transfer/v1/README.md) (browser runtime provenance by version label, CDP/MCP/Ollama listener binding, model readiness through the existing Ollama probe, model-egress class, resource floors, orphan sessions and leftover profiles, and heartbeat freshness). It is never `ready` on a real host until per-job isolation evidence from [#276](https://github.com/ahliweb/omes/issues/276) lands: until then `session_isolation` is `unknown` with `ISOLATION_EVIDENCE_NOT_INTEGRATED`. A `ready` document is a producer claim about the host at `observed_at`, not authorization to run a job. It adds no executor, worker, adapter or listener, and OMES still does not run browsers; the worker, adapter and supervisor remain Hermes-owned or external ([#299](https://github.com/ahliweb/omes/issues/299)) and job approval, leases and the record ledger remain AWCMS-owned.
+
 **Not implemented yet**: reusable browser-data-transfer templates, Hermes Playwright adapter, new OMES browser host-evidence contract, AWCMS transfer UI/ledger, record-level reporting. Tracked by #294 and its children. Existing OMES `omes job`, Ollama health, exposure and Control Center contracts are reusable foundations but do not by themselves deliver this workflow.
+
+Per-job browser isolation evidence (`session_isolation: per_job`, per-job egress allowlists and cgroup ceilings) and cryptographic binary hash pinning of the browser executable are Not implemented yet (tracked in #298; isolation depends on #276). Only the browser version label is compared today.
 
 ## 11. Operational decision rubric
 
