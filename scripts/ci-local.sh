@@ -280,6 +280,47 @@ wf_block_coe() {
   '
 }
 
+# wf_block_name: the display name of a job block on stdin - the GitHub check-run
+# name of that job (`name:` at the job level, surrounding quotes removed). Prints
+# nothing when the job has no `name:` (GitHub then names the check run after the
+# job id, see wf_check_name).
+wf_block_name() {
+  awk '
+    /^    name:[ \t]*/ {
+      v = $0
+      sub(/^    name:[ \t]*/, "", v)
+      if (v ~ /^"/) {
+        sub(/^"/, "", v)
+        sub(/"[ \t]*(#.*)?$/, "", v)
+      } else if (v ~ /^\047/) {
+        sub(/^\047/, "", v)
+        sub(/\047[ \t]*(#.*)?$/, "", v)
+      } else {
+        sub(/[ \t]+#.*$/, "", v)
+      }
+      print v
+      exit
+    }
+  '
+}
+
+# wf_check_name FILE JOB_ID [IMAGE TIER] - the check-run name GitHub gives this
+# job: its `name:` (matrix.image / matrix.tier substituted for a matrix row) or
+# its id when it has none. scripts/release.sh matches check runs against this
+# value (issue #315); an expression that is not substituted stays literal, so
+# it can never match a real check run (fail closed).
+wf_check_name() {
+  local file="$1" id="$2" image="${3:-}" tier="${4:-}" name
+  name="$(wf_job_block "$file" "$id" | wf_block_name)"
+  [[ -n "$name" ]] || name="$id"
+  # shellcheck disable=SC2016 # literal GitHub expressions, not shell ones
+  {
+    name="${name//'${{ matrix.image }}'/$image}"
+    name="${name//'${{ matrix.tier }}'/$tier}"
+  }
+  printf '%s' "$name"
+}
+
 # wf_block_env: KEY=VALUE for every literal OMES_* assignment in the block.
 wf_block_env() {
   awk '
@@ -1352,6 +1393,7 @@ print_json_summary() {
   printf '  "schema": %s,\n' "$(json_str "$SCHEMA")"
   printf '  "result": %s,\n' "$(json_str "$RESULT")"
   printf '  "exit_code": %s,\n' "$EXIT_CODE"
+  printf '  "generated_at": %s,\n' "$(json_str "$(date -u +%Y-%m-%dT%H:%M:%SZ)")"
   if ((${#REQUESTED_JOBS[@]} > 0)); then
     printf '  "profile": "custom",\n'
   else
@@ -1385,7 +1427,7 @@ print_json_summary() {
 }
 
 print_list() {
-  local u idx first=1 sel s
+  local u idx first=1 sel s check_name
   if ((JSON)); then
     printf '{\n  "schema": %s,\n  "jobs": [\n' "$(json_str "$SCHEMA")"
     for u in "${!U_NAME[@]}"; do
@@ -1393,8 +1435,12 @@ print_list() {
       sel=false
       for s in "${SEL[@]+"${SEL[@]}"}"; do [[ "$s" == "$u" ]] && sel=true; done
       if ((first)); then first=0; else printf ',\n'; fi
-      printf '    {"name": %s, "workflow": %s, "workflow_job": %s, "profile": %s, "blocking": %s, "selected": %s, "image": %s, "command": %s}' \
-        "$(json_str "${U_NAME[$u]}")" "$(json_str "${R_WF[$idx]}")" "$(json_str "${R_WFJOB[$idx]}")" \
+      check_name=null
+      if [[ "${R_WF[$idx]}" != "-" && -f "${WORKFLOWS_DIR}/${R_WF[$idx]}" ]]; then
+        check_name="$(json_str "$(wf_check_name "${WORKFLOWS_DIR}/${R_WF[$idx]}" "${R_WFJOB[$idx]}" "${U_VARIANT[$u]}" "${U_TIER[$u]}")")"
+      fi
+      printf '    {"name": %s, "workflow": %s, "workflow_job": %s, "check_name": %s, "profile": %s, "blocking": %s, "selected": %s, "image": %s, "command": %s}' \
+        "$(json_str "${U_NAME[$u]}")" "$(json_str "${R_WF[$idx]}")" "$(json_str "${R_WFJOB[$idx]}")" "$check_name" \
         "$(json_str "${R_PROFILE[$idx]}")" "$([[ "${U_BLOCK[$u]}" == "blocking" ]] && echo true || echo false)" "$sel" \
         "$([[ -n "${U_VARIANT[$u]}" ]] && json_str "${U_VARIANT[$u]}" || echo null)" "$(json_str "${R_CMD[$idx]}")"
     done
