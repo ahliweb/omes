@@ -208,35 +208,81 @@ exact list so the client and its documentation cannot silently drift apart.
 - Rotate the token by updating the environment variable the credential
   reference names; OMES holds no copy to rotate.
 
-### 6.3 Upstream baseline verification (issue #259)
+### 6.3 Upstream baseline verification (issues #259, #288)
 
 `architecture/capabilities.json`'s `coolify.deployment.adapter` capability
 tracks a `supported_baseline` against `coollabsio/coolify` releases. As of
-2026-09-28 this is `v4.3.23` (previously `v4.0.0`). Because there is no live
+2026-10-14 this is `v4.4.6` (previously `v4.3.23` per issue #259, and
+`v4.0.0` before that). Because there is no live
 Coolify HTTP integration exercised by CI (see the status note at the top of
 this document) and no host-level release gate that talks to a real Coolify
-instance, this baseline bump is **not** a claim that `v4.3.23` was
+instance, this baseline bump is **not** a claim that `v4.4.6` was
 integration-tested against a running Coolify server. It is a documented
-changelog review verifying that every Coolify release between `v4.0.0` and
-`v4.3.23` does not change the exact endpoint/method surface §6.1 lists as
-used by `client.py`:
+review of upstream release notes and API route/controller source verifying
+that no Coolify release between `v4.3.23` and `v4.4.6` changes the exact
+endpoint/method surface §6.1 lists as used by `client.py`.
+
+**Review scope for issue #288 (`v4.3.23` to `v4.4.6`, honestly stated):**
+
+- Reviewed: the published GitHub release notes for every release in the
+  window (`v4.4.0`, `v4.4.1`, `v4.4.2`, `v4.4.3`, `v4.4.4`, `v4.4.5`,
+  `v4.4.6`; there is no `v4.3.24`+). Only `v4.4.0` has a "Changed" (breaking)
+  section; no other release in the window lists breaking changes.
+- Reviewed: `routes/api.php` and `app/Http/Controllers/Api/DeployController.php`
+  at both `v4.3.23` and `v4.4.6`. Every route in the §6.1 table is present at
+  both tags with the same HTTP method and the same token ability
+  (`read` for the `GET` routes; `deploy` for `POST /deploy` and
+  `POST /applications/{uuid}/rollback`). `POST /deploy` reads the same
+  `uuid`, `force` (and `tag`, `pull_request_id`/`pr`, `docker_tag`) inputs at
+  both tags; the only addition is a validation error for an out-of-range
+  pull-request ID, which `client.py` never sends.
+- Not reviewed: the full `v4.3.23...v4.4.6` diff (764 commits, 2,086 files;
+  GitHub declined to render it), the full OpenAPI document, response-body
+  field-level schemas, or any running Coolify instance. The release notes
+  and source excerpts were read through a summarizing fetch tool, not a
+  local clone, so a field-level response change that no release note
+  mentions would not have been caught here.
+
+Findings from the `v4.4.0` notes that touch (or are adjacent to) the
+adapter:
+
+- Realtime (Soketi to Laravel Reverb), container labels (numeric IDs to
+  `coolify.applicationUuid`-style labels), environment-variable-name
+  validation, multi-server/persistent-volume restrictions, OIDC, secret
+  managers, SQLite databases, audit log, registries, previews, and
+  server-role changes do not touch any endpoint `client.py` calls. The
+  `is_build_server` field is deprecated in favor of `server_role` but still
+  works; `client.py` neither sends nor interprets either field.
+- **Response redaction (behavior note, not a break):** `v4.4.0` hides
+  deployment logs, and proxy configuration/validation logs, from API
+  responses unless the token carries the `read:sensitive` ability.
+  `client.py` returns Coolify's JSON as-is and nothing in this repository
+  yet maps a live Coolify response into `observed-state` (the real-Coolify
+  provider is not implemented yet, see section 7), so no current code path
+  depends on those fields. When that mapping is built, the least-privilege
+  token in §6.2 deliberately does not grant `read:sensitive`: treat an
+  absent `proxy_domain_config` as "not visible to this token", not as "no
+  proxy configured", and do not grant `read:sensitive` to the OMES token
+  just to fill it in.
+- API tokens must carry only abilities Coolify knows (`v4.4.0` rejects
+  unknown ones); the `read` and `deploy` abilities §6.2 asks for are known.
+
+Carried over from the earlier review (still applicable, still not affecting
+`client.py`):
 
 - `v4.2.0`/`v4.3.0` introduced a breaking change requiring `POST` instead of
   `GET` for state-changing endpoints (`/servers/{uuid}/validate`,
   `/applications/{uuid}/{start,restart,stop}`,
   `/databases/{uuid}/{start,restart,stop}`,
   `/services/{uuid}/{start,restart,stop}`, and the service-application
-  equivalents). `client.py` calls none of these endpoints, so this change is
-  not applicable.
+  equivalents). `client.py` calls none of these endpoints.
 - `v4.3.22` rejected `host_path` in persistent-volume API requests
-  (previously supported). `client.py` never sends a `host_path` field, so
-  this change is not applicable.
-- Every other endpoint §6.1 lists (`GET /applications[/{uuid}]`,
-  `POST /deploy`, `GET /deployments[...]`,
-  `POST /applications/{uuid}/rollback`, `GET /servers[/{uuid}]`,
-  `GET /projects[/{uuid}[/{environment}]]`) is unaffected across the full
-  `v4.0.0...v4.3.23` release window
-  (<https://github.com/coollabsio/coolify/compare/v4.0.0...v4.3.23>).
+  (previously supported). `client.py` never sends a `host_path` field.
+
+Release windows reviewed:
+<https://github.com/coollabsio/coolify/compare/v4.0.0...v4.3.23> (issue #259)
+and <https://github.com/coollabsio/coolify/compare/v4.3.23...v4.4.6>
+(issue #288).
 
 If a future Coolify release changes one of the endpoints/methods §6.1
 actually calls, that is a `BREAKING_CHANGE`-classified finding for

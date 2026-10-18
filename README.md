@@ -44,6 +44,8 @@ for the known limitations that remain even where the code is implemented.
 
 ## Architecture and roadmap
 
+For the planned **provider-neutral AI inference-serving boundary**, see [Inference-serving architecture](docs/ai-inference-serving-architecture.md) (#291). **vLLM is not implemented (deferred #289), Kubernetes/OpenShift is not implemented (deferred #290)**; the separate generic read-only inference observation is tracked in #292. Existing Hermes model/provider routing and OMES host lifecycle remain the only authorities for their respective planes.
+
 OMES is deliberately layered rather than a second agent runtime:
 
 - **OMES** owns host compatibility, preflight, installation, service lifecycle,

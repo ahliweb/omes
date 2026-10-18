@@ -3,8 +3,9 @@
 # modules/graphify-mcp/module.sh - Graphify's MCP stdio server, installed
 # via the optional `graphifyy[mcp]` PyPI extra.
 #
-# Verified empirically (2026-09-28, graphifyy 0.9.71, `pip install
-# "graphifyy[mcp]"` inside python:3.12-slim): the extra adds a real,
+# Verified empirically (2026-10-14, graphifyy 0.9.87, `pip install
+# "graphifyy[mcp]==0.9.87"` in a fresh Python 3.11 venv, plus a stdio MCP
+# `initialize` + `tools/list` handshake): the extra adds a real,
 # invocable console script, `graphify-mcp` (entry point
 # `graphify.serve:_main`), documented by `graphify-mcp --help` as:
 #

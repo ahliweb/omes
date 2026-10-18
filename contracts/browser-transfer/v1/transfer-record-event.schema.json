@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/browser-transfer/v1/transfer-record-event.schema.json",
+  "title": "transfer-record-event",
+  "description": "Sanitized, metadata-only browser transfer record transition projection. OMES wire contract #296, parent #294. This is not a record payload, action permission or proof of destination success. AWCMS owns authoritative durable record state. Producer/consumer must independently authorize tenant and site scopes.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "event_id",
+    "tenant_id",
+    "workflow_id",
+    "run_id",
+    "job_id",
+    "record_key_hash",
+    "state_before",
+    "state_after",
+    "event_type",
+    "step_id",
+    "worker_id",
+    "correlation_id",
+    "idempotency_key_hash",
+    "reason_code",
+    "observed_at"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "tenant_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "record_key_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "state_before": {
+      "type": "string",
+      "enum": [
+        "none",
+        "discovered",
+        "extracted",
+        "validated",
+        "ready",
+        "pre_submit_checked",
+        "submitted_unknown",
+        "verified_committed",
+        "duplicate_skipped",
+        "reconciliation_required",
+        "paused_manual",
+        "failed_nonretryable"
+      ]
+    },
+    "state_after": {
+      "type": "string",
+      "enum": [
+        "discovered",
+        "extracted",
+        "validated",
+        "ready",
+        "pre_submit_checked",
+        "submitted_unknown",
+        "verified_committed",
+        "duplicate_skipped",
+        "reconciliation_required",
+        "paused_manual",
+        "failed_nonretryable"
+      ]
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "record_transition",
+        "checkpoint",
+        "reconciliation",
+        "manual_intervention"
+      ]
+    },
+    "step_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "worker_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "idempotency_key_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "reason_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{0,63}$"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "navigate_registered",
+        "read_text",
+        "read_table_page",
+        "get_field_value",
+        "fill_registered_field",
+        "select_option",
+        "click_registered_action",
+        "wait_for_condition",
+        "verify_destination_record",
+        "pause_for_human"
+      ]
+    },
+    "model_id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_./:@+-]{1,128}$"
+    },
+    "mapping_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "adapter_version": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "evidence_ref": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_./:-]{1,256}$"
+    },
+    "duration_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 86400000
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$"
+    }
+  }
+}
