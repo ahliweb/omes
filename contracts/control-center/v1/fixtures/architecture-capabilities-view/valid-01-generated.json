@@ -332,6 +332,16 @@
     },
     {
       "authority": "omes",
+      "execution_semantics": "observational",
+      "id": "omes.observability.correlation_envelope",
+      "implementation_status": "implemented",
+      "name": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "omes_module": "observability",
+      "plane": "observability",
+      "upstream_project": "ahliweb/omes"
+    },
+    {
+      "authority": "omes",
       "execution_semantics": "deterministic",
       "id": "omes.privacy.egress_policy",
       "implementation_status": "implemented",
