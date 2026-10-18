@@ -2,7 +2,7 @@
 
 > **Status: architecture guidance / design only.** Primary issue: [#291](https://github.com/ahliweb/omes/issues/291) (2026-10-09). This file does **not** announce a deployed inference service, a new model/provider router, or a new deployment backend.
 >
-> **vLLM: Not implemented yet (tracked in #289). Kubernetes/OpenShift: Not implemented yet (tracked in #290).** Both are explicitly **DEFERRED — DO NOT IMPLEMENT** until a maintainer records a separate go-decision on their issues. Generic endpoint observation is proposed separately in [#292](https://github.com/ahliweb/omes/issues/292); it is not yet shipped.
+> **vLLM: Not implemented yet (tracked in #289). Kubernetes/OpenShift: Not implemented yet (tracked in #290).** Both are explicitly **DEFERRED — DO NOT IMPLEMENT** until a maintainer records a separate go-decision on their issues. Phase 1 of generic, read-only endpoint observation is implemented by [#292](https://github.com/ahliweb/omes/issues/292) as `omes health inference-endpoint` (section 3.1); the opt-in active synthetic probe remains **Not implemented yet (tracked in #292)**.
 
 This is a *compatibility and ownership blueprint* informed by Red Hat's [AgentOps Unlocked Kubernetes demonstration](https://www.youtube.com/watch?v=6MuAOFfJk2w) and [companion repo](https://github.com/red-hat-ai-dev/agent-ops-series). That demonstration uses **LangGraph**, whereas OMES delegates agent behavior to **Hermes Agent**. Its chosen stack is **not** evidence of compatibility with Hermes or production readiness in OMES.
 
@@ -35,7 +35,7 @@ OMES is a host/deployment lifecycle and security-evidence toolkit; **it is not a
      endpoint (operator authority)           preflight / verify / audit / recovery
             |
      Ollama (existing host evidence)
-     Other OpenAI-compatible endpoint (no new OMES adapter yet)
+     Other OpenAI-compatible endpoint (read-only evidence only: omes health inference-endpoint, #292)
      vLLM (DEFERRED #289)
      Kubernetes/OpenShift placement (DEFERRED #290, platform authority)
 ```
@@ -52,16 +52,16 @@ OMES is a host/deployment lifecycle and security-evidence toolkit; **it is not a
 | Ollama health evidence | Implemented: #71; [Ollama health implementation](../lib/omes/py/health/ollama.py) | Retain CLI and JSON compatibility; synthetic checks only |
 | Hermes-native source-attributed health | Implemented: #79, #178, ADR-0022; [health data model](../lib/omes/py/health/model.py) | Reuse source, authority, prove/do-not-prove semantics |
 | Local-only Restricted posture, egress, provenance and privacy | Implemented controls: #214–#218, #235–#237; [AI data policy](ai-data-privacy-and-model-security.md) | Do not duplicate classification, provider assurance or egress engine |
-| Generic, non-mutating inference endpoint evidence | **Not implemented yet (tracked in #292)** | Separate versioned/sanitized contract and read-only adapter only after #291 review |
+| Generic, non-mutating inference endpoint evidence | Phase 1 implemented: #292, `omes health inference-endpoint` ([implementation](../lib/omes/py/health/inference_endpoint.py), section 3.1). Opt-in active synthetic probe: **Not implemented yet (tracked in #292)** | Extends the existing health layer model additively (no new contract or authority); stays read-only and metadata-only |
 | vLLM hosting/deployment and benchmark | **Not implemented yet (tracked in #289)**; **DEFERRED** | Explicit user/maintainer go decision and evidence gates |
 | Kubernetes/OpenShift backend / KServe | **Not implemented yet (tracked in #290)**; **DEFERRED** | Comparative ADR, compatibility/security/cost proof and explicit go decision |
 | Cross-plane correlation/Mission Control additions | Existing ownership: #263–#277, several PRs open | Reuse the authoritative correlation/source projection; no duplicate telemetry store, event broker or UI |
 
 The phrase *implemented* above refers to the named OMES baseline components on `main`; it does **not** mean vLLM, Kubernetes, generic endpoint discovery, or related hardware support has been tested.
 
-## 3. Future neutral observation contract: design, not code
+## 3. Neutral observation contract: design and phase-1 implementation
 
-[#292](https://github.com/ahliweb/omes/issues/292) may consider additive read-only evidence using the existing `lib/omes/py/health/model.py` layer and existing contracts. Avoid introducing a distinct `inference-runtime` authority, conflicting state store, or model-router selector. The following fields are conceptual and **are not a shipped schema**:
+[#292](https://github.com/ahliweb/omes/issues/292) adds additive read-only evidence using the existing `lib/omes/py/health/model.py` layer (section 3.1). It introduces no distinct `inference-runtime` authority, no state store and no model-router selector. The following fields are the conceptual design; they are **not a published schema**, and section 3.1 states exactly which are realized:
 
 | Evidence field | Semantics / default failure handling |
 | --- | --- |
@@ -73,6 +73,24 @@ The phrase *implemented* above refers to the named OMES baseline components on `
 | `desired`, `observed`, `correlation_id`, `evidence_ref` | Only for OMES-owned host operations using current job/state/reconciliation contracts; unknown != success |
 
 **Read-only probing rule:** default to metadata that requires no prompt and is obtainable through an existing supported and explicitly configured trusted endpoint. No active tool/chat request by default; synthetic fixtures only with an explicit opt-in. Use allowlisted URL schemes, local/private trust decisions, pinned expected destinations, DNS/redirect/IPv4/IPv6/SSRF protections, valid TLS certificates, bounded body sizes/timeouts, and no secrets in arguments, telemetry, state or output. If safe discovery or verification is unavailable, fail closed as `unknown` / `unsupported`, not guessed `healthy`.
+
+### 3.1 Phase 1 as implemented (issue #292)
+
+`omes health inference-endpoint` ([docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks); controls in [security §8.9](security.md#89-inference-endpoint-observation-controls-issue-292); threats AI-09 to AI-14 in [threat-model §5.x](threat-model.md#5x-ai-model-and-data-egress-threat-delta-issue-213)) realizes the read-only rule above for an operator-configured, non-secret endpoint reference (`OMES_INFERENCE_ENDPOINT` or `--endpoint`). It extends the health model additively (`unknown` status, optional `reason`/`checked_at`) instead of adding a versioned contract: the existing structures can carry every field below, whereas a new schema would add a second evidence shape for the Control Center to track. The result is therefore a CLI evidence shape, not a published Control Center contract.
+
+| Conceptual field | Phase-1 realization |
+| --- | --- |
+| `subject_ref`, `source_authority` | `endpoint` (redacted display form, `[REDACTED]` when rejected); per-layer `authority` (`omes-host` for OMES's own policy/clock evaluation, `external-provider` for what the endpoint reports) and `source` |
+| `observed_at`, `freshness` | `checked_at`; `freshness.{state, max_age_seconds, expires_at}`; layer `freshness` (endpoint `Date` skew); `revalidate()` for stale/future/unparseable records |
+| `service_reachable` | layers `network` (TCP to a vetted address) and `tls` (verified session, `https` only) |
+| `model_available` | layer `api` (valid `GET /v1/models` list, never HTTP 200 alone) and layer `model` (configured id advertised, exact match) |
+| `capability_results` | **Not implemented yet (tracked in #292)**: layer `active_probe` is always `not_applicable` (`active_probe_not_implemented`) and no prompt is sent |
+| `health_status`, `proves`, `remediation` | `status` (`pass`/`fail`/`not_applicable`/`unknown`), `proves` (what a pass does and does not establish), fixed redacted `remediation` |
+| `endpoint_exposure` | layer `policy` (loopback/private scope; public, link-local, metadata, multicast and reserved addresses refused before any request); the host-wide listener audit stays with `omes audit exposure` |
+| `egress_policy_ref`, `artifact_provenance_ref` | not copied: use `omes health ai-privacy` and `omes audit provenance --verify-artifacts` |
+| `desired`, `observed`, `correlation_id`, `evidence_ref` | not applicable: nothing is mutated, so there is no OMES-owned operation to reconcile |
+
+The only request is one `GET <prefix>/v1/models`; server-specific `/health`, `/version` and `/metrics` paths are intentionally excluded (not part of the OpenAI-compatible contract, extra surface). An endpoint that needs authentication yields `unknown` (`auth_required`); OMES never sends or reads a token, so authenticated endpoints remain covered by Hermes provider readiness.
 
 For vLLM, upstream documentation specifically warns that `--api-key` does **not** protect every HTTP endpoint; it must not be treated as a sufficient perimeter control. See the [vLLM OpenAI-compatible API security notes](https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/). This is a **future security requirement**, not permission to install vLLM.
 
@@ -96,14 +114,14 @@ Key constraints:
 5. Provider acknowledgement, HTTP `202`, process status or exit code is **not** proof of a healthy model. Reconcile observed service, model/capability evidence, provenance and security posture, marking missing evidence unknown.
 6. Undo only owned resources and always verify post-rollback state. Unsupported hardware/runtime is a non-mutating `BLOCKED` outcome.
 
-No executable service deployment, Kubernetes manifest, endpoint enrollment or additional active CLI command is specified by this document.
+No service deployment, Kubernetes manifest or endpoint enrollment is specified by this document; the only command it describes is the read-only `omes health inference-endpoint` observation (section 3.1), which never installs, configures or starts anything.
 
 ## 5. Five practical deployment cases
 
 | Use case | Status / present approach | Required evidence before enabling new work |
 | --- | --- | --- |
 | A. Single Ubuntu/Mint developer, Ollama | Existing Ollama host checks (#71) + Hermes provider/runtime separation (#79). Model choice remains Hermes-owned | Model/capability-specific synthetic check; local exposure, RAM/VRAM and privacy posture |
-| B. Private compatible endpoint operated outside OMES | Hermes config may reference a supported endpoint; OMES generic observer is **not implemented (#292)** | Valid released Hermes API compatibility and safe observation source, trust roots and endpoint ownership |
+| B. Private compatible endpoint operated outside OMES | Hermes config may reference a supported endpoint; OMES provides read-only observation via `omes health inference-endpoint` (#292, section 3.1); the active capability probe is **Not implemented yet (tracked in #292)** | Valid released Hermes API compatibility and safe observation source, trust roots and endpoint ownership |
 | C. Multi-user shared inference service | External operator owns inference; no OMES-managed serving adapter is assumed | Benchmark latency/TTFT/p95, throughput, isolation/quotas, failure modes and SLO |
 | D. Cloud model with local restricted-data plane | Existing classification/egress rules and provider assurance may apply; do not send `RESTRICTED` records to cloud | Sanitization/aggregate re-identification analysis, egress policy decision, provider assurance evidence |
 | E. vLLM server or Kubernetes/OpenShift GPU cluster | **Both deferred:** Not implemented yet (tracked in #289); Not implemented yet (tracked in #290) | Explicit go decision, measured workload need, separate threat/ADR review, hardware/licensing and disposable integration tests |
@@ -123,7 +141,7 @@ Use [OMES security](security.md) and [threat model](threat-model.md) for mandato
 ### Related work and sequencing
 
 1. **Now:** document and review this neutral boundary via #291 (no changes to existing runtime schemas/enums).
-2. **After review:** optionally implement secure generic inference observation in #292 as a *separate* issue, branch and PR.
+2. **Phase 1 (implemented):** secure, generic, read-only inference endpoint observation in #292 as a *separate* issue, branch and PR on top of the #291 review. The opt-in active synthetic probe is **Not implemented yet (tracked in #292)**.
 3. **Not now:** keep #289 vLLM and #290 Kubernetes/OpenShift OPEN with **DEFERRED — DO NOT IMPLEMENT** until explicitly unblocked.
 4. Existing #269/#272/#276/#277 and #263/#264/PR #268 own cross-plane trace, isolation and Mission Control; extend existing sources only after their coupled work merges.
 

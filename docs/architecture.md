@@ -1188,6 +1188,14 @@ sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issu
 [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
 Security regression gates are implemented ([#218](https://github.com/ahliweb/omes/issues/218),
 closed; commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
+Read-only, provider-neutral evidence for an already-configured local/private OpenAI-compatible
+inference endpoint is implemented in phase 1 as `omes health inference-endpoint`
+([#292](https://github.com/ahliweb/omes/issues/292); capability
+`omes.health.inference_endpoint_evidence`, observability plane, authority `omes`; see
+[lib/omes/py/health/inference_endpoint.py](../lib/omes/py/health/inference_endpoint.py) and
+[docs/ai-inference-serving-architecture.md §3.1](ai-inference-serving-architecture.md)): it extends the
+existing health layer model, sends one metadata `GET`, never configures or routes a Hermes provider,
+and its opt-in active synthetic probe is Not implemented yet (tracked in #292).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 

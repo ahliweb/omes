@@ -360,7 +360,8 @@ built-in commands.
 
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]` /
-`omes health agent-runtime [--json] [--profile-home <path>]`
+`omes health agent-runtime [--json] [--profile-home <path>]` /
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -372,7 +373,7 @@ and [docs/hermes-deployment-guide.md §9](hermes-deployment-guide.md#9-health-an
 for what each layer proves and its remediation. Exit codes: 0 ready, 7 not
 ready.
 
-`omes health ollama` is documented below.
+`omes health ollama` and `omes health inference-endpoint` are documented below.
 
 Implemented by [`lib/omes/cmd/health.sh`](../lib/omes/cmd/health.sh)
 (issue [#71](https://github.com/ahliweb/omes/issues/71)), which delegates
@@ -418,6 +419,93 @@ error, e.g. an unknown target or missing flag value).
 omes health ollama --json | jq -e '.ready'
 omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
+```
+
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]`
+(issue [#292](https://github.com/ahliweb/omes/issues/292), via
+[`lib/omes/py/health/inference_endpoint.py`](../lib/omes/py/health/inference_endpoint.py),
+[`endpoint_guard.py`](../lib/omes/py/health/endpoint_guard.py) and
+[`pinned_http.py`](../lib/omes/py/health/pinned_http.py), stdlib only) reports **read-only, provider-neutral
+evidence** about an already-configured local or private OpenAI-compatible inference endpoint. It complements
+`omes health ollama` and Hermes provider readiness and replaces neither; it never configures, selects or routes a
+Hermes provider, reads no Hermes configuration or private store, and the endpoint is only ever an explicit non-secret
+reference (`--endpoint` or `OMES_INFERENCE_ENDPOINT`; see [docs/configuration.md §24](configuration.md#24-omes-health-inference-endpoint--libomespyhealthinference_endpointpy-issue-292)).
+The design is [docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md).
+
+What it does, in order (each is a layer in the JSON):
+
+- **config**: an endpoint was supplied and is a plain `http(s)://host[:port][/prefix]` URL. Other schemes
+  (`file://`, `gopher://`, …), userinfo, query strings, fragments, control characters/CRLF and numeric-encoded hosts
+  (`2130706433`, `0x7f.1`) are rejected, and a rejected value is printed as `[REDACTED]`, never echoed. No endpoint
+  configured is `not_applicable`; nothing is guessed or discovered.
+- **policy**: the host is resolved once and **every** resolved address must be loopback (or, with the default
+  `private` scope, RFC 1918/IPv6 ULA). Public, link-local (including `169.254.169.254` instance metadata),
+  multicast, unspecified, shared/CGNAT and reserved addresses fail before any connection is made; IPv4-mapped IPv6 is
+  unwrapped and judged as the embedded IPv4 address. There is no override for public addresses.
+- **network / tls / api**: one bounded `GET <prefix>/v1/models` (the entire request allowlist; no prompt, no
+  `Authorization`/`Cookie` header, no proxy variables honored, `Accept-Encoding: identity`) sent to the vetted
+  address with the original host name as `Host`/SNI. `https` uses TLS 1.2+ with certificate chain and host name
+  verification that can never be disabled (`--ca-file`/`OMES_INFERENCE_CA_FILE` supplies a private CA). Redirects are
+  never followed (3xx is `fail`, reason `redirect_not_followed`); the body is capped at 1 MiB; the total deadline is
+  `OMES_HEALTH_TIMEOUT` (default 10 s, max 30 s) including a slow-drip server. HTTP 401/403 is `unknown` with reason
+  `auth_required` (OMES never sends a token); 404/405/501 is `fail` (`unsupported_api`); malformed JSON, an
+  unexpected shape, an oversized body and a connection that closes mid-response are `fail`; a timeout is `unknown`.
+- **model**: the configured model id (`--model`/`OMES_INFERENCE_MODEL`) is listed by the endpoint (exact match).
+  Not configured is `unknown`; absent is `fail` (`model_missing`).
+- **freshness**: the endpoint's HTTP `Date` is within 300 s of this host's clock; larger skew is `unknown`
+  (`clock_skew_exceeded`). A server that sends no `Date` makes this layer `not_applicable`.
+- **active_probe**: always `not_applicable` (`active_probe_not_implemented`). An opt-in synthetic chat/tool probe is
+  **Not implemented yet (tracked in #292)**; this command never sends a prompt.
+
+**A passing result proves** a loopback/private endpoint answered a well-formed model list that contains the
+configured id, over a verified channel if `https`. It does **not** prove the model is loaded, can generate, supports
+tools, or is the intended weights, and HTTP 200 alone is never treated as ready. `http` to a non-loopback private
+address is permitted but is reported (`plaintext_http_non_loopback`) because the traffic is unencrypted.
+
+**Exit codes:** 0 status is `pass`; 7 anything else (`fail`, `unknown` or `not_applicable`; read the JSON `status`);
+2 usage error (unknown flag, missing flag value, invalid `--scope`).
+
+**JSON shape** (single object on stdout; layers use the shared
+[`lib/omes/py/health/model.py`](../lib/omes/py/health/model.py) layer fields `status`, `signals`, `proves`,
+`remediation`, `detail`, `authority`, `source`, `compatibility_fallback`, plus the optional `reason` and
+`checked_at` added by #292; statuses are `pass|fail|not_applicable|unknown`; authority is `omes-host` for OMES's own
+policy/clock evaluation and `external-provider` for what the serving endpoint reports). This is the CLI evidence
+shape, not a published Control Center contract: it carries `unknown` and extra fields that
+`contracts/control-center/v1/health-readiness.response.schema.json` does not allow, so it must not be substituted for
+that response. Example (abridged; `proves`/`remediation`/`signals` omitted):
+
+```json
+{
+  "target": "inference-endpoint",
+  "evidence_version": 1,
+  "endpoint": "http://127.0.0.1:8000",
+  "status": "unknown",
+  "ready": false,
+  "checked_at": "2026-10-14T12:00:00Z",
+  "freshness": {"state": "fresh", "checked_at": "2026-10-14T12:00:00Z", "max_age_seconds": 300, "expires_at": "2026-10-14T12:05:00Z"},
+  "layers": {
+    "config":       {"status": "pass", "authority": "omes-host", "source": "omes-endpoint-config", "checked_at": "2026-10-14T12:00:00Z"},
+    "policy":       {"status": "pass", "authority": "omes-host", "source": "omes-endpoint-policy", "detail": "1 address(es) vetted (loopback)"},
+    "network":      {"status": "pass", "authority": "external-provider", "source": "tcp-connect"},
+    "tls":          {"status": "not_applicable", "reason": "plaintext_http_loopback"},
+    "api":          {"status": "unknown", "reason": "auth_required", "detail": "HTTP 401; OMES sends no credentials", "authority": "external-provider", "source": "http-get:/v1/models"},
+    "model":        {"status": "not_applicable", "reason": "skipped_prior_failure"},
+    "freshness":    {"status": "pass"},
+    "active_probe": {"status": "not_applicable", "reason": "active_probe_not_implemented", "detail": "Not implemented yet (tracked in #292)"}
+  },
+  "limits": {"allowed_probes": ["GET /v1/models"], "scope": "private", "timeout_seconds": 10.0, "max_response_bytes": 1048576, "redirects_followed": false, "prompt_sent": false, "credentials_sent": false}
+}
+```
+
+`freshness.expires_at` is when a consumer must stop trusting this record as current;
+`inference_endpoint.revalidate()` downgrades stale, future-dated or unparseable-timestamp evidence to `unknown`.
+
+**Examples:**
+
+```bash
+OMES_INFERENCE_ENDPOINT=http://127.0.0.1:8000 OMES_INFERENCE_MODEL=my-model omes health inference-endpoint
+omes health inference-endpoint --json --endpoint https://llm.internal:8443 --ca-file /etc/ssl/internal-ca.pem --model my-model | jq -e '.ready'
+omes health --json inference-endpoint   # no endpoint configured: status "not_applicable", ready false, exit 7
 ```
 
 `omes health ai-privacy [--json]` (issue
