@@ -5,6 +5,7 @@
 - **Decision maker:** @ahliweb
 - **Related:** ADR-0017 (Upstream-first ownership and boundary enforcement), ADR-0020 (Hermes backup and import boundaries), ADR-0025 (Graphify upstream delegation), [docs/architecture.md](../architecture.md), [docs/business/release-gates.md](../business/release-gates.md), [Issue #181](https://github.com/ahliweb/omes/issues/181)
 - **Supersedes / Amends:** Operationalizes ADR-0017's upstream-first precedence (`DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT`) with continuous, automated drift detection and deprecation tracking across upstream projects.
+- **Amended by:** [Issue #312](https://github.com/ahliweb/omes/issues/312) — the `upstream-drift.yml` workflow no longer runs on its weekly schedule; it runs by manual `workflow_dispatch` only (it is the only way to create or update the tracking issue), and `scripts/ci-local.sh --job upstream-drift` provides a local, report-only run. See [docs/ci.md](../ci.md) section 1.3.
 
 ---
 
@@ -50,7 +51,7 @@ We evaluated two architectural approaches:
 | **7. SEO Impact** | Neutral. | Neutral. |
 | **8. UI/UX Implications** | Inconsistent operator awareness of new upstream capabilities. | Predictable maintainer workflow: deterministic CLI commands (`scripts/upstream-drift.py --check`) integrated into release gates and CI. |
 | **9. Compatibility** | No effect on existing runtime compatibility. | Zero runtime footprint: offline-safe, decoupled from host installation and agent runtime. |
-| **10. Operational Complexity** | High cognitive overhead tracking multiple upstream release feeds. | Low: A single GitHub Actions workflow runs weekly or on dispatch, updating one deduplicated issue only when actionable drift exists. |
+| **10. Operational Complexity** | High cognitive overhead tracking multiple upstream release feeds. | Low: A single GitHub Actions workflow runs weekly or on dispatch (manual dispatch only since issue #312), updating one deduplicated issue only when actionable drift exists. |
 | **11. Long-Term Implications** | OMES risks becoming a stagnant set of obsolete wrappers around fast-moving upstream tools. | Keeps OMES lean, current, and tightly aligned with upstream Hermes and ecosystem standards. |
 
 ---
