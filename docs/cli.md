@@ -359,7 +359,8 @@ built-in commands.
 ## 4.13 `omes health` (layered health/readiness checks)
 
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
-`omes health ollama [--json] [--profile <name>] [--model <id>]`
+`omes health ollama [--json] [--profile <name>] [--model <id>]` /
+`omes health agent-runtime [--json] [--profile-home <path>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -501,6 +502,53 @@ omes health ai-privacy prune --max-age-days 30 --max-count 200
 Exit codes: `--persist` inherits the report's own exit code (persistence is a logged side effect,
 never a cause of failure on its own). `prune`: 0 ok, 1 a delete failed, 2 usage error (including an
 invalid/out-of-range `--max-age-days`/`--max-count`, which fails closed rather than being clamped).
+
+`omes health agent-runtime [--json] [--profile-home <path>]` (issue
+[#270](https://github.com/ahliweb/omes/issues/270), epic [#269](https://github.com/ahliweb/omes/issues/269),
+via [`lib/omes/py/health/agent_runtime_posture.py`](../lib/omes/py/health/agent_runtime_posture.py))
+reports the **configured** Hermes delegation limits. Hermes owns delegation (`delegate_task`);
+OMES only reports posture, never enforces limits, schedules agents or routes models
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 2). Each value is read with
+the supported, read-only `hermes config get <key> --json` through the shared allowlisted reader
+[`lib/omes/py/health/hermes_config.py`](../lib/omes/py/health/hermes_config.py) (the same reader later
+posture checks reuse); `--raw` is never passed, so credential-shaped values stay masked by
+Hermes, and no Hermes file or database is read. The Hermes profile is `--profile-home <path>`
+if given, else the same resolution as `omes health agent` (`OMES_HERMES_HOME`, else `~/.hermes`),
+passed to Hermes through the supported `HERMES_HOME` variable.
+
+Keys read: `delegation.max_concurrent_children`, `max_spawn_depth`, `max_iterations`,
+`child_timeout_seconds` and `subagent_auto_approve` (required), plus `model`, `provider`,
+`orchestrator_enabled`, `worktree_isolation` and `oneshot_max_children` (optional). Each key is
+reported as `value`, `absent` (Hermes says the key is unset; `worktree_isolation` absent is shown as
+"default false (inferred)") or `unknown` with a bounded reason code (`binary_missing`, `timeout`,
+`nonzero_exit`, `unsupported_flag` for a Hermes that rejects `--json`, `json_unparseable`,
+`invalid_type`, `out_of_range`, and so on). Values are validated for type and range; a rejected value
+is not echoed.
+
+Findings: `delegation.no_child_timeout` (warn; `child_timeout_seconds` is `0`, which Hermes treats as
+no timeout), `delegation.subagent_auto_approve_enabled` (warn), `delegation.spawn_depth_above_documented`
+(warn; depth above the 3 the upstream documentation describes, although the upstream code has no
+ceiling), `delegation.nested_orchestration` (info; depth 2 or 3), `delegation.model_not_pinned` (info;
+children inherit the parent model, and per-task model tiering is unsupported upstream), and
+`delegation.optional_key_unavailable` (info). `status` is `ok` (every required key read, no warning),
+`warn` (every required key read, at least one warning) or `unknown` (a required key was absent,
+unreadable or invalid). `unknown` is never reported as `ok`.
+
+**Scope caveat.** The report carries `"scope": "configured"` and a `scope_note`: values are what
+`hermes config get` resolves (including Hermes built-in defaults). Environment overrides such as
+`DELEGATION_MAX_CONCURRENT_CHILDREN` and runtime state are not observed, so this is not proof of
+the effective runtime limits. Upstream documentation and code disagree on some defaults, so no
+default is hardcoded as truth; only live values are reported.
+
+Exit codes (mirrors `ai-privacy`): 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
+
+**JSON schema:** `{"check":"delegation_limits","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"delegation.<name>":{"state":"value","value":...}|{"state":"absent"}|{"state":"unknown","reason":"..."}},"findings":[{"id":"...","severity":"info|warn","key":"...","message":"...","value":...}],"reason_codes":["..."]}`
+
+```bash
+omes health agent-runtime
+omes health agent-runtime --json | jq -r '.status'
+omes health agent-runtime --profile-home /path/to/profile-home --json
+```
 
 ## 4.14 `omes audit` (security audits)
 

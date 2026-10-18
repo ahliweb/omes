@@ -94,17 +94,20 @@ def _fact(value: Optional[str], source: str, method: str, reason: Optional[str] 
     }
 
 
-def _run(cmd: list, timeout: float = _TIMEOUT_SECONDS):
+def _run(cmd: list, timeout: float = _TIMEOUT_SECONDS, env: Optional[dict] = None):
     """Runs a fixed argv command with a bounded timeout. Returns
     (returncode, stdout, stderr); returncode -1 means "binary not found",
     -2 means "timed out". Never uses shell=True and never receives
-    caller-controlled argv beyond a fixed command name.
+    caller-controlled argv beyond a fixed command name. `env`, when given,
+    is the complete child environment (a copy of os.environ plus fixed
+    variables such as HERMES_HOME - lib/omes/py/health/hermes_config.py is
+    the only caller that passes one); None inherits the parent's.
     """
     if shutil.which(cmd[0]) is None:
         return -1, "", f"{cmd[0]} not found on PATH"
     try:
         proc = subprocess.run(  # nosec B603 - fixed argv, no shell, bounded timeout, read-only
-            cmd, capture_output=True, text=True, timeout=timeout, check=False
+            cmd, capture_output=True, text=True, timeout=timeout, check=False, env=env
         )
         return proc.returncode, proc.stdout, proc.stderr
     except subprocess.TimeoutExpired:
