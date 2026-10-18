@@ -223,9 +223,13 @@ repository tree.
 OMES_MATRIX_IMAGES="ubuntu:24.04" ./scripts/test-matrix.sh   # a single image
 ```
 
+`./scripts/ci-local.sh` runs every CI job locally (no GitHub Actions needed) and
+prints a summary for the pull request description; it is the required per-PR check.
+
 See [docs/testing.md](docs/testing.md) for the full test pyramid and
-[docs/ci.md](docs/ci.md) for what runs in CI, what blocks a PR, and how to
-run every CI check locally.
+[docs/ci.md](docs/ci.md) for the CI jobs, what blocks a PR versus what is advisory,
+why the GitHub Actions workflows run only on manual dispatch, and how to run every
+CI check locally.
 
 ## Contributing
 
