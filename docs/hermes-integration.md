@@ -591,6 +591,45 @@ expose this as a `module_doctor` hook (advisory — never fails
 `module_verify`), scoped to their own mode. See
 [docs/cli.md](cli.md) for the full flag/exit-code reference.
 
+### 17.1 Delegation-limits posture and the config read path (issue #270)
+
+`omes health agent-runtime` ([`lib/omes/py/health/agent_runtime_posture.py`](../lib/omes/py/health/agent_runtime_posture.py);
+see [docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks)) reports the
+**configured** Hermes delegation limits. Hermes owns delegation; OMES only reports posture
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 2, [docs/multi-agent-control-patterns.md](multi-agent-control-patterns.md)).
+
+The read path is `hermes config get <key> --json`
+([CLI reference](https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/reference/cli-commands.md)),
+implemented once in [`lib/omes/py/health/hermes_config.py`](../lib/omes/py/health/hermes_config.py)
+so later posture checks reuse it instead of growing their own readers:
+
+- Fixed argv, no shell, timeout from `OMES_HEALTH_TIMEOUT` (default 10 s). `--raw` is never passed;
+  without it Hermes masks credential-shaped values.
+- Only keys in a hard-coded allowlist of non-secret `delegation.*` settings are read; any other key,
+  and any key whose name looks like a credential or endpoint (`api_key`, `token`, `secret`, `password`,
+  `base_url`, and similar), is refused before a subprocess starts. `delegation.api_key` and
+  `delegation.base_url` exist upstream and are deliberately not readable by OMES.
+- The profile is selected through the supported `HERMES_HOME` environment variable. OMES never opens
+  `config.yaml`, `.env`, `state.db` or `messages.db`.
+- The result is tri-state: `value`, `absent` (Hermes reports `Config key not set: <key>`), or
+  `unknown` with a bounded reason code (missing binary, timeout, an older Hermes that rejects
+  `--json`, unparseable output, and so on). `unknown` is never rendered as healthy.
+
+**Configured, not effective.** The values are what `hermes config get` resolves, including Hermes
+built-in defaults. Hermes can also apply environment-variable overrides at runtime (for example
+`DELEGATION_MAX_CONCURRENT_CHILDREN`); OMES cannot observe those, so the report is labelled
+`scope: "configured"` and must not be read as proof of the limits a running gateway enforces.
+Upstream documentation and code disagree on some defaults, so OMES hardcodes none and reports only
+live values.
+
+**Model tiering is Hermes configuration.** `delegate_task` has no per-task model parameter at
+`v2026.9.24`; only the global `delegation.model`/`delegation.provider` pin exists. The report notes when
+no model is pinned (children inherit the parent model). The recommended path, if worker tiers
+(for example a high-capability coordinator with cheaper workers) are wanted before upstream adds a
+per-task parameter, is separate Hermes profiles per tier, each with its own `delegation.model`; run
+`omes health agent-runtime --profile-home <profile home>` per profile to review each one. OMES does not route
+models, pick providers or pin `delegation.model` for you (ADR-0029, ADR-0032).
+
 ## 18. Exposure audit (issue #80)
 
 `omes audit exposure` ([`lib/omes/cmd/audit.sh`](../lib/omes/cmd/audit.sh),

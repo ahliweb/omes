@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama|versions|ai-privacy] [options]
+Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -54,6 +54,15 @@ Targets:
             writes it to <state-dir>/ai-privacy-evidence/ (mode 0700/0600).
             Default behavior is unchanged: nothing is persisted without
             this flag.
+  agent-runtime  Read-only report of the CONFIGURED Hermes delegation limits
+            (max_concurrent_children, max_spawn_depth, max_iterations,
+            child_timeout_seconds, subagent_auto_approve, delegation
+            model/provider pin) read through `hermes config get <key>
+            --json`, with findings and an ok|warn|unknown status (issue
+            #270, ADR-0032 rule 2). Reports configured values only:
+            environment overrides are not observed. OMES reports posture;
+            Hermes owns delegation and OMES never routes models.
+            Options: --json  --profile-home <path>
   ai-privacy prune  Retention/rotation for evidence persisted by
             --persist above (issue #234). Deletes records older than
             --max-age-days and/or beyond --max-count, confined to the
@@ -87,6 +96,7 @@ Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4
             ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
             ai-privacy prune: 0 ok, 1 a delete failed, 2 usage error (including an
             invalid/out-of-range --max-age-days/--max-count).
+            agent-runtime: 0 status is ok/warn, 7 status is unknown.
 EOF
 }
 
@@ -737,6 +747,105 @@ _health_run_ai_privacy_prune() {
 # END omes health ai-privacy (issue #216, retention issue #234)
 # =============================================================================
 
+# =============================================================================
+# BEGIN omes health agent-runtime (issue #270) - see
+# docs/multi-agent-control-patterns.md section 3 and ADR-0032 rule 2
+# =============================================================================
+#
+# `omes health agent-runtime` reports the CONFIGURED Hermes delegation
+# limits. Hermes owns delegation; this only reports posture and never
+# enforces, schedules or routes models. Values come from `hermes config get
+# <key> --json` through lib/omes/py/health/hermes_config.py (the shared,
+# allowlisted reader); no Hermes file or database is read.
+
+# _health_print_agent_runtime_human <json>
+_health_print_agent_runtime_human() {
+  OMES_HEALTH_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_JSON"])
+except ValueError:
+    print("[omes] health agent-runtime: the posture checker did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] health agent-runtime: status=%s scope=%s" % (d.get("status"), d.get("scope")))
+for key, entry in d.get("keys", {}).items():
+    if entry.get("state") == "value":
+        print("[omes]   %-38s %s" % (key, json.dumps(entry.get("value"))))
+    else:
+        detail = entry.get("reason") or entry.get("interpretation") or ""
+        print("[omes]   %-38s %s %s" % (key, entry.get("state"), detail))
+for f in d.get("findings", []):
+    print("[omes]   %s %s: %s" % (f.get("severity", "").upper(), f.get("id"), f.get("message")))
+print("[omes]   note: %s" % d.get("scope_note"))
+'
+}
+
+# _health_run_agent_runtime [--json] [--profile-home <path>]
+_health_run_agent_runtime() {
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+  local profile_home=""
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      --profile-home)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health agent-runtime: --profile-home requires a value"
+        profile_home="$2"
+        shift 2
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health agent-runtime: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  # Same Hermes profile resolution as `omes health agent` (OMES_HERMES_HOME,
+  # else ~/.hermes) unless --profile-home overrides it.
+  [[ -n "$profile_home" ]] || profile_home="$(runtime_home hermes)"
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health agent-runtime: python3 not found (required for lib/omes/py/health/agent_runtime_posture.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_py_script agent_runtime_posture.py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health agent-runtime: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local output rc=0
+  output="$(python3 "$script" --profile-home "$profile_home" 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    log_error "health agent-runtime: the posture checker produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_agent_runtime_human "$output"
+  fi
+
+  exit "$rc"
+}
+# =============================================================================
+# END omes health agent-runtime (issue #270)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
@@ -752,6 +861,12 @@ cmd_health() {
   if [[ "${1:-}" == "ai-privacy" ]]; then
     shift
     _health_run_ai_privacy "$@"
+    return 0
+  fi
+
+  if [[ "${1:-}" == "agent-runtime" ]]; then
+    shift
+    _health_run_agent_runtime "$@"
     return 0
   fi
 
