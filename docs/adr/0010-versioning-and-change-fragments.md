@@ -165,7 +165,9 @@ cleared and a `vX.Y.Z` git tag is created matching the new `VERSION`.
   check on every pull request — see [docs/ci.md](../ci.md) Section 9 and
   [CONTRIBUTING.md](../../CONTRIBUTING.md) Section 4 for the exact rules
   enforced (frontmatter, positive-integer `issue`, ADR-0010 `type`, and a
-  single-paragraph body).
+  single-paragraph body). *(Amended by issue #312: the check runs in
+  `scripts/ci-local.sh`, the per-PR check, and in the manually dispatched
+  workflow; the GitHub workflow no longer triggers on every pull request.)*
 
 <!-- OMES-MERMAID: docs/adr/0010-versioning-and-change-fragments.md -->
 

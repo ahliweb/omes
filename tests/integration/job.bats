@@ -179,3 +179,77 @@ EOF
   run bash -c "stat -c '%a' '${OMES_STATE_DIR}/jobs/audit.jsonl'"
   [ "$output" = "600" ]
 }
+
+# --- omes job reconcile: default-deny tenant scope (#318) ---------------------
+
+# Submits a job as tenant-acme, then forces its stored state to `running` with no
+# runner identity and an old updated_at, so it would be an orphan candidate if
+# scope allowed it. Sets RUNNING_JOB_FILE / RUNNING_JOB_ID.
+_seed_running_job() {
+  _write_request "status" "$1"
+  "$OMES_BIN" job submit --file "$REQ" --json >/dev/null
+  RUNNING_JOB_FILE=$(ls "${OMES_STATE_DIR}/jobs/"job-*.json | head -1)
+  python3 - "$RUNNING_JOB_FILE" <<'PY'
+import json, sys
+p = sys.argv[1]
+d = json.load(open(p))
+d["state"] = "running"
+d["updated_at"] = "2020-01-01T00:00:00Z"
+json.dump(d, open(p, "w"))
+PY
+  RUNNING_JOB_ID=$(basename "$RUNNING_JOB_FILE" .json)
+}
+
+_job_state_digest() {
+  sha256sum "$RUNNING_JOB_FILE" "${OMES_STATE_DIR}/jobs/audit.jsonl"
+}
+
+@test "omes job reconcile (batch) is refused with tenant_not_configured when OMES_JOBS_TENANT_ID is unset" {
+  _seed_running_job idem-318a
+  before=$(_job_state_digest)
+  unset OMES_JOBS_TENANT_ID
+  run "$OMES_BIN" job reconcile --json
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"error": "tenant_not_configured"'* ]]
+  [ "$before" = "$(_job_state_digest)" ]
+}
+
+@test "omes job reconcile (batch) treats an empty OMES_JOBS_TENANT_ID as unset" {
+  _seed_running_job idem-318b
+  before=$(_job_state_digest)
+  export OMES_JOBS_TENANT_ID=""
+  run "$OMES_BIN" job reconcile --json
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"error": "tenant_not_configured"'* ]]
+  [ "$before" = "$(_job_state_digest)" ]
+}
+
+@test "omes job reconcile --job is refused with tenant_not_configured when OMES_JOBS_TENANT_ID is unset" {
+  _seed_running_job idem-318c
+  before=$(_job_state_digest)
+  unset OMES_JOBS_TENANT_ID
+  run "$OMES_BIN" job reconcile --job "$RUNNING_JOB_ID" --json
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"error": "tenant_not_configured"'* ]]
+  [ "$before" = "$(_job_state_digest)" ]
+}
+
+@test "omes job reconcile --job for a job of another tenant is refused as cross_tenant_rejected" {
+  _seed_running_job idem-318d
+  before=$(_job_state_digest)
+  export OMES_JOBS_TENANT_ID="tenant-other"
+  run "$OMES_BIN" job reconcile --job "$RUNNING_JOB_ID" --json
+  [ "$status" -eq 1 ]
+  [[ "$output" == *'"error": "cross_tenant_rejected"'* ]]
+  [ "$before" = "$(_job_state_digest)" ]
+}
+
+@test "omes job reconcile (batch) skips and counts a job of another tenant" {
+  _seed_running_job idem-318e
+  before=$(_job_state_digest)
+  export OMES_JOBS_TENANT_ID="tenant-other"
+  run "$OMES_BIN" job reconcile --json
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"skipped_out_of_scope": 1'* ]]
+  [ "$before" = "$(_job_state_digest)" ]
+}

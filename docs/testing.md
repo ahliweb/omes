@@ -43,6 +43,15 @@ a real reboot can prove.
 ./tests/run.sh
 ```
 
+To run this together with every other CI job — and, when you are root, as the
+non-root uid the suites expect — use `./scripts/ci-local.sh`
+([docs/ci.md](ci.md) §10). `./scripts/ci-local.sh --profile full` adds the
+container regression matrix of §2.2 below. The runner itself is covered by
+`tests/unit/ci-local.bats` (argument parsing, job listing, the workflow drift
+guard, pass/fail/advisory/skipped semantics, JSON shape, the pre-push hook) and
+`tests/unit/ci-local-docker.bats` (registry mirror, proxy and CA pass-through,
+redaction); both use stub scripts and a fake `docker`, never the real tools.
+
 Uses a locally installed `bats`/`shellcheck` when present, falling back to Docker
 (`koalaman/shellcheck:stable`, a derived `bats/bats:latest` image with `python3` and `git`
 layered on for the JSON-validity assertions and the `omes update` git tests - see
@@ -104,7 +113,10 @@ and `compose up|ps|logs|down|exec` (lifecycle), each with an
 env-controlled failure mode (`SHIM_DOCKER_CONTEXT`,
 `SHIM_DOCKER_ENDPOINT`, `SHIM_DOCKER_SECURITY_OPTIONS`,
 `SHIM_DOCKER_COMPOSE_UP_EXIT`, `SHIM_DOCKER_COMPOSE_PS_OUTPUT`,
-`SHIM_DOCKER_COMPOSE_EXEC_EXIT`) - never a real Docker daemon.
+`SHIM_DOCKER_COMPOSE_EXEC_EXIT`, and for the isolation-drift check
+`SHIM_DOCKER_INSPECT_OUTPUT`/`SHIM_DOCKER_INSPECT_EXIT`/
+`SHIM_DOCKER_NETWORK_INSPECT_OUTPUT`/`SHIM_DOCKER_NETWORK_INSPECT_EXIT`) -
+never a real Docker daemon.
 Real-Docker/VM integration is opt-in-only follow-up (no rootless Docker
 daemon is available in this implementation environment) - see
 [docs/agent-deployment.md section 8](agent-deployment.md#8-compose-backend-rootless-docker-compose-isolation-issue-96)
@@ -200,11 +212,13 @@ install.
 `tests/graphify/real-smoke.sh` is a separate, **opt-in** real smoke test: it installs the actual
 `graphifyy` package from PyPI inside a throwaway `python:3.12-slim` container and runs a real
 `graphify extract --code-only` against the same synthetic fixture, printing the installed
-version. It is never run by `tests/run.sh` or on every pull request (it makes a real network
+version. It is never run by `tests/run.sh` or by default (it makes a real network
 call, which every OMES-triggered code-only invocation is otherwise documented to avoid needing);
-`.github/workflows/compatibility.yml`'s `graphify-real-smoke` job runs it only on the weekly
-schedule or `workflow_dispatch`, non-blocking (`continue-on-error: true`), so normal PR CI stays
-fast and never depends on PyPI availability. Run it by hand with `tests/graphify/real-smoke.sh`.
+`.github/workflows/compatibility.yml`'s `graphify-real-smoke` job runs it only on
+`workflow_dispatch` (it also ran on the weekly schedule before issue #312 made every workflow
+manual-only), non-blocking (`continue-on-error: true`), so normal PR checks stay
+fast and never depend on PyPI availability. Run it by hand with `tests/graphify/real-smoke.sh`
+or `scripts/ci-local.sh --job graphify-real-smoke`.
 
 ### 2.5 Manual desktop checklist
 
@@ -294,16 +308,20 @@ A specific run's evidence is **not** committed to the repository (`tests/matrix/
   or attached (the JSON results, the summary table, a `tar`/zip of an evidence bundle) into the
   pull request body per the engineering brief's PR-body "Verification" section convention, and
   into `docs/business/release-gates.md`'s go/no-go checklist as "the specific artifact/run that
-  proves each row" (that document's section 5, step 1).
-- **In CI**: `.github/workflows/compatibility.yml` uploads `tests/matrix/results/` and
+  proves each row" (that document's section 5, step 1). `scripts/ci-local.sh --profile full`
+  (or `--job matrix:<image>`) prints the summary table to paste; it is self-reported evidence.
+- **In CI**: when `.github/workflows/compatibility.yml` is dispatched by hand (it has no
+  automatic trigger since issue #312), it uploads `tests/matrix/results/` and
   `tests/matrix/logs/` as a build artifact named `omes-test-matrix-<image>` per matrix job run
   (and `omes-real-install-ubuntu-24.04` for the dedicated idempotency job) - that artifact's URL
-  (from the Actions run) is the durable, referenceable evidence a release review cites.
+  (from the Actions run) is the durable, referenceable evidence a release review cites. Dispatch
+  it on the release commit for a release review.
 
 ## 4. What blocks a release vs. what is advisory
 
-Blocking (a failing check fails the PR/blocks a release, per this document's evidence table and
-[docs/ci.md](ci.md)):
+Blocking (a failing check fails the run - `scripts/ci-local.sh` or a dispatched workflow - and
+blocks a release, per this document's evidence table and [docs/ci.md](ci.md); whether it gates a
+PR merge is a branch-protection setting the repository owner controls, see docs/ci.md section 1):
 
 - `tests/run.sh` (ShellCheck, unit bats, integration bats) - unchanged from issue #6/#16.
 - `scripts/test-matrix.sh` for the two Tier-1 images (`ubuntu:24.04`, `linuxmintd/mint22-amd64`),
@@ -311,7 +329,7 @@ Blocking (a failing check fails the PR/blocks a release, per this document's evi
 - `.github/workflows/compatibility.yml`'s `real-install-ubuntu-24-04` job (`continue-on-error:
   false` as of this issue, now that apt-base exists to install for real).
 
-Advisory (reported, does not fail the PR/block a release by itself):
+Advisory (reported, does not fail the run/block a release by itself):
 
 - `scripts/test-matrix.sh` for `ubuntu:22.04` (Tier 2 - "tested periodically... regressions are
   tracked but do not block a release by themselves," per `docs/compatibility-matrix.md`).

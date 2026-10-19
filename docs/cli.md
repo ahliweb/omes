@@ -359,7 +359,9 @@ built-in commands.
 ## 4.13 `omes health` (layered health/readiness checks)
 
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
-`omes health ollama [--json] [--profile <name>] [--model <id>]`
+`omes health ollama [--json] [--profile <name>] [--model <id>]` /
+`omes health agent-runtime [--json] [--profile-home <path>]` /
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -371,7 +373,7 @@ and [docs/hermes-deployment-guide.md §9](hermes-deployment-guide.md#9-health-an
 for what each layer proves and its remediation. Exit codes: 0 ready, 7 not
 ready.
 
-`omes health ollama` is documented below.
+`omes health ollama` and `omes health inference-endpoint` are documented below.
 
 Implemented by [`lib/omes/cmd/health.sh`](../lib/omes/cmd/health.sh)
 (issue [#71](https://github.com/ahliweb/omes/issues/71)), which delegates
@@ -417,6 +419,93 @@ error, e.g. an unknown target or missing flag value).
 omes health ollama --json | jq -e '.ready'
 omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
+```
+
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]`
+(issue [#292](https://github.com/ahliweb/omes/issues/292), via
+[`lib/omes/py/health/inference_endpoint.py`](../lib/omes/py/health/inference_endpoint.py),
+[`endpoint_guard.py`](../lib/omes/py/health/endpoint_guard.py) and
+[`pinned_http.py`](../lib/omes/py/health/pinned_http.py), stdlib only) reports **read-only, provider-neutral
+evidence** about an already-configured local or private OpenAI-compatible inference endpoint. It complements
+`omes health ollama` and Hermes provider readiness and replaces neither; it never configures, selects or routes a
+Hermes provider, reads no Hermes configuration or private store, and the endpoint is only ever an explicit non-secret
+reference (`--endpoint` or `OMES_INFERENCE_ENDPOINT`; see [docs/configuration.md §24](configuration.md#24-omes-health-inference-endpoint--libomespyhealthinference_endpointpy-issue-292)).
+The design is [docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md).
+
+What it does, in order (each is a layer in the JSON):
+
+- **config**: an endpoint was supplied and is a plain `http(s)://host[:port][/prefix]` URL. Other schemes
+  (`file://`, `gopher://`, …), userinfo, query strings, fragments, control characters/CRLF and numeric-encoded hosts
+  (`2130706433`, `0x7f.1`) are rejected, and a rejected value is printed as `[REDACTED]`, never echoed. No endpoint
+  configured is `not_applicable`; nothing is guessed or discovered.
+- **policy**: the host is resolved once and **every** resolved address must be loopback (or, with the default
+  `private` scope, RFC 1918/IPv6 ULA). Public, link-local (including `169.254.169.254` instance metadata),
+  multicast, unspecified, shared/CGNAT and reserved addresses fail before any connection is made; IPv4-mapped IPv6 is
+  unwrapped and judged as the embedded IPv4 address. There is no override for public addresses.
+- **network / tls / api**: one bounded `GET <prefix>/v1/models` (the entire request allowlist; no prompt, no
+  `Authorization`/`Cookie` header, no proxy variables honored, `Accept-Encoding: identity`) sent to the vetted
+  address with the original host name as `Host`/SNI. `https` uses TLS 1.2+ with certificate chain and host name
+  verification that can never be disabled (`--ca-file`/`OMES_INFERENCE_CA_FILE` supplies a private CA). Redirects are
+  never followed (3xx is `fail`, reason `redirect_not_followed`); the body is capped at 1 MiB; the total deadline is
+  `OMES_HEALTH_TIMEOUT` (default 10 s, max 30 s) including a slow-drip server. HTTP 401/403 is `unknown` with reason
+  `auth_required` (OMES never sends a token); 404/405/501 is `fail` (`unsupported_api`); malformed JSON, an
+  unexpected shape, an oversized body and a connection that closes mid-response are `fail`; a timeout is `unknown`.
+- **model**: the configured model id (`--model`/`OMES_INFERENCE_MODEL`) is listed by the endpoint (exact match).
+  Not configured is `unknown`; absent is `fail` (`model_missing`).
+- **freshness**: the endpoint's HTTP `Date` is within 300 s of this host's clock; larger skew is `unknown`
+  (`clock_skew_exceeded`). A server that sends no `Date` makes this layer `not_applicable`.
+- **active_probe**: always `not_applicable` (`active_probe_not_implemented`). An opt-in synthetic chat/tool probe is
+  **Not implemented yet (tracked in #292)**; this command never sends a prompt.
+
+**A passing result proves** a loopback/private endpoint answered a well-formed model list that contains the
+configured id, over a verified channel if `https`. It does **not** prove the model is loaded, can generate, supports
+tools, or is the intended weights, and HTTP 200 alone is never treated as ready. `http` to a non-loopback private
+address is permitted but is reported (`plaintext_http_non_loopback`) because the traffic is unencrypted.
+
+**Exit codes:** 0 status is `pass`; 7 anything else (`fail`, `unknown` or `not_applicable`; read the JSON `status`);
+2 usage error (unknown flag, missing flag value, invalid `--scope`).
+
+**JSON shape** (single object on stdout; layers use the shared
+[`lib/omes/py/health/model.py`](../lib/omes/py/health/model.py) layer fields `status`, `signals`, `proves`,
+`remediation`, `detail`, `authority`, `source`, `compatibility_fallback`, plus the optional `reason` and
+`checked_at` added by #292; statuses are `pass|fail|not_applicable|unknown`; authority is `omes-host` for OMES's own
+policy/clock evaluation and `external-provider` for what the serving endpoint reports). This is the CLI evidence
+shape, not a published Control Center contract: it carries `unknown` and extra fields that
+`contracts/control-center/v1/health-readiness.response.schema.json` does not allow, so it must not be substituted for
+that response. Example (abridged; `proves`/`remediation`/`signals` omitted):
+
+```json
+{
+  "target": "inference-endpoint",
+  "evidence_version": 1,
+  "endpoint": "http://127.0.0.1:8000",
+  "status": "unknown",
+  "ready": false,
+  "checked_at": "2026-10-14T12:00:00Z",
+  "freshness": {"state": "fresh", "checked_at": "2026-10-14T12:00:00Z", "max_age_seconds": 300, "expires_at": "2026-10-14T12:05:00Z"},
+  "layers": {
+    "config":       {"status": "pass", "authority": "omes-host", "source": "omes-endpoint-config", "checked_at": "2026-10-14T12:00:00Z"},
+    "policy":       {"status": "pass", "authority": "omes-host", "source": "omes-endpoint-policy", "detail": "1 address(es) vetted (loopback)"},
+    "network":      {"status": "pass", "authority": "external-provider", "source": "tcp-connect"},
+    "tls":          {"status": "not_applicable", "reason": "plaintext_http_loopback"},
+    "api":          {"status": "unknown", "reason": "auth_required", "detail": "HTTP 401; OMES sends no credentials", "authority": "external-provider", "source": "http-get:/v1/models"},
+    "model":        {"status": "not_applicable", "reason": "skipped_prior_failure"},
+    "freshness":    {"status": "pass"},
+    "active_probe": {"status": "not_applicable", "reason": "active_probe_not_implemented", "detail": "Not implemented yet (tracked in #292)"}
+  },
+  "limits": {"allowed_probes": ["GET /v1/models"], "scope": "private", "timeout_seconds": 10.0, "max_response_bytes": 1048576, "redirects_followed": false, "prompt_sent": false, "credentials_sent": false}
+}
+```
+
+`freshness.expires_at` is when a consumer must stop trusting this record as current;
+`inference_endpoint.revalidate()` downgrades stale, future-dated or unparseable-timestamp evidence to `unknown`.
+
+**Examples:**
+
+```bash
+OMES_INFERENCE_ENDPOINT=http://127.0.0.1:8000 OMES_INFERENCE_MODEL=my-model omes health inference-endpoint
+omes health inference-endpoint --json --endpoint https://llm.internal:8443 --ca-file /etc/ssl/internal-ca.pem --model my-model | jq -e '.ready'
+omes health --json inference-endpoint   # no endpoint configured: status "not_applicable", ready false, exit 7
 ```
 
 `omes health ai-privacy [--json]` (issue
@@ -501,6 +590,53 @@ omes health ai-privacy prune --max-age-days 30 --max-count 200
 Exit codes: `--persist` inherits the report's own exit code (persistence is a logged side effect,
 never a cause of failure on its own). `prune`: 0 ok, 1 a delete failed, 2 usage error (including an
 invalid/out-of-range `--max-age-days`/`--max-count`, which fails closed rather than being clamped).
+
+`omes health agent-runtime [--json] [--profile-home <path>]` (issue
+[#270](https://github.com/ahliweb/omes/issues/270), epic [#269](https://github.com/ahliweb/omes/issues/269),
+via [`lib/omes/py/health/agent_runtime_posture.py`](../lib/omes/py/health/agent_runtime_posture.py))
+reports the **configured** Hermes delegation limits. Hermes owns delegation (`delegate_task`);
+OMES only reports posture, never enforces limits, schedules agents or routes models
+([ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) rule 2). Each value is read with
+the supported, read-only `hermes config get <key> --json` through the shared allowlisted reader
+[`lib/omes/py/health/hermes_config.py`](../lib/omes/py/health/hermes_config.py) (the same reader later
+posture checks reuse); `--raw` is never passed, so credential-shaped values stay masked by
+Hermes, and no Hermes file or database is read. The Hermes profile is `--profile-home <path>`
+if given, else the same resolution as `omes health agent` (`OMES_HERMES_HOME`, else `~/.hermes`),
+passed to Hermes through the supported `HERMES_HOME` variable.
+
+Keys read: `delegation.max_concurrent_children`, `max_spawn_depth`, `max_iterations`,
+`child_timeout_seconds` and `subagent_auto_approve` (required), plus `model`, `provider`,
+`orchestrator_enabled`, `worktree_isolation` and `oneshot_max_children` (optional). Each key is
+reported as `value`, `absent` (Hermes says the key is unset; `worktree_isolation` absent is shown as
+"default false (inferred)") or `unknown` with a bounded reason code (`binary_missing`, `timeout`,
+`nonzero_exit`, `unsupported_flag` for a Hermes that rejects `--json`, `json_unparseable`,
+`invalid_type`, `out_of_range`, and so on). Values are validated for type and range; a rejected value
+is not echoed.
+
+Findings: `delegation.no_child_timeout` (warn; `child_timeout_seconds` is `0`, which Hermes treats as
+no timeout), `delegation.subagent_auto_approve_enabled` (warn), `delegation.spawn_depth_above_documented`
+(warn; depth above the 3 the upstream documentation describes, although the upstream code has no
+ceiling), `delegation.nested_orchestration` (info; depth 2 or 3), `delegation.model_not_pinned` (info;
+children inherit the parent model, and per-task model tiering is unsupported upstream), and
+`delegation.optional_key_unavailable` (info). `status` is `ok` (every required key read, no warning),
+`warn` (every required key read, at least one warning) or `unknown` (a required key was absent,
+unreadable or invalid). `unknown` is never reported as `ok`.
+
+**Scope caveat.** The report carries `"scope": "configured"` and a `scope_note`: values are what
+`hermes config get` resolves (including Hermes built-in defaults). Environment overrides such as
+`DELEGATION_MAX_CONCURRENT_CHILDREN` and runtime state are not observed, so this is not proof of
+the effective runtime limits. Upstream documentation and code disagree on some defaults, so no
+default is hardcoded as truth; only live values are reported.
+
+Exit codes (mirrors `ai-privacy`): 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
+
+**JSON schema:** `{"check":"delegation_limits","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"delegation.<name>":{"state":"value","value":...}|{"state":"absent"}|{"state":"unknown","reason":"..."}},"findings":[{"id":"...","severity":"info|warn","key":"...","message":"...","value":...}],"reason_codes":["..."]}`
+
+```bash
+omes health agent-runtime
+omes health agent-runtime --json | jq -r '.status'
+omes health agent-runtime --profile-home /path/to/profile-home --json
+```
 
 ## 4.14 `omes audit` (security audits)
 
@@ -860,6 +996,7 @@ omes agent plan <name> [--json]
 omes agent apply <name> [--dry-run] [--yes] [--json]
 omes agent status <name> [--json]
 omes agent health <name> [--json]
+omes agent isolation-drift <name> [--json]       # compose backend only; read-only (issue #276)
 omes agent restart <name> [--json]
 omes agent logs <name> [journalctl-args...]      # systemd backend
 omes agent logs <name> [--tail N] [--follow]     # compose backend (docker compose logs)
@@ -868,14 +1005,15 @@ omes agent remove <name> [--yes] [--json]        # compose backend only
 omes agent orchestration --session <id> [--tenant <id>] [--server <id>] [--json]
 ```
 
+- `isolation-drift` (issue #276, compose backend only) compares the declared compose isolation posture (image, `uid:gid`, `cap_drop: [ALL]`, read-only rootfs, `no-new-privileges`, network `internal` flag, memory/cpu/pids limits, no Docker-socket or undeclared mounts) with the running container reported by `docker inspect` and `docker network inspect`. It is read-only (fixed argv, no restart, no `sudo`). `--json` prints `{status, findings: [{field, declared, observed, severity}], unverified, skipped, reason, ...}` on stdout; `status` is `ok`, `drift` or `unknown` (docker unavailable, container missing or stopped, malformed output, or unverifiable fields), and `ok` is never reported without evidence. Details and limits: [docs/agent-deployment.md section 9.7](agent-deployment.md).
 - `orchestration` inspects live Hermes delegated-task subagent process trees reconstructed from `hermes.observer.v1` observer telemetry (issue #183, ADR-0028). Returns hierarchical process trees with step counts, active tools, elapsed durations, and freshness states.
 
-**Exit codes:** 0 ok; 2 usage error (including `remove` against a
-non-compose backend, which is not implemented); 4 preflight failed
+**Exit codes:** 0 ok; 2 usage error (including `remove` and `isolation-drift`
+against a non-compose backend, which are not implemented); 4 preflight failed
 (missing/invalid manifest, or - for `backend: "compose"` - a rootful
 Docker daemon/socket/docker-group-only access); 5 privilege error
 (`serviceMode` vs. current EUID mismatch); 6 apply/mutation failed; 7
-verification/health failed; 9 backup step failed; 10 rollback/remove
+verification/health failed (for `isolation-drift`, both `drift` and `unknown`); 9 backup step failed; 10 rollback/remove
 teardown failed; 1 other errors (e.g. an unconfirmed mutating call).
 `doctor` always exits 0 (it is a read-only report; per-agent failure is
 surfaced in its `ok`/`error` fields, not the process exit code - see
@@ -956,6 +1094,7 @@ omes job status <job-id> [--json]
 omes job list [--state STATE] [--json]
 omes job cancel <job-id> --actor <id> [--json]
 omes job expire [--json]
+omes job reconcile [--job <job-id>] [--actor <id>] [--json]
 ```
 
 - `submit` validates `<file>` against
@@ -977,11 +1116,32 @@ omes job expire [--json]
   — see docs/jobs.md's state machine for why).
 - `expire` moves every `queued`/`approved` job older than
   `OMES_JOBS_TTL_SECONDS` to `expired`.
+- `reconcile` (#271) finds `running` jobs whose runner process is provably gone
+  (host rebooted, pid dead, or pid reused by another process; a `running`
+  record without runner identity qualifies only after
+  `OMES_JOBS_ORPHAN_LEGACY_SECONDS`, default 3600) and re-runs the operation's
+  existing read-back. Desired == observed becomes `succeeded` (`rolled_back`
+  for a rollback); a mismatch becomes `failed` / `reconciliation_mismatch`;
+  anything unverifiable (including operations without a read-back, or a
+  read-back without a complete desired/observed pair) becomes `failed` /
+  `outcome_unknown`, never success. A live runner is never touched. Idempotent;
+  `--job` restricts it to one job (an out-of-scope tenant/server is refused;
+  a batch run skips and counts such jobs). Tenant scope is default-deny like
+  `submit` (#318): without a non-empty `OMES_JOBS_TENANT_ID`, both the batch
+  run and `--job` are refused with `tenant_not_configured` and exit 1, before
+  anything is read, written or audited. With `--json`, stdout is
+  `{"reconciled": [...], "unchanged": [...], "skipped_out_of_scope": N}` and
+  logs go to stderr; a refusal prints
+  `{"error": "tenant_not_configured" | "cross_tenant_rejected", "reason": ...}`
+  instead. See [docs/jobs.md](jobs.md) §7.1 and §9.
 
 **Exit codes:** 0 (success; for `run`, only when the job reached
-`succeeded`/`rolled_back`), 1 (error — schema validation failure,
-cross-tenant rejection or `tenant_not_configured` (unset `OMES_JOBS_TENANT_ID`), missing approval, invalid state transition,
-exhausted retries, job failed), 2 (usage error).
+`succeeded`/`rolled_back`; for `reconcile`, whenever reconciliation itself
+completed, even if it moved a job to `failed`), 1 (error — schema validation
+failure, cross-tenant rejection or `tenant_not_configured` (unset or empty
+`OMES_JOBS_TENANT_ID`; applies to `submit` and to both forms of `reconcile`),
+unknown job for `reconcile --job`, missing approval, invalid state transition, exhausted retries, job failed), 2 (usage
+error).
 
 ### 4.17 Control Center pull-worker: `omes worker`
 

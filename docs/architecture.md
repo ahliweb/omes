@@ -165,8 +165,10 @@ tests/integration/*.bats        # Integration tests executing bin/omes against s
 tests/vm/                       # VM-based compatibility test definitions.
 tests/fixtures/                 # Fixtures, e.g. tests/fixtures/os-release/ variants.
 tests/shims/                    # Fake apt-get/systemctl/sudo/hermes/curl for integration tests.
-.github/workflows/lint.yml      # ShellCheck + bats CI.
-.github/workflows/compatibility.yml # OS/profile compatibility matrix CI.
+.github/workflows/lint.yml      # ShellCheck + bats CI (manual dispatch only since #312).
+.github/workflows/compatibility.yml # OS/profile compatibility matrix CI (manual dispatch only since #312).
+.github/workflows/upstream-drift.yml # Upstream drift review (manual dispatch only since #312).
+scripts/ci-local.sh             # Runs every CI job locally; the per-PR check (docs/ci.md section 10).
 docs/architecture.md            # This document.
 docs/adr/*.md                   # Architecture Decision Records.
 docs/business/*.md              # Business plan and go-to-market documents.
@@ -1101,7 +1103,7 @@ The registry gained four new entries describing boundaries and infrastructure th
 
 ### 16.3 Automated upstream drift review and deprecation tracking
 
-Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml`.
+Per [ADR-0026](adr/0026-upstream-drift-automation.md) and issue [#181](https://github.com/ahliweb/omes/issues/181), OMES monitors upstream project releases (Hermes, Omarchy, Graphify, Coolify) via `scripts/upstream-drift.py` and `.github/workflows/upstream-drift.yml` (a workflow that runs by manual dispatch only since issue [#312](https://github.com/ahliweb/omes/issues/312); `scripts/ci-local.sh --job upstream-drift` is the local, report-only equivalent).
 
 The drift inspection engine:
 - Compares latest released upstream versions against `architecture/capabilities.json` supported baselines.
@@ -1186,6 +1188,14 @@ sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issu
 [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
 Security regression gates are implemented ([#218](https://github.com/ahliweb/omes/issues/218),
 closed; commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
+Read-only, provider-neutral evidence for an already-configured local/private OpenAI-compatible
+inference endpoint is implemented in phase 1 as `omes health inference-endpoint`
+([#292](https://github.com/ahliweb/omes/issues/292); capability
+`omes.health.inference_endpoint_evidence`, observability plane, authority `omes`; see
+[lib/omes/py/health/inference_endpoint.py](../lib/omes/py/health/inference_endpoint.py) and
+[docs/ai-inference-serving-architecture.md §3.1](ai-inference-serving-architecture.md)): it extends the
+existing health layer model, sends one metadata `GET`, never configures or routes a Hermes provider,
+and its opt-in active synthetic probe is Not implemented yet (tracked in #292).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
@@ -1469,7 +1479,7 @@ starting point, not a finished one.
 
 ## 19. Multi-agent control patterns (epic #269)
 
-Epic [#269](https://github.com/ahliweb/omes/issues/269) evaluated Octop-style coordinator/worker patterns (a team host that only schedules, parallel asynchronous dispatch, per-agent isolation, ACP, durable orchestration, a Mission-Control-like view) against the authority model in §16 and §18. [ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) records the decision and [docs/multi-agent-control-patterns.md](multi-agent-control-patterns.md) holds the evidence, the capability matrix and the verified gaps. This is a phase 0 decision record: it changes no runtime behavior, and every child capability ([#270](https://github.com/ahliweb/omes/issues/270)–[#277](https://github.com/ahliweb/omes/issues/277)) is Not implemented yet unless its own change lands.
+Epic [#269](https://github.com/ahliweb/omes/issues/269) evaluated Octop-style coordinator/worker patterns (a team host that only schedules, parallel asynchronous dispatch, per-agent isolation, ACP, durable orchestration, a Mission-Control-like view) against the authority model in §16 and §18. [ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md) records the decision and [docs/multi-agent-control-patterns.md](multi-agent-control-patterns.md) holds the evidence, the capability matrix and the verified gaps. This is a phase 0 decision record: it changes no runtime behavior by itself. Delivered children so far: the read-only delegation-limits posture check `omes health agent-runtime` of [#270](https://github.com/ahliweb/omes/issues/270), and orphaned host-job reconciliation plus observer handling of `unknown` ([#271](https://github.com/ahliweb/omes/issues/271)). Every other child capability ([#272](https://github.com/ahliweb/omes/issues/272)–[#277](https://github.com/ahliweb/omes/issues/277)) is Not implemented yet unless its own change lands.
 
 OMES adopts patterns, not products. Coordinator-to-worker delegation (including model tiering such as Opus to Sonnet or Haiku), agent-run durability and the Agent Client Protocol (ACP) are Hermes-owned: Hermes `v2026.9.24` already ships `delegate_task` with concurrency and depth limits, marks a restarted running child `unknown`, and provides `hermes acp`. OMES owns only host-control concerns that these patterns touch: reconciling orphaned host jobs after a restart ([#271](https://github.com/ahliweb/omes/issues/271)), the cross-plane evidence envelope ([#272](https://github.com/ahliweb/omes/issues/272)), and OS-level isolation verification ([#276](https://github.com/ahliweb/omes/issues/276)). Registry invariant R9 (§16.2.1) reserves `acp`, `agent_client_protocol`, `coordinator`, `subagent` and `subagents` from OMES authority, and the registry gains the two existing upstream capabilities `hermes.agent.delegation` and `hermes.agent.acp_server`.
 
@@ -1477,15 +1487,15 @@ The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native to
 
 | Concern | Authority | Status (2026-10-03) |
 |---|---|---|
-| Coordinator/worker delegation and model tiering | Hermes | Delegated upstream; per-task model parameter absent at the pinned baseline; policy and audit tracked in [#270](https://github.com/ahliweb/omes/issues/270) |
-| Agent-run durability and restart (`unknown`) | Hermes | Delegated upstream; OMES consumption not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
-| Orphaned host-job reconciliation | OMES | Not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
-| Cross-plane correlation/trace envelope | OMES contract (observability plane) | Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)) |
+| Coordinator/worker delegation and model tiering | Hermes | Delegated upstream; per-task model parameter absent at the pinned baseline (separate Hermes profiles per worker tier is the ADAPT path; OMES does not route models). Read-only configured-limits posture check implemented as `omes health agent-runtime` ([#270](https://github.com/ahliweb/omes/issues/270)); it reports configured, not effective, values |
+| Agent-run durability and restart (`unknown`) | Hermes | Delegated upstream; the OMES observer consumes `UNKNOWN` as terminal non-success (#271, implemented) |
+| Orphaned host-job reconciliation | OMES | Implemented (#271): `omes job reconcile`, executor identity instead of a lease; confirmed cancellation of running jobs and automatic invocation not implemented (cancellation tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
+| Cross-plane correlation/trace envelope | OMES contract (observability plane) | Contract, validator and deterministic convergence reducer implemented (`contracts/observability/v1/correlation-envelope.schema.json`, `lib/omes/py/observability/envelope.py`, capability `omes.observability.correlation_envelope`); evidence only, never authority. Propagation through AWCMS, job and worker flows and producer wiring: Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)) |
 | ACP (inbound) | Hermes | Delegated upstream (`hermes acp`); posture evidence not implemented yet (tracked in [#273](https://github.com/ahliweb/omes/issues/273)) |
 | ACP (outbound client) | Hermes | Deferred to upstream proposal [hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257) |
 | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | Not implemented yet (tracked in [#274](https://github.com/ahliweb/omes/issues/274)) |
 | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
-| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; drift and egress verification not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
+| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; compose `egress: "none"` and the read-only `omes agent isolation-drift` declared-versus-running check implemented (shim-tested). Per-destination egress allowlist, runtime egress probe and real rootless-daemon evidence not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
 | Mission Control projection | AWCMS | Not implemented yet (tracked in [#277](https://github.com/ahliweb/omes/issues/277)) |
 
 Threats for these patterns are recorded as `MA-01`..`MA-11` in [docs/threat-model.md](threat-model.md). Standards references in ADR-0032 are alignment only; no compliance or certification is claimed.

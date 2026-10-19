@@ -165,7 +165,7 @@ cmd_agent() {
   fi
 
   if [[ "$#" -eq 0 ]]; then
-    printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|restart|logs|rollback|remove> [name] [args...]\n' >&2
+    printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|isolation-drift|restart|logs|rollback|remove> [name] [args...]\n' >&2
     printf '[omes]   see docs/agent-deployment.md\n' >&2
     return 2
   fi
@@ -223,13 +223,13 @@ cmd_agent() {
       _agent_py "$subcommand" "${extra_args[@]}" "$@"
       return $?
       ;;
-    list | doctor | check | plan | status | health | restart | migrate | orchestration)
+    list | doctor | check | plan | status | health | isolation-drift | restart | migrate | orchestration)
       _agent_py "$subcommand" "${extra_args[@]}" "$@"
       return $?
       ;;
     *)
       printf '[omes] unknown "omes agent" subcommand: %s\n' "$subcommand" >&2
-      printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|restart|logs|rollback|remove|orchestration> [name] [args...]\n' >&2
+      printf '[omes] usage: omes agent <list|doctor|check|plan|apply|status|health|isolation-drift|restart|logs|rollback|remove|orchestration> [name] [args...]\n' >&2
       return 2
       ;;
   esac
