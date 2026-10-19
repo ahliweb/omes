@@ -2,11 +2,17 @@
 
 This directory holds versioned JSON Schema contracts for boundaries between
 OMES and external control planes (currently: the planned AWCMS-based
-Control Center, issue [#89](https://github.com/ahliweb/omes/issues/89)).
+Control Center, issue [#89](https://github.com/ahliweb/omes/issues/89), plus
+the cross-plane `observability` envelope, issue [#272](https://github.com/ahliweb/omes/issues/272)).
 These are **wire contracts, not implementation**. A schema existing here
 does not mean the producing/consuming service exists yet; see
 [docs/control-center-and-integrations.md](../docs/control-center-and-integrations.md)
 section 11 for what is actually implemented.
+
+
+## Browser transfer (proposed)
+
+`contracts/browser-transfer/v1/` contains optional, sanitized browser worker readiness and per-record transfer event **wire contracts only** (#294/#296). They are not an executable Playwright/Hermes adapter, a second business workflow engine, an AWCMS record database, or a browser permission boundary. See [browser transfer v1 README](browser-transfer/v1/README.md); the corresponding design is tracked in #295 and [PR #307](https://github.com/ahliweb/omes/pull/307). Existing `contracts/control-center/v1/` safe host operations must not be expanded into free-form browser actions.
 
 ## Layout convention
 
@@ -142,4 +148,5 @@ fragment.
 |---|---|---|
 | `control-center/v1` | issue #89 | Contracts defined; no implementation of the AWCMS producer/OMES consumer sides exists in this repository yet, except the OMES-side job runner (`lib/omes/py/jobs/`, issue #90), which validates `deployment.request` against this contract before running an operation. |
 | `ai-egress/v1` | issue #214 (ADR-0029) | Metadata-only AI data-classification and model-egress decision request/response contracts. Implemented and consumed by the deterministic evaluator `lib/omes/py/privacy/egress_policy.py`. Restricted local-only runtime enforcement and privacy evidence are implemented in #215-#218; Control Center projection is implemented in #217. `provider-assurance-evidence.schema.json` (issue #237, threat AI-07) records the section 5 provider due-diligence checklist as structured, versioned evidence-reference-only fields, embedded in the request as `provider_assurance` and required for the evaluator to approve `cloud_sanitized`. |
+| `observability/v1` | issue #272 (ADR-0032 rule 5) | Cross-plane correlation/event envelope (`correlation-envelope.schema.json`): identifiers, closed status, freshness, ADR-0029 classification and redaction state only; **evidence, not authority**, with no free-text, command or credential field. Validated and converged by `lib/omes/py/observability/envelope.py` (stdlib-only; reuses `jobs/schema.py`). Not implemented yet (tracked in #272): propagation through AWCMS, job and worker flows and any producer that emits it. |
 | `rescue-ai/v1` | issue #261 | Bounded metadata contract for an optional external Ventoy/Linux rescue companion using OpenCode Go. The contract is staged; the external collector and `omes rescue` validator are not implemented yet. It rejects prompts, model responses, credentials, raw logs, arbitrary commands, and unrestricted paths. See [docs/rescue-ai.md](../docs/rescue-ai.md). |

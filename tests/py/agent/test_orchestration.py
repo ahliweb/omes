@@ -414,5 +414,92 @@ class TestHermesOrchestration(unittest.TestCase):
         self.assertEqual(len(other_sessions), 0)
 
 
+    def _event(self, session_id: str, subagent_id: str, event_type: str, state: str, ts: str, **extra) -> dict:
+        event = {
+            "schema_version": "1.0.0",
+            "event_type": event_type,
+            "tenant_id": "tenant-acme",
+            "server_id": "srv-01",
+            "session_id": session_id,
+            "subagent_id": subagent_id,
+            "parent_subagent_id": None,
+            "state": state,
+            "timestamp": ts,
+            "hermes_version": "v2026.9.24",
+        }
+        event.update(extra)
+        return event
+
+    def _tree(self, session_id: str) -> dict:
+        return orchestration.build_tree(
+            session_id=session_id,
+            tenant_id="tenant-acme",
+            server_id="srv-01",
+            state_root=self.state_root,
+            now=datetime(2026, 9, 21, 12, 2, 0, tzinfo=timezone.utc),
+        )
+
+    def test_unknown_is_terminal_non_success_and_counted_as_failed(self) -> None:
+        """Hermes marks a restarted running child UNKNOWN (#271): never success, never active."""
+        sid = "sess-unknown"
+        orchestration.ingest_event(self._event(sid, "sub-ok", "subagent_start", "RUNNING", "2026-09-21T12:00:00Z"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-ok", "subagent_stop", "SUCCEEDED", "2026-09-21T12:00:30Z"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-unk", "subagent_start", "RUNNING", "2026-09-21T12:00:00Z", parent_subagent_id="sub-ok"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-unk", "subagent_stop", "UNKNOWN", "2026-09-21T12:01:00Z", parent_subagent_id="sub-ok"), state_root=self.state_root)
+
+        self.assertIn("UNKNOWN", orchestration.TERMINAL_STATES)
+        self.assertNotIn("UNKNOWN", orchestration.TERMINAL_SUCCESS_STATES)
+        self.assertNotIn("UNKNOWN", orchestration.ACTIVE_STATES)
+
+        tree = self._tree(sid)
+        nodes = {n["subagent_id"]: n for n in tree["nodes"]}
+        self.assertEqual(nodes["sub-unk"]["state"], "UNKNOWN")
+        self.assertIsNone(nodes["sub-unk"]["completed_at"])
+        self.assertEqual(tree["completed_count"], 1)  # only sub-ok
+        self.assertEqual(tree["failed_count"], 1)  # sub-unk, terminal non-success
+        self.assertEqual(tree["active_count"], 0)
+        self.assertEqual(tree["freshness"], "live")  # UNKNOWN is not an active node that can go stale
+
+    def test_late_active_event_does_not_revert_unknown(self) -> None:
+        sid = "sess-unknown-late-active"
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_step", "UNKNOWN", "2026-09-21T12:01:00Z"), state_root=self.state_root)
+        for state, event_type in (("RUNNING", "subagent_step"), ("STARTING", "subagent_start"), ("PENDING", "subagent_start")):
+            orchestration.ingest_event(self._event(sid, "sub-1", event_type, state, "2026-09-21T12:00:00Z"), state_root=self.state_root)
+        tree = self._tree(sid)
+        self.assertEqual(tree["nodes"][0]["state"], "UNKNOWN")
+        self.assertEqual(tree["active_count"], 0)
+        self.assertEqual(tree["failed_count"], 1)
+        self.assertEqual(tree["completed_count"], 0)
+
+    def test_unknown_is_sticky_against_a_later_succeeded_event(self) -> None:
+        """A replayed or out-of-order SUCCEEDED must not launder UNKNOWN into success."""
+        sid = "sess-unknown-sticky"
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_start", "RUNNING", "2026-09-21T12:00:00Z"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_stop", "UNKNOWN", "2026-09-21T12:01:00Z"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_stop", "SUCCEEDED", "2026-09-21T12:01:30Z"), state_root=self.state_root)
+        tree = self._tree(sid)
+        self.assertEqual(tree["nodes"][0]["state"], "UNKNOWN")
+        self.assertIsNone(tree["nodes"][0]["completed_at"])
+        self.assertEqual(tree["completed_count"], 0)
+        self.assertEqual(tree["failed_count"], 1)
+
+    def test_late_unknown_does_not_downgrade_a_definite_terminal_state(self) -> None:
+        sid = "sess-unknown-late"
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_stop", "SUCCEEDED", "2026-09-21T12:01:00Z"), state_root=self.state_root)
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_stop", "UNKNOWN", "2026-09-21T12:00:30Z"), state_root=self.state_root)
+        tree = self._tree(sid)
+        self.assertEqual(tree["nodes"][0]["state"], "SUCCEEDED")
+        self.assertEqual(tree["completed_count"], 1)
+        self.assertEqual(tree["failed_count"], 0)
+
+    def test_unknown_as_first_event_is_accepted(self) -> None:
+        sid = "sess-unknown-first"
+        orchestration.ingest_event(self._event(sid, "sub-1", "subagent_stop", "UNKNOWN", "2026-09-21T12:01:00Z"), state_root=self.state_root)
+        tree = self._tree(sid)
+        self.assertEqual(tree["nodes"][0]["state"], "UNKNOWN")
+        self.assertEqual(tree["failed_count"], 1)
+        self.assertEqual(tree["completed_count"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

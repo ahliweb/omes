@@ -262,7 +262,7 @@ file path are all derived from the manifest and `OMES_STATE_DIR`/
 `OMES_CONFIG_DIR`, never from a separate override. See
 [docs/agent-deployment.md section 8](agent-deployment.md) for the
 manifest's own `spec.compose` fields (image, project, network, user,
-capDrop, readOnlyRootfs, volumes, ports) and
+capDrop, readOnlyRootfs, egress, volumes, ports) and
 [docs/testing.md](testing.md) for `tests/shims/docker`'s
 `SHIM_DOCKER_*` test-only knobs.
 
@@ -274,15 +274,32 @@ The OMES-side control job runner used by a future Control Center (issue
 
 | Variable | Default | Kind | Meaning |
 |---|---|---|---|
-| `OMES_JOBS_TENANT_ID` | unset (default-deny) | Operator | The tenant this OMES instance is enrolled under. If unset, `omes job submit` refuses every request (no implicit tenant). If set, a request whose `tenant_id` does not match is rejected as cross-tenant and audited. Read by `lib/omes/py/jobs/store.py`. |
-| `OMES_JOBS_SERVER_ID` | unset (not checked) | Operator | If set, a request whose `target.server_id` does not match is rejected as cross-tenant and audited. |
+| `OMES_JOBS_TENANT_ID` | unset (default-deny) | Operator | The tenant this OMES instance is enrolled under. If unset, `omes job submit` refuses every request with `tenant_not_configured` (default-deny, no implicit tenant; hosts that submitted jobs without it must now set it). If set, a request whose `tenant_id` does not match is rejected as cross-tenant (`cross_tenant_rejected`). Neither rejection is written to the job audit log (no job exists to attach it to). The pull worker (`omes worker`) does not need this variable: it uses the tenant it was enrolled under (`omes worker enroll --tenant`). Read by `lib/omes/py/jobs/store.py`. |
+| `OMES_JOBS_SERVER_ID` | unset (not checked) | Operator | If set, a request whose `target.server_id` does not match is rejected as cross-tenant (not written to the job audit log). |
 | `OMES_JOBS_AUTO_APPROVE` | `preflight,status,backup` | Operator | Comma-separated allowlist of operation names that `omes job run` may auto-approve from `queued` without an explicit `omes job approve`. A destructive operation (`restore`, `rollback`, `stop`, `configure`) is never auto-approvable regardless of this list. |
 | `OMES_JOBS_TTL_SECONDS` | `3600` | Operator | Age (from `created_at`) after which `omes job expire` moves a `queued`/`approved` job to `expired`. |
+| `OMES_JOBS_ORPHAN_LEGACY_SECONDS` | `3600` | Operator | Minimum age (from `updated_at`) before `omes job reconcile` treats a `running` job that has no recorded runner identity (written before #271) as an orphan candidate. Jobs with runner identity are judged by boot id and pid, not by age. |
 | `OMES_JOBS_TIMEOUT_SECONDS` | `120` | Operator | Per-command timeout for both the operation's execution and its read-back verification. A timeout is never reported as success. |
 | `OMES_JOBS_TEST_MODE` | unset | Test-only | Must be `1` for `OMES_JOBS_TEST_ARGV_OVERRIDE` to have any effect; a stray override env var alone never redirects real execution. |
 | `OMES_JOBS_TEST_ARGV_OVERRIDE` | unset | Test-only | A JSON array replacing the argv `omes job run` would otherwise execute, used by `tests/py/jobs/test_runner.py` to exercise the timeout path deterministically. Never set in a production deployment. |
 
-## 24. Reserved but not read by any code path yet
+## 24. `omes health inference-endpoint` / `lib/omes/py/health/inference_endpoint.py` (issue #292)
+
+Read-only evidence for an already-configured local/private OpenAI-compatible inference endpoint; see
+[docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks) and
+[docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md). None of these variables holds a
+secret: the endpoint is a non-secret reference (a URL carrying credentials is rejected and redacted, never used), OMES
+reads no token or API key for this command, and nothing is read from Hermes configuration or private stores.
+
+| Variable | Flag equivalent | Default | Kind | Meaning |
+|---|---|---|---|---|
+| `OMES_INFERENCE_ENDPOINT` | `--endpoint <url>` | unset | Operator | Base URL `http(s)://host[:port][/prefix]` of the endpoint to observe. Unset means `not_applicable` (nothing is guessed or discovered). Userinfo, query strings and fragments are rejected. Prefer the variable over the flag: argv is visible to other local users. |
+| `OMES_INFERENCE_MODEL` | `--model <id>` | unset | Operator | Model id that must be advertised by `GET /v1/models` (exact match). Unset means model availability is `unknown`, so the result is never ready. |
+| `OMES_INFERENCE_ENDPOINT_SCOPE` | `--scope <loopback\|private>` | `private` | Operator | Allowed destination scope. `private` allows loopback plus RFC 1918/IPv6 ULA; `loopback` allows loopback only. Public, link-local (including instance metadata), multicast, unspecified, shared/CGNAT and reserved addresses are always refused; there is no override. |
+| `OMES_INFERENCE_CA_FILE` | `--ca-file <path>` | unset (system trust store) | Operator | PEM CA bundle used to verify an `https` private endpoint's certificate. Certificate and host name verification can never be disabled. |
+| `OMES_HEALTH_TIMEOUT` | — | `10` (seconds) | Operator | Shared with `omes health agent\|gateway\|ollama`. For this command it is the total deadline for DNS, connect, TLS and the single request (clamped to 0.1 to 30 seconds). |
+
+## 25. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 

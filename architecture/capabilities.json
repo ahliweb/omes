@@ -170,6 +170,46 @@
       ]
     },
     {
+      "capability_id": "hermes.agent.delegation",
+      "title": "Hermes Subagent Delegation (delegate_task, orchestrator/leaf roles, concurrency and depth limits)",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.24",
+      "observed_upstream_revision": "v2026.9.24",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "plane": "agent_runtime",
+      "execution_semantics": "probabilistic",
+      "implementation_status": "delegated_upstream",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/delegation.md"
+      ]
+    },
+    {
+      "capability_id": "hermes.agent.acp_server",
+      "title": "Hermes Agent Client Protocol (ACP) Server for Editor Integration",
+      "authority": "hermes",
+      "upstream_project": "NousResearch/hermes-agent",
+      "supported_baseline": "v2026.9.24",
+      "observed_upstream_revision": "v2026.9.24",
+      "maturity": "released_supported",
+      "disposition": "delegate",
+      "plane": "agent_runtime",
+      "execution_semantics": "deterministic",
+      "implementation_status": "delegated_upstream",
+      "omes_module": null,
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/NousResearch/hermes-agent/blob/v2026.9.24/website/docs/user-guide/features/acp.md"
+      ]
+    },
+    {
       "capability_id": "omarchy.release.channels",
       "title": "Omarchy Release Channel Update Specification",
       "authority": "omarchy",
@@ -296,8 +336,8 @@
       "title": "Graphify Codebase Knowledge Graph Extraction",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_supported",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -308,7 +348,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -316,8 +356,8 @@
       "title": "Graphify MCP Server and Hermes Skill Integration",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_supported",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -328,7 +368,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -336,8 +376,8 @@
       "title": "Graphify Upstream Hermes Skill Installer",
       "authority": "graphify",
       "upstream_project": "graphify",
-      "supported_baseline": "0.9.71",
-      "observed_upstream_revision": "0.9.71",
+      "supported_baseline": "0.9.87",
+      "observed_upstream_revision": "0.9.87",
       "maturity": "released_unverified",
       "disposition": "delegate",
       "plane": "tool_data",
@@ -348,7 +388,7 @@
       "adr_reference": "ADR-0025",
       "removal_trigger": null,
       "evidence_urls": [
-        "https://pypi.org/project/graphifyy/0.9.71/"
+        "https://pypi.org/project/graphifyy/0.9.87/"
       ]
     },
     {
@@ -496,8 +536,8 @@
       "title": "Coolify Optional Deployment Adapter",
       "authority": "omes",
       "upstream_project": "coollabsio/coolify",
-      "supported_baseline": "v4.3.23",
-      "observed_upstream_revision": "v4.3.23",
+      "supported_baseline": "v4.4.6",
+      "observed_upstream_revision": "v4.4.6",
       "maturity": "released_supported",
       "disposition": "defer",
       "plane": "host_control",
@@ -509,8 +549,8 @@
       "removal_trigger": null,
       "evidence_urls": [
         "https://github.com/coollabsio/coolify",
-        "https://github.com/coollabsio/coolify/releases/tag/v4.3.23",
-        "https://github.com/coollabsio/coolify/compare/v4.0.0...v4.3.23"
+        "https://github.com/coollabsio/coolify/releases/tag/v4.4.6",
+        "https://github.com/coollabsio/coolify/compare/v4.3.23...v4.4.6"
       ]
     },
     {
@@ -784,6 +824,27 @@
       ]
     },
     {
+      "capability_id": "omes.health.inference_endpoint_evidence",
+      "title": "OMES Read-Only Inference Endpoint Evidence (loopback/private OpenAI-compatible endpoints, metadata GET only)",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": null,
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "plane": "observability",
+      "execution_semantics": "observational",
+      "implementation_status": "implemented",
+      "omes_module": "health",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0029",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/docs/ai-inference-serving-architecture.md",
+        "https://github.com/ahliweb/omes/issues/292"
+      ]
+    },
+    {
       "capability_id": "boundary.tool_gateway.mcp",
       "title": "MCP / API / tool integration boundary (logical)",
       "authority": "hermes",
@@ -864,6 +925,27 @@
       "evidence_urls": [
         "https://github.com/ahliweb/omes/blob/main/docs/security.md",
         "https://documentation.wazuh.com/current/index.html"
+      ]
+    },
+    {
+      "capability_id": "omes.observability.correlation_envelope",
+      "title": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "authority": "omes",
+      "upstream_project": "ahliweb/omes",
+      "supported_baseline": "unreleased-main",
+      "observed_upstream_revision": "main",
+      "maturity": "released_unverified",
+      "disposition": "adapt",
+      "plane": "observability",
+      "execution_semantics": "observational",
+      "implementation_status": "implemented",
+      "omes_module": "observability",
+      "duplication_allowed": false,
+      "adr_reference": "ADR-0032",
+      "removal_trigger": null,
+      "evidence_urls": [
+        "https://github.com/ahliweb/omes/blob/main/contracts/observability/v1/correlation-envelope.schema.json",
+        "https://github.com/ahliweb/omes/issues/272"
       ]
     }
   ]

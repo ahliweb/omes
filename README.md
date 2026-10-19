@@ -44,6 +44,8 @@ for the known limitations that remain even where the code is implemented.
 
 ## Architecture and roadmap
 
+For the planned **provider-neutral AI inference-serving boundary**, see [Inference-serving architecture](docs/ai-inference-serving-architecture.md) (#291). **vLLM is not implemented (deferred #289), Kubernetes/OpenShift is not implemented (deferred #290)**; generic read-only inference endpoint observation is implemented in phase 1 as `omes health inference-endpoint` (#292; the opt-in active capability probe is Not implemented yet (tracked in #292)). Existing Hermes model/provider routing and OMES host lifecycle remain the only authorities for their respective planes.
+
 OMES is deliberately layered rather than a second agent runtime:
 
 - **OMES** owns host compatibility, preflight, installation, service lifecycle,
@@ -221,9 +223,13 @@ repository tree.
 OMES_MATRIX_IMAGES="ubuntu:24.04" ./scripts/test-matrix.sh   # a single image
 ```
 
+`./scripts/ci-local.sh` runs every CI job locally (no GitHub Actions needed) and
+prints a summary for the pull request description; it is the required per-PR check.
+
 See [docs/testing.md](docs/testing.md) for the full test pyramid and
-[docs/ci.md](docs/ci.md) for what runs in CI, what blocks a PR, and how to
-run every CI check locally.
+[docs/ci.md](docs/ci.md) for the CI jobs, what blocks a PR versus what is advisory,
+why the GitHub Actions workflows run only on manual dispatch, and how to run every
+CI check locally.
 
 ## Contributing
 

@@ -189,6 +189,12 @@ These gates map directly to the QA/security issues that produce the evidence:
 | Telegram allowlist behavior proven | Test asserts unauthorized users/groups are rejected and authorized ones are served, in both directions (see hermes-telegram-bot lessons: verify allowlisted groups still serve unknown *users* correctly) | #13, #15 |
 | Known limitations published | This document and `docs/threat-model.md` are current and linked from the release notes | #5, #18 |
 
+Where a row above names a CI job, the job is the one in `.github/workflows/`. Since issue
+[#312](https://github.com/ahliweb/omes/issues/312) those workflows run only on manual dispatch,
+so the evidence is a workflow run dispatched on the release commit or the summary of
+`scripts/ci-local.sh` for it ([docs/ci.md](ci.md) sections 1 and 10); a local summary is
+self-reported and is not enforced by GitHub.
+
 ## 8. Control Center and provider integration security
 
 The web Control Center and provider adapters are **not implemented in the current CLI branch**. The OMES-side control job runner (`omes job`, issue [#90](https://github.com/ahliweb/omes/issues/90), `lib/omes/py/jobs/`) IS implemented and already enforces several of the bullets below locally — see [docs/jobs.md](jobs.md) for what it does today. When issues [#89](https://github.com/ahliweb/omes/issues/89)–[#102](https://github.com/ahliweb/omes/issues/102) are fully implemented (including the Control Center itself and a transport), the following are release requirements:
@@ -213,7 +219,7 @@ See [docs/control-center-and-integrations.md](control-center-and-integrations.md
 | Contract schema validation fails closed on unsupported keywords (`$ref`, `format`, `if`/`then`, etc.) with `SchemaError`; annotations are explicitly allowlisted; raw-secret detection operates independently | `lib/omes/py/jobs/schema.py`, `lib/omes/py/agent/jsonschema_lite.py`, `scripts/check-contracts.py` (#172) |
 | Idempotent submission; a replay never re-executes | `lib/omes/py/jobs/store.py`'s `submit()`, `idempotency.json` index |
 | Destructive operations (`restore`, `rollback`, `stop`, `configure`) require explicit approval | `lib/omes/py/jobs/store.py`'s `is_destructive()`/`can_auto_approve()`, enforced in `runner.run()` |
-| Cross-tenant/cross-target rejection, audited | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks |
+| Default-deny tenant scope (unset `OMES_JOBS_TENANT_ID` refuses every submission) and cross-tenant/cross-target rejection, before any state is written (the rejection itself is not in the job audit log) | `store.submit()`'s `OMES_JOBS_TENANT_ID`/`OMES_JOBS_SERVER_ID` checks; the pull worker passes its enrolled tenant |
 | Append-only, hash-chained audit log | `lib/omes/py/jobs/audit.py` (`append()`/`verify_chain()`) |
 | Redacted logs and capped command-output tails, with a bounded-backtracking redaction regex (fixed during #90's own test suite — see docs/threat-model.md T40) | `lib/omes/py/jobs/audit.py`'s `redact_structure()`/`capped_redacted_tail()` |
 | Read-back verification; a timeout is never reported as success | `lib/omes/py/jobs/runner.py`'s `_compare_desired_observed()` |
@@ -368,6 +374,34 @@ document is never evidence that a different plane's guardrail has been satisfied
 particular, **OMES does not mediate all Hermes-native tool execution** — a user or operator reaching
 Hermes through a Hermes-owned channel bypasses both AWCMS and OMES entirely, and no control in this
 document changes that.
+
+### 8.9 Inference endpoint observation controls (issue #292)
+
+`omes health inference-endpoint` ([docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks),
+[docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md)) is a read-only preflight
+observation of an operator-configured, non-secret endpoint reference. It is not an inference gateway, does not
+select or route a provider (Hermes remains authoritative, ADR-0017/ADR-0029), reads no credential and no Hermes
+private store, and an active prompt/tool probe is **Not implemented yet (tracked in #292)**. The controls below are
+all implemented and tested in `tests/py/health/test_inference_endpoint.py`; threats are AI-09 to AI-14 in
+[docs/threat-model.md §5.x](threat-model.md#5x-ai-model-and-data-egress-threat-delta-issue-213).
+
+| Control | Implemented in |
+|---|---|
+| Endpoint grammar allowlist: `http`/`https` only; userinfo, query, fragment, control characters/CRLF, non-ASCII and numeric-encoded hosts are rejected; a rejected value is printed as `[REDACTED]`, never echoed | `lib/omes/py/health/endpoint_guard.py` `parse_endpoint()`/`redact_endpoint()` |
+| SSRF policy: resolve once, classify **every** address, allow only loopback (and RFC 1918/ULA with the default `private` scope); public, link-local, instance-metadata, multicast, unspecified, shared/CGNAT, reserved and IPv4-embedding IPv6 forms are refused with no request sent; IPv4-mapped IPv6 is unwrapped; no override exists | `endpoint_guard.py` `classify_ip()`/`resolve_and_vet()` |
+| DNS-rebinding defence: the connection goes only to the vetted address (re-checked via the connected peer); the original name is still sent as `Host`/SNI and verified | `lib/omes/py/health/pinned_http.py` `get()` |
+| Redirects never followed; 3xx is `fail` and the `Location` is not echoed | `pinned_http.py` (http.client never follows), `inference_endpoint.py` `_interpret()` |
+| TLS 1.2+, certificate chain and host name verification always on (private CA via `--ca-file`); no HTTP request is sent over an unverified channel | `pinned_http.py` `make_ssl_context()` |
+| Bounded: one allowlisted `GET /v1/models` (no body, no `Authorization`/`Cookie`, `Accept-Encoding: identity`, proxy variables ignored), 1 MiB response cap enforced while reading, total deadline (default 10 s, max 30 s) enforced by a socket watchdog, so a slow-drip server cannot extend it | `pinned_http.py`, `inference_endpoint.py` |
+| Fail closed: `ready` requires every required layer `pass`; timeout, 401/403 (`auth_required`), 404, 3xx, malformed/oversized/unexpected responses, TLS failure, missing model, clock skew over 300 s and absent evidence are never ready | `inference_endpoint.py` `_overall()`; `model.py` `aggregate()` treats `unknown` as blocking |
+| Evidence freshness: `checked_at` and `freshness.expires_at`; `revalidate()` downgrades stale, future-dated or unparseable evidence to `unknown` | `inference_endpoint.py` `revalidate()` |
+| Redacted, fixed-string remediation; no endpoint, header, body or exception text is interpolated into output | `inference_endpoint.py` `_REMEDIATION` |
+
+Residual limits (documented, not hidden): a `pass` proves a policy-compliant endpoint advertises the model id, not
+that the model can generate, call tools or is the intended weights; OMES does not verify the serving process
+identity, its own authentication posture (an unauthenticated route on a private network is not detected), or model
+provenance beyond the existing `omes audit provenance` evidence; plain `http` to a non-loopback private address is
+permitted but flagged; an operator-trusted private CA is trusted for that endpoint only through the explicit CA file.
 
 ### 8.x Rescue companion cloud-AI route (issue #261)
 

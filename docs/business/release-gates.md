@@ -13,6 +13,34 @@ OMES is an independent, MIT-licensed, Omarchy-inspired compatibility layer and d
 toolkit for Ubuntu Server 26.04 LTS, Ubuntu Server 24.04 LTS, and Linux Mint 22.x, with Hermes Agent as the automation
 layer. It is not the official Omarchy project, and no release gate below waives that.
 
+**How CI evidence is produced (issue #312).** The GitHub Actions workflows run only on manual
+`workflow_dispatch`; they no longer run on pull requests, pushes or a schedule. Where a gate
+below cites "CI", the evidence is either a workflow run dispatched on the exact release commit
+(`gh workflow run lint.yml --ref <branch>`, `gh workflow run compatibility.yml --ref <branch>`)
+or the summary printed by `scripts/ci-local.sh` (`--profile full` for the compatibility
+matrix) for that commit. Local summaries are self-reported, not enforced by GitHub, so a gate
+reviewer should prefer the dispatched run for a release commit.
+
+**`scripts/release.sh` enforces this evidence and fails closed (issue #315).** It refuses to cut
+a release unless the commit being released has acceptable evidence for EVERY blocking job from
+at least one of two sources: (1) completed, successful GitHub Actions check runs for every
+blocking `lint.yml` and `compatibility.yml` job (a missing, failed, cancelled or still-running
+required job is no evidence; advisory jobs are not required; the GitGuardian App's automatic check
+run is not a substitute), or (2) a local evidence file
+produced by `scripts/ci-local.sh --profile full --json` on that exact commit (clean tree,
+non-shallow clone, result `pass`, every blocking job including the matrix and real-install jobs
+passed, timestamp not in the future; default `.omes-ci/ci-local-<sha>.json`, or
+`--ci-evidence PATH`). Whichever source is used, a completed check run on the release commit
+with conclusion `failure`, `timed_out` or `action_required` blocks the release regardless of app
+or whether its job is required (a failing GitGuardian run means a leaked secret, and a red check
+contradicts local evidence); a failing advisory Actions job is the only exception, and a
+still-running non-required run only warns. Zero check runs is never a pass, and a missing `gh` does not skip the gate:
+only the local evidence file can pass without it. The local file is self-reported, bound to the
+commit SHA and not enforced by GitHub. `--skip-ci-check` is an explicit operator opt-out, never
+the default: it prints a warning and is recorded in the tag message and the GitHub Release
+notes, so a release cut without CI evidence is visible as such, and a gate reviewer must treat
+such a release as not having passed the CI gates below. See [docs/ci.md](../ci.md) sections 1 and 8.1.
+
 ## 1. Release stages
 
 ### 1.1 Alpha
@@ -36,8 +64,10 @@ layer. It is not the official Omarchy project, and no release gate below waives 
   confirmation (`--yes`), and unsupported-platform detection (exit 3) happens before any
   mutation, proven jointly by #15 and #17.
 - Release provenance and commit integrity: release cut via `scripts/release.sh` (#168) from clean
-  `main` with green CI checks, matching VERSION/changelog/tag, and verified read-back of git tag
-  and GitHub Release.
+  `main` with CI evidence for every blocking job on that commit (dispatched workflow runs or a
+  `scripts/ci-local.sh --profile full` evidence file, enforced by the fail-closed gate described in
+  "How CI evidence is produced" above), matching VERSION/changelog/tag, and verified read-back of git tag and
+  GitHub Release.
 - Release evidence bundle verified: SLSA provenance, SBOM, compatibility evidence, recovery evidence, security checks, and SHA256SUMS generated via `scripts/generate-release-bundle.py` and verified via `scripts/verify-release-bundle.py` (#173, ADR-0010). Missing evidence cannot be rendered as PASS; BLOCKED or NOT TESTED is required.
 - Upstream drift review clean or triaged: `python3 scripts/upstream-drift.py --check` passes or all actionable findings have tracked issues with documented disposition decisions (ADR-0026, #181).
 - Docs walkthrough by a second operator: someone other than ahliweb follows the published

@@ -32,8 +32,15 @@ class RunnerTestBase(unittest.TestCase):
         self._tmp = tempfile.mkdtemp(prefix="omes-jobs-runner-test-")
         self.root = Path(self._tmp) / "state"
         store.paths.ensure_layout(self.root)
+        # submit() is default-deny without a local tenant (issue #279).
+        self._saved_tenant = os.environ.get("OMES_JOBS_TENANT_ID")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
 
     def tearDown(self):
+        if self._saved_tenant is None:
+            os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        else:
+            os.environ["OMES_JOBS_TENANT_ID"] = self._saved_tenant
         shutil.rmtree(self._tmp, ignore_errors=True)
 
 
