@@ -1188,6 +1188,14 @@ sanitized Control Center projection ([#217](https://github.com/ahliweb/omes/issu
 [lib/omes/py/privacy/posture_projection.py](../lib/omes/py/privacy/posture_projection.py)).
 Security regression gates are implemented ([#218](https://github.com/ahliweb/omes/issues/218),
 closed; commit `ce44b0a`, PR #231; see `tests/py/privacy/test_privacy_boundary_regression.py`).
+Read-only, provider-neutral evidence for an already-configured local/private OpenAI-compatible
+inference endpoint is implemented in phase 1 as `omes health inference-endpoint`
+([#292](https://github.com/ahliweb/omes/issues/292); capability
+`omes.health.inference_endpoint_evidence`, observability plane, authority `omes`; see
+[lib/omes/py/health/inference_endpoint.py](../lib/omes/py/health/inference_endpoint.py) and
+[docs/ai-inference-serving-architecture.md §3.1](ai-inference-serving-architecture.md)): it extends the
+existing health layer model, sends one metadata `GET`, never configures or routes a Hermes provider,
+and its opt-in active synthetic probe is Not implemented yet (tracked in #292).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).
 
@@ -1465,12 +1473,12 @@ The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native to
 | Coordinator/worker delegation and model tiering | Hermes | Delegated upstream; per-task model parameter absent at the pinned baseline (separate Hermes profiles per worker tier is the ADAPT path; OMES does not route models). Read-only configured-limits posture check implemented as `omes health agent-runtime` ([#270](https://github.com/ahliweb/omes/issues/270)); it reports configured, not effective, values |
 | Agent-run durability and restart (`unknown`) | Hermes | Delegated upstream; the OMES observer consumes `UNKNOWN` as terminal non-success (#271, implemented) |
 | Orphaned host-job reconciliation | OMES | Implemented (#271): `omes job reconcile`, executor identity instead of a lease; confirmed cancellation of running jobs and automatic invocation not implemented (cancellation tracked in [#271](https://github.com/ahliweb/omes/issues/271)) |
-| Cross-plane correlation/trace envelope | OMES contract (observability plane) | Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)) |
+| Cross-plane correlation/trace envelope | OMES contract (observability plane) | Contract, validator and deterministic convergence reducer implemented (`contracts/observability/v1/correlation-envelope.schema.json`, `lib/omes/py/observability/envelope.py`, capability `omes.observability.correlation_envelope`); evidence only, never authority. Propagation through AWCMS, job and worker flows and producer wiring: Not implemented yet (tracked in [#272](https://github.com/ahliweb/omes/issues/272)) |
 | ACP (inbound) | Hermes | Delegated upstream (`hermes acp`); posture evidence not implemented yet (tracked in [#273](https://github.com/ahliweb/omes/issues/273)) |
 | ACP (outbound client) | Hermes | Deferred to upstream proposal [hermes-agent#5257](https://github.com/NousResearch/hermes-agent/issues/5257) |
 | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | Not implemented yet (tracked in [#274](https://github.com/ahliweb/omes/issues/274)) |
 | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
-| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; drift and egress verification not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
+| Workload isolation verification | OMES/infrastructure (OS); Hermes (logical) | Hardening and rootless Compose implemented; compose `egress: "none"` and the read-only `omes agent isolation-drift` declared-versus-running check implemented (shim-tested). Per-destination egress allowlist, runtime egress probe and real rootless-daemon evidence not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)) |
 | Mission Control projection | AWCMS | Not implemented yet (tracked in [#277](https://github.com/ahliweb/omes/issues/277)) |
 
 Threats for these patterns are recorded as `MA-01`..`MA-11` in [docs/threat-model.md](threat-model.md). Standards references in ADR-0032 are alignment only; no compliance or certification is claimed.

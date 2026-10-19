@@ -165,14 +165,25 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     """Reconciles orphaned `running` jobs (issue #271). Exit 0 when the
     reconciliation itself completed - including when it moved a job to
     `failed` (that is the safe, intended outcome for an unverifiable run);
-    exit 1 for an unknown job or a job outside the local tenant/server scope."""
+    exit 1 for an unknown job, a job outside the local tenant/server scope, or
+    no configured local tenant (default-deny, #318; same `tenant_not_configured`
+    / `cross_tenant_rejected` JSON errors as `submit`)."""
     try:
         result = reconcile.reconcile(job_id=args.job, actor=args.actor)
     except store.UnknownJobError:
         print(f"error: unknown job {args.job}", file=sys.stderr)
         return EX_ERROR
+    except store.TenantNotConfiguredError as exc:
+        if args.json:
+            _print_json({"error": "tenant_not_configured", "reason": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
     except store.CrossTenantError as exc:
-        print(f"error: {exc}", file=sys.stderr)
+        if args.json:
+            _print_json({"error": "cross_tenant_rejected", "reason": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
     if args.json:
         # stdout stays machine-readable; human-oriented logs go to stderr.

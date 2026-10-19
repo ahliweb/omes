@@ -490,12 +490,61 @@ EOF
   [[ "$output" != *"stub check-links"* ]]
 }
 
+@test "--list --json names the GitHub check run of every workflow job (the release CI gate matches on it, #315)" {
+  ci --list --json --profile full
+  [ "$status" -eq 0 ]
+  run python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+by = {j["name"]: j for j in d["jobs"]}
+assert by["workflow-sync"]["check_name"] is None
+assert by["shellcheck"]["check_name"] == "ShellCheck (severity=warning blocks, style is advisory)"
+assert by["actionlint"]["check_name"] == "actionlint"
+assert by["matrix:ubuntu:24.04"]["check_name"] == "ubuntu:24.04 (tier 1)"
+assert by["matrix:ubuntu:22.04"]["check_name"] == "ubuntu:22.04 (tier 2)"
+assert by["matrix:ubuntu:22.04"]["blocking"] is False
+assert by["real-install-ubuntu-24-04"]["check_name"] == "Real install + idempotency (ubuntu:24.04, root, apt-base)"
+assert by["graphify-real-smoke"]["check_name"].startswith("Graphify real smoke")
+for j in d["jobs"]:
+    assert "check_name" in j and (j["check_name"] is None or "${{" not in j["check_name"]), j
+' <<<"$output"
+  [ "$status" -eq 0 ]
+}
+
+@test "a job without a name: is listed under its workflow job id, as GitHub names its check run" {
+  mkdir -p "${OMES_TEST_TMPDIR}/wf"
+  cp "${FAKE_REPO}/.github/workflows/"*.yml "${OMES_TEST_TMPDIR}/wf/"
+  sed -i "/^    name: Relative Markdown link check$/d" "${OMES_TEST_TMPDIR}/wf/lint.yml"
+  OMES_CI_WORKFLOWS_DIR="${OMES_TEST_TMPDIR}/wf" ci --list --json
+  [ "$status" -eq 0 ]
+  run python3 -c '
+import json, sys
+d = json.loads(sys.stdin.read())
+print({j["name"]: j["check_name"] for j in d["jobs"]}["check-links"])
+' <<<"$output"
+  [ "$status" -eq 0 ]
+  [ "$output" = "check-links" ]
+}
+
+@test "the JSON summary carries a UTC generated_at timestamp (evidence freshness for scripts/release.sh, #315)" {
+  ci --job check-links --json
+  [ "$status" -eq 0 ]
+  run python3 -c '
+import datetime, json, re, sys
+d = json.loads(sys.stdin.read())
+assert re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", d["generated_at"]), d["generated_at"]
+when = datetime.datetime.strptime(d["generated_at"], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+assert abs((datetime.datetime.now(datetime.timezone.utc) - when).total_seconds()) < 120
+' <<<"$output"
+  [ "$status" -eq 0 ]
+}
+
 @test "the JSON summary has the documented shape" {
   ci --job check-links --job actionlint --json
   run python3 -c '
 import json, sys
 d = json.loads(sys.stdin.read())
-for k in ("schema", "result", "exit_code", "profile", "fail_fast", "duration_seconds", "git", "mirror",
+for k in ("schema", "result", "exit_code", "generated_at", "profile", "fail_fast", "duration_seconds", "git", "mirror",
           "extra_ca", "proxy_variables_passed", "counts", "jobs"):
     assert k in d, k
 assert d["profile"] == "custom"

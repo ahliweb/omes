@@ -309,5 +309,100 @@ class TestTopologyValidation(unittest.TestCase):
         self.assertTrue(any("topology" in e for e in errors))
 
 
+class TestEgressControl(unittest.TestCase):
+    """Per-deployment egress mode (issue #276)."""
+
+    def setUp(self):
+        self.manifest = _load_fixture("valid-compose-generic.json")
+        # The generic fixture publishes a loopback port, which is
+        # incompatible with egress "none"; tests that need "none" drop it.
+        self.no_ports = copy.deepcopy(self.manifest)
+        del self.no_ports["spec"]["compose"]["ports"]
+
+    def test_default_renders_open_network_unchanged(self):
+        plan = compose.build_plan(self.manifest)
+        self.assertEqual(plan["egress"], "open")
+        rendered = compose.render_compose_yaml(plan)
+        self.assertIn("    driver: bridge\n    internal: false\n", rendered)
+        self.assertNotIn("internal: true", rendered)
+
+    def test_explicit_open_renders_identically_to_default(self):
+        explicit = copy.deepcopy(self.manifest)
+        explicit["spec"]["compose"]["egress"] = "open"
+        self.assertEqual(
+            compose.render_compose_yaml(compose.build_plan(explicit)),
+            compose.render_compose_yaml(compose.build_plan(self.manifest)),
+        )
+
+    def test_none_renders_internal_network(self):
+        data = copy.deepcopy(self.no_ports)
+        data["spec"]["compose"]["egress"] = "none"
+        plan = compose.build_plan(data)
+        self.assertEqual(plan["egress"], "none")
+        rendered = compose.render_compose_yaml(plan)
+        self.assertIn("    driver: bridge\n    internal: true\n", rendered)
+        self.assertNotIn("internal: false", rendered)
+        self.assertEqual(compose.plan_summary(plan)["egress"], "none")
+
+    def test_none_changes_only_the_internal_flag(self):
+        data = copy.deepcopy(self.no_ports)
+        open_yaml = compose.render_compose_yaml(compose.build_plan(data))
+        data["spec"]["compose"]["egress"] = "none"
+        none_yaml = compose.render_compose_yaml(compose.build_plan(data))
+        self.assertEqual(open_yaml.replace("internal: false", "internal: true"), none_yaml)
+
+    def test_invalid_egress_rejected_by_schema(self):
+        data = copy.deepcopy(self.manifest)
+        data["spec"]["compose"]["egress"] = "allowlist"
+        errors = manifest.validate(data, OMES_ROOT)
+        self.assertTrue(any("egress" in e for e in errors), errors)
+
+    def test_invalid_egress_rejected_by_semantic_validation(self):
+        errors = compose.validate_compose_spec(
+            {"image": f"registry.example.com/x@{VALID_DIGEST}", "user": "1000:1000", "egress": "allowlist"}, "worker"
+        )
+        self.assertTrue(any("spec.compose.egress" in e for e in errors), errors)
+
+    def test_valid_egress_values_accepted(self):
+        for value in ("open", "none"):
+            errors = compose.validate_compose_spec(
+                {"image": f"registry.example.com/x@{VALID_DIGEST}", "user": "1000:1000", "egress": value}, "worker"
+            )
+            self.assertEqual(errors, [], value)
+
+    def test_none_with_ports_rejected(self):
+        data = copy.deepcopy(self.manifest)  # fixture publishes 127.0.0.1:8081:8080
+        data["spec"]["compose"]["egress"] = "none"
+        errors = manifest.validate(data, OMES_ROOT)
+        self.assertTrue(any("cannot be combined with spec.compose.ports" in e for e in errors), errors)
+
+    def test_none_manifest_validates_without_ports(self):
+        data = copy.deepcopy(self.no_ports)
+        data["spec"]["compose"]["egress"] = "none"
+        self.assertEqual(manifest.validate(data, OMES_ROOT), [])
+
+    def test_v2_manifest_egress_none(self):
+        v2 = OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment"
+        data = json.loads((v2 / "valid-compose-egress-none.json").read_text(encoding="utf-8"))
+        self.assertEqual(manifest.validate(data, OMES_ROOT), [])
+        plan = compose.build_plan(data)
+        self.assertEqual(plan["egress"], "none")
+        self.assertIn("internal: true", compose.render_compose_yaml(plan))
+
+    def test_v2_manifest_unknown_egress_rejected(self):
+        v2 = OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment"
+        data = json.loads((v2 / "invalid-compose-egress-unknown.json").read_text(encoding="utf-8"))
+        self.assertTrue(manifest.validate(data, OMES_ROOT))
+
+    def test_existing_refusals_unchanged_with_egress_none(self):
+        data = copy.deepcopy(self.no_ports)
+        data["spec"]["compose"]["egress"] = "none"
+        data["spec"]["compose"]["volumes"] = [
+            {"hostPath": "/var/run/docker.sock", "containerPath": "/var/run/docker.sock"}
+        ]
+        errors = manifest.validate(data, OMES_ROOT)
+        self.assertTrue(any("Docker socket" in e for e in errors), errors)
+
+
 if __name__ == "__main__":
     unittest.main()
