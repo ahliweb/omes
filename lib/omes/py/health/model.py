@@ -21,6 +21,12 @@ SIGNAL_NAMES = ("enabled", "active", "reachable", "ready", "connected")
 STATUS_PASS = "pass"
 STATUS_FAIL = "fail"
 STATUS_NOT_APPLICABLE = "not_applicable"
+# Issue #292: "evidence is absent, ambiguous, or could not be obtained"
+# (timeout, auth required, clock skew, nothing configured to prove). It is
+# deliberately NOT a pass: aggregate() treats it as blocking readiness.
+# Only the inference-endpoint evidence layers (inference_endpoint.py) emit
+# it today; the Hermes layers still use pass|fail|not_applicable.
+STATUS_UNKNOWN = "unknown"
 
 AUTHORITY_HERMES = "hermes"
 AUTHORITY_OMES_HOST = "omes-host"
@@ -37,6 +43,8 @@ def layer_result(
     source: str = "omes",
     compatibility_fallback: bool = False,
     removal_trigger: Optional[str] = None,
+    reason: Optional[str] = None,
+    checked_at: Optional[str] = None,
 ) -> dict:
     """Builds one layer's result object. `signals` maps a subset of
     SIGNAL_NAMES to True/False/None (None = not evaluated for this
@@ -50,6 +58,12 @@ def layer_result(
     issue #178). If a fallback is used because stable Hermes lacks a
     machine-readable signal, compatibility_fallback is True with an
     explicit removal_trigger.
+
+    `reason` (a stable machine-readable code, e.g. "timeout") and
+    `checked_at` (an RFC 3339 UTC timestamp of the observation) are
+    additive, optional extensions introduced by issue #292; they are
+    omitted from the result when None, so every pre-existing caller's
+    output is byte-for-byte unchanged.
     """
     res = {
         "status": status,
@@ -63,6 +77,10 @@ def layer_result(
     }
     if removal_trigger is not None:
         res["removal_trigger"] = removal_trigger
+    if reason is not None:
+        res["reason"] = reason
+    if checked_at is not None:
+        res["checked_at"] = checked_at
     return res
 
 
@@ -85,18 +103,21 @@ def aggregate(layers: dict) -> tuple:
       them into one boolean (issue #79's explicit requirement to
       distinguish these signals).
     """
+    # STATUS_UNKNOWN (issue #292) blocks exactly like STATUS_FAIL: absent
+    # or ambiguous evidence must never read as ready.
+    blocking = (STATUS_FAIL, STATUS_UNKNOWN)
     ready = True
     for name in ("host", "runtime", "gateway"):
         layer = layers.get(name, {})
-        if layer.get("status") == STATUS_FAIL:
+        if layer.get("status") in blocking:
             ready = False
 
     provider = layers.get("provider", {})
-    if provider.get("status") == STATUS_FAIL:
+    if provider.get("status") in blocking:
         ready = False
 
     channel = layers.get("channel", {})
-    connected = channel.get("status") != STATUS_FAIL
+    connected = channel.get("status") not in blocking
 
     return ready, connected
 

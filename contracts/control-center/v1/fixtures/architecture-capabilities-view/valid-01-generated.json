@@ -292,6 +292,16 @@
     },
     {
       "authority": "omes",
+      "execution_semantics": "observational",
+      "id": "omes.health.inference_endpoint_evidence",
+      "implementation_status": "implemented",
+      "name": "OMES Read-Only Inference Endpoint Evidence (loopback/private OpenAI-compatible endpoints, metadata GET only)",
+      "omes_module": "health",
+      "plane": "observability",
+      "upstream_project": "ahliweb/omes"
+    },
+    {
+      "authority": "omes",
       "execution_semantics": "deterministic",
       "id": "omes.host.backup",
       "implementation_status": "implemented",
@@ -338,6 +348,16 @@
       "name": "OMES Subprocess Job Execution Engine",
       "omes_module": "jobs",
       "plane": "host_control",
+      "upstream_project": "ahliweb/omes"
+    },
+    {
+      "authority": "omes",
+      "execution_semantics": "observational",
+      "id": "omes.observability.correlation_envelope",
+      "implementation_status": "implemented",
+      "name": "OMES Cross-Plane Correlation Evidence Envelope and Convergence",
+      "omes_module": "observability",
+      "plane": "observability",
       "upstream_project": "ahliweb/omes"
     },
     {

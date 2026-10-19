@@ -280,9 +280,25 @@ with `evidence.reconciliation` (orphan reason, classification, previous
 runner identity), and appends one hash-chained `reconciled_orphan` audit
 entry (`from: running`). Reconciliation is idempotent: a second run finds no
 `running` job, executes no command, writes nothing and appends no audit
-entry. Tenant/server scope follows `submit`: with `OMES_JOBS_TENANT_ID` /
-`OMES_JOBS_SERVER_ID` set, a batch run skips (and counts) jobs of another
-tenant/server, and `--job <id>` on such a job is refused.
+entry.
+
+Tenant scope is default-deny and identical to `submit` (issue #318, see §9).
+`reconcile` resolves the local tenant through the same
+`store.resolve_local_tenant()` as `store.submit()`, **before** it loads or
+lists any job. If no local tenant is configured (`OMES_JOBS_TENANT_ID` unset
+or empty, and no enrolled tenant passed by an in-process caller), both the
+batch run and `--job <id>` raise `TenantNotConfiguredError`, and
+`omes job reconcile` exits 1 with `{"error": "tenant_not_configured",
+"reason": ...}` under `--json` (the reason on stderr otherwise). Nothing is
+read back, written, transitioned or audited, and `--job` does not reveal
+whether the id exists (the tenant check comes first). Before #318 an unset
+`OMES_JOBS_TENANT_ID` made a batch run reconcile every `running` job of every
+tenant. With a tenant configured, a batch run skips (and counts in
+`skipped_out_of_scope`) any job whose `tenant_id` differs, and `--job <id>` on
+such a job is refused with `{"error": "cross_tenant_rejected", ...}` and
+exit 1; a record with a missing `tenant_id` never matches.
+`OMES_JOBS_SERVER_ID` stays optional and, when set, applies the same
+skip/refuse rule to `target.server_id`.
 
 Confirmed cancellation of a `running` job (intent versus verified stop) is
 Not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271));
@@ -340,6 +356,22 @@ The pull worker (`omes worker`, issue #192) does not read
 (`omes worker enroll --tenant`, stored in its credentials) to
 `store.submit(enrolled_tenant_id=...)`, so the local check is against the
 enrolled tenant and works on hosts without the variable.
+
+**Effective-tenant precedence (`store.resolve_local_tenant()`).** There is
+one resolver, used by `store.submit()` and by orphan reconciliation
+(`store.assert_record_in_local_scope()` / `reconcile.reconcile()`, issue #318):
+
+1. `enrolled_tenant_id`, when the caller supplies a non-empty one, **wins**
+   over the environment: if both are set and differ, the enrolled tenant is
+   the one enforced and `OMES_JOBS_TENANT_ID` is ignored;
+2. otherwise `OMES_JOBS_TENANT_ID` (an empty string counts as unset);
+3. otherwise `TenantNotConfiguredError` (default-deny), never "any tenant".
+
+`omes job submit` and `omes job reconcile` run in the operator's shell and
+pass no enrolled tenant, so for them the effective tenant is
+`OMES_JOBS_TENANT_ID` alone. The `enrolled_tenant_id` keyword is used by the
+pull worker for `submit` and is accepted by `reconcile.reconcile()` for
+in-process callers that hold enrolled credentials; the CLI has no flag for it.
 
 `OMES_JOBS_SERVER_ID` stays optional: if set, it applies the same
 mismatch check to `target.server_id`; if unset, the target server is not

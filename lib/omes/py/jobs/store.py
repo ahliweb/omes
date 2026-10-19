@@ -194,13 +194,36 @@ def local_server_id() -> str | None:
     return os.environ.get("OMES_JOBS_SERVER_ID") or None
 
 
-def assert_record_in_local_scope(record: dict[str, Any]) -> None:
-    """Same tenant/server scope rule `submit()` applies to a request, applied
-    to an existing job record (used by orphan reconciliation, issue #271): if
-    OMES_JOBS_TENANT_ID / OMES_JOBS_SERVER_ID are set, a record belonging to
-    another tenant or server must not be touched. Raises CrossTenantError."""
-    tenant = local_tenant_id()
-    if tenant is not None and record.get("tenant_id") != tenant:
+def resolve_local_tenant(enrolled_tenant_id: str | None = None, action: str = "submitting jobs") -> str:
+    """The single resolver for the effective local tenant (issues #279, #318).
+
+    Precedence: `enrolled_tenant_id` when the caller has one (the pull worker
+    passes its enrolled credentials' tenant), otherwise OMES_JOBS_TENANT_ID.
+    An unset or empty value of either counts as "not set". If neither
+    yields a tenant this raises TenantNotConfiguredError (default-deny):
+    there is no implicit "any tenant is fine" mode. `action` only words the
+    error message. Used by both `submit()` and `assert_record_in_local_scope()`
+    so the two paths cannot drift."""
+    tenant = enrolled_tenant_id or local_tenant_id()
+    if tenant is None:
+        raise TenantNotConfiguredError(
+            "no local tenant configured: set OMES_JOBS_TENANT_ID (or enroll the "
+            f"pull worker with 'omes worker enroll --tenant') before {action}"
+        )
+    return tenant
+
+
+def assert_record_in_local_scope(record: dict[str, Any], *, enrolled_tenant_id: str | None = None) -> None:
+    """Same default-deny tenant/server scope rule `submit()` applies to a
+    request, applied to an existing job record (used by orphan
+    reconciliation, issues #271/#318). The local tenant comes from
+    `resolve_local_tenant()`: if none is configured this raises
+    TenantNotConfiguredError, and a record whose tenant_id differs from
+    (or is missing next to) the local tenant raises CrossTenantError, so
+    it is never touched. If OMES_JOBS_SERVER_ID is set, a record for
+    another server is refused too."""
+    tenant = resolve_local_tenant(enrolled_tenant_id, action="reconciling jobs")
+    if record.get("tenant_id") != tenant:
         raise CrossTenantError(
             f"job tenant_id={record.get('tenant_id')!r} does not match local tenant {tenant!r}"
         )
@@ -362,12 +385,7 @@ def submit(
     replay lookup, so a rejected request leaves no job record, index
     entry, or audit line. OMES_JOBS_SERVER_ID stays optional: when unset
     the target server is not checked."""
-    tenant = enrolled_tenant_id or local_tenant_id()
-    if tenant is None:
-        raise TenantNotConfiguredError(
-            "no local tenant configured: set OMES_JOBS_TENANT_ID (or enroll the "
-            "pull worker with 'omes worker enroll --tenant') before submitting jobs"
-        )
+    tenant = resolve_local_tenant(enrolled_tenant_id)
     if request["tenant_id"] != tenant:
         raise CrossTenantError(
             f"request tenant_id={request['tenant_id']!r} does not match local tenant {tenant!r}"
