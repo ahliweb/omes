@@ -38,6 +38,15 @@ PORT_RE = re.compile(r"^127\.0\.0\.1:([0-9]{1,5}):([0-9]{1,5})$")
 DEFAULT_CAP_DROP = ["ALL"]
 DEFAULT_READ_ONLY_ROOTFS = True
 
+# Per-deployment egress mode (issue #276). "open" is the long-standing
+# behavior (a plain bridge with outbound access) and stays the default so
+# existing manifests render byte-identically. "none" renders the compose
+# network as `internal: true`: Docker then gives the network no route to
+# the outside world. This is all-or-nothing - there is no per-destination
+# allowlist (Not implemented yet, tracked in #276).
+EGRESS_MODES = ("open", "none")
+DEFAULT_EGRESS = "open"
+
 # Never accepted as a host-side bind mount target, under any path -
 # defence in depth even though the schema does not expose a "privileged"/
 # "pid"/"network_mode" field at all (additionalProperties: false already
@@ -100,6 +109,23 @@ def _validate_network(network: Any) -> List[str]:
     if network in _FORBIDDEN_NETWORK_VALUES:
         errors.append(f"spec.compose.network: {network!r} is not allowed (no host/none network mode)")
     return errors
+
+
+def _validate_egress(egress: Any, ports: Any) -> List[str]:
+    if egress is None:
+        return []
+    if not isinstance(egress, str) or egress not in EGRESS_MODES:
+        return [f"spec.compose.egress: must be one of {list(EGRESS_MODES)!r}"]
+    if egress == "none" and ports:
+        # Docker does not publish host ports for a container attached only
+        # to an internal network, so this combination would be silently
+        # inert. Refuse it instead of rendering something that looks like
+        # it works.
+        return [
+            "spec.compose.egress: 'none' cannot be combined with spec.compose.ports - Docker does "
+            "not publish host ports for a container attached only to an internal network"
+        ]
+    return []
 
 
 def _validate_topology(topology: Any) -> List[str]:
@@ -216,6 +242,7 @@ def validate_compose_spec(compose_spec: Dict[str, Any], agent_name: str) -> List
     errors.extend(_validate_cap_drop(compose_spec.get("capDrop")))
     errors.extend(_validate_volumes(compose_spec.get("volumes"), agent_name))
     errors.extend(_validate_ports(compose_spec.get("ports")))
+    errors.extend(_validate_egress(compose_spec.get("egress"), compose_spec.get("ports")))
     return errors
 
 
@@ -297,6 +324,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         volumes.append({"hostPath": default_data_host_path, "containerPath": "/opt/data", "readOnly": False})
 
     ports = list(compose_spec.get("ports", []))
+    egress = compose_spec.get("egress") or DEFAULT_EGRESS
 
     compose_file = compose_dir / "compose.yaml"
 
@@ -313,6 +341,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "image": compose_spec["image"],
         "project": project,
         "network": network,
+        "egress": egress,
         "user": compose_spec.get("user"),
         "capDrop": cap_drop,
         "readOnlyRootfs": bool(read_only_rootfs),
@@ -347,6 +376,13 @@ def _yaml_str(value: str) -> str:
     defensively so nothing here can break the flat line format."""
     escaped = value.replace("\\", "\\\\").replace('"', '\\"')
     return f'"{escaped}"'
+
+
+def network_is_internal(plan: Dict[str, Any]) -> bool:
+    """True when the plan's egress mode blocks all external egress
+    (`egress: "none"` -> compose `internal: true`). Shared by the renderer
+    and the drift check so both read the declared value from one place."""
+    return plan.get("egress", DEFAULT_EGRESS) == "none"
 
 
 def render_compose_yaml(plan: Dict[str, Any]) -> str:
@@ -400,7 +436,7 @@ def render_compose_yaml(plan: Dict[str, Any]) -> str:
     lines.append("networks:")
     lines.append(f"  {plan['network']}:")
     lines.append("    driver: bridge")
-    lines.append("    internal: false")
+    lines.append(f"    internal: {'true' if network_is_internal(plan) else 'false'}")
 
     return "\n".join(lines) + "\n"
 
@@ -415,6 +451,7 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
         "image": plan["image"],
         "project": plan["project"],
         "network": plan["network"],
+        "egress": plan.get("egress", DEFAULT_EGRESS),
         "user": plan.get("user"),
         "capDrop": plan["capDrop"],
         "readOnlyRootfs": plan["readOnlyRootfs"],
