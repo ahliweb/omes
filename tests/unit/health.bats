@@ -54,3 +54,13 @@ assert isinstance(d['systemd_present'], bool)
   [[ "$output" == *"gateway"* ]]
   [[ "$output" == *"ollama"* ]]
 }
+
+@test "_health_usage documents the inference-endpoint target and keeps the ollama options (issue #292)" {
+  run _health_usage
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"inference-endpoint"* ]]
+  [[ "$output" == *"OMES_INFERENCE_ENDPOINT"* ]]
+  # The pre-existing ollama contract text must be untouched.
+  [[ "$output" == *"Options: --json  --profile <name>  --model <id>"* ]]
+  [[ "$output" == *"ollama: 0 ready, 7 not ready, 4 service missing"* ]]
+}

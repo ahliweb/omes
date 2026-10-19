@@ -283,7 +283,23 @@ The OMES-side control job runner used by a future Control Center (issue
 | `OMES_JOBS_TEST_MODE` | unset | Test-only | Must be `1` for `OMES_JOBS_TEST_ARGV_OVERRIDE` to have any effect; a stray override env var alone never redirects real execution. |
 | `OMES_JOBS_TEST_ARGV_OVERRIDE` | unset | Test-only | A JSON array replacing the argv `omes job run` would otherwise execute, used by `tests/py/jobs/test_runner.py` to exercise the timeout path deterministically. Never set in a production deployment. |
 
-## 24. Reserved but not read by any code path yet
+## 24. `omes health inference-endpoint` / `lib/omes/py/health/inference_endpoint.py` (issue #292)
+
+Read-only evidence for an already-configured local/private OpenAI-compatible inference endpoint; see
+[docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks) and
+[docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md). None of these variables holds a
+secret: the endpoint is a non-secret reference (a URL carrying credentials is rejected and redacted, never used), OMES
+reads no token or API key for this command, and nothing is read from Hermes configuration or private stores.
+
+| Variable | Flag equivalent | Default | Kind | Meaning |
+|---|---|---|---|---|
+| `OMES_INFERENCE_ENDPOINT` | `--endpoint <url>` | unset | Operator | Base URL `http(s)://host[:port][/prefix]` of the endpoint to observe. Unset means `not_applicable` (nothing is guessed or discovered). Userinfo, query strings and fragments are rejected. Prefer the variable over the flag: argv is visible to other local users. |
+| `OMES_INFERENCE_MODEL` | `--model <id>` | unset | Operator | Model id that must be advertised by `GET /v1/models` (exact match). Unset means model availability is `unknown`, so the result is never ready. |
+| `OMES_INFERENCE_ENDPOINT_SCOPE` | `--scope <loopback\|private>` | `private` | Operator | Allowed destination scope. `private` allows loopback plus RFC 1918/IPv6 ULA; `loopback` allows loopback only. Public, link-local (including instance metadata), multicast, unspecified, shared/CGNAT and reserved addresses are always refused; there is no override. |
+| `OMES_INFERENCE_CA_FILE` | `--ca-file <path>` | unset (system trust store) | Operator | PEM CA bundle used to verify an `https` private endpoint's certificate. Certificate and host name verification can never be disabled. |
+| `OMES_HEALTH_TIMEOUT` | — | `10` (seconds) | Operator | Shared with `omes health agent\|gateway\|ollama`. For this command it is the total deadline for DNS, connect, TLS and the single request (clamped to 0.1 to 30 seconds). |
+
+## 25. Reserved but not read by any code path yet
 
 None known as of this writing — every variable above is read somewhere in the tree. If you add a new `OMES_*` variable, add a row here in the same pull request (`CONTRIBUTING.md` §7, docs-accuracy rule).
 

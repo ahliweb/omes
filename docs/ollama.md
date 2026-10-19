@@ -16,6 +16,10 @@ health check: `omes health ollama` and, when Ollama looks configured,
 an advisory `omes doctor` signal via `modules/hermes`'s `module_doctor`
 hook (see [docs/hermes-integration.md](hermes-integration.md)).
 
+For a local or private OpenAI-compatible endpoint that is **not** Ollama, `omes health inference-endpoint` (issue
+[#292](https://github.com/ahliweb/omes/issues/292), see [docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks))
+gives read-only, metadata-only evidence. It complements this checker and does not replace or change it.
+
 ## 2. Install pointer
 
 Follow Ollama's own documentation: <https://docs.ollama.com/linux>. On a

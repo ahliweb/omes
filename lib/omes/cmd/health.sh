@@ -1,5 +1,5 @@
 # shellcheck shell=bash
-# omes-help: layered health checks for Ollama and the Hermes agent/gateway (issues #71, #79)
+# omes-help: layered health checks for Ollama, the Hermes agent/gateway, and read-only inference endpoint evidence (issues #71, #79, #292)
 #
 # lib/omes/cmd/health.sh - `omes health [agent|gateway|ollama]` dispatcher.
 #
@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime] [options]
+Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|inference-endpoint] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -71,6 +71,18 @@ Targets:
             pattern - never a symlink, never anything else in that
             directory. Idempotent; supports --dry-run.
             Options: --json  --dry-run  --max-age-days <N>  --max-count <N>
+  inference-endpoint  Read-only, provider-neutral evidence for an
+            already-configured local/private OpenAI-compatible inference
+            endpoint (issue #292; complements, never replaces, 'ollama'
+            and Hermes provider readiness). One metadata GET /v1/models
+            only: no prompt, no credentials, no redirects followed, public/
+            link-local/metadata destinations refused before any request,
+            TLS always verified. Status pass|fail|not_applicable|unknown;
+            never ready on timeout, 401/403, bad response, missing model
+            or absent evidence. It never configures Hermes' provider.
+            Options: --json  --endpoint <url>  --model <id>
+            --scope <loopback|private>  --ca-file <path>
+            (see docs/cli.md and docs/ai-inference-serving-architecture.md)
 
 Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.md):
   OMES_HEALTH_TIMEOUT           per-probe timeout in seconds (default 10)
@@ -91,12 +103,19 @@ Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.
                                  (see 'omes audit provenance --verify-artifacts', issue #236)
   OMES_AI_PRIVACY_EVIDENCE_MAX_AGE_DAYS   'ai-privacy prune' default max age in days (default 90)
   OMES_AI_PRIVACY_EVIDENCE_MAX_COUNT      'ai-privacy prune' default max record count (default 500)
+  OMES_INFERENCE_ENDPOINT       inference-endpoint: non-secret base URL, e.g. http://127.0.0.1:8000
+                                 (no userinfo/query; unset => not_applicable, never guessed)
+  OMES_INFERENCE_MODEL          inference-endpoint: model id that must be advertised (or --model)
+  OMES_INFERENCE_ENDPOINT_SCOPE inference-endpoint: loopback | private (default private)
+  OMES_INFERENCE_CA_FILE        inference-endpoint: path to a PEM CA bundle for a private https CA
 
 Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4 service missing.
             ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
             ai-privacy prune: 0 ok, 1 a delete failed, 2 usage error (including an
             invalid/out-of-range --max-age-days/--max-count).
             agent-runtime: 0 status is ok/warn, 7 status is unknown.
+            inference-endpoint: 0 status is pass, 7 anything else (fail, unknown or
+            not_applicable - see the JSON status), 2 usage error.
 EOF
 }
 
@@ -846,6 +865,105 @@ _health_run_agent_runtime() {
 # END omes health agent-runtime (issue #270)
 # =============================================================================
 
+# =============================================================================
+# BEGIN omes health inference-endpoint (issue #292) - see
+# docs/ai-inference-serving-architecture.md section 3 and docs/cli.md
+# =============================================================================
+#
+# `omes health inference-endpoint` reports read-only evidence about an
+# already-configured local/private OpenAI-compatible endpoint
+# (lib/omes/py/health/inference_endpoint.py). It sends one metadata GET, no
+# prompt and no credential, and never touches Hermes configuration; the
+# endpoint reference comes only from --endpoint or OMES_INFERENCE_ENDPOINT.
+# This block is self-contained so the ollama/agent/gateway targets above
+# are untouched.
+
+# _health_print_inference_endpoint_human <json>
+# Prints a short summary using only fields the checker already redacted.
+_health_print_inference_endpoint_human() {
+  OMES_HEALTH_JSON="$1" python3 -c '
+import json
+import os
+
+try:
+    d = json.loads(os.environ["OMES_HEALTH_JSON"])
+except ValueError:
+    print("[omes] health inference-endpoint: the checker did not return valid JSON")
+    raise SystemExit(0)
+
+print("[omes] health inference-endpoint: status=%s ready=%s endpoint=%s" % (d.get("status"), d.get("ready"), d.get("endpoint")))
+for name, layer in d.get("layers", {}).items():
+    reason = layer.get("reason")
+    print("[omes]   %-12s %s%s" % (name + ":", layer.get("status", "unknown"), " (%s)" % reason if reason else ""))
+    if layer.get("status") in ("fail", "unknown") and layer.get("remediation"):
+        print("[omes]     remediation: %s" % layer["remediation"])
+print("[omes]   note: a pass proves the model id is advertised by a policy-compliant endpoint, not that it can generate")
+'
+}
+
+# _health_run_inference_endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <s>] [--ca-file <path>]
+_health_run_inference_endpoint() {
+  local -a py_args=()
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      --endpoint | --model | --scope | --ca-file)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health inference-endpoint: $1 requires a value"
+        py_args+=("$1" "$2")
+        shift 2
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health inference-endpoint: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health inference-endpoint: python3 not found (required for lib/omes/py/health/inference_endpoint.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_py_script inference_endpoint.py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health inference-endpoint: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  # stderr is discarded on purpose: the checker's own output is the
+  # redacted evidence; nothing it could print to stderr is safer than that.
+  local output rc=0
+  output="$(python3 "$script" "${py_args[@]+"${py_args[@]}"}" 2>/dev/null)" || rc=$?
+
+  if [[ -z "$output" ]]; then
+    # argparse rejects a bad --scope with exit 2 and no stdout.
+    [[ "$rc" -eq 2 ]] && omes_die "$OMES_EX_USAGE" "health inference-endpoint: invalid arguments (--scope must be 'loopback' or 'private')"
+    log_error "health inference-endpoint: the checker produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  if [[ "$want_json" -eq 1 ]]; then
+    printf '%s\n' "$output"
+  else
+    _health_print_inference_endpoint_human "$output"
+  fi
+
+  exit "$rc"
+}
+# =============================================================================
+# END omes health inference-endpoint (issue #292)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
@@ -870,7 +988,7 @@ cmd_health() {
     return 0
   fi
 
-  # `omes health [agent|gateway|ollama] [options]` (issues #71, #79): the
+  # `omes health [agent|gateway|ollama|inference-endpoint] [options]` (issues #71, #79, #292): the
   # target may appear anywhere among the arguments (docs/cli.md §4.12
   # lets a global flag like --json sit either before or after it, e.g.
   # `omes health --json ollama` vs. `omes health ollama --json`), so scan
@@ -881,7 +999,7 @@ cmd_health() {
   local target="" a
   local -a rest=()
   for a in "$@"; do
-    if [[ -z "$target" ]] && { [[ "$a" == "agent" ]] || [[ "$a" == "gateway" ]] || [[ "$a" == "ollama" ]]; }; then
+    if [[ -z "$target" ]] && { [[ "$a" == "agent" ]] || [[ "$a" == "gateway" ]] || [[ "$a" == "ollama" ]] || [[ "$a" == "inference-endpoint" ]]; }; then
       target="$a"
       continue
     fi
@@ -892,6 +1010,9 @@ cmd_health() {
   case "$target" in
     ollama)
       _health_run_ollama "${rest[@]+"${rest[@]}"}"
+      ;;
+    inference-endpoint)
+      _health_run_inference_endpoint "${rest[@]+"${rest[@]}"}"
       ;;
     agent | gateway)
       _health_run_hermes "$target" "${rest[@]+"${rest[@]}"}"

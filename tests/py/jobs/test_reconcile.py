@@ -557,6 +557,221 @@ class TestReconcileScope(ReconcileTestBase):
         self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "queued")
 
 
+class TenantDefaultDenyBase(ReconcileTestBase):
+    """Issue #318: reconcile is default-deny when no local tenant is
+    configured, exactly like store.submit() (#279)."""
+
+    def snapshot(self) -> dict[str, bytes]:
+        return {str(p.relative_to(self.root)): p.read_bytes() for p in sorted(self.root.rglob("*")) if p.is_file()}
+
+    def audit_lines(self) -> list[dict]:
+        # Tolerates a missing audit log: "no audit file" and "no new entries" are both "nothing appended".
+        if not store.paths.audit_log_path(self.root).exists():
+            return []
+        return super().audit_lines()
+
+    def seed_orphan(self, key="idem-318-1", **overrides) -> dict:
+        return self.make_running(runner=runner_info(), key=key, **overrides)
+
+
+class TestReconcileTenantDefaultDeny(TenantDefaultDenyBase):
+    def assert_refused_untouched(self, call, exc_type=store.TenantNotConfiguredError):
+        before = self.snapshot()
+        audit_before = self.audit_lines()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            with self.assertRaises(exc_type):
+                call()
+        run_argv.assert_not_called()  # no read-back command was executed
+        self.assertEqual(self.snapshot(), before)  # no file created, changed or removed
+        self.assertEqual(self.audit_lines(), audit_before)  # no audit entry appended
+
+    def test_batch_refused_when_tenant_unset(self):
+        record = self.seed_orphan()
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root))
+        self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "running")
+
+    def test_batch_refused_when_tenant_empty_string(self):
+        record = self.seed_orphan()
+        os.environ["OMES_JOBS_TENANT_ID"] = ""
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root))
+        self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "running")
+
+    def test_job_refused_when_tenant_unset(self):
+        record = self.seed_orphan()
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root, job_id=record["job_id"]))
+
+    def test_job_refused_when_tenant_empty_string(self):
+        record = self.seed_orphan()
+        os.environ["OMES_JOBS_TENANT_ID"] = ""
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root, job_id=record["job_id"]))
+
+    def test_unset_tenant_is_checked_before_job_lookup(self):
+        # An unconfigured host must not reveal whether a job exists.
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root, job_id="job-doesnotexist-20260101T000000Z"))
+
+    def test_refusal_is_a_cross_tenant_error_too(self):
+        # Subclass relationship keeps every existing `except CrossTenantError` fail-closed.
+        self.seed_orphan()
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        self.assert_refused_untouched(lambda: reconcile.reconcile(self.root), exc_type=store.CrossTenantError)
+
+    def test_mismatched_tenant_batch_does_not_reconcile(self):
+        theirs = self.seed_orphan(tenant_id="tenant-other", key="idem-318-2")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
+        before = self.snapshot()
+        audit_before = self.audit_lines()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            result = reconcile.reconcile(self.root)
+        run_argv.assert_not_called()
+        self.assertEqual(result, {"reconciled": [], "unchanged": [], "skipped_out_of_scope": 1})
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.audit_lines(), audit_before)
+        self.assertEqual(store.load_job(theirs["job_id"], self.root)["state"], "running")
+
+    def test_mismatched_tenant_job_is_refused_without_side_effects(self):
+        theirs = self.seed_orphan(tenant_id="tenant-other", key="idem-318-3")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
+        before = self.snapshot()
+        audit_before = self.audit_lines()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            with self.assertRaises(store.CrossTenantError) as ctx:
+                reconcile.reconcile(self.root, job_id=theirs["job_id"])
+        self.assertNotIsInstance(ctx.exception, store.TenantNotConfiguredError)
+        run_argv.assert_not_called()
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.audit_lines(), audit_before)
+
+    def test_record_without_tenant_id_is_not_reconciled(self):
+        record = self.seed_orphan(key="idem-318-4")
+        stored = store.load_job(record["job_id"], self.root)
+        stored["tenant_id"] = None
+        store.save_job(stored, self.root)
+        before = self.snapshot()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            result = reconcile.reconcile(self.root)
+            with self.assertRaises(store.CrossTenantError):
+                reconcile.reconcile(self.root, job_id=record["job_id"])
+        run_argv.assert_not_called()
+        self.assertEqual(result["skipped_out_of_scope"], 1)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_enrolled_tenant_works_without_env_var(self):
+        record = self.seed_orphan(key="idem-318-5")
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv", return_value=READBACK_MATCH):
+            result = reconcile.reconcile(self.root, enrolled_tenant_id="tenant-acme")
+        self.assertEqual([r["job_id"] for r in result["reconciled"]], [record["job_id"]])
+
+    def test_enrolled_tenant_takes_precedence_over_env_var(self):
+        # Same precedence as store.submit(): enrolled tenant wins over OMES_JOBS_TENANT_ID.
+        mine = self.seed_orphan(key="idem-318-6")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-other"
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv", return_value=READBACK_MATCH):
+            result = reconcile.reconcile(self.root, enrolled_tenant_id="tenant-acme")
+        self.assertEqual([r["job_id"] for r in result["reconciled"]], [mine["job_id"]])
+
+    def test_enrolled_tenant_mismatch_job_is_refused(self):
+        mine = self.seed_orphan(key="idem-318-7")
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            with self.assertRaises(store.CrossTenantError):
+                reconcile.reconcile(self.root, job_id=mine["job_id"], enrolled_tenant_id="tenant-other")
+        run_argv.assert_not_called()
+        self.assertEqual(store.load_job(mine["job_id"], self.root)["state"], "running")
+
+    def test_submit_and_reconcile_share_the_resolver(self):
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        with self.assertRaises(store.TenantNotConfiguredError) as submit_exc:
+            store.submit(make_request(idempotency_key="idem-318-8"), root=self.root)
+        with self.assertRaises(store.TenantNotConfiguredError) as reconcile_exc:
+            reconcile.reconcile(self.root)
+        self.assertIn("OMES_JOBS_TENANT_ID", str(reconcile_exc.exception))
+        self.assertIn("OMES_JOBS_TENANT_ID", str(submit_exc.exception))
+        self.assertEqual(store.resolve_local_tenant("tenant-w"), "tenant-w")
+
+
+class TestReconcileTenantDefaultDenyCli(TenantDefaultDenyBase):
+    def setUp(self):
+        super().setUp()
+        os.environ["OMES_STATE_DIR"] = str(self.root)
+
+    def tearDown(self):
+        os.environ.pop("OMES_STATE_DIR", None)
+        super().tearDown()
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+    def _check_refusal(self, *argv, tenant_env):
+        record = self.seed_orphan()
+        if tenant_env is None:
+            os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        else:
+            os.environ["OMES_JOBS_TENANT_ID"] = tenant_env
+        before = self.snapshot()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            code, out, err = self.run_cli(*argv)
+        run_argv.assert_not_called()
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(store.load_job(record["job_id"], self.root)["state"], "running")
+        return record, code, out, err
+
+    def test_batch_json_unset_matches_submit_convention(self):
+        _r, code, out, err = self._check_refusal("reconcile", "--json", tenant_env=None)
+        self.assertEqual(code, cli.EX_ERROR)
+        doc = json.loads(out)
+        self.assertEqual(doc["error"], "tenant_not_configured")
+        self.assertIn("OMES_JOBS_TENANT_ID", doc["reason"])
+        self.assertEqual(err, "")
+
+    def test_batch_json_empty_string(self):
+        _r, code, out, _err = self._check_refusal("reconcile", "--json", tenant_env="")
+        self.assertEqual(code, cli.EX_ERROR)
+        self.assertEqual(json.loads(out)["error"], "tenant_not_configured")
+
+    def test_job_json_unset(self):
+        record = self.seed_orphan(key="idem-318-c1")
+        os.environ.pop("OMES_JOBS_TENANT_ID", None)
+        before = self.snapshot()
+        code, out, _err = self.run_cli("reconcile", "--job", record["job_id"], "--json")
+        self.assertEqual(code, cli.EX_ERROR)
+        self.assertEqual(json.loads(out)["error"], "tenant_not_configured")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_human_output_goes_to_stderr(self):
+        _r, code, out, err = self._check_refusal("reconcile", tenant_env=None)
+        self.assertEqual(code, cli.EX_ERROR)
+        self.assertEqual(out, "")
+        self.assertIn("no local tenant configured", err)
+
+    def test_job_json_mismatched_tenant_is_cross_tenant_rejected(self):
+        theirs = self.seed_orphan(tenant_id="tenant-other", key="idem-318-c2")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
+        before = self.snapshot()
+        code, out, _err = self.run_cli("reconcile", "--job", theirs["job_id"], "--json")
+        self.assertEqual(code, cli.EX_ERROR)
+        self.assertEqual(json.loads(out)["error"], "cross_tenant_rejected")
+        self.assertEqual(self.snapshot(), before)
+
+    def test_batch_mismatched_tenant_exits_ok_and_skips(self):
+        theirs = self.seed_orphan(tenant_id="tenant-other", key="idem-318-c3")
+        os.environ["OMES_JOBS_TENANT_ID"] = "tenant-acme"
+        before = self.snapshot()
+        with self.host(liveness=identity.DEAD), mock.patch.object(runner, "_run_argv") as run_argv:
+            code, out, _err = self.run_cli("reconcile", "--json")
+        run_argv.assert_not_called()
+        self.assertEqual(code, cli.EX_OK)
+        self.assertEqual(json.loads(out)["skipped_out_of_scope"], 1)
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(store.load_job(theirs["job_id"], self.root)["state"], "running")
+
+
 class TestReconcileCli(ReconcileTestBase):
     def setUp(self):
         super().setUp()
