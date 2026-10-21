@@ -280,6 +280,31 @@ logged_args() { grep -v '^--- docker$' "$FAKE_DOCKER_LOG" || true; }
   [[ "$output" == *"plain line"* ]]
 }
 
+@test "redact_stream still redacts when sed rejects -u (BusyBox sed, issue #329)" {
+  # A sed that rejects -u the way BusyBox does and otherwise runs the real sed.
+  local real_sed fake_dir
+  real_sed="$(command -v sed)"
+  fake_dir="${OMES_TEST_TMPDIR}/busybox-sed"
+  mkdir -p "$fake_dir"
+  {
+    printf '#!/usr/bin/env bash\n'
+    printf 'for a in "$@"; do [[ "$a" == "-u" ]] && { echo "sed: unrecognized option: u" >&2; exit 1; }; done\n'
+    printf 'exec %q "$@"\n' "$real_sed"
+  } >"${fake_dir}/sed"
+  chmod +x "${fake_dir}/sed"
+  export HTTPS_PROXY=http://user:s3cret@proxy.example.invalid:3128/
+  export PATH="${fake_dir}:${PATH}"
+  lib 'WORK="$(mktemp -d)"; setup_redaction; echo "unbuffered=${SED_UNBUFFERED}";
+    printf "%s\n" "using http://user:s3cret@proxy.example.invalid:3128/ now" "plain line" | redact_stream; rm -rf "$WORK"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"unbuffered=0"* ]]
+  [[ "$output" != *"unrecognized option"* ]]
+  [[ "$output" != *"s3cret"* ]]
+  [[ "$output" != *"proxy.example.invalid"* ]]
+  [[ "$output" == *"[REDACTED]"* ]]
+  [[ "$output" == *"plain line"* ]]
+}
+
 @test "a full run with a proxy and a mirror never prints the proxy URL, in the log or the summary" {
   # Fake docker "present", fake repo job that echoes its environment's proxy.
   export HTTPS_PROXY=http://user:s3cret@proxy.example.invalid:3128 OMES_CI_DOCKER_NETWORK=host \

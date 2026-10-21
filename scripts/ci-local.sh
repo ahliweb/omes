@@ -86,6 +86,8 @@ WORK=""
 LOGS=""
 SHIM_DIR=""
 REDACT_SED=""
+# 1 when the local sed accepts GNU -u (unbuffered); BusyBox sed does not (#329).
+SED_UNBUFFERED=0
 NR_DIR=""
 NR_USER=""
 NR_UID="${OMES_CI_NONROOT_UID:-65534}"
@@ -591,11 +593,22 @@ setup_redaction() {
     fi
   done
   printf '%s\n' 's|://[^/@[:space:]]*:[^/@[:space:]]*@|://[REDACTED]@|g' >>"$REDACT_SED"
+  # `-u` is a GNU extension; BusyBox sed in the Alpine bats image rejects it
+  # (issue #329). Use it only where it works: without it the output is the
+  # same, only flushed in larger blocks.
+  SED_UNBUFFERED=0
+  if printf 'x\n' | sed -u -e 's|x|x|' >/dev/null 2>&1; then
+    SED_UNBUFFERED=1
+  fi
 }
 
 redact_stream() {
   if [[ -n "$REDACT_SED" && -s "$REDACT_SED" ]]; then
-    sed -u -f "$REDACT_SED"
+    if [[ "$SED_UNBUFFERED" == 1 ]]; then
+      sed -u -f "$REDACT_SED"
+    else
+      sed -f "$REDACT_SED"
+    fi
   else
     cat
   fi
