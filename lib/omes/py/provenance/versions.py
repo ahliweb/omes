@@ -100,8 +100,9 @@ def _run(cmd: list, timeout: float = _TIMEOUT_SECONDS, env: Optional[dict] = Non
     -2 means "timed out". Never uses shell=True and never receives
     caller-controlled argv beyond a fixed command name. `env`, when given,
     is the complete child environment (a copy of os.environ plus fixed
-    variables such as HERMES_HOME - lib/omes/py/health/hermes_config.py is
-    the only caller that passes one); None inherits the parent's. The child's
+    variables such as HERMES_HOME - lib/omes/py/health/hermes_config.py and
+    lib/omes/py/health/acp_posture.py are the only callers that pass one);
+    None inherits the parent's. The child's
     stdin is always /dev/null, never the caller's.
     """
     if shutil.which(cmd[0]) is None:
