@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Audit UX — prototipe Control Center v2</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0D1115;color:#E8EEF3;font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7FD3DE}a:hover{color:#A6E4EC}
+</style>
+</helmet>
+
+<div style="width: 1440px; min-height: 2900px; box-sizing: border-box; padding: 64px; background: #0D1115; display: flex; flex-direction: column; gap: 48px">
+
+  <header style="display: flex; flex-direction: column; gap: 16px; max-width: 1000px">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #7FD3DE">ahliweb/omes · ui/control-center/index.html · commit 8990850 · 19 Okt 2026</span>
+    <h1 style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 700; letter-spacing: -0.025em; text-wrap: pretty">Audit UX prototipe Control Center v2: kuat di fondasi, lemah di kejujuran data dan keamanan interaksi</h1>
+    <p style="margin: 0; font-size: 17px; line-height: 1.6; color: #B7C3CE; max-width: 880px">Prototipe referensi satu berkas (1.260 baris, 12 layar) untuk konsol multi-tenant AWCMS + OMES. Dirender ulang pada 1440×960 dan 390×844, lalu dibandingkan dengan dokumen desain sendiri (ui-ux-design-system.md §7–§9) dan ADR-0027.</p>
+  </header>
+
+  <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+    <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #F49A8B"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8z"></path></svg>Kritis</span>
+      <span style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em">4</span>
+      <span style="font-size: 13px; color: #8D9BA8">melanggar aturan proyek sendiri</span>
+    </div>
+    <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #E8B44A"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3 2 20h20z"></path></svg>Tinggi</span>
+      <span style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em">6</span>
+      <span style="font-size: 13px; color: #8D9BA8">menyesatkan keputusan operator</span>
+    </div>
+    <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #B4BFFA"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><circle cx="12" cy="12" r="9"></circle></svg>Sedang</span>
+      <span style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em">5</span>
+      <span style="font-size: 13px; color: #8D9BA8">memperlambat atau membingungkan</span>
+    </div>
+    <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 20px; display: flex; flex-direction: column; gap: 6px">
+      <span style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; color: #C3CDD6"><svg aria-hidden="true" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-dasharray="3 3"><circle cx="12" cy="12" r="9"></circle></svg>Rendah</span>
+      <span style="font-size: 40px; font-weight: 700; letter-spacing: -0.02em">2</span>
+      <span style="font-size: 13px; color: #8D9BA8">polesan</span>
+    </div>
+  </div>
+
+  <section style="display: flex; flex-direction: column; gap: 20px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Kondisi saat ini, dengan penanda temuan</h2>
+    <div style="display: flex; gap: 40px; align-items: flex-start">
+      <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+        <div style="position: relative; width: 820px; height: 547px; border-radius: 10px; overflow: hidden; border: 1px solid #252E38">
+          <img src="assets/prototype-v2-overview.png" alt="Layar Fleet overview prototipe v2" style="width: 820px; height: 547px; display: block">
+          <span style="position: absolute; left: 483px; top: 88px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">3</span>
+          <span style="position: absolute; left: 102px; top: 101px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">3</span>
+          <span style="position: absolute; left: 671px; top: 86px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">7</span>
+          <span style="position: absolute; left: 637px; top: 176px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">9</span>
+          <span style="position: absolute; left: 176px; top: 483px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">5</span>
+          <span style="position: absolute; left: 443px; top: 483px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">4</span>
+          <span style="position: absolute; left: 148px; top: 188px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">6</span>
+          <span style="position: absolute; left: 62px; top: 238px; width: 24px; height: 24px; border-radius: 50%; background: #9AA8F8; color: #0B0E1F; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">11</span>
+          <span style="position: absolute; left: 53px; top: 490px; width: 24px; height: 24px; border-radius: 50%; background: #A3B0BC; color: #0D1115; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">16</span>
+        </div>
+        <figcaption style="font-size: 13px; color: #8D9BA8">Fleet overview, 1440×960</figcaption>
+      </figure>
+
+      <div style="display: flex; flex-direction: column; gap: 28px; width: 500px">
+        <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+          <div style="position: relative; width: 500px; height: 333px; border-radius: 10px; overflow: hidden; border: 1px solid #252E38">
+            <img src="assets/prototype-v2-servers.png" alt="Layar Servers dan drift prototipe v2" style="width: 500px; height: 333px; display: block">
+            <span style="position: absolute; left: 455px; top: 43px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">1</span>
+            <span style="position: absolute; left: 214px; top: 243px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">2</span>
+            <span style="position: absolute; left: 330px; top: 106px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">7</span>
+            <span style="position: absolute; left: 158px; top: 98px; width: 24px; height: 24px; border-radius: 50%; background: #F07A68; color: #1A0B08; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">4</span>
+          </div>
+          <figcaption style="font-size: 13px; color: #8D9BA8">Servers &amp; drift, 1440×960</figcaption>
+        </figure>
+        <div style="display: flex; gap: 20px; align-items: flex-start">
+          <figure style="margin: 0; display: flex; flex-direction: column; gap: 10px">
+            <div style="position: relative; width: 160px; height: 346px; border-radius: 10px; overflow: hidden; border: 1px solid #252E38">
+              <img src="assets/prototype-v2-mobile-390.png" alt="Prototipe v2 pada lebar ponsel 390 px" style="width: 160px; height: 346px; display: block">
+              <span style="position: absolute; left: 110px; top: 111px; width: 24px; height: 24px; border-radius: 50%; background: #E8B44A; color: #1A1407; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 3px rgba(13,17,21,0.85)">8</span>
+            </div>
+            <figcaption style="font-size: 13px; color: #8D9BA8">390×844</figcaption>
+          </figure>
+          <div style="display: flex; flex-direction: column; gap: 12px; padding-top: 4px">
+            <h3 style="margin: 0; font-size: 15px; font-weight: 700; color: #7DD89A">Yang sudah baik — pertahankan</h3>
+            <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; font-size: 13px; line-height: 1.5; color: #B7C3CE">
+              <li>Data dihasilkan dari fixture kontrak v1, dicek kesegarannya di CI</li>
+              <li>Uji kontras WCAG otomatis atas palet</li>
+              <li>:focus-visible, prefers-reduced-motion, tombol native</li>
+              <li>Pemisahan otoritas omes-host / hermes / provider</li>
+              <li>Font mono untuk ID, hash, versi</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 0; background: #141A20; border: 1px solid #252E38; border-radius: 12px; overflow: hidden">
+    <div style="display: grid; grid-template-columns: 48px 112px minmax(0, 1.25fr) minmax(0, 1fr) 210px; gap: 20px; padding: 14px 24px; border-bottom: 1px solid #252E38; font-size: 12px; font-weight: 700; color: #8D9BA8">
+      <span>No</span><span>Keparahan</span><span>Temuan dan bukti</span><span>Perbaikan di v3</span><span>Rujukan</span>
+    </div>
+    <sc-for list="{{ findings }}" as="f" hint-placeholder-count="17">
+      <div style="display: grid; grid-template-columns: 48px 112px minmax(0, 1.25fr) minmax(0, 1fr) 210px; gap: 20px; padding: 16px 24px; border-bottom: 1px solid #1C242C; align-items: start">
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 600; color: #B7C3CE">{{ f.n }}</span>
+        <span style="{{ f.sevStyle }}">{{ f.sev }}</span>
+        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+          <span style="font-size: 15px; font-weight: 600; line-height: 1.4">{{ f.title }}</span>
+          <span style="font-size: 13px; line-height: 1.55; color: #8D9BA8">{{ f.ev }}</span>
+        </div>
+        <span style="font-size: 13px; line-height: 1.55; color: #B7C3CE">{{ f.fix }}</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; line-height: 1.55; color: #8D9BA8">{{ f.ref }}</span>
+      </div>
+    </sc-for>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":2900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const sev = {
+      Kritis: 'color:#F49A8B;background:rgba(240,122,104,0.14)',
+      Tinggi: 'color:#E8B44A;background:rgba(232,180,74,0.14)',
+      Sedang: 'color:#B4BFFA;background:rgba(154,168,248,0.14)',
+      Rendah: 'color:#C3CDD6;background:rgba(163,176,188,0.14)'
+    };
+    const raw = [
+      ['1', 'Kritis', 'Tombol “Buka SSH” di detail server', 'ADR-0027 memilih pull-worker keluar-saja dan melarang SSH masuk; UI justru menawarkan jalur yang dilarang arsitekturnya.', 'Hapus. Ganti dengan “Minta check via worker” yang masuk antrean job beraudit.', 'ADR-0027 · ISO 27001 A.8.20, A.8.22'],
+      ['2', 'Kritis', 'Mutasi satu klik, termasuk perubahan firewall CRITICAL', '“Apply 3 perubahan” langsung di detail server; “Setujui” di antrean tanpa membuka rencana; pengaju bisa jadi penyetuju.', 'Alur rencana → tinjau dampak → setujui oleh owner selain pengaju → ketik nama host untuk risiko kritis; snapshot rollback ditampilkan.', 'ISO 27001 A.5.3, A.8.32 · ISO 20000-1 §8.5.1'],
+      ['3', 'Kritis', 'Angka yang saling bertentangan', 'Badge Operasi “3” dan judul antrean “3” di-hardcode, data berisi 1. Ringkasan Health “PASS 6 · WARN 2 · FAIL 1” di-hardcode, kartu menampilkan 4 PASS, lalu menyarankan omes doctor --fix --dry-run — opsi yang tidak ada di CLI (omes doctor [--json]).', 'Semua hitungan diturunkan dari satu sumber data; tidak ada literal angka di markup.', 'ui-ux-design-system §7.3, §8'],
+      ['4', 'Kritis', 'Data basi tampil seperti data sehat', 'omes-mint-01 (heartbeat 2 j 14 m) menampilkan CPU 0% / memori 0%. omes-bak-01 disk 88% berlabel “in sync”/Sehat.', 'Status “Tak diketahui” dengan nilai “—”; ambang sumber daya ikut menentukan status host.', 'Fail-closed §7.3 · ISO 27001 A.8.16'],
+      ['5', 'Tinggi', '“Diurut menurut risiko”, padahal alfabetis', 'Host basi berada di baris ke-11 dari 12, di bawah lipatan layar.', 'Urutan: kritis → tak diketahui → perhatian → sehat; panel “Perlu tindakan” di atas KPI.', 'Nielsen H1, H8'],
+      ['6', 'Tinggi', 'Status hanya dibedakan warna', 'Titik 6 px tanpa teks; amber dipakai untuk Drift dan Perhatian sekaligus.', 'Lencana ikon + teks; bentuk berbeda per status (segi delapan, segitiga, lingkaran putus-putus, centang).', 'WCAG 2.2 SC 1.4.1, 1.4.11'],
+      ['7', 'Tinggi', 'Ambang warna tidak konsisten', 'Memori 71% amber di Overview, cyan di detail (ambang 80). KPI “Verify lulus 50%” berwarna hijau.', 'Satu aturan: ≥75% perhatian, ≥90% kritis; bar netral bila normal; hijau hanya untuk lulus penuh.', 'Nielsen H4 · ISO 9241-110 (konformitas ekspektasi)'],
+      ['8', 'Tinggi', 'Tidak responsif', 'Grid 232 px + konten; pada 390 px judul terpotong, KPI melebar keluar layar, scroll horizontal.', 'Shell flex-wrap; tampilan on-call ponsel khusus dengan tab bawah.', 'WCAG 2.2 SC 1.4.10 Reflow'],
+      ['9', 'Tinggi', 'Linimasa tidak terbaca', 'Stempel waktu ISO mentah di kolom 44 px, bertumpuk dengan teks; tanpa zona waktu.', 'Format lokal “19 Sep 2026, 16.00 WIB” + atribut datetime ISO.', 'ISO 8601 · WCAG SC 1.3.1'],
+      ['10', 'Tinggi', 'Dua dunia data yang tidak tersambung', 'Armada bernama omes-app-01…, fixture memakai server-acme-01 / srv-0001 / srv-prod-01; drawer rencana untuk omes-app-01 sementara antrean berisi restart server-acme-01.', 'Satu identitas host lintas layar; tambahkan fixture armada ke kontrak v1.', 'ui-ux-design-system §8'],
+      ['11', 'Sedang', 'IA datar 12 item, bahasa campur', 'Arsitektur dan Progres (dokumentasi proyek) sejajar layar operasional; “Overview” bersebelahan “Orkestrasi langsung”.', 'Kelompok Pantau · Ubah & pulihkan · Agen · Tata kelola; dokumentasi dipindah ke kaki sidebar; seluruh label Bahasa Indonesia.', 'Nielsen H4 · ISO 9241-112'],
+      ['12', 'Sedang', 'Glyph Unicode sebagai ikon', '◉ ▤ ⚙ ✦ ⌁ dirender kecil dan berbeda per OS/font.', 'Set ikon garis SVG 16 px, aria-hidden, label teks selalu ada.', 'WCAG SC 1.1.1'],
+      ['13', 'Sedang', '⌘K bukan command palette', 'Membuka drawer rencana statis; tidak ada pencarian, pemilih target, atau perangkap fokus; tombol × tanpa aria-label.', '⌘K = pencarian host/job/ID korelasi; “Rencanakan operasi” jadi alur terpisah.', 'WAI-ARIA APG Dialog'],
+      ['14', 'Sedang', 'Skala tipografi terfragmentasi', '14 ukuran berbeda, sembilan di antaranya di bawah 14 px (9,5 sampai 13,5); label huruf kapital 10,5 px.', 'Skala 12 / 13 / 14 / 16 / 20 / 28; tanpa huruf kapital kecil.', 'ISO 9241-125'],
+      ['15', 'Sedang', 'Umpan aktivitas tercampur penagihan', 'payment.succeeded muncul di aktivitas operasional; rollback berwarna netral.', 'Umpan ops saja; peristiwa penagihan di Jejak audit; rollback ber-status Perhatian.', 'Nielsen H8'],
+      ['16', 'Rendah', 'Saklar peran di sisi klien', 'Owner/Operator di sidebar mengesankan peran bisa diganti pengguna.', 'Tampilkan identitas + peran dari server; mode pratinjau peran hanya di prototipe.', 'ISO 27001 A.5.15, A.8.2'],
+      ['17', 'Rendah', 'Layar setengah kosong', 'Operasi dan Health menyisakan ±70% ruang kosong tanpa empty state.', 'Empty state yang menjelaskan arti “kosong” dan langkah berikutnya.', 'Nielsen H10']
+    ];
+    const findings = raw.map((r) => ({
+      n: r[0], sev: r[1], title: r[2], ev: r[3], fix: r[4], ref: r[5],
+      sevStyle: 'justify-self:start;display:inline-flex;align-items:center;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;' + sev[r[1]]
+    }));
+    return { findings };
+  }
+}
+</script>
+</body>
+</html>
