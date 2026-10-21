@@ -100,7 +100,7 @@ Reuses `docs/threat-model.md` §4's asset list (A1–A9) plus:
   cannot and should not trust a remote caller's tenant claim without
   local verification.
 - Advisories that the canonical endpoints do not enforce (stale target, decommissioned target, unverified backup) are shown by Mission Control as non-blocking; enforcing them in the endpoints is a possible follow-up proposal, not tracked by a numbered issue. This is residual risk, not a Mission Control bypass: the canonical endpoints remain the enforcement point.
-- The CC11–CC21 "implemented upstream" statements describe the `ahliweb/awcms` pull requests named in each row (merge evidence in [control-center-release-closeout.md](control-center-release-closeout.md) §6.2); this repository does not re-run those tests. The vendored OMES contracts there are pinned to commit `a4026e6` pending the merge of OMES PR #268.
+- The CC11–CC21 "implemented upstream" statements describe the `ahliweb/awcms` pull requests named in each row (merge evidence in [control-center-release-closeout.md](control-center-release-closeout.md) §6.2); this repository does not re-run those tests. The vendored OMES contracts there are pinned at commit `a4026e6` of the OMES PR #268 branch; the hashed contents are identical on `main` after the squash merge, so AWCMS should re-pin to the squash commit.
 - This document does not evaluate the AWCMS/awcms-one codebase's own
   security posture (out of scope: it is a separate repository); it only
   evaluates the contract and the OMES-side job runner.

@@ -3,8 +3,8 @@
 - **Status:** Accepted
 - **Date:** 2026-10-03
 - **Decision maker:** @ahliweb
-- **Related:** [ADR-0017](0017-upstream-first-ownership-and-boundary-enforcement.md) (upstream-first ownership), [ADR-0027](0027-control-center-pull-worker-transport.md) (pull-worker transport), [ADR-0028](0028-hermes-orchestration-visualization.md) (Hermes orchestration observer), [ADR-0029](0029-ai-data-boundary-and-private-inference.md) (AI data boundary), ADR-0031 (Mission Control; pending in PR [#268](https://github.com/ahliweb/omes/pull/268)), [Epic #269](https://github.com/ahliweb/omes/issues/269), [docs/multi-agent-control-patterns.md](../multi-agent-control-patterns.md), [docs/threat-model.md](../threat-model.md) (§5.z, `MA-01`..`MA-11`)
-- **Supersedes / Amends:** None. Adds a decision record, two registry entries, and a wider R9 reserved-term list. It changes no runtime behavior. Number 0031 is reserved for the Mission Control ADR in PR #268.
+- **Related:** [ADR-0017](0017-upstream-first-ownership-and-boundary-enforcement.md) (upstream-first ownership), [ADR-0027](0027-control-center-pull-worker-transport.md) (pull-worker transport), [ADR-0028](0028-hermes-orchestration-visualization.md) (Hermes orchestration observer), [ADR-0029](0029-ai-data-boundary-and-private-inference.md) (AI data boundary), ADR-0031 (Mission Control; landed in PR [#268](https://github.com/ahliweb/omes/pull/268)), [Epic #269](https://github.com/ahliweb/omes/issues/269), [docs/multi-agent-control-patterns.md](../multi-agent-control-patterns.md), [docs/threat-model.md](../threat-model.md) (§5.z, `MA-01`..`MA-11`)
+- **Supersedes / Amends:** None. Adds a decision record, two registry entries, and a wider R9 reserved-term list. It changes no runtime behavior. Number 0031 was taken by the Mission Control ADR (PR #268).
 - **Implementation:** Phase 0 only (this record, the registry/linter guard, the threat delta, and the decomposition into [#270](https://github.com/ahliweb/omes/issues/270)–[#277](https://github.com/ahliweb/omes/issues/277)). Every child issue is **Not implemented yet** unless its own PR lands. Child [#272](https://github.com/ahliweb/omes/issues/272) has landed its envelope contract, validator, convergence reducer and registry entry (`omes.observability.correlation_envelope`); its propagation through AWCMS, job and worker flows is Not implemented yet (tracked in #272).
 
 ---
@@ -24,7 +24,7 @@ Verified evidence behind this decision (full tables are in [docs/multi-agent-con
 - ADR-0017 precedence applies: `DELEGATE -> PORT -> ADAPT -> DEFER -> REJECT`. Hermes owns delegation, sessions, memory, model/provider routing and ACP (AGENTS.md §2).
 - Registry invariants R1, R8 and R9 already prevent OMES from owning agent-runtime behavior or silently adopting a second agent framework.
 - **OMES does not mediate all Hermes-native tool execution** ([docs/architecture.md §18.2](../architecture.md#182-limitations--read-this-before-assuming-omes-mediates-agent-behavior)). Nothing in this ADR makes OMES an interception point for Hermes tool calls, an ACP proxy, or an agent scheduler.
-- AWCMS owns tenants, approvals and Mission Control presentation ([epic #263](https://github.com/ahliweb/omes/issues/263); ADR-0031 pending in PR #268). The pull worker (ADR-0027, #192) distributes host-control jobs; it is not a distributed AI worker.
+- AWCMS owns tenants, approvals and Mission Control presentation ([epic #263](https://github.com/ahliweb/omes/issues/263); ADR-0031 landed in PR #268). The pull worker (ADR-0027, #192) distributes host-control jobs; it is not a distributed AI worker.
 - No claim of compliance or certification follows from this ADR. No credentials, prompts, transcripts, or chain-of-thought may appear in any artifact this decision produces (ADR-0029).
 
 ---
@@ -66,7 +66,7 @@ We adopt **Option B**. The following rules bind OMES contributors and the epic #
 8. **Budget governance.** Budget policy is AWCMS's; enforcement is by Hermes (iteration, timeout, depth, concurrency limits and provider limits) and infrastructure (cgroup limits). Unknown usage is not zero ([#275](https://github.com/ahliweb/omes/issues/275)).
 9. **Isolation split.** OS and host isolation (systemd hardening, rootless Compose, egress restriction) is OMES/infrastructure. Logical agent isolation (workspaces, sessions, memory, worktrees) is Hermes. Verifying declared isolation against running state is OMES work that is not implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)); OMES does not claim to enforce logical isolation.
 10. **Registry.** Register the existing upstream capabilities `hermes.agent.delegation` and `hermes.agent.acp_server` (authority `hermes`, `delegated_upstream`, `released_supported`, `adr_reference` ADR-0032). Extend R9's reserved terms with `acp`, `agent_client_protocol`, `coordinator`, `subagent`, `subagents` (existing: reasoning, model_routing, memory, delegation, sessions). Add no other registry entries until a child issue lands its implementation.
-11. **Mission Control projects only.** The Mission Control view ([#277](https://github.com/ahliweb/omes/issues/277), AWCMS presentation) renders only data whose source exists, and is blocked by #270–#276 and by PR [#268](https://github.com/ahliweb/omes/pull/268) (ADR-0031, pending). It is not an authority for any state it displays.
+11. **Mission Control projects only.** The Mission Control view ([#277](https://github.com/ahliweb/omes/issues/277), AWCMS presentation) renders only data whose source exists, and is blocked by #270–#276 (PR [#268](https://github.com/ahliweb/omes/pull/268), ADR-0031, has landed). It is not an authority for any state it displays.
 
 ---
 
@@ -118,6 +118,6 @@ Revisit this ADR when:
 
 - Hermes ships a per-task model parameter or a generalized outbound ACP client (upstream [#5257](https://github.com/NousResearch/hermes-agent/issues/5257) or successor);
 - a measured throughput, ordering, duration or high-availability requirement justifies a broker or workflow engine;
-- PR [#268](https://github.com/ahliweb/omes/pull/268) merges (ADR-0031) or changes the Mission Control boundary;
+- the Mission Control boundary changes from the one decided in ADR-0031 (landed in PR [#268](https://github.com/ahliweb/omes/pull/268));
 - a child issue (#270–#277) finds that an assumption recorded here is false;
 - the pinned Hermes baseline changes in a way that alters delegation, restart (`unknown`) or ACP semantics.

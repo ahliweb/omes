@@ -56,7 +56,7 @@ stable upstream interface), **REJECT** (contradicts scope).
 | MCP boundary | Not a distinct Octop claim relied on here | Logical boundary (not OMES-shipped) | DEFER (stays a logical boundary) | Registry `boundary.tool_gateway.mcp` (`logical_boundary`) | None |
 | Bidirectional ACP | Inbound `octop acp` server; outbound runners flagged `"trusted": true`; permission prompts surface in chat ([acp](https://github.com/TencentCloud/Octop/blob/main/docs/acp.md)) | Hermes (inbound `hermes acp`); outbound is upstream proposal #5257 | DELEGATE (inbound), DEFER (outbound) | Registry `hermes.agent.acp_server` (added by this change) | [#273](https://github.com/ahliweb/omes/issues/273) |
 | Unified channel gateway | Web UI, CLI and IM share one runtime via `ChannelManager` (architecture page) | Hermes (channels, messaging) | DELEGATE; REJECT an OMES-owned gateway | `modules/hermes-gateway` handles service lifecycle only | None |
-| Mission-Control-like UI | Not relied on as a verified Octop claim | AWCMS (presentation; epic #263, ADR-0031 pending in PR [#268](https://github.com/ahliweb/omes/pull/268)) | AWCMS | Observer projection contract (ADR-0028) | [#277](https://github.com/ahliweb/omes/issues/277) |
+| Mission-Control-like UI | Not relied on as a verified Octop claim | AWCMS (presentation; epic #263, ADR-0031 landed in PR [#268](https://github.com/ahliweb/omes/pull/268)) | AWCMS | Observer projection contract (ADR-0028) | [#277](https://github.com/ahliweb/omes/issues/277) |
 | Process-local in-flight tracking (limitation) | In-flight team-job tracking is in-process (`TeamJobTracker`); out-of-process inbox persistence is a v1 non-target and "restart loses in-flight tasks"; "The whole stack is one process. There is no separate worker, no external queue" | Hermes for agent runs; OMES for host jobs | Do not copy; OMES reconciles host jobs | Job store, idempotency index, hash-chained audit (`lib/omes/py/jobs/`) | [#271](https://github.com/ahliweb/omes/issues/271) |
 
 The two "not relied on" cells are deliberate: this document does not assert an
@@ -204,7 +204,7 @@ and the parts of #276 recorded in its row below.
 Sequencing: #272 (envelope) lands before #274 (decision envelope) and #277.
 #270 lands before #275, because budget policy depends on what Hermes can
 enforce. #271, #272 and #276 are independent and may proceed in parallel.
-#277 is last and only after PR #268 (ADR-0031) has merged. "Depends on" lists
+#277 is last; PR #268 (ADR-0031) has landed. "Depends on" lists
 design dependencies as recorded in the epic; this document does not claim
 those issues are in any particular GitHub state.
 

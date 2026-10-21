@@ -738,7 +738,7 @@ projection with its own shape.
 
 ### 2.13 Mission Control scene view and replay window (issue #264, ADR-0031)
 
-Epic [#263](https://github.com/ahliweb/omes/issues/263) delivers a 3D Mission Control workspace in AWCMS. [ADR-0031](adr/0031-mission-control-compositional-projection.md) decides that it is a **derived presentation/read-model composition, not a new authority**. Issue [#264](https://github.com/ahliweb/omes/issues/264) adds the OMES-side contract surface that keeps it that way: contracts, fixtures, a source map, and a guard, implemented in this repository (OMES PR [#268](https://github.com/ahliweb/omes/pull/268), **pending merge (approval required)**).
+Epic [#263](https://github.com/ahliweb/omes/issues/263) delivers a 3D Mission Control workspace in AWCMS. [ADR-0031](adr/0031-mission-control-compositional-projection.md) decides that it is a **derived presentation/read-model composition, not a new authority**. Issue [#264](https://github.com/ahliweb/omes/issues/264) adds the OMES-side contract surface that keeps it that way: contracts, fixtures, a source map, and a guard, implemented in this repository (landed in OMES PR [#268](https://github.com/ahliweb/omes/pull/268)).
 
 **AWCMS consumption: shipped.** The three AWCMS routes below consume these contracts (see [docs/control-center-release-closeout.md](control-center-release-closeout.md) §6.2 for evidence):
 
@@ -748,7 +748,7 @@ Epic [#263](https://github.com/ahliweb/omes/issues/263) delivers a 3D Mission Co
 | `GET /api/v1/omes/mission-control/replay?from&to&cursor` | `mission-control-replay-window` | [#881](https://github.com/ahliweb/awcms/pull/881) (`3c239ca`, #266) |
 | `GET /api/v1/omes/mission-control/actions?kind=&id=` | none: an advisory AWCMS-internal response, deliberately not part of the scene contract | [#882](https://github.com/ahliweb/awcms/pull/882) (`27e62b3`, #267) |
 
-The vendored copies in AWCMS are pinned by SHA-256 to OMES commit `a4026e6` (the #268 head). They will be re-pinned to #268's squash SHA after it merges; the content is identical, so the re-pin changes the recorded provenance only. Editing the vendored copy is drift, not a fix.
+The vendored copies in AWCMS are pinned by SHA-256, and the AWCMS `PIN.json` currently records the contract content at commit `a4026e6` of the #268 branch. The hashed file contents are identical on `main` after the PR #268 squash merge, so AWCMS should re-pin to the squash commit; the re-pin changes the recorded provenance only. Editing the vendored copy is drift, not a fix.
 
 **`mission-control-scene-view.schema.json`** is the single-tenant, read-only wire shape of one scene: `schema_version`, `source_map_version`, `tenant_id`, `generated_at`, `mode` (`live` or `historical`), `as_of`, `sources[]` (which authority was consulted and whether it was `available`, `stale`, or `unavailable`), `nodes[]` (at most 500), `relations[]` (at most 1000), and `truncated` counts so a clipped scene says so. Each node is a **reference**: an opaque `node_id` (used only by relations), a `kind`, the source authority's own opaque `source_id`, a bounded `label` (untrusted: output-encode, never inject as HTML), the echoed `source_state`, the derived `visual_state`, `freshness` (`live`, `stale`, `unknown`), `observed_at`, and the canonical existing `detail_route`. It carries no layout coordinates, no mission/task lifecycle, no authorization decision, no action availability, and no raw log, prompt, transcript, or tool payload. `additionalProperties: false` at every object level makes that structural (registry guard C1).
 
@@ -898,8 +898,8 @@ This document defines the contract; it does not redefine or duplicate:
   `mission-control-source-map.json` are a read-only composition over the
   contracts above. They do not redefine any source contract, add a mission/task
   domain, add an operation to `operation-request`, or add an approval inbox.
-  #264 (this contract surface, ADR-0031) is implemented here (OMES PR #268,
-  pending merge); #265 (AWCMS workspace), #266 (replay mode), and #267
+  #264 (this contract surface, ADR-0031) is implemented here (landed in OMES
+  PR #268); #265 (AWCMS workspace), #266 (replay mode), and #267
   (contextual actions) are **shipped** in `ahliweb/awcms` PRs #880, #881, and
   #882 (evidence in
   [control-center-release-closeout.md](control-center-release-closeout.md)

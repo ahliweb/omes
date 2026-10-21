@@ -129,9 +129,8 @@ already allocated by open pull requests.
 ADR 0034 was authored on 2026-10-15 as part of issue
 [#312](https://github.com/ahliweb/omes/issues/312) (local CI and manual-only
 workflows) and [#315](https://github.com/ahliweb/omes/issues/315) (fail-closed
-release gate). Number 0031 is reserved by the Mission Control ADR in pending
-PR [#268](https://github.com/ahliweb/omes/pull/268); 0032 and 0033 were taken
-by #278 and #307.
+release gate). Numbers 0031–0033 were taken by #264 (PR
+[#268](https://github.com/ahliweb/omes/pull/268)), #278 and #307.
 
 ## Conventions
 
