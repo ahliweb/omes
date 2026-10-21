@@ -71,6 +71,12 @@ ALLOWED_KEYS = frozenset({
     # ACP tool-surface posture (issue #273): names of toolsets only.
     "platform_toolsets.acp",
     "agent.disabled_toolsets",
+    # Run-budget posture (issue #275): numeric limits (null = unlimited) only.
+    # There is deliberately no token, spend or cost key: none exists upstream.
+    "agent.max_turns",
+    "agent.run_budget_seconds",
+    "agent.loop_caps.max_subagents",
+    "agent.loop_caps.max_web_searches",
 })
 
 #: Defence in depth on top of the allowlist: a key whose name looks like it
