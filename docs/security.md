@@ -410,7 +410,7 @@ sanitized, metadata-only host evidence for an **optional, separately installed**
 defined by the [#296 wire contract](../contracts/browser-transfer/v1/README.md). It is evidence, not
 enforcement: OMES does not sandbox, supervise or authorize the worker, and OMES does not mediate
 Hermes-native browser tool use reached through other Hermes entry points (§8.8). Per-job isolation
-evidence is **Not implemented yet (tracked in #298, depends on #276 / PR #282)**.
+evidence is **Not implemented yet (tracked in #298, depends on #276)**.
 
 | Control | Implemented in |
 |---|---|

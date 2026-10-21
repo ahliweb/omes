@@ -710,7 +710,7 @@ exactly the document defined by
 `reason_codes`, a browser version label and a UTC `observed_at`). It reuses the #71 Ollama probe, the
 #80 exposure audit's listener table and the #216 destination classifier, never launches a browser,
 and never reads a cookie, profile or heartbeat content. **Per-job isolation evidence is Not
-implemented yet (tracked in #298, depends on #276 / PR #282), so the state is never `ready` on a real
+implemented yet (tracked in #298, depends on #276), so the state is never `ready` on a real
 host today.** The tenant, server and worker ids come from `OMES_JOBS_TENANT_ID`, `OMES_JOBS_SERVER_ID`
 and `OMES_BROWSER_WORKER_ID` (or `--worker-id`) and are never invented. **Exit codes:** 0 `ready`; 7
 any other state (the document is still printed); 4 not configured (an id is missing — nothing on

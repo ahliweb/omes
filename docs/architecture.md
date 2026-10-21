@@ -1448,7 +1448,7 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   mechanisms, ships no browser, executor, adapter or listener, and is evidence only: the
   business workflow, the worker and the record ledger stay with AWCMS and Hermes, and OMES still
   does not mediate Hermes-native tool use outside that workflow. Per-job isolation evidence is Not
-  implemented yet (tracked in #298, depends on #276 / PR #282), so the reported state is never
+  implemented yet (tracked in #298, depends on #276), so the reported state is never
   `ready` on a real host today.
 
 ### 18.7 Standards crosswalk

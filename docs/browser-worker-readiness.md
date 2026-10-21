@@ -1,6 +1,6 @@
 # Browser worker host-readiness evidence (`omes health browser-worker`)
 
-> **Status: partially implemented.** Issue [#298](https://github.com/ahliweb/omes/issues/298) under epic [#294](https://github.com/ahliweb/omes/issues/294), stacked on the wire contract from [#296](https://github.com/ahliweb/omes/issues/296). The read-only evidence **producer** exists. Per-job browser isolation evidence is **Not implemented yet (tracked in #298, depends on #276 / PR #282)**, so on a real host the reported state is **never `ready` today** — by design, not by accident. OMES ships **no** browser worker, RPA runtime, browser executor, Playwright dependency or adapter, and nothing in this feature launches a browser.
+> **Status: partially implemented.** Issue [#298](https://github.com/ahliweb/omes/issues/298) under epic [#294](https://github.com/ahliweb/omes/issues/294), stacked on the wire contract from [#296](https://github.com/ahliweb/omes/issues/296). The read-only evidence **producer** exists. Per-job browser isolation evidence is **Not implemented yet (tracked in #298, depends on #276)**: the merged #282 `omes agent isolation-drift` verifies only the declared compose posture of an agent container, not per-job browser profile, egress or cgroup ceilings. So on a real host the reported state is **never `ready` today** — by design, not by accident. OMES ships **no** browser worker, RPA runtime, browser executor, Playwright dependency or adapter, and nothing in this feature launches a browser.
 
 Read first: [AGENTS.md](../AGENTS.md), [scope](scope.md), [architecture](architecture.md), [security](security.md), [threat model](threat-model.md), [AI data privacy](ai-data-privacy-and-model-security.md), [ADR-0029](adr/0029-ai-data-boundary-and-private-inference.md), [Ollama](ollama.md).
 
@@ -13,7 +13,7 @@ An authenticated consumer (the AWCMS Control Center, via the existing pull-worke
 | Host compatibility, listener exposure, resource floors, runtime provenance, host-side evidence | **OMES** (this document) |
 | Model readiness | The reused [#71 Ollama probe](ollama.md) (`omes health ollama`); model/provider routing stays **Hermes**-owned |
 | Browser actions, locators, origin allowlists, the worker itself | A Hermes-owned adapter or an external worker ([#299](https://github.com/ahliweb/omes/issues/299)); never OMES |
-| Per-job isolation (profile, user, filesystem, network, ceilings) | [#276](https://github.com/ahliweb/omes/issues/276), open [PR #282](https://github.com/ahliweb/omes/pull/282); not integrated here |
+| Per-job isolation (profile, user, filesystem, network, ceilings) | [#276](https://github.com/ahliweb/omes/issues/276), still open; [PR #282](https://github.com/ahliweb/omes/pull/282) is merged and `omes agent isolation-drift` verifies only the declared compose posture of an agent container, not per-job browser profile, egress or cgroup ceilings; not integrated here |
 | Tenant/job scope, approval, lease, replay, idempotency, record ledger, whether to run a job | **AWCMS**; it verifies identity and freshness **outside** this document |
 
 A `ready` document is a *producer claim about this host at `observed_at`*. It is not authorization to run a browser job, not proof that the worker is isolated, and not a statement about any Hermes-native tool use reached through other Hermes entry points (OMES does not mediate those; see [architecture §18.2](architecture.md#182-limitations--read-this-before-assuming-omes-mediates-agent-behavior)).
@@ -51,7 +51,7 @@ Output of the producer on a host with every declaration present but no isolation
 {"schema_version": "1.0.0", "tenant_id": "tenant-1", "server_id": "server-1", "worker_id": "worker-1", "state": "unknown", "browser_engine": "chromium", "adapter_version": "adapter-v1", "browser_version": "chromium-122.0.6261.94", "model_provider": "none", "model_ready": "not_required", "session_isolation": "unknown", "exposure": "loopback", "capability_profile": "deterministic", "observed_at": "2026-10-14T12:00:00Z", "reason_codes": ["ISOLATION_EVIDENCE_NOT_INTEGRATED"]}
 ```
 
-The same document once an isolation source reports `per_job` (shape only — this requires the future #276 integration and is exercised in tests by injecting that source; it cannot be produced on a real host yet):
+The same document once an isolation source reports `per_job` (shape only — this requires per-job isolation evidence, which is not implemented yet (tracked in #298, depends on #276), and is exercised in tests by injecting that source; it cannot be produced on a real host yet):
 
 ```json
 {"schema_version": "1.0.0", "tenant_id": "tenant-1", "server_id": "server-1", "worker_id": "worker-1", "state": "ready", "browser_engine": "chromium", "adapter_version": "adapter-v1", "browser_version": "chromium-122.0.6261.94", "model_provider": "none", "model_ready": "not_required", "session_isolation": "per_job", "exposure": "loopback", "capability_profile": "deterministic", "observed_at": "2026-10-14T12:00:00Z", "reason_codes": ["READINESS_CHECKS_PASSED"]}
@@ -151,7 +151,7 @@ Codes are stable identifiers (`^[A-Z][A-Z0-9_]{0,63}$`). The *State* column is t
 
 | Code | State | Meaning | Remediation |
 |---|---|---|---|
-| `ISOLATION_EVIDENCE_NOT_INTEGRATED` | unknown | per-job browser isolation (and per-job egress/resource ceilings) evidence is not integrated yet | Not implemented yet (tracked in #298, depends on #276 / PR #282) |
+| `ISOLATION_EVIDENCE_NOT_INTEGRATED` | unknown | per-job browser isolation (and per-job egress/resource ceilings) evidence is not integrated yet | Not implemented yet (tracked in #298, depends on #276); #282 is merged, but `omes agent isolation-drift` verifies only the declared compose posture of an agent container, not per-job browser profile, egress or cgroup ceilings |
 | `ISOLATION_NOT_CONFIGURED` | blocked | the isolation evidence source reports that per-job isolation is not configured | configure per-job isolation (#276) before leasing browser jobs |
 
 **Resources**
@@ -193,7 +193,7 @@ Codes are stable identifiers (`^[A-Z][A-Z0-9_]{0,63}$`). The *State* column is t
 
 | Item | Status |
 |---|---|
-| Per-job browser isolation evidence (`session_isolation: per_job`), including the per-job network egress allowlist and cgroup resource ceilings. The existing drift check lives only on the unmerged #276 branch ([PR #282](https://github.com/ahliweb/omes/pull/282)); it is not copied here. Until it is wired in through the single `default_isolation` source, `session_isolation` is `unknown` with `ISOLATION_EVIDENCE_NOT_INTEGRATED` and no document can be `ready`. | Not implemented yet (tracked in #298, depends on #276 / PR #282) |
+| Per-job browser isolation evidence (`session_isolation: per_job`), including the per-job network egress allowlist and cgroup resource ceilings. [PR #282](https://github.com/ahliweb/omes/pull/282) is merged and `omes agent isolation-drift` is on main, but it verifies only the declared compose posture of an agent container; it does not cover per-job browser profile, egress or cgroup ceilings, so it is not wired in here. Until it is wired in through the single `default_isolation` source, `session_isolation` is `unknown` with `ISOLATION_EVIDENCE_NOT_INTEGRATED` and no document can be `ready`. | Not implemented yet (tracked in #298, depends on #276) |
 | Cryptographic (sha256/signature) pinning of the browser executable. Only the version label is compared; hashing hundreds of MB per health call is deliberately avoided, and the [#236](provenance.md) artifact records are model-artifact specific. | Not implemented yet (tracked in #298) |
 | Observing the Hermes `agent-browser` version and the Browser Use CLI version (they live in Hermes' own install tree, which OMES does not read); the adapter version is declared by the operator instead. `omes health versions` is unchanged. | Not implemented yet (tracked in #299) |
 | A heartbeat **producer**, the browser worker, its Playwright/Hermes adapter and its supervisor (profile cleanup, orphan kill, lease expiry) | Not implemented yet (tracked in #299; OMES will not own a browser executor) |

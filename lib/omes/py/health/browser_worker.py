@@ -32,7 +32,10 @@ What it reports (and what it deliberately does NOT):
   proof that the worker is isolated: per-job isolation evidence belongs to
   #276 and is NOT integrated yet, so `session_isolation` is reported as
   `unknown` with `ISOLATION_EVIDENCE_NOT_INTEGRATED`, which prevents
-  `ready`. Not implemented yet (tracked in #298, depends on #276).
+  `ready`. Not implemented yet (tracked in #298, depends on #276): the merged
+  #282 `omes agent isolation-drift` verifies only the declared compose posture
+  of an agent container, not per-job browser profile, egress or cgroup
+  ceilings.
 - Every probe is read-only and bounded. The only network-active probe is the
   reused #71 Ollama check, which the operator opts into by declaring the
   `ai_assisted` capability profile; it sends a short synthetic non-secret
@@ -215,7 +218,7 @@ REASONS: dict = {
     "ISOLATION_EVIDENCE_NOT_INTEGRATED": (
         SEV_UNKNOWN,
         "per-job browser isolation (and per-job egress/resource ceilings) evidence is not integrated yet",
-        "Not implemented yet (tracked in #298, depends on #276 / PR #282)",
+        "Not implemented yet (tracked in #298, depends on #276); #282 is merged, but `omes agent isolation-drift` verifies only the declared compose posture of an agent container, not per-job browser profile, egress or cgroup ceilings",
     ),
     "ISOLATION_NOT_CONFIGURED": (
         SEV_BLOCKED,
@@ -574,8 +577,10 @@ def default_hermes_version() -> Optional[str]:
 def default_isolation(_cfg: Config) -> dict:
     """The isolation evidence source. Per-job browser isolation (profile,
     user, filesystem, network egress and resource ceilings per job) is owned
-    by #276; its drift check lives on an unmerged branch (PR #282) and is
-    deliberately NOT copied here. Until it is integrated this is `unknown`,
+    by #276. The merged #282 `omes agent isolation-drift` verifies only the
+    declared compose posture of an agent container (not per-job browser
+    profile, egress or cgroup ceilings), so it is deliberately NOT wired in
+    here. Until it is integrated this is `unknown`,
     which prevents `ready`. A future integration replaces this one function
     (or injects another provider) to return {"session_isolation": "per_job"
     | "not_configured", "codes": [...]}."""

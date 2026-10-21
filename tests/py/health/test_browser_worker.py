@@ -125,7 +125,7 @@ class World:
         deps.destination_class = lambda: "local"
         deps.hermes_version = lambda: "Hermes Agent v0.21.5 (2026.9.24)"
         # The default isolation provider is `unknown` (nothing integrated);
-        # a healthy world injects the future #276 evidence explicitly.
+        # a healthy world injects per-job isolation evidence explicitly.
         deps.isolation = lambda cfg: {"session_isolation": "per_job", "codes": []}
         deps.uid = lambda: os.geteuid()
         self.deps = deps
@@ -199,8 +199,8 @@ class TestReadyPath(unittest.TestCase):
         self.assertNotIn("model_id", document)
 
     def test_default_isolation_provider_can_never_produce_ready(self):
-        """The production isolation source is `unknown` until #276 is
-        integrated: even a fully healthy host must not reach `ready`."""
+        """The production isolation source is `unknown` until per-job isolation
+        evidence (#276) is integrated: even a fully healthy host must not reach `ready`."""
         world = World(self)
         world.deps.isolation = bw.default_isolation
         document, _ = world.collect()
@@ -1114,8 +1114,9 @@ class TestResources(unittest.TestCase):
 
 
 class TestIsolationIntegrationPoint(unittest.TestCase):
-    """The browser job/profile isolation test is owned by #276 (open PR #282),
-    not duplicated here: #298 only defines the seam (`Deps.isolation`, whose
+    """The browser job/profile isolation test is owned by #276 (still open;
+    #282's `omes agent isolation-drift` covers only the declared compose
+    posture of an agent container), not duplicated here: #298 only defines the seam (`Deps.isolation`, whose
     production default reports `unknown`) and the rules for what a provider's
     answer means."""
 
@@ -1141,9 +1142,9 @@ class TestIsolationIntegrationPoint(unittest.TestCase):
                 else:
                     self.assertEqual(document["state"], "ready")
 
-    @unittest.skip("Not implemented yet (tracked in #298, depends on #276 / PR #282): wire the #276 isolation drift check into Deps.isolation")
+    @unittest.skip("Not implemented yet (tracked in #298, depends on #276): wire per-job browser isolation evidence into Deps.isolation (merged #282 isolation-drift covers only the declared compose posture)")
     def test_276_isolation_drift_check_feeds_session_isolation(self):
-        raise AssertionError("placeholder: replaced when #276 lands and is integrated")
+        raise AssertionError("placeholder: replaced when #276 per-job isolation evidence lands and is integrated")
 
 
 class TestPlatform(unittest.TestCase):
