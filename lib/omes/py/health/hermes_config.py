@@ -68,6 +68,9 @@ ALLOWED_KEYS = frozenset({
     "delegation.worktree_isolation",
     "delegation.subagent_auto_approve",
     "delegation.oneshot_max_children",
+    # ACP tool-surface posture (issue #273): names of toolsets only.
+    "platform_toolsets.acp",
+    "agent.disabled_toolsets",
 })
 
 #: Defence in depth on top of the allowlist: a key whose name looks like it

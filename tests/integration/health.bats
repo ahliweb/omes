@@ -173,3 +173,88 @@ assert "delegation.no_child_timeout" in [f["id"] for f in d["findings"]]
   [ "$status" -eq 0 ]
   [[ "$output" == *"health agent-runtime: status=ok scope=configured"* ]]
 }
+
+# ---------------------------------------------------------------------------
+# omes health acp (issue #273): configured tool surface of Hermes' inbound ACP
+# server. Logic is covered by tests/py/health/test_acp_posture.py; these assert
+# the bash <-> python wiring through tests/shims/hermes. Live ACP session
+# exposure is never observable and must always be reported as unknown.
+# ---------------------------------------------------------------------------
+
+@test "omes health acp is unknown (exit 7) when Hermes cannot answer config get" {
+  omes_run_stdout_only "$OMES_BIN" health acp --json
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "unknown", d["status"]
+assert d["scope"] == "configured"
+assert d["session_exposure"] == "unknown"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health acp warns (exit 0) when platform_toolsets.acp is unset and never claims exposure" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_ACP_VERSION=1.0
+  omes_run_stdout_only "$OMES_BIN" health acp --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "warn", d
+assert d["scope"] == "configured"
+assert d["keys"]["platform_toolsets.acp"] == {"state": "absent"}
+ids = [f["id"] for f in d["findings"]]
+assert "acp.default_toolset_includes_execution" in ids, ids
+assert "acp.session_exposure_unobservable" in ids, ids
+assert "acp.outbound_not_supported_upstream" in ids, ids
+assert d["installability"]["state"] == "installed"
+assert d["session_exposure"] == "unknown"
+'
+  [ "$status" -eq 0 ]
+  # Only supported read forms were used: config get ... --json and `acp --version`; never --raw or --check.
+  run grep -c -- "--raw" "$SHIM_LOG"
+  [ "$output" = "0" ]
+  run grep -c -- "--check" "$SHIM_LOG"
+  [ "$output" = "0" ]
+  run grep -c -- "^hermes acp --version$" "$SHIM_LOG"
+  [ "$output" = "1" ]
+  run grep -c -- "^hermes config get platform_toolsets.acp --json$" "$SHIM_LOG"
+  [ "$output" = "1" ]
+}
+
+@test "omes health acp reports ok when platform_toolsets.acp is restricted, even if ACP is not installed" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web", "file"]'
+  export SHIM_HERMES_CONFIG_GET_AGENT_DISABLED_TOOLSETS='[]'
+  omes_run_stdout_only "$OMES_BIN" health acp --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["status"] == "ok", d
+assert d["keys"]["platform_toolsets.acp"] == {"state": "value", "value": ["web", "file"]}
+assert "acp.toolset_restricted" in [f["id"] for f in d["findings"]]
+assert d["installability"]["state"] == "not_installed_or_unknown"
+assert d["session_exposure"] == "unknown"
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "omes health acp rejects an unknown argument with a usage error" {
+  run "$OMES_BIN" health acp --bogus
+  [ "$status" -eq 2 ]
+}
+
+@test "omes health acp human output states the configured scope and unknown exposure" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web"]'
+  run "$OMES_BIN" health acp
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"health acp: status=ok scope=configured"* ]]
+  [[ "$output" == *"session exposure"*"unknown"* ]]
+}
