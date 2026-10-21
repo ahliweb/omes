@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "event_id": "evt-0001",
+  "tenant_id": "tenant-fixture",
+  "workflow_id": "wf-fixture",
+  "run_id": "run-fixture-001",
+  "job_id": "job-fixture-001",
+  "state_before": "submitted_unknown",
+  "state_after": "verified_committed",
+  "event_type": "reconciliation",
+  "step_id": "step-0009",
+  "worker_id": "worker-fixture",
+  "correlation_id": "corr-fixture",
+  "idempotency_key_hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "reason_code": "DESTINATION_READBACK_MATCH",
+  "action_type": "verify_destination_record",
+  "mapping_version": "mapping-v1",
+  "adapter_version": "adapter-v1",
+  "model_id": "qwen3.5:9b",
+  "duration_ms": 138,
+  "observed_at": "2026-10-12T02:00:00Z"
+}
