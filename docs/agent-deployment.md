@@ -645,14 +645,44 @@ It compares these fields, each reported as a finding
 | `image` | the digest-pinned reference | high |
 | `user` | `compose.user` (skipped, and listed under `skipped`, when the manifest omits it) | critical if the container runs as root, else high |
 | `capDrop` | `["ALL"]` | high |
+| `capAdd` | nothing: the renderer never emits `cap_add`, and Docker reports "none added" as `null` | high; critical when `ALL` or `SYS_ADMIN` is added |
 | `readOnlyRootfs` | the plan value (default `true`) | high |
 | `noNewPrivileges` | always `true` | high |
+| `securityOpt.seccomp` | Docker's default profile (no override; the renderer emits no seccomp option) | high for `unconfined`, medium for a custom profile (the profile body is never echoed) |
+| `securityOpt.apparmor` | Docker's default profile (no override; also read from the top-level `AppArmorProfile` when it is `unconfined`) | high for `unconfined`, medium for a custom profile |
+| `securityOpt.undeclared` | `no-new-privileges` only; any other entry (for example `label=disable`, `systempaths=unconfined`) is reported | high |
+| `devices` | nothing: the renderer never emits `devices`; each mapping is reported as `host:container:permissions` | high |
+| `ipcMode` | `private` (Docker's default; the empty string older engines report is accepted too) | critical for `host`, high for `container:<id>`, low for any other value such as `shareable` or `none` |
 | `network.internal` | `true` only for `egress: "none"` | high when `none` was declared but the network is not internal; low when the network is stricter than declared |
 | `network.attached` | exactly the plan's `<project>_<network>` | high |
 | `memory`, `cpus`, `pidsLimit` | `resources.memory`/`cpu`/`pids` | medium |
 | `mounts.dockerSocket` | no mount whose source or destination contains `docker.sock` | critical |
 | `mounts.undeclared`, `mounts.mode[...]`, `mounts.missing` | the plan's bind mounts | high / high or medium / medium |
 | `privileged`, `networkMode`, `pidMode` | never privileged, never host network or host PID | critical |
+
+Fields the renderer does not declare. `compose.py` renders `cap_drop`,
+`security_opt: ["no-new-privileges:true"]`, `read_only`, the network
+`internal` flag, limits and the declared mounts, and nothing for `cap_add`,
+`devices`, `ipc`, `privileged`, `pid`, seccomp or AppArmor. The check therefore
+treats Docker's default as the declaration for those fields and reports only an
+undeclared override. Two consequences are explicit rather than silent:
+
+- The default seccomp and AppArmor profiles are not visible in `docker inspect`,
+  so the check can detect an override but cannot prove the default is active.
+  Both controls are listed in `skipped` as "not declared by the renderer" on
+  every run, and a clean result must not be read as proof that the default
+  profiles are enforced. The daemon-level view (`docker info` security options)
+  is the preflight's job (section 8), not this check's.
+- `DeviceCgroupRules`, `DeviceRequests`, `UsernsMode`, `UTSMode`, `Sysctls` and
+  `ExtraHosts` are not compared. Not implemented yet (tracked in
+  [#276](https://github.com/ahliweb/omes/issues/276)).
+
+A field that is absent from the inspect output, or has an unexpected type
+(for example `CapAdd` as a string, `Privileged` as `"false"`, or a device entry
+without `PathOnHost`), is listed under `unverified` and is never assumed to be
+the safe value, so the overall status cannot be `ok` (fail closed, ADR-0032
+rule 3). Docker's `null` for "nothing set" is a valid empty value for `CapAdd`,
+`SecurityOpt` and `Devices`.
 
 Overall `status`:
 
@@ -664,19 +694,49 @@ Overall `status`:
   output is malformed, or no drift was seen but some fields could not be
   observed (they are listed under `unverified`).
 
+`skipped` holds informational notes for controls the manifest or renderer does
+not declare (the `user` default, seccomp, AppArmor); it never makes a result
+`unknown` and never counts as verification.
+
 `--json` prints one object on stdout (`status`, `findings`, `unverified`,
 `skipped`, `reason`, `container`, `project`, `network`, `egress`, `running`,
 `readOnly: true`); errors and diagnostics go to stderr. Exit codes: `0` only for `ok`; `7` for both `drift` and `unknown`
 (the `status` field tells them apart); `4` for a missing or invalid manifest;
 `2` for a non-compose backend.
 
+#### Isolation profile matrix (compose backend)
+
+What each control is, who enforces it, and what verifies it today. "Declared"
+means `compose.py` renders it; "default" means the renderer emits nothing and
+Docker's default is the expectation.
+
+| Control | Compose backend: declared as | Enforcing authority | Verified by `isolation-drift` | Not implemented yet (tracked in #276) |
+|---|---|---|---|---|
+| `cap_drop` | `["ALL"]`, always | Container engine (rootless Docker) | `capDrop` (running value equals declaration) | real-daemon evidence |
+| `cap_add` | none, never rendered | Container engine | `capAdd` (any added capability is drift) | real-daemon evidence |
+| seccomp | default (nothing rendered) | Container engine | `securityOpt.seccomp` flags an override only; the default is listed under `skipped` | proof the default profile is active |
+| AppArmor | default (nothing rendered) | Host LSM via the container engine | `securityOpt.apparmor` flags an override only; the default is listed under `skipped` | proof the default profile is active |
+| `no-new-privileges` | `security_opt`, always | Container engine / kernel | `noNewPrivileges` | real-daemon evidence |
+| devices | none, never rendered | Container engine | `devices` (any mapping is drift) | `DeviceCgroupRules`, `DeviceRequests` |
+| IPC namespace | default `private` (nothing rendered) | Container engine / kernel | `ipcMode` (`host`, `container:*`, `shareable`, `none` are drift) | none beyond real-daemon evidence |
+| privileged / host PID / host network | impossible to declare (schema and `validate_compose_spec` refuse) | OMES validation, then the engine | `privileged`, `pidMode`, `networkMode` | real-daemon evidence |
+| egress | `egress: "open"` (default) or `"none"` (`internal: true`) | Container engine network (Docker `internal`) | `network.internal`, `network.attached` | per-destination allowlist, runtime egress probe |
+
+For the systemd backend the equivalent controls are the hardening profile units
+and, for egress, the opt-in `hermes-restricted` module
+(`IPAddressDeny=any`); `isolation-drift` does not cover that backend (it exits
+2). Logical isolation (Hermes sessions, memory, worktrees) is Hermes-owned and is
+not inspected.
+
 Limits (Not implemented yet, tracked in
 [#276](https://github.com/ahliweb/omes/issues/276)): the check proves the
 configuration the container engine holds, not runtime behavior (no egress packet
-probe); there is no per-destination allowlist to verify; it is not wired into
-`omes agent doctor` or any scheduled job; and it has been exercised only against
-the Docker shim, never a real rootless daemon (see section 12). Logical isolation
-(Hermes sessions, memory, worktrees) is Hermes-owned and is not inspected.
+probe); there is no per-destination allowlist to verify; cleanup and retention
+of orphaned compose projects, containers and networks is not implemented; it is
+not wired into `omes agent doctor` or any scheduled job; and it has been
+exercised only against the Docker shim, never a real rootless daemon (see
+section 12). The new hardening fields are asserted from Docker's documented
+`docker inspect` output, not observed live.
 
 ## 11. `omes doctor` integration and `omes agent logs` (compose)
 
@@ -759,8 +819,8 @@ section 9.4/7a above rather than here.
 - **Compose backend (#276) - real-daemon evidence and egress allowlist**:
   `omes agent isolation-drift` and `egress: "none"` are tested only against
   `tests/shims/docker`; there is no run against a real rootless daemon, so the
-  `docker inspect` field names are asserted from Docker's documented output, not
-  observed live (Not implemented yet, tracked in
+  `docker inspect` field names (including `CapAdd`, `SecurityOpt`, `Devices` and
+  `IpcMode`) are asserted from Docker's documented output, not observed live (Not implemented yet, tracked in
   [#276](https://github.com/ahliweb/omes/issues/276)). A per-destination egress
   allowlist and a runtime egress probe are likewise Not implemented yet (tracked
   in #276).

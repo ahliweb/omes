@@ -6,7 +6,15 @@ docs/multi-agent-control-patterns.md G7).
 `backend: "compose"` deployment: pinned image, non-root `uid:gid`,
 `cap_drop: [ALL]`, read-only rootfs, `no-new-privileges`, an optional
 internal (no-egress) network, memory/cpu/pids limits, and only the
-declared bind mounts (never a Docker socket). This module compares that
+declared bind mounts (never a Docker socket). The renderer declares
+nothing else: no `cap_add`, no `devices`, no `ipc`, no `privileged`, and no
+seccomp or AppArmor override. For those fields the declaration is "Docker's
+default", so an *undeclared override* is drift (`HostConfig.CapAdd`,
+`HostConfig.Devices`, `HostConfig.IpcMode`, `HostConfig.Privileged`, and
+`SecurityOpt` seccomp/apparmor/other entries). The default seccomp and
+AppArmor profiles cannot be proven active from `docker inspect`, so those two
+controls are reported under `skipped` as not declared; only an override is
+detected. This module compares that
 declaration with what the container engine reports for the *running*
 container through two read-only commands, each a fixed argv list with a
 bounded timeout (never a shell string):
@@ -26,8 +34,10 @@ Status semantics (fail-closed):
   Positive evidence of drift wins over missing evidence elsewhere.
 - `unknown`: there is no usable evidence (docker missing, daemon
   unreachable, container absent, malformed inspect output), or no drift
-  was seen but at least one field could not be observed. `unknown` is
-  never reported as `ok`.
+  was seen but at least one field could not be observed. A field that is
+  absent from the inspect output, or has an unexpected type, is
+  unobserved (never assumed to be the safe value). `unknown` is never
+  reported as `ok`.
 
 Limits (Not implemented yet, tracked in #276): this proves the container
 *configuration* the engine holds. It does not prove runtime egress
@@ -95,6 +105,33 @@ def _no_new_privileges(security_opt: Any) -> bool:
     return False
 
 
+def _split_security_opt(opt: str) -> Tuple[str, str]:
+    """Splits one `SecurityOpt` entry into (key, value). Docker reports
+    both `key=value` and `key:value` spellings; the key ends at whichever
+    separator comes first, so a value that itself contains `=` or `:` (an
+    inline seccomp profile) is kept whole."""
+    positions = [i for i in (opt.find("="), opt.find(":")) if i >= 0]
+    if not positions:
+        return opt, ""
+    cut = min(positions)
+    return opt[:cut], opt[cut + 1:]
+
+
+def _str_list(value: Any) -> Optional[List[str]]:
+    """`value` as a list of strings: None (Docker's null for "nothing set")
+    is the empty list; anything that is not a list of strings is
+    unparseable and returns None."""
+    if value is None:
+        return []
+    if isinstance(value, list) and all(isinstance(v, str) for v in value):
+        return list(value)
+    return None
+
+
+def _short(text: str, limit: int = 80) -> str:
+    return text if len(text) <= limit else text[: limit - 3] + "..."
+
+
 def _docker_socket_path(value: Any) -> bool:
     return isinstance(value, str) and "docker.sock" in value
 
@@ -139,59 +176,162 @@ def _compare_container(plan: Dict[str, Any], inspect: Dict[str, Any], findings: 
 
     if host is None:
         unverified.extend(
-            ["capDrop", "readOnlyRootfs", "noNewPrivileges", "memory", "cpus", "pidsLimit", "privileged", "networkMode", "pidMode"]
+            [
+                "capDrop", "capAdd", "readOnlyRootfs", "noNewPrivileges", "securityOpt", "devices",
+                "memory", "cpus", "pidsLimit", "privileged", "networkMode", "pidMode", "ipcMode",
+            ]
         )
     else:
+        _compare_host(plan, inspect, host, findings, unverified, skipped)
+
+    _compare_mounts(plan, inspect, findings, unverified)
+
+
+def _compare_host(plan: Dict[str, Any], inspect: Dict[str, Any], host: Dict[str, Any], findings: List[Dict[str, Any]], unverified: List[str], skipped: List[str]) -> None:
+    # capDrop
+    dropped = _str_list(host["CapDrop"]) if "CapDrop" in host else None
+    if dropped is None:
+        unverified.append("capDrop")
+    else:
         declared_caps = sorted(_norm_cap(c) for c in plan["capDrop"])
-        observed_caps = sorted(_norm_cap(c) for c in (host.get("CapDrop") or []))
+        observed_caps = sorted(_norm_cap(c) for c in dropped)
         if declared_caps != observed_caps:
             findings.append(_finding("capDrop", declared_caps, observed_caps, SEVERITY_HIGH))
 
-        if "ReadonlyRootfs" in host:
-            if bool(host["ReadonlyRootfs"]) != bool(plan["readOnlyRootfs"]):
-                findings.append(_finding("readOnlyRootfs", bool(plan["readOnlyRootfs"]), bool(host["ReadonlyRootfs"]), SEVERITY_HIGH))
+    # capAdd: the renderer never emits cap_add, so any added capability is
+    # undeclared. Docker reports "nothing added" as null.
+    added = _str_list(host["CapAdd"]) if "CapAdd" in host else None
+    if added is None:
+        unverified.append("capAdd")
+    else:
+        observed_added = sorted({_norm_cap(c) for c in added})
+        if observed_added:
+            severity = SEVERITY_CRITICAL if {"ALL", "SYS_ADMIN"} & set(observed_added) else SEVERITY_HIGH
+            findings.append(_finding("capAdd", [], observed_added, severity))
+
+    if "ReadonlyRootfs" in host:
+        if bool(host["ReadonlyRootfs"]) != bool(plan["readOnlyRootfs"]):
+            findings.append(_finding("readOnlyRootfs", bool(plan["readOnlyRootfs"]), bool(host["ReadonlyRootfs"]), SEVERITY_HIGH))
+    else:
+        unverified.append("readOnlyRootfs")
+
+    _compare_security_opt(inspect, host, findings, unverified, skipped)
+
+    # devices: the renderer never emits devices. Docker reports "none" as null.
+    if "Devices" not in host or not (host["Devices"] is None or isinstance(host["Devices"], list)):
+        unverified.append("devices")
+    else:
+        mapped: List[str] = []
+        parseable = True
+        for device in host["Devices"] or []:
+            if isinstance(device, dict) and isinstance(device.get("PathOnHost"), str):
+                mapped.append(f"{device['PathOnHost']}:{device.get('PathInContainer') or ''}:{device.get('CgroupPermissions') or ''}")
+            else:
+                parseable = False
+        if mapped:
+            findings.append(_finding("devices", [], sorted(mapped), SEVERITY_HIGH))
+        if not parseable:
+            unverified.append("devices")
+
+    resources = plan.get("resources", {})
+    declared_mem = _memory_bytes(resources.get("memory"))
+    if declared_mem is not None:
+        if "Memory" in host:
+            observed_mem = host["Memory"] or 0
+            if observed_mem != declared_mem:
+                findings.append(_finding("memory", declared_mem, observed_mem, SEVERITY_MEDIUM))
         else:
-            unverified.append("readOnlyRootfs")
+            unverified.append("memory")
+    declared_cpu = _nano_cpus(resources.get("cpu"))
+    if declared_cpu is not None:
+        if "NanoCpus" in host:
+            observed_cpu = host["NanoCpus"] or 0
+            if observed_cpu != declared_cpu:
+                findings.append(_finding("cpus", declared_cpu, observed_cpu, SEVERITY_MEDIUM))
+        else:
+            unverified.append("cpus")
+    if "pids" in resources:
+        if "PidsLimit" in host:
+            observed_pids = host["PidsLimit"]
+            if observed_pids != resources["pids"]:
+                findings.append(_finding("pidsLimit", resources["pids"], observed_pids, SEVERITY_MEDIUM))
+        else:
+            unverified.append("pidsLimit")
 
-        observed_nnp = _no_new_privileges(host.get("SecurityOpt"))
-        if not observed_nnp:
-            findings.append(_finding("noNewPrivileges", True, False, SEVERITY_HIGH))
+    # Settings the manifest schema can never declare. Any of these on a
+    # running container is drift from the (absent) declaration. A missing
+    # or wrongly typed value is unobserved, never assumed safe.
+    privileged = host.get("Privileged")
+    if not isinstance(privileged, bool):
+        unverified.append("privileged")
+    elif privileged:
+        findings.append(_finding("privileged", False, True, SEVERITY_CRITICAL))
+    for key, field in (("NetworkMode", "networkMode"), ("PidMode", "pidMode")):
+        value = host.get(key)
+        if not isinstance(value, str):
+            unverified.append(field)
+        elif value == "host":
+            findings.append(_finding(field, "not host", "host", SEVERITY_CRITICAL))
 
-        resources = plan.get("resources", {})
-        declared_mem = _memory_bytes(resources.get("memory"))
-        if declared_mem is not None:
-            if "Memory" in host:
-                observed_mem = host["Memory"] or 0
-                if observed_mem != declared_mem:
-                    findings.append(_finding("memory", declared_mem, observed_mem, SEVERITY_MEDIUM))
-            else:
-                unverified.append("memory")
-        declared_cpu = _nano_cpus(resources.get("cpu"))
-        if declared_cpu is not None:
-            if "NanoCpus" in host:
-                observed_cpu = host["NanoCpus"] or 0
-                if observed_cpu != declared_cpu:
-                    findings.append(_finding("cpus", declared_cpu, observed_cpu, SEVERITY_MEDIUM))
-            else:
-                unverified.append("cpus")
-        if "pids" in resources:
-            if "PidsLimit" in host:
-                observed_pids = host["PidsLimit"]
-                if observed_pids != resources["pids"]:
-                    findings.append(_finding("pidsLimit", resources["pids"], observed_pids, SEVERITY_MEDIUM))
-            else:
-                unverified.append("pidsLimit")
+    # ipcMode: undeclared, so Docker's private default is expected ("" is
+    # the same default as reported by older engines). `host` shares the
+    # host's IPC namespace; `container:<id>` joins another workload's;
+    # `shareable` lets others join this one; `none` is stricter but still
+    # undeclared.
+    ipc = host.get("IpcMode")
+    if not isinstance(ipc, str):
+        unverified.append("ipcMode")
+    elif ipc not in ("", "private"):
+        if ipc == "host":
+            severity = SEVERITY_CRITICAL
+        elif ipc.startswith("container:"):
+            severity = SEVERITY_HIGH
+        else:
+            severity = SEVERITY_LOW
+        findings.append(_finding("ipcMode", "private", _short(ipc), severity))
 
-        # Settings the manifest schema can never declare. Any of these on a
-        # running container is drift from the (absent) declaration.
-        if host.get("Privileged"):
-            findings.append(_finding("privileged", False, True, SEVERITY_CRITICAL))
-        if host.get("NetworkMode") == "host":
-            findings.append(_finding("networkMode", "not host", "host", SEVERITY_CRITICAL))
-        if host.get("PidMode") == "host":
-            findings.append(_finding("pidMode", "not host", "host", SEVERITY_CRITICAL))
 
-    _compare_mounts(plan, inspect, findings, unverified)
+def _compare_security_opt(inspect: Dict[str, Any], host: Dict[str, Any], findings: List[Dict[str, Any]], unverified: List[str], skipped: List[str]) -> None:
+    """`no-new-privileges` is declared; seccomp and AppArmor are not (the
+    declaration is Docker's default), so only an override is drift. The
+    inspect output cannot prove the default profile is active, so both are
+    reported under `skipped` as not declared rather than as verified."""
+    skipped.append(
+        "seccomp: not declared by the renderer; Docker's default profile is expected and only an override "
+        "(unconfined or a custom profile) is reported; the active default is not visible in docker inspect"
+    )
+    skipped.append(
+        "apparmor: not declared by the renderer; Docker's default profile is expected and only an override "
+        "(unconfined or a custom profile) is reported; the active default is not visible in docker inspect"
+    )
+    opts = _str_list(host["SecurityOpt"]) if "SecurityOpt" in host else None
+    if opts is None:
+        unverified.extend(["securityOpt", "noNewPrivileges"])
+        return
+
+    if not _no_new_privileges(opts):
+        findings.append(_finding("noNewPrivileges", True, False, SEVERITY_HIGH))
+
+    seen: Dict[str, List[str]] = {"seccomp": [], "apparmor": []}
+    other: List[str] = []
+    for opt in opts:
+        key, value = _split_security_opt(opt)
+        if key in seen:
+            seen[key].append(value)
+        elif key != "no-new-privileges":
+            other.append(_short(opt))
+
+    if not seen["apparmor"] and inspect.get("AppArmorProfile") == "unconfined":
+        seen["apparmor"].append("unconfined")
+
+    for key in ("seccomp", "apparmor"):
+        if not seen[key]:
+            continue
+        observed = "unconfined" if any(v == "unconfined" for v in seen[key]) else "custom profile"
+        severity = SEVERITY_HIGH if observed == "unconfined" else SEVERITY_MEDIUM
+        findings.append(_finding(f"securityOpt.{key}", "default profile (no override)", observed, severity))
+    if other:
+        findings.append(_finding("securityOpt.undeclared", "no-new-privileges only", sorted(other), SEVERITY_HIGH))
 
 
 def _compare_mounts(plan: Dict[str, Any], inspect: Dict[str, Any], findings: List[Dict[str, Any]], unverified: List[str]) -> None:

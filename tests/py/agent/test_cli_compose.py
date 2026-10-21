@@ -314,11 +314,17 @@ class TestComposeEgressAndIsolationDrift(ComposeCliTestCase):
         mem = {"K": 1024, "M": 1024 ** 2, "G": 1024 ** 3}[plan["resources"]["memory"][-1]] * int(plan["resources"]["memory"][:-1])
         host = {
             "CapDrop": ["ALL"],
+            "CapAdd": None,
             "ReadonlyRootfs": True,
             "SecurityOpt": ["no-new-privileges:true"],
+            "Devices": None,
+            "IpcMode": "private",
             "Memory": mem,
             "NanoCpus": int(round(float(plan["resources"]["cpu"]) * 1e9)),
             "PidsLimit": plan["resources"]["pids"],
+            "Privileged": False,
+            "NetworkMode": f"{plan['project']}_{plan['network']}",
+            "PidMode": "",
         }
         host.update(host_overrides)
         return json.dumps([{
@@ -359,6 +365,33 @@ class TestComposeEgressAndIsolationDrift(ComposeCliTestCase):
         out = json.loads(proc.stdout)
         self.assertEqual(out["status"], "drift")
         self.assertEqual({f["field"] for f in out["findings"]}, {"readOnlyRootfs", "capDrop"})
+
+    def test_isolation_drift_reports_hardening_field_drift(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        device = {"PathOnHost": "/dev/fuse", "PathInContainer": "/dev/fuse", "CgroupPermissions": "rwm"}
+        env = self._drift_env(self._inspect_json(
+            self._plan(),
+            CapAdd=["NET_ADMIN"],
+            SecurityOpt=["no-new-privileges:true", "seccomp=unconfined"],
+            Devices=[device],
+            IpcMode="host",
+        ))
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["status"], "drift")
+        self.assertEqual({f["field"] for f in out["findings"]}, {"capAdd", "securityOpt.seccomp", "devices", "ipcMode"})
+
+    def test_isolation_drift_missing_hardening_field_is_unknown(self):
+        self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
+        data = json.loads(self._inspect_json(self._plan()))
+        del data[0]["HostConfig"]["CapAdd"]
+        env = self._drift_env(json.dumps(data))
+        proc = self._run("isolation-drift", "compose-worker", "--json", env=env)
+        self.assertEqual(proc.returncode, 7, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["status"], "unknown")
+        self.assertIn("capAdd", out["unverified"])
 
     def test_isolation_drift_egress_none_against_open_network(self):
         self._write_manifest("compose-worker", self._fixture("valid-compose-egress-none.json"))
