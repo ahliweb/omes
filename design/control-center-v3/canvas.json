@@ -11,7 +11,7 @@
     "Health.dc.html": {"x": 3040, "y": 3320, "w": 1440, "h": 1400, "title": "04 · Kesehatan per otoritas (redesain v3)", "expand": "fill"},
     "Mobile.dc.html": {"x": 4560, "y": 3320, "w": 390, "h": 844, "title": "05 · On-call ponsel (redesain v3)"},
     "Tokens.dc.html": {"x": 0, "y": 5380, "w": 1440, "h": 1500, "title": "06 · Sistem desain v3"},
-    "HermesOffice.dc.html": {"x": 0, "y": 7300, "w": 1440, "h": 1360, "title": "07 · Kantor agen Hermes — 2D ↔ 3D", "expand": "fill", "is_interactive": true},
+    "HermesOffice.dc.html": {"x": 0, "y": 7300, "w": 1440, "h": 1840, "title": "07 · Kantor agen Hermes — multi-kantor & hierarki, 2D ↔ 3D", "expand": "fill", "is_interactive": true},
     "HermesAgenda.dc.html": {"x": 1520, "y": 7300, "w": 1440, "h": 1500, "title": "08 · Manajemen, tugas & agenda agen", "expand": "fill", "is_interactive": true},
     "AvatarKit.dc.html": {"x": 3040, "y": 7300, "w": 1440, "h": 1080, "title": "09 · Kit & pengaturan avatar", "is_interactive": true},
     "Avatar.dc.html": {"x": 4560, "y": 7300, "w": 124, "h": 200, "title": "Komponen · Avatar"}

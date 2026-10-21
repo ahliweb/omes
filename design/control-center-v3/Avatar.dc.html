@@ -86,11 +86,17 @@ body{margin:0}
           <path d="M25 62 L31 72 L37 62" fill="#E8EEF3" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></path>
           <rect x="27" y="50" width="8" height="12" rx="3" fill="#A3B0BC"></rect>
           <circle cx="31" cy="34" r="17" fill="{{ skinFill }}" stroke="{{ outline }}" stroke-width="{{ outlineW }}"></circle>
-          <path d="M14 33 C14 20 22 15 31 15 C41 15 48 21 48 32 C44 26 37 24 31 25 C24 25 18 28 14 33 Z" fill="#3B4652"></path>
+          <path d="M14 33 C14 20 22 15 31 15 C41 15 48 21 48 32 C44 26 37 24 31 25 C24 25 18 28 14 33 Z" fill="{{ hairFill }}"></path>
           <sc-if value="{{ is3d }}" hint-placeholder-val="{{ true }}">
             <ellipse cx="24" cy="30" rx="5" ry="3" fill="#FFFFFF" opacity="0.35"></ellipse>
           </sc-if>
           <rect x="35" y="72" width="9" height="12" rx="2" fill="#E8EEF3" stroke="#0D1115" stroke-width="1.2"></rect>
+          <sc-if value="{{ isOperator }}" hint-placeholder-val="{{ false }}">
+            <g fill="none" stroke="#0D1115" stroke-width="2.2" stroke-linecap="round">
+              <path d="M14 34 C14 18 48 18 48 34"></path>
+              <path d="M47 38 C46 44 42 46 37 46"></path>
+            </g>
+          </sc-if>
         </g>
       </sc-if>
     </g>
@@ -119,7 +125,7 @@ body{margin:0}
   </svg>
 </div>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props='{"agent":{"editor":"enum","options":["lead","code","lint","contract","owner"],"default":"lead"},"look":{"editor":"enum","options":["3d","2d"],"default":"3d"},"state":{"editor":"enum","options":["run","done","fail","wait","unknown"],"default":"run"},"size":{"editor":"int","min":24,"max":320,"default":200},"animate":{"editor":"boolean","default":false},"badge":{"editor":"boolean","default":true},"$preview":{"width":124,"height":200}}'>
+<script type="text/x-dc" data-dc-script data-props='{"agent":{"editor":"enum","options":["lead","code","lint","contract","owner","operator"],"default":"lead"},"look":{"editor":"enum","options":["3d","2d"],"default":"3d"},"state":{"editor":"enum","options":["run","done","fail","wait","unknown"],"default":"run"},"size":{"editor":"int","min":24,"max":320,"default":200},"animate":{"editor":"boolean","default":false},"badge":{"editor":"boolean","default":true},"$preview":{"width":124,"height":200}}'>
 class Component extends DCLogic {
   renderVals() {
     const R = {
@@ -127,7 +133,8 @@ class Component extends DCLogic {
       code: { c: '#C79BEF', d: '#7A4CA6', l: '#E4CCF8', name: 'Analis Kode' },
       lint: { c: '#6FA8F5', d: '#2C5FA8', l: '#B5D2FA', name: 'Lint Checker' },
       contract: { c: '#EF8FB8', d: '#A2466E', l: '#F8C6DB', name: 'Contract Tester' },
-      owner: { c: '#6E7C8A', d: '#3E4955', l: '#9AA7B4', name: 'Owner (manusia)' }
+      owner: { c: '#6E7C8A', d: '#3E4955', l: '#9AA7B4', name: 'Owner (manusia)' },
+      operator: { c: '#D9A55B', d: '#8A6326', l: '#F0CF96', name: 'Operator (manusia)' }
     };
     const S = {
       run: { c: '#7FD3DE', t: 'berjalan' },
@@ -161,7 +168,7 @@ class Component extends DCLogic {
       outlineW: look3d ? 0 : 1.6,
       shadowOpacity: look3d ? 0.45 : 0.25,
       is3d: look3d,
-      isBot: key !== 'owner', isHuman: key === 'owner',
+      isBot: key !== 'owner' && key !== 'operator', isHuman: key === 'owner' || key === 'operator', isOperator: key === 'operator', hairFill: key === 'operator' ? '#5A3E2B' : '#3B4652',
       isLead: key === 'lead', isCode: key === 'code', isLint: key === 'lint', isContract: key === 'contract',
       bobStyle: live ? 'animation:avBob 2.4s ease-in-out infinite' : (anim ? 'animation:avBreath 4.8s ease-in-out infinite' : ''),
       blinkStyle: anim ? 'transform-box:fill-box;transform-origin:50% 50%;animation:avBlink 4.2s infinite' : '',

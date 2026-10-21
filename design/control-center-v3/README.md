@@ -39,7 +39,7 @@ canvas the files were authored in.
 | [`Health.dc.html`](Health.dc.html) | 04 · Health grouped by authority (`omes-host`, `hermes`, `external-provider`) and host matrix that never shows stale data as healthy | no |
 | [`Mobile.dc.html`](Mobile.dc.html) | 05 · On-call phone view (390×844) | links |
 | [`Tokens.dc.html`](Tokens.dc.html) | 06 · Design system v3: surfaces, status vocabulary with shapes and contrast ratios, 6-step type scale, core components | no |
-| [`HermesOffice.dc.html`](HermesOffice.dc.html) | 07 · Hermes agent office: animated 2D floor plan ↔ 3D isometric office, session replay of fixture events, per-agent detail (task, management chain, tool allowlist, agenda) | yes |
+| [`HermesOffice.dc.html`](HermesOffice.dc.html) | 07 · Agent offices by business and hierarchy (organisation → head office → business offices), animated 2D floor plan ↔ 3D isometric view. Head office: approval cycle for `corr-op-0001`. Hermes office: session replay in which agents walk to a delegation meeting, return to their rooms, work and report back, with context-dependent delegation/result lines. Acme office: deployment sequence for `deployment-acme-hermes-01`. Fleet office: host-by-host scan of the 12 sample hosts. Per-person detail (activity, location, management chain, tool allowlist, agenda) | yes |
 | [`HermesAgenda.dc.html`](HermesAgenda.dc.html) | 08 · Management structure, task board and session agenda timeline per agent | filter |
 | [`AvatarKit.dc.html`](AvatarKit.dc.html) | 09 · Avatar kit and settings: agent, 3D/2D style, status, animation, sizes, usage rules | yes |
 | [`Avatar.dc.html`](Avatar.dc.html) | Shared avatar component (`agent`, `state`, `look`, `size`, `animate`, `badge`) imported by screens 07–09 | — |
@@ -47,7 +47,8 @@ canvas the files were authored in.
 The audit page uses three screenshots of the v2 prototype in `assets/`
 (`prototype-v2-overview.png`, `prototype-v2-servers.png`,
 `prototype-v2-mobile-390.png`), and `previews/` holds a static PNG render of
-each v3 screen. Animations respect
+each v3 screen (`previews/HermesOffice.png` shows the multi-office version of
+screen 07, Kantor Hermes floor in 3D, captured mid-replay). Animations respect
 `prefers-reduced-motion`, and the office view has a pause control.
 
 ## Data provenance
@@ -61,6 +62,17 @@ each v3 screen. Animations respect
   placeholder, and the screens show its parent as unknown rather than guessing.
 - Items tagged **contoh** (example) in the agenda and task board are illustrative
   scenarios; the repository has no Hermes schedule data yet.
+- Screen 07's offices are a design grouping, not an OMES component. The head
+  office's approval queue is AWCMS Control Center authority, and only the
+  Hermes office has a recorded agent session. The delegation "meeting" stands
+  for the `delegate_task` calls at 19.00.00; walking and work durations between
+  events are not in the fixture.
+- The Acme and fleet offices have no agents. Their moving objects (release
+  package, racks, alerts) come from the deployment, operation and
+  `sample-fleet.json` data. The Acme step order (deploy → verify 1/2 →
+  rollback → restart requested) is inferred from status, with no timestamps.
+  "Acme" is taken from the resource IDs; the data does not say it is a customer.
+  The operator `user-jane` is the requester recorded on `corr-op-0001`.
 - Proposed rules that need team agreement: resource thresholds (≥75% attention,
   ≥90% critical) and the stale-heartbeat rule (> 3 × poll interval).
 
