@@ -207,10 +207,6 @@ class TestCollectAndMain(unittest.TestCase):
             del os.environ["OMES_TEST_CANARY_SECRET"]
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class TestRunNeverInheritsStdin(unittest.TestCase):
     """_run() is shared by every version/config probe (including
     `hermes acp --version` via health/hermes_config.py). A probe must never
@@ -229,3 +225,7 @@ class TestRunNeverInheritsStdin(unittest.TestCase):
         # returns at once instead of hitting the timeout (-2).
         rc, out, _err = versions._run(["cat"], timeout=5.0)
         self.assertEqual((rc, out), (0, ""))
+
+
+if __name__ == "__main__":
+    unittest.main()
