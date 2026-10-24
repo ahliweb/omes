@@ -294,6 +294,10 @@ flowchart LR
     V --> R[Rollback on failure]
 ```
 
+## AWCMS Bun channel delivery and OMES host runtime boundary
+
+[**AWCMS Bun realtime/notification integration boundary**](docs/awcms-bun-channel-realtime-boundary.md) (issue [#345](https://github.com/ahliweb/omes/issues/345)) documents that AWCMS-hosted CRM campaigns, outbox dispatch and future SSE/WebSocket status use AWCMS's pinned **Bun**. OMES's own **Python HTTPS outbound-only signed pull-worker** and Hermes-native runtime remain unchanged; the future UI stream is not a remote execution channel and does not ship with this docs change.
+
 ## Shipped versus planned OMES and Hermes AI UI/UX
 
 [**Control Center and AI Management UX contract v1.0**](docs/control-center-ai-ux-contract.md) distinguishes existing authorized AWCMS /admin/omes/* operator pages from planned typed Hermes AI Management, Mission Control 3D, browser-transfer and Bun SSE/WS status projection, using the accepted OMES design system (issue [#348](https://github.com/ahliweb/omes/issues/348)). UI contract is documentation, not runtime implementation.
