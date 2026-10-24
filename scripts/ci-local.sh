@@ -86,6 +86,7 @@ WORK=""
 LOGS=""
 SHIM_DIR=""
 REDACT_SED=""
+REDACT_SED_OPTS=()
 NR_DIR=""
 NR_USER=""
 NR_UID="${OMES_CI_NONROOT_UID:-65534}"
@@ -591,11 +592,16 @@ setup_redaction() {
     fi
   done
   printf '%s\n' 's|://[^/@[:space:]]*:[^/@[:space:]]*@|://[REDACTED]@|g' >>"$REDACT_SED"
+  # `sed -u` (unbuffered) is a GNU extension; BusyBox sed rejects it (#329).
+  REDACT_SED_OPTS=()
+  if sed -u -e '' </dev/null >/dev/null 2>&1; then
+    REDACT_SED_OPTS=(-u)
+  fi
 }
 
 redact_stream() {
   if [[ -n "$REDACT_SED" && -s "$REDACT_SED" ]]; then
-    sed -u -f "$REDACT_SED"
+    sed "${REDACT_SED_OPTS[@]}" -f "$REDACT_SED"
   else
     cat
   fi

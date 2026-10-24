@@ -167,10 +167,21 @@ class TestAllowlist(unittest.TestCase):
         for key in hermes_config.ALLOWED_KEYS:
             self.assertIsNone(hermes_config.SECRET_KEY_PATTERN.search(key), key)
 
-    def test_allowlist_is_a_frozenset_of_delegation_keys(self):
+    def test_allowlist_is_a_frozenset_of_known_posture_keys(self):
+        # delegation.* (#270), the two ACP tool-surface keys (#273) and the four
+        # run-budget keys (#275); any other namespace must be added here
+        # deliberately in a reviewed change.
         self.assertIsInstance(hermes_config.ALLOWED_KEYS, frozenset)
+        acp_keys = {"platform_toolsets.acp", "agent.disabled_toolsets"}
+        budget_keys = {
+            "agent.max_turns",
+            "agent.run_budget_seconds",
+            "agent.loop_caps.max_subagents",
+            "agent.loop_caps.max_web_searches",
+        }
         for key in hermes_config.ALLOWED_KEYS:
-            self.assertTrue(key.startswith("delegation."), key)
+            self.assertTrue(key.startswith("delegation.") or key in acp_keys or key in budget_keys, key)
+        self.assertLessEqual(acp_keys | budget_keys, hermes_config.ALLOWED_KEYS)
 
 
 class TestTimeout(unittest.TestCase):

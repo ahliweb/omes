@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Manajemen, tugas dan agenda agen Hermes</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0D1115;color:#E8EEF3;font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7FD3DE}a:hover{color:#A6E4EC}
+:focus-visible{outline:2px solid #7FD3DE;outline-offset:2px;border-radius:6px}
+@keyframes avBob{0%,100%{transform:translateY(0)}50%{transform:translateY(-2.5px)}}
+@keyframes avBreath{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+@keyframes avBlink{0%,92%,100%{transform:scaleY(1)}95%{transform:scaleY(.1)}}
+@keyframes avPulse{0%,100%{opacity:1}50%{opacity:.35}}
+@keyframes agFlow{from{background-position:0 0}to{background-position:0 -24px}}
+@keyframes agStripe{from{background-position:0 0}to{background-position:28px 0}}
+@keyframes agNow{0%,100%{opacity:1}50%{opacity:.45}}
+@keyframes agRise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes agShimmer{0%{left:-40%}100%{left:100%}}
+@media (prefers-reduced-motion: reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+</style>
+</helmet>
+
+<div style="min-height: 100vh; background: #0D1115; display: flex; flex-direction: column">
+  <header style="display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 14px 32px; border-bottom: 1px solid #1C242C">
+    <nav aria-label="Breadcrumb" style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #8D9BA8">
+      <a href="Main.dc.html" style="color: #8D9BA8; text-decoration: none">Ahliweb Production</a>
+      <span aria-hidden="true">/</span><a href="HermesOffice.dc.html" style="color: #8D9BA8; text-decoration: none">Hermes</a>
+      <span aria-hidden="true">/</span><span style="color: #E8EEF3; font-weight: 600">Tugas &amp; agenda</span>
+    </nav>
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE; border: 1px solid #252E38; border-radius: 6px; padding: 3px 8px">sess-main-12345</span>
+    <div style="flex: 1"></div>
+    <a href="HermesOffice.dc.html" style="display: inline-flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 14px; border-radius: 8px; border: 1px solid #344250; color: #E8EEF3; font-size: 13px; font-weight: 600; text-decoration: none">
+      <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2 21 7v10l-9 5-9-5V7z"></path><path d="M12 22V12M21 7l-9 5-9-5"></path></svg>Lihat kantor</a>
+  </header>
+
+  <div style="padding: 24px 32px 48px; display: flex; flex-direction: column; gap: 24px; box-sizing: border-box; width: 100%; max-width: 1440px">
+    <div style="display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap">
+      <div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 420px">
+        <h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em">Manajemen, tugas &amp; agenda</h1>
+        <p style="margin: 0; font-size: 14px; color: #8D9BA8">Siapa melapor ke siapa, apa yang dikerjakan setiap agen, dan kapan. Waktu dalam WIB.</p>
+      </div>
+      <div role="group" aria-label="Saring menurut agen" style="display: flex; flex-wrap: wrap; gap: 6px">
+        <sc-for list="{{ chips }}" as="c" hint-placeholder-count="6">
+          <button onClick="{{ c.pick }}" aria-pressed="{{ c.pressed }}" style="{{ c.style }}">
+            <span style="{{ c.dot }}"></span>{{ c.label }}
+          </button>
+        </sc-for>
+      </div>
+    </div>
+
+    <section aria-labelledby="h-org" style="background: #141A20; border: 1px solid #252E38; border-radius: 14px; padding: 20px 24px; display: flex; flex-direction: column; gap: 16px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <h2 id="h-org" style="margin: 0; font-size: 16px; font-weight: 700">Struktur manajemen</h2>
+        <span style="font-size: 13px; color: #8D9BA8">garis bergerak = delegasi aktif · garis putus = hubungan tak tercatat di pohon</span>
+      </div>
+      <div style="display: flex; gap: 32px; flex-wrap: wrap; align-items: stretch">
+        <div style="flex: 999 1 640px; min-width: 0; display: flex; flex-direction: column; align-items: center">
+          <div style="{{ org.owner.box }}">
+            <dc-import name="Avatar" agent="owner" state="wait" look="3d" size="64" animate="{{ true }}" badge="{{ true }}" hint-size="40px,64px"></dc-import>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 14px; font-weight: 700">Owner</span>
+              <span style="font-size: 12px; color: #8D9BA8">manusia · penyetuju akhir</span>
+              <span style="font-size: 12px; font-weight: 600; color: #E8B44A">1 menunggu keputusan</span>
+            </div>
+          </div>
+          <div style="width: 2px; height: 28px; background: #E8B44A; opacity: .6"></div>
+          <div style="{{ org.lead.box }}">
+            <dc-import name="Avatar" agent="lead" state="run" look="3d" size="64" animate="{{ true }}" badge="{{ true }}" hint-size="40px,64px"></dc-import>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 14px; font-weight: 700">Lead Planner</span>
+              <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">sub-lead-001 · manajer</span>
+              <span style="font-size: 12px; font-weight: 600; color: #7FD3DE">Berjalan · 2 bawahan</span>
+            </div>
+          </div>
+          <div style="width: 2px; height: 22px; background-image: repeating-linear-gradient(180deg, #7FD3DE 0 6px, transparent 6px 12px); animation: agFlow 1.2s linear infinite"></div>
+          <div style="width: 52%; min-width: 280px; height: 2px; background: #344250"></div>
+          <div style="display: flex; justify-content: space-between; width: 52%; min-width: 280px">
+            <div style="width: 2px; height: 22px; background: #344250"></div>
+            <div style="width: 2px; height: 22px; background: #344250"></div>
+          </div>
+          <div style="display: flex; justify-content: center; gap: 24px; flex-wrap: wrap; width: 100%">
+            <div style="{{ org.lint.box }}">
+              <dc-import name="Avatar" agent="lint" state="done" look="3d" size="64" animate="{{ true }}" badge="{{ true }}" hint-size="40px,64px"></dc-import>
+              <div style="display: flex; flex-direction: column; gap: 2px">
+                <span style="font-size: 14px; font-weight: 700">Lint Checker</span>
+                <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">sub-child-001 · eksekutor</span>
+                <span style="font-size: 12px; font-weight: 600; color: #7DD89A">Selesai 19.01.00</span>
+              </div>
+            </div>
+            <div style="{{ org.contract.box }}">
+              <dc-import name="Avatar" agent="contract" state="done" look="3d" size="64" animate="{{ true }}" badge="{{ true }}" hint-size="40px,64px"></dc-import>
+              <div style="display: flex; flex-direction: column; gap: 2px">
+                <span style="font-size: 14px; font-weight: 700">Contract Tester</span>
+                <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">sub-child-002 · eksekutor</span>
+                <span style="font-size: 12px; font-weight: 600; color: #7DD89A">Selesai 19.01.10</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1 1 260px; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 10px">
+          <div style="{{ org.code.box }}">
+            <dc-import name="Avatar" agent="code" state="run" look="3d" size="64" animate="{{ true }}" badge="{{ true }}" hint-size="40px,64px"></dc-import>
+            <div style="display: flex; flex-direction: column; gap: 2px">
+              <span style="font-size: 14px; font-weight: 700">Analis Kode</span>
+              <span style="font-size: 12px; color: #8D9BA8; font-family: 'JetBrains Mono', ui-monospace, monospace">sub-code-001</span>
+              <span style="font-size: 12px; font-weight: 600; color: #7FD3DE">Berjalan</span>
+            </div>
+          </div>
+          <span style="font-size: 13px; line-height: 1.55; color: #B7C3CE">Agen ini muncul di aliran event tetapi tidak ada di pohon orkestrasi. UI menandainya “induk tak diketahui”, bukan menebak manajernya.</span>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-kanban" style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <h2 id="h-kanban" style="margin: 0; font-size: 16px; font-weight: 700">Papan tugas</h2>
+        <span style="font-size: 13px; color: #8D9BA8">{{ kanbanNote }}</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 14px; align-items: start">
+        <sc-for list="{{ columns }}" as="col" hint-placeholder-count="4">
+          <div style="background: #10151A; border: 1px solid #252E38; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 180px">
+            <div style="display: flex; align-items: center; gap: 8px; padding: 2px 4px 4px">
+              <span style="{{ col.dot }}"></span>
+              <h3 style="margin: 0; font-size: 14px; font-weight: 700">{{ col.title }}</h3>
+              <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">{{ col.count }}</span>
+            </div>
+            <sc-for list="{{ col.cards }}" as="k" hint-placeholder-count="2">
+              <article key="{{ k.key }}" style="{{ k.box }}">
+                <div style="display: flex; gap: 10px; align-items: flex-start">
+                  <span style="width: 30px; height: 48px; flex: none; display: flex; align-items: flex-end">
+                    <dc-import name="Avatar" agent="{{ k.agent }}" state="{{ k.state }}" look="2d" size="48" animate="{{ false }}" badge="{{ false }}" hint-size="30px,48px"></dc-import>
+                  </span>
+                  <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+                    <span style="font-size: 14px; font-weight: 600; line-height: 1.4">{{ k.title }}</span>
+                    <span style="font-size: 12px; color: #8D9BA8">{{ k.who }}</span>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center">
+                  <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; padding: 2px 7px; border-radius: 5px; background: #1A2129; border: 1px solid #303B46; color: #B7C3CE">{{ k.meta }}</span>
+                  <span style="{{ k.tagStyle }}">{{ k.tag }}</span>
+                </div>
+                <sc-if value="{{ k.running }}" hint-placeholder-val="{{ false }}">
+                  <div style="position: relative; height: 4px; border-radius: 2px; background: #252E38; overflow: hidden" aria-hidden="true">
+                    <span style="position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px; background: #7FD3DE; animation: agShimmer 1.8s ease-in-out infinite"></span>
+                  </div>
+                </sc-if>
+              </article>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-agenda" style="background: #141A20; border: 1px solid #252E38; border-radius: 14px; overflow: hidden">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid #1C242C">
+        <h2 id="h-agenda" style="margin: 0; font-size: 16px; font-weight: 700">Agenda sesi</h2>
+        <span style="font-size: 13px; color: #8D9BA8">21 Sep 2026 · 19.00–19.06 WIB · garis tegak = snapshot 19.05.00</span>
+      </div>
+      <div style="overflow-x: auto">
+        <div style="min-width: 880px; padding: 8px 20px 18px">
+          <div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; padding: 8px 0">
+            <span></span>
+            <div style="position: relative; height: 18px">
+              <sc-for list="{{ ticks }}" as="t" hint-placeholder-count="7">
+                <span style="{{ t.style }}">{{ t.label }}</span>
+              </sc-for>
+            </div>
+          </div>
+          <sc-for list="{{ lanes }}" as="ln" hint-placeholder-count="5">
+            <div style="display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 16px; align-items: center; padding: 8px 0; border-top: 1px solid #1C242C; animation: agRise .35s ease-out both">
+              <div style="display: flex; align-items: center; gap: 10px; min-width: 0">
+                <span style="width: 26px; height: 42px; flex: none; display: flex; align-items: flex-end">
+                  <dc-import name="Avatar" agent="{{ ln.agent }}" state="{{ ln.state }}" look="3d" size="42" animate="{{ false }}" badge="{{ false }}" hint-size="26px,42px"></dc-import>
+                </span>
+                <div style="display: flex; flex-direction: column; gap: 1px; min-width: 0">
+                  <span style="font-size: 13px; font-weight: 700">{{ ln.name }}</span>
+                  <span style="{{ ln.stateStyle }}">{{ ln.stateLabel }}</span>
+                </div>
+              </div>
+              <div style="position: relative; height: 40px; border-radius: 8px; background-image: linear-gradient(90deg, #1C242C 1px, transparent 1px); background-size: 16.6667% 100%; background-color: #10151A">
+                <div style="position: absolute; left: 83.333%; top: -8px; bottom: -8px; width: 2px; background: #B4BFFA; animation: agNow 2s ease-in-out infinite"></div>
+                <sc-for list="{{ ln.bars }}" as="b" hint-placeholder-count="1">
+                  <div style="{{ b.style }}" title="{{ b.title }}">
+                    <span style="font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis">{{ b.label }}</span>
+                  </div>
+                </sc-for>
+                <sc-for list="{{ ln.marks }}" as="m" hint-placeholder-count="1">
+                  <span style="{{ m.style }}" title="{{ m.title }}"></span>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-berikut" style="display: flex; flex-direction: column; gap: 12px">
+      <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap">
+        <h2 id="h-berikut" style="margin: 0; font-size: 16px; font-weight: 700">Agenda berikutnya</h2>
+        <span style="display: inline-flex; padding: 1px 7px; border-radius: 4px; border: 1px solid #3B4470; color: #B4BFFA; font-size: 12px; font-weight: 600">contoh skenario</span>
+        <span style="font-size: 13px; color: #8D9BA8">sumber produksi: jadwal cron &amp; antrean Hermes</span>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(min(250px, 100%), 1fr)); gap: 12px">
+        <sc-for list="{{ nexts }}" as="n" hint-placeholder-count="5">
+          <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 14px; display: flex; gap: 12px; align-items: flex-start">
+            <span style="width: 34px; height: 54px; flex: none; display: flex; align-items: flex-end">
+              <dc-import name="Avatar" agent="{{ n.agent }}" state="wait" look="3d" size="54" animate="{{ false }}" badge="{{ false }}" hint-size="34px,54px"></dc-import>
+            </span>
+            <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0">
+              <span style="font-size: 12px; font-weight: 600; color: #8D9BA8">{{ n.name }} · {{ n.when }}</span>
+              <span style="font-size: 14px; font-weight: 600; line-height: 1.4">{{ n.what }}</span>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { agent: 'all' };
+  }
+  renderVals() {
+    const f = this.state.agent;
+    const show = (k) => f === 'all' || f === k;
+    const SC = { run: '#7FD3DE', done: '#7DD89A', wait: '#E8B44A', unknown: '#A3B0BC' };
+    const SL = { run: 'Berjalan', done: 'Selesai', wait: 'Menunggu', unknown: 'Tak diketahui' };
+    const RC = { lead: '#5FC8D6', code: '#C79BEF', lint: '#6FA8F5', contract: '#EF8FB8', owner: '#A3B0BC' };
+    const NM = { lead: 'Lead Planner', code: 'Analis Kode', lint: 'Lint Checker', contract: 'Contract Tester', owner: 'Owner' };
+    const chipList = [['all', 'Semua agen'], ['lead', NM.lead], ['code', NM.code], ['lint', NM.lint], ['contract', NM.contract], ['owner', 'Owner (manusia)']];
+    const chips = chipList.map((c) => ({
+      label: c[1], pressed: f === c[0] ? 'true' : 'false',
+      pick: () => this.setState({ agent: c[0] }),
+      dot: c[0] === 'all' ? 'display:none' : 'width:8px;height:8px;border-radius:50%;background:' + RC[c[0]],
+      style: 'display:inline-flex;align-items:center;gap:7px;min-height:36px;padding:0 12px;border-radius:999px;font:inherit;font-size:13px;cursor:pointer;' + (f === c[0] ? 'background:#1A2832;border:1px solid #2A4752;color:#E8EEF3;font-weight:700' : 'background:transparent;border:1px solid #252E38;color:#B7C3CE;font-weight:500')
+    }));
+    const node = (k, dashed) => ({
+      box: 'display:flex;align-items:flex-end;gap:12px;padding:10px 16px 10px 12px;border-radius:12px;background:#0F1419;transition:opacity .3s ease,box-shadow .3s ease;' + (dashed ? 'border:1.5px dashed #4A5868;' : 'border:1px solid #252E38;') + (show(k) ? 'opacity:1;' + (f === k ? 'box-shadow:0 0 0 2px ' + RC[k] : '') : 'opacity:.35')
+    });
+    const org = { owner: node('owner'), lead: node('lead'), lint: node('lint'), contract: node('contract'), code: node('code', true) };
+    const CARDS = [
+      { col: 'queue', agent: 'lead', state: 'wait', title: 'Susun ringkasan sesi untuk owner', meta: 'setelah analisis selesai', tag: 'contoh' },
+      { col: 'queue', agent: 'code', state: 'wait', title: 'Laporkan temuan analisis indeks', meta: 'tujuan belum tercatat', tag: 'contoh' },
+      { col: 'run', agent: 'lead', state: 'run', title: 'Delegasikan subtugas ke agen anak', meta: 'delegate_task · sejak 19.00.00', tag: '' },
+      { col: 'run', agent: 'code', state: 'run', title: 'Analisis definisi indeks', meta: 'sejak 19.00.00 · tool tak dilaporkan', tag: '' },
+      { col: 'owner', agent: 'owner', state: 'wait', title: 'restart → server-acme-01', meta: 'corr-op-0001 · rencana belum ada', tag: 'dari operator' },
+      { col: 'done', agent: 'lint', state: 'done', title: 'ShellCheck & lint lulus bersih', meta: 'run_command · 19.01.00', tag: '' },
+      { col: 'done', agent: 'contract', state: 'done', title: 'Validasi 100 skema kontrak', meta: 'run_command · 19.01.10', tag: '' }
+    ];
+    const COLS = [['queue', 'Antre', '#8D9BA8'], ['run', 'Berjalan', '#7FD3DE'], ['owner', 'Butuh owner', '#E8B44A'], ['done', 'Selesai', '#7DD89A']];
+    const visible = CARDS.filter((c) => show(c.agent));
+    const columns = COLS.map((c) => {
+      const cards = visible.filter((k) => k.col === c[0]).map((k, i) => ({
+        key: c[0] + i + f,
+        agent: k.agent, state: k.state, title: k.title, meta: k.meta, tag: k.tag,
+        who: NM[k.agent] + (k.agent === 'owner' ? ' · manusia' : ''),
+        running: k.col === 'run',
+        tagStyle: k.tag ? 'font-size:12px;font-weight:600;padding:1px 7px;border-radius:4px;' + (k.tag === 'contoh' ? 'border:1px solid #3B4470;color:#B4BFFA' : 'border:1px solid #4A3A1C;color:#E8B44A') : 'display:none',
+        box: 'display:flex;flex-direction:column;gap:10px;padding:12px;border-radius:10px;background:#141A20;border:1px solid #252E38;box-shadow:inset 3px 0 0 ' + RC[k.agent] + ';animation:agRise .3s ease-out both'
+      }));
+      return { title: c[1], count: String(cards.length), cards, dot: 'width:10px;height:10px;border-radius:50%;background:' + c[2] };
+    });
+    const pct = (sec) => (sec / 360 * 100).toFixed(3) + '%';
+    const bar = (a, b, kind, label, title) => ({
+      label, title,
+      style: 'position:absolute;top:7px;height:26px;border-radius:6px;display:flex;align-items:center;padding:0 10px;box-sizing:border-box;color:#0D1115;left:' + pct(a) + ';width:' + pct(b - a) + ';' +
+        (kind === 'run' ? 'background-color:#7FD3DE;background-image:repeating-linear-gradient(135deg,rgba(255,255,255,.28) 0 8px,transparent 8px 14px);background-size:28px 100%;animation:agStripe 1s linear infinite' : 'background:#7DD89A')
+    });
+    const mark = (sec, c, title) => ({ title, style: 'position:absolute;top:13px;width:14px;height:14px;margin-left:-7px;border-radius:50%;border:2px solid #0D1115;box-sizing:border-box;left:' + pct(sec) + ';background:' + c });
+    const LANES = [
+      { agent: 'lead', state: 'run', bars: [bar(0, 300, 'run', 'delegate_task · menunggu hasil', 'Lead Planner berjalan sejak 19.00.00')], marks: [mark(60, '#7DD89A', 'Hasil lint diterima 19.01.00'), mark(70, '#7DD89A', 'Hasil kontrak diterima 19.01.10')] },
+      { agent: 'code', state: 'run', bars: [bar(0, 300, 'run', 'analisis definisi indeks', 'Analis Kode berjalan sejak 19.00.00')], marks: [] },
+      { agent: 'lint', state: 'done', bars: [bar(0, 60, 'done', 'lint ✓', 'ShellCheck dan lint 19.00.00–19.01.00')], marks: [] },
+      { agent: 'contract', state: 'done', bars: [bar(0, 70, 'done', '100 skema ✓', 'Validasi skema 19.00.00–19.01.10')], marks: [] },
+      { agent: 'owner', state: 'wait', bars: [], marks: [] }
+    ];
+    const lanes = LANES.filter((l) => show(l.agent)).map((l) => ({
+      agent: l.agent, state: l.state, bars: l.bars, marks: l.marks, name: NM[l.agent],
+      stateLabel: l.agent === 'owner' ? 'tidak ada slot terjadwal di sesi' : SL[l.state],
+      stateStyle: 'font-size:12px;font-weight:600;color:' + (l.agent === 'owner' ? '#8D9BA8' : SC[l.state])
+    }));
+    const ticks = [0, 1, 2, 3, 4, 5, 6].map((m) => ({
+      label: '19.0' + m,
+      style: "position:absolute;top:0;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:#8D9BA8;left:" + (m / 6 * 100).toFixed(3) + '%;transform:translateX(' + (m === 0 ? '0' : m === 6 ? '-100%' : '-50%') + ')'
+    }));
+    const NEXT = [
+      ['lead', 'setelah analisis', 'Susun ringkasan sesi dan kirim ke owner'],
+      ['code', 'saat selesai', 'Laporkan temuan definisi indeks ke manajer'],
+      ['lint', 'setelah apply berikutnya', 'Lint ulang modul yang berubah'],
+      ['contract', 'saat fixture berubah', 'Validasi ulang skema kontrak v1'],
+      ['owner', 'hari ini', 'Putuskan corr-op-0001 setelah rencana dilampirkan']
+    ];
+    const nexts = NEXT.filter((n) => show(n[0])).map((n) => ({ agent: n[0], name: NM[n[0]], when: n[1], what: n[2] }));
+    return {
+      chips, org, columns, lanes, ticks, nexts,
+      kanbanNote: f === 'all' ? '7 kartu · 2 berjalan · 1 butuh owner' : 'disaring: ' + NM[f]
+    };
+  }
+}
+</script>
+</body>
+</html>

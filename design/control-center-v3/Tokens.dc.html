@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>Sistem desain v3 — OMES Control Center</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0D1115;color:#E8EEF3;font-family:'Public Sans',system-ui,-apple-system,'Segoe UI',sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#7FD3DE}a:hover{color:#A6E4EC}
+</style>
+</helmet>
+
+<div style="width: 1440px; min-height: 1500px; box-sizing: border-box; padding: 64px; background: #0D1115; display: flex; flex-direction: column; gap: 48px">
+
+  <header style="display: flex; flex-direction: column; gap: 12px; max-width: 920px">
+    <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 13px; color: #7FD3DE">menggantikan ui-ux-design-system.md §2 · kandidat ADR baru</span>
+    <h1 style="margin: 0; font-size: 44px; line-height: 1.1; font-weight: 700; letter-spacing: -0.025em">Sistem desain v3: tenang secara default, keras saat ada masalah</h1>
+    <p style="margin: 0; font-size: 17px; line-height: 1.6; color: #B7C3CE">Palet gelap dan tipografi v2 dipertahankan. Yang berubah: warna hanya dipakai untuk status, setiap status punya bentuk dan teks, skala huruf dipangkas menjadi enam langkah, dan semua pasangan teks lolos 4,5:1.</p>
+  </header>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Warna permukaan &amp; tinta</h2>
+    <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 12px">
+      <sc-for list="{{ surfaces }}" as="c" hint-placeholder-count="8">
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <div style="{{ c.sw }}"></div>
+          <span style="font-size: 13px; font-weight: 600">{{ c.name }}</span>
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">{{ c.hex }}</span>
+          <span style="font-size: 12px; color: #8D9BA8">{{ c.use }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="display: flex; flex-direction: column; gap: 16px">
+    <h2 style="margin: 0; font-size: 22px; font-weight: 700">Kosakata status — satu arti, satu bentuk, satu warna</h2>
+    <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; overflow: hidden">
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 12px 24px; border-bottom: 1px solid #252E38; font-size: 12px; font-weight: 700; color: #8D9BA8">
+        <span>Lencana</span><span>Teks / latar</span><span>Kontras pada panel</span><span>Kapan dipakai</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 14px 24px; border-bottom: 1px solid #1C242C; align-items: center">
+        <span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: rgba(240,122,104,0.14); color: #F49A8B; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M8 3h8l5 5v8l-5 5H8l-5-5V8z"></path><path d="M12 8v5M12 16h.01" stroke-linecap="round"></path></svg>Kritis</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">#F49A8B / 14%</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">8,21 : 1</span>
+        <span style="font-size: 13px; line-height: 1.5; color: #B7C3CE">Gagal, terekspos, atau sumber daya ≥90%. Selalu disertai tindakan.</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 14px 24px; border-bottom: 1px solid #1C242C; align-items: center">
+        <span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: rgba(163,176,188,0.14); color: #C3CDD6; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3 3"></circle><path d="M9.5 9.5a2.5 2.5 0 0 1 4.6 1.3c0 1.7-2.1 2-2.1 3.2M12 17h.01"></path></svg>Tak diketahui</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">#C3CDD6 / 14%</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">10,87 : 1</span>
+        <span style="font-size: 13px; line-height: 1.5; color: #B7C3CE">Data basi, hilang, atau tidak valid terhadap kontrak. Nilai ditampilkan “—”, bukan 0.</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 14px 24px; border-bottom: 1px solid #1C242C; align-items: center">
+        <span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: rgba(232,180,74,0.14); color: #E8B44A; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"><path d="M12 3 2 20h20z"></path><path d="M12 10v4M12 17h.01" stroke-linecap="round"></path></svg>Perhatian</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">#E8B44A / 14%</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">9,23 : 1</span>
+        <span style="font-size: 13px; line-height: 1.5; color: #B7C3CE">Drift non-kritis, rollback, sumber daya 75–89%.</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 14px 24px; border-bottom: 1px solid #1C242C; align-items: center">
+        <span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: rgba(154,168,248,0.14); color: #B4BFFA; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>Menunggu</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">#B4BFFA / 14%</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">9,82 : 1</span>
+        <span style="font-size: 13px; line-height: 1.5; color: #B7C3CE">Gerbang alur kerja: persetujuan, antrean, dijadwalkan.</span>
+      </div>
+      <div style="display: grid; grid-template-columns: 200px 120px 160px minmax(0, 1fr); gap: 20px; padding: 14px 24px; align-items: center">
+        <span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px 3px 7px; border-radius: 999px; background: rgba(111,208,140,0.12); color: #7DD89A; font-size: 12px; font-weight: 700"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8 12 3 3 5-6"></path></svg>Sehat</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">#7DD89A / 12%</span>
+        <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">10,15 : 1</span>
+        <span style="font-size: 13px; line-height: 1.5; color: #B7C3CE">Hanya bila data segar dan semua check lulus. Lulus sebagian bukan hijau.</span>
+      </div>
+    </div>
+  </section>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 32px">
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <h2 style="margin: 0; font-size: 22px; font-weight: 700">Tipografi — 6 langkah (v2: 14 ukuran)</h2>
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 8px 24px">
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid #1C242C; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">28 / 700</span>
+          <span style="font-size: 28px; font-weight: 700; letter-spacing: -0.02em">Judul halaman, angka KPI</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid #1C242C; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">20 / 700</span>
+          <span style="font-size: 20px; font-weight: 700">Judul detail objek</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid #1C242C; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">16 / 700</span>
+          <span style="font-size: 16px; font-weight: 700">Judul panel</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid #1C242C; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">14 / 400–600</span>
+          <span style="font-size: 14px">Teks isi, navigasi, tombol</span>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; border-bottom: 1px solid #1C242C; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">13 / 400</span>
+          <span style="font-size: 13px; color: #B7C3CE">Sel tabel, keterangan, <span style="font-family: 'JetBrains Mono', ui-monospace, monospace">omes-app-01</span></span>
+        </div>
+        <div style="display: grid; grid-template-columns: 110px minmax(0, 1fr); gap: 16px; padding: 12px 0; align-items: baseline">
+          <span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #8D9BA8">12 / 600</span>
+          <span style="font-size: 12px; font-weight: 600; color: #8D9BA8">Label kolom, lencana, waktu — batas bawah</span>
+        </div>
+      </div>
+      <span style="font-size: 13px; color: #8D9BA8">Public Sans untuk UI · JetBrains Mono untuk ID, hash, versi, perintah, dan angka telemetri. Tanpa label huruf kapital kecil.</span>
+    </section>
+
+    <section style="display: flex; flex-direction: column; gap: 16px">
+      <h2 style="margin: 0; font-size: 22px; font-weight: 700">Komponen inti</h2>
+      <div style="background: #141A20; border: 1px solid #252E38; border-radius: 12px; padding: 24px; display: flex; flex-direction: column; gap: 22px">
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <span style="font-size: 12px; font-weight: 600; color: #8D9BA8">Tombol · tinggi 44 (36 di baris padat)</span>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <button style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: #5FC8D6; border: none; color: #071417; font: inherit; font-size: 14px; font-weight: 700">Utama</button>
+            <button style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: transparent; border: 1px solid #344250; color: #E8EEF3; font: inherit; font-size: 14px; font-weight: 600">Sekunder</button>
+            <button style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: transparent; border: 1px solid #5A2E28; color: #F49A8B; font: inherit; font-size: 14px; font-weight: 600">Merusak</button>
+            <button disabled="{{ true }}" style="min-height: 44px; padding: 0 18px; border-radius: 8px; background: #1A2129; border: 1px solid #252E38; color: #6E7C89; font: inherit; font-size: 14px; font-weight: 600">Nonaktif</button>
+          </div>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <label for="tok-input" style="font-size: 13px; font-weight: 600">Konfirmasi ketik</label>
+          <input id="tok-input" type="text" value="omes-app-01" style="min-height: 44px; box-sizing: border-box; background: #0D1115; border: 1px solid #344250; border-radius: 8px; padding: 0 12px; color: #E8EEF3; font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; max-width: 320px">
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px">
+          <span style="font-size: 12px; font-weight: 600; color: #8D9BA8">Bar sumber daya · netral bila normal</span>
+          <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px">
+            <div style="display: flex; flex-direction: column; gap: 5px"><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #B7C3CE">52%</span><div style="height: 4px; border-radius: 2px; background: #252E38"><div style="width: 52%; height: 100%; border-radius: 2px; background: #5E6B78"></div></div></div>
+            <div style="display: flex; flex-direction: column; gap: 5px"><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #E8B44A; font-weight: 600">84%</span><div style="height: 4px; border-radius: 2px; background: #252E38"><div style="width: 84%; height: 100%; border-radius: 2px; background: #E8B44A"></div></div></div>
+            <div style="display: flex; flex-direction: column; gap: 5px"><span style="font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 12px; color: #F49A8B; font-weight: 600">93%</span><div style="height: 4px; border-radius: 2px; background: #252E38"><div style="width: 93%; height: 100%; border-radius: 2px; background: #F07A68"></div></div></div>
+          </div>
+        </div>
+        <span style="font-size: 12px; line-height: 1.5; color: #8D9BA8">Spasi kelipatan 4 (4 · 8 · 12 · 16 · 20 · 24 · 32) · radius 6 kontrol, 8 tombol, 12 panel, 999 lencana.</span>
+      </div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1500}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const list = [
+      ['Kanvas', '#0D1115', 'latar halaman'],
+      ['Sidebar', '#10151A', 'navigasi'],
+      ['Panel', '#141A20', 'kartu, tabel'],
+      ['Garis', '#252E38', 'batas panel'],
+      ['Tinta', '#E8EEF3', '14,98 : 1'],
+      ['Tinta 2', '#B7C3CE', '9,77 : 1'],
+      ['Redup', '#8D9BA8', '6,16 : 1 (min. 5,71)'],
+      ['Aksen', '#5FC8D6', 'tindakan utama saja']
+    ];
+    const surfaces = list.map((c) => ({
+      name: c[0], hex: c[1], use: c[2],
+      sw: 'height:72px;border-radius:10px;border:1px solid #303B46;background:' + c[1]
+    }));
+    return { surfaces };
+  }
+}
+</script>
+</body>
+</html>
