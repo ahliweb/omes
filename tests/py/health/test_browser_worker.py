@@ -26,6 +26,7 @@ import shutil
 import stat
 import sys
 import tempfile
+import types
 import unittest
 from unittest import mock
 
@@ -128,6 +129,10 @@ class World:
         # a healthy world injects per-job isolation evidence explicitly.
         deps.isolation = lambda cfg: {"session_isolation": "per_job", "codes": []}
         deps.uid = lambda: os.geteuid()
+        # Hermetic root-safety input: every browser binary is a root-owned,
+        # non-group/world-writable file unless a test says otherwise, so the
+        # result does not depend on who runs the suite or on /usr/bin.
+        deps.stat = lambda path: fake_stat(0, 0o755)
         self.deps = deps
 
     def collect(self):
@@ -297,6 +302,17 @@ def _s_browser_missing(w, stack):
     w.deps.which = lambda name: "/usr/bin/chromium"
 
 
+def fake_stat(uid, mode):
+    return types.SimpleNamespace(st_uid=uid, st_mode=stat.S_IFREG | mode)
+
+
+def _s_browser_unsafe(w, stack):
+    # Run as root against a binary a non-root account owns.
+    w.deps.uid = lambda: 0
+    w.deps.stat = lambda path: fake_stat(1000, 0o755)
+    w.deps.browser_version = mock.Mock(side_effect=AssertionError("an unsafe binary must never be executed"))
+
+
 def _s_browser_version_unknown(w, stack):
     w.deps.browser_version = lambda binary: None
 
@@ -387,6 +403,7 @@ SCENARIOS = {
     "ADAPTER_VERSION_UNDECLARED": (_drop_env("OMES_BROWSER_WORKER_ADAPTER_VERSION"), "unknown"),
     "BROWSER_PIN_UNDECLARED": (_drop_env("OMES_BROWSER_WORKER_BROWSER_PIN"), "unknown"),
     "BROWSER_BINARY_MISSING": (_s_browser_missing, "blocked"),
+    "BROWSER_BINARY_UNSAFE": (_s_browser_unsafe, "blocked"),
     "BROWSER_VERSION_UNKNOWN": (_s_browser_version_unknown, "unknown"),
     "BROWSER_PIN_MISMATCH": (_set_env(OMES_BROWSER_WORKER_BROWSER_PIN="chromium-1.0.0"), "blocked"),
     "CDP_LISTENER_NONLOOPBACK": (_s_listeners(SS_WILDCARD_CDP), "blocked"),
@@ -646,6 +663,121 @@ class TestBrowserRuntime(unittest.TestCase):
         os.chmod(failing, 0o755)
         self.assertIsNone(bw.default_browser_version(failing))
         self.assertIsNone(bw.default_browser_version(os.path.join(world.tmp, "missing")))
+
+
+class TestBrowserBinaryRootSafety(unittest.TestCase):
+    """When the check runs as root, a browser binary that is not root-owned or
+    is group/world-writable is refused (not ready) and never executed
+    (reviewer note on #313, item of #325)."""
+
+    def assertBrowserAccepted(self, world, version="chromium-122.0.6261.94"):
+        # The faked uid also feeds the profile-root ownership check, so the
+        # overall state is not asserted here, only the browser probe's result.
+        document, results = world.collect()
+        browser = next(r for r in results if r["probe"] == "browser")
+        self.assertEqual(browser["codes"], [])
+        self.assertNotIn("BROWSER_BINARY_UNSAFE", document["reason_codes"])
+        self.assertEqual((document["browser_engine"], document["browser_version"]), ("chromium", version))
+
+    def _root_world(self, uid, mode):
+        world = World(self)
+        world.deps.uid = lambda: 0
+        world.deps.stat = lambda path: fake_stat(uid, mode)
+        return world
+
+    def _assert_refused(self, world):
+        world.deps.browser_version = mock.Mock(side_effect=AssertionError("an unsafe binary must never be executed"))
+        document, results = world.collect()
+        self.assertEqual(document["state"], "blocked")
+        self.assertIn("BROWSER_BINARY_UNSAFE", document["reason_codes"])
+        self.assertNotEqual(document["state"], "ready")
+        self.assertNotIn(bw.READY_CODE, document["reason_codes"])
+        self.assertEqual((document["browser_engine"], document["browser_version"]), ("unknown", "unknown"))
+        # An unsafe binary is not also reported as missing, mismatched or unversioned.
+        for other in ("BROWSER_BINARY_MISSING", "BROWSER_VERSION_UNKNOWN", "BROWSER_PIN_MISMATCH", "BROWSER_PIN_UNDECLARED"):
+            self.assertNotIn(other, document["reason_codes"])
+        self.assertEqual(schema_errors(document), [])
+        world.deps.browser_version.assert_not_called()
+        return results
+
+    def test_root_refuses_a_binary_owned_by_another_account(self):
+        results = self._assert_refused(self._root_world(1000, 0o755))
+        browser = next(r for r in results if r["probe"] == "browser")
+        self.assertEqual(browser["detail"]["browser_source"], "explicit_unsafe")
+
+    def test_root_refuses_a_group_writable_root_owned_binary(self):
+        self._assert_refused(self._root_world(0, 0o775))
+
+    def test_root_refuses_a_world_writable_root_owned_binary(self):
+        self._assert_refused(self._root_world(0, 0o757))
+
+    def test_root_refuses_when_the_binary_cannot_be_stat_ed(self):
+        world = World(self)
+        world.deps.uid = lambda: 0
+        world.deps.stat = mock.Mock(side_effect=PermissionError("denied"))
+        self._assert_refused(world)
+
+    def test_root_accepts_a_root_owned_binary_without_group_or_world_write(self):
+        for mode in (0o755, 0o700, 0o555):
+            with self.subTest(mode=oct(mode)):
+                world = self._root_world(0, mode)
+                self.assertBrowserAccepted(world)
+
+    def test_non_root_is_never_subject_to_the_check(self):
+        world = World(self)
+        world.deps.uid = lambda: 1000
+        world.deps.stat = mock.Mock(side_effect=AssertionError("a non-root run must not stat the binary"))
+        self.assertBrowserAccepted(world)
+        world.deps.stat.assert_not_called()
+
+    def test_the_resolved_symlink_target_is_what_is_checked(self):
+        world = World(self)
+        link = os.path.join(world.tmp, "link-chromium")
+        os.symlink(world.browser, link)
+        world.env["OMES_BROWSER_WORKER_BROWSER_BIN"] = link
+        world.deps.uid = lambda: 0
+        seen = []
+        world.deps.stat = lambda path: seen.append(path) or fake_stat(1000, 0o755)
+        self._assert_refused(world)
+        self.assertEqual(seen, [os.path.realpath(world.browser)])
+
+    def test_a_path_discovered_unsafe_binary_is_refused_not_skipped(self):
+        world = World(self)
+        del world.env["OMES_BROWSER_WORKER_BROWSER_BIN"]
+        found = []
+        world.deps.which = lambda name: found.append(name) or "/usr/bin/" + name
+        world.deps.uid = lambda: 0
+        world.deps.stat = lambda path: fake_stat(1000, 0o755)
+        results = self._assert_refused(world)
+        # The first candidate is refused; no later PATH candidate rescues it.
+        self.assertEqual(found, ["chromium"])
+        browser = next(r for r in results if r["probe"] == "browser")
+        self.assertEqual(browser["detail"]["browser_source"], "path_unsafe")
+
+    def test_a_declared_unsafe_binary_is_not_rescued_by_path(self):
+        world = self._root_world(1000, 0o755)
+        world.deps.which = lambda name: "/usr/bin/chromium"
+        self._assert_refused(world)
+
+    def test_the_playwright_cache_is_never_executed_so_is_never_checked(self):
+        world = World(self)
+        del world.env["OMES_BROWSER_WORKER_BROWSER_BIN"]
+        base = os.path.join(world.home, ".cache", "ms-playwright", "chromium-1194", "chrome-linux")
+        os.makedirs(base)
+        pathlib.Path(base, "..", "INSTALLATION_COMPLETE").write_text("", encoding="utf-8")
+        exe = pathlib.Path(base, "chrome")
+        exe.write_text("#!/bin/sh\n", encoding="utf-8")
+        os.chmod(exe, 0o755)
+        world.env["OMES_BROWSER_WORKER_BROWSER_PIN"] = "playwright-chromium-1194"
+        world.deps.uid = lambda: 0
+        world.deps.stat = mock.Mock(side_effect=AssertionError("the cache browser is not executed, so it is not stat-ed"))
+        world.deps.browser_version = mock.Mock(side_effect=AssertionError("the bundled browser must never be executed"))
+        self.assertBrowserAccepted(world, version="playwright-chromium-1194")
+
+    def test_default_stat_and_uid_are_the_real_ones(self):
+        world = World(self)
+        self.assertEqual(bw.Deps().uid(), os.geteuid())
+        self.assertEqual(bw.Deps().stat(world.browser).st_ino, os.stat(world.browser).st_ino)
 
 
 class TestExposure(unittest.TestCase):

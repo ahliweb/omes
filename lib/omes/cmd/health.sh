@@ -112,7 +112,9 @@ Targets:
             resource floors, orphan sessions/leftover profiles, and
             heartbeat freshness. Metadata only - never a cookie, profile
             content, URL, prompt or credential - and it never launches a
-            browser. --json prints exactly the document that validates
+            browser. As root it refuses (BROWSER_BINARY_UNSAFE) a browser
+            binary that is not root-owned or is group/world-writable rather
+            than executing it. --json prints exactly the document that validates
             against contracts/browser-transfer/v1/browser-worker-readiness.schema.json.
             Per-job isolation evidence is Not implemented yet (tracked in
             #298, depends on #276), so the state is never 'ready' today.

@@ -160,6 +160,11 @@ REASONS: dict = {
         "no usable Chromium-family browser binary was found",
         "install the browser the worker pins, or set OMES_BROWSER_WORKER_BROWSER_BIN to its absolute path",
     ),
+    "BROWSER_BINARY_UNSAFE": (
+        SEV_BLOCKED,
+        "run as root, the browser binary is not root-owned or is group/world-writable, so it was not executed",
+        "make the binary root-owned and not group/world-writable (chown root:root, chmod go-w), or run the check as the worker account",
+    ),
     "BROWSER_VERSION_UNKNOWN": (
         SEV_UNKNOWN,
         "a browser was found but its version could not be determined",
@@ -591,6 +596,10 @@ def default_uid() -> int:
     return os.geteuid()
 
 
+def default_stat(path: str) -> os.stat_result:
+    return os.stat(path)
+
+
 class Deps:
     """Bundle of every side effect, so each probe is a pure function of its
     inputs under test. Attribute assignment replaces any dependency."""
@@ -607,6 +616,7 @@ class Deps:
         self.hermes_version: Callable[[], Optional[str]] = default_hermes_version
         self.isolation: Callable[[Config], dict] = default_isolation
         self.uid: Callable[[], int] = default_uid
+        self.stat: Callable[[str], os.stat_result] = default_stat
 
 
 # ---------------------------------------------------------------------------
@@ -710,6 +720,24 @@ def _has_executable(root: str, depth: int = 2) -> bool:
     return False
 
 
+def binary_unsafe_for_root(path: str, deps: Deps) -> bool:
+    """True when the check runs as root (euid 0) and `path` - the resolved
+    binary that `<browser> --version` would execute - is not root-owned or is
+    group/world-writable. Running such a file as root hands root to whoever
+    can write it, so the binary is reported as not ready and never executed.
+    A stat failure is treated as unsafe (fail closed). Non-root runs are not
+    affected: they execute nothing the invoking user could not already run.
+    Only the binary itself is checked, not its parent directories, and a
+    Playwright-cache browser is never executed so it is never checked."""
+    if deps.uid() != 0:
+        return False
+    try:
+        st = deps.stat(path)
+    except OSError:
+        return True
+    return st.st_uid != 0 or bool(st.st_mode & 0o022)
+
+
 def probe_browser(cfg: Config, deps: Deps) -> dict:
     engine = "not_installed"
     label: Optional[str] = None
@@ -721,8 +749,11 @@ def probe_browser(cfg: Config, deps: Deps) -> dict:
         # runtime than the one the operator pinned).
         real = os.path.realpath(cfg.browser_bin)
         if os.path.isfile(real) and os.access(real, os.X_OK):
-            source = "explicit"
-            engine, label = _browser_label(deps.browser_version(cfg.browser_bin))
+            if binary_unsafe_for_root(real, deps):
+                source = "explicit_unsafe"
+            else:
+                source = "explicit"
+                engine, label = _browser_label(deps.browser_version(cfg.browser_bin))
         else:
             source = "explicit_missing"
     else:
@@ -733,13 +764,23 @@ def probe_browser(cfg: Config, deps: Deps) -> dict:
             for name in _BROWSER_NAMES:
                 found = deps.which(name)
                 if found:
-                    source = "path"
-                    engine, label = _browser_label(deps.browser_version(found))
+                    if binary_unsafe_for_root(os.path.realpath(found), deps):
+                        source = "path_unsafe"
+                    else:
+                        source = "path"
+                        engine, label = _browser_label(deps.browser_version(found))
                     break
 
     codes = []
     fields = {"browser_engine": engine}
-    if engine == "not_installed":
+    if source.endswith("_unsafe"):
+        # Found but deliberately not executed: engine and version stay
+        # `unknown` (the contract has no better value) and the pin is not
+        # compared against anything.
+        codes.append("BROWSER_BINARY_UNSAFE")
+        fields["browser_engine"] = "unknown"
+        fields["browser_version"] = "unknown"
+    elif engine == "not_installed":
         codes.append("BROWSER_BINARY_MISSING")
         fields["browser_version"] = "none"
     elif label is None:

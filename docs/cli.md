@@ -801,7 +801,7 @@ exactly the document defined by
 (`state` is one of `ready`, `degraded`, `blocked`, `unsupported`, `unknown`, with stable
 `reason_codes`, a browser version label and a UTC `observed_at`). It reuses the #71 Ollama probe, the
 #80 exposure audit's listener table and the #216 destination classifier, never launches a browser,
-and never reads a cookie, profile or heartbeat content. **Per-job isolation evidence is Not
+and never reads a cookie, profile or heartbeat content. When it runs **as root** it refuses to execute a browser binary that is not root-owned or is group/world-writable: the result is `blocked` with `BROWSER_BINARY_UNSAFE` (engine and version `unknown`) and `<browser> --version` is not run; non-root runs are unaffected. **Per-job isolation evidence is Not
 implemented yet (tracked in #298, depends on #276), so the state is never `ready` on a real
 host today.** The tenant, server and worker ids come from `OMES_JOBS_TENANT_ID`, `OMES_JOBS_SERVER_ID`
 and `OMES_BROWSER_WORKER_ID` (or `--worker-id`) and are never invented. **Exit codes:** 0 `ready`; 7

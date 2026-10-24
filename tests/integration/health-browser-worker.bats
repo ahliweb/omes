@@ -231,6 +231,26 @@ tcp   LISTEN 0      128    0.0.0.0:11434         0.0.0.0:*     users:(("ollama",
   [[ "$(json_field "$output" 'd["reason_codes"]')" == *"BROWSER_BINARY_MISSING"* ]]
 }
 
+@test "as root, a browser binary owned by another account is refused and not executed (BROWSER_BINARY_UNSAFE)" {
+  # Real-uid test: it can only exercise the root path when the suite itself
+  # runs as root. ci-local.sh runs bats as a non-root uid, where the unit
+  # suite (tests/py/health/test_browser_worker.py) covers this with an
+  # injected uid and stat.
+  [ "$(id -u)" -eq 0 ] || skip "needs to run as root (euid 0)"
+  local unsafe="${OMES_TEST_TMPDIR}/unsafe-chromium" marker="${OMES_TEST_TMPDIR}/was-executed"
+  printf '#!/bin/sh\ntouch "%s"\necho "Chromium 122.0.6261.94 unofficial"\n' "$marker" >"$unsafe"
+  chmod 0755 "$unsafe"
+  chown 65534:65534 "$unsafe"
+  export OMES_BROWSER_WORKER_BROWSER_BIN="$unsafe"
+  omes_run_stdout_only "$OMES_BIN" health browser-worker --json
+  [ "$status" -eq 7 ]
+  assert_contract "$output"
+  [ "$(json_field "$output" 'd["state"]')" = "blocked" ]
+  [ "$(json_field "$output" 'd["browser_engine"]')" = "unknown" ]
+  [[ "$(json_field "$output" 'd["reason_codes"]')" == *"BROWSER_BINARY_UNSAFE"* ]]
+  [ ! -e "$marker" ]
+}
+
 @test "a browser version that differs from the pin is blocked" {
   export SHIM_CHROMIUM_VERSION="Chromium 123.0.0.1 unofficial"
   omes_run_stdout_only "$OMES_BIN" health browser-worker --json
