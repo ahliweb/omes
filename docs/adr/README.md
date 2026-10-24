@@ -46,6 +46,7 @@ architecture and state model."
 | [0032](0032-multi-agent-control-patterns-boundary.md) | Multi-agent control patterns adopted without a second agent runtime | Accepted |
 | [0033](0033-browser-data-transfer-ownership-and-playwright-boundary.md) | Delegated AI browser transfer with constrained Playwright and existing AWCMS Control Center | Proposed |
 | [0034](0034-local-ci-as-the-per-pr-check.md) | Local CI as the per-PR check; GitHub Actions manual-only | Accepted |
+| [0036](0036-omes-web-separated-repositories-versioned-integration.md) | OMES and OMES-Web remain separate with versioned integrations and canonical Control Center ownership | Proposed |
 
 ADRs 0012 and 0013 were authored on 2026-09-19 as part of issue
 [#85](https://github.com/ahliweb/omes/issues/85), "Define an

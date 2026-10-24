@@ -289,3 +289,7 @@ command.
   and transition durations to effectively zero for users who ask for it at the OS/browser level.
 - **Document metadata**: `<html lang="id">` (the prototype's UI copy is Indonesian) and a `<title>` are both present.
 - **Dialog/status semantics**: the operation drawer is a labelled modal dialog with a keyboard-focusable surface, and the polling status is exposed through a polite live region. The reference prototype does not yet implement an interactive ARIA tree or live event stream; that remains part of the functional Control Center work tracked by #198/#201.
+
+## Screen evidence and planned AI extensions (2026-10-24)
+
+The [**OMES Control Center + Hermes AI screen contract**](control-center-ai-ux-contract.md) provides an evidence-tagged **OM-01–OM-14** inventory, screen field/action/state contracts, future typed AI approvals, browser-transfer UX, 3D Mission Control accessibility and the AWCMS Bun realtime/OMES Python worker boundary. This is a **supplement** to these accepted design tokens and does not silently replace any shipped screen or agent runtime. Tracked [#348](https://github.com/ahliweb/omes/issues/348).
