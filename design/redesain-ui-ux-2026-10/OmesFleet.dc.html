@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>OMES · Ringkasan armada</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#5fc8d6}a:hover{color:#7ed4df}
+.nv:hover{background:#1a222b;color:#e8eef3}
+.ghost:hover{background:#1e262e}
+.row:hover{background:#171e25}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #0d1115; color: #e8eef3; font-family: 'Public Sans', system-ui, sans-serif; font-size: 14px">
+
+<aside style="flex: 1 1 248px; background: #10151a; color: #b7c3ce; display: flex; flex-direction: column; border-right: 1px solid #252e38">
+<div style="padding: 16px 14px 12px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #252e38">
+<button type="button" aria-label="Ganti ruang kerja, saat ini OMES Control Center" style="display: flex; align-items: center; gap: 10px; background: transparent; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left">
+<span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 8px; background: #5fc8d6; color: #0d1115; display: grid; place-items: center; font-weight: 800; font-size: 14px">O</span>
+<span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="color: #e8eef3; font-weight: 700; font-size: 15px">OMES Control Center</span><span style="font-size: 12px; color: #8d9ba8">ruang kerja di AWCMS</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8d9ba8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"></path></svg>
+</button>
+<button type="button" aria-label="Ganti lingkungan, saat ini Ahliweb Production" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; background: #141a20; border: 1px solid #252e38; border-radius: 10px; color: #e8eef3; text-align: left; cursor: pointer; font: inherit">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #f49a8b; flex: none"></span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1"><span style="font-size: 13px; font-weight: 600">Ahliweb Production</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8d9ba8">tnt_8f21c · produksi</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+</div>
+<nav aria-label="OMES" style="padding: 12px 10px; display: flex; flex-direction: column; gap: 14px; flex: 1">
+<sc-for list="{{nav}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; font-weight: 600; color: #8d9ba8; padding: 0 10px 4px">{{g.label}}</span>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="4">
+<a href="{{it.href}}" class="nv" aria-current="{{it.cur}}" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; text-decoration: none; {{it.st}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.icon}}"></path></svg>
+<span style="flex: 1">{{it.label}}</span>
+<sc-if value="{{it.badge}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; {{it.bst}}">{{it.badge}}</span></sc-if>
+</a>
+</sc-for>
+</div>
+</sc-for>
+</nav>
+<div style="padding: 14px 16px 16px; border-top: 1px solid #252e38; display: flex; flex-direction: column; gap: 10px">
+<a href="#" style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b7c3ce; text-decoration: none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Kembali ke admin AWCMS</a>
+<div style="display: flex; align-items: center; gap: 10px"><span aria-hidden="true" style="width: 30px; height: 30px; border-radius: 999px; background: #1e262e; color: #e8eef3; display: grid; place-items: center; font-weight: 700; font-size: 11px">RS</span><span style="display: flex; flex-direction: column; line-height: 1.25"><span style="font-size: 13px; font-weight: 600; color: #e8eef3">Rina Setiawati</span><span style="font-size: 12px; color: #8d9ba8">Peran OMES: <span style="color: #5fc8d6">owner</span></span></span></div>
+</div>
+</aside>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+<header style="min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 28px; border-bottom: 1px solid #252e38; box-sizing: border-box">
+<nav aria-label="Remah roti" style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #b7c3ce"><span>Ahliweb Production</span><span aria-hidden="true">/</span><span aria-current="page" style="color: #e8eef3; font-weight: 600">Ringkasan</span></nav>
+<button type="button" style="display: flex; align-items: center; gap: 9px; flex: 1 1 220px; max-width: 360px; height: 38px; padding: 0 11px; border: 1px solid #252e38; border-radius: 8px; background: #141a20; color: #8d9ba8; font: inherit; font-size: 14px; cursor: pointer; margin-left: 12px">
+<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M21 21l-4.3-4.3"></path></svg>
+<span style="flex: 1; text-align: left">Cari host, job, ID korelasi…</span>
+<kbd style="font-family: 'JetBrains Mono', monospace; font-size: 11px; padding: 2px 6px; border: 1px solid #252e38; border-radius: 5px; color: #b7c3ce">Ctrl K</kbd>
+</button>
+<div style="flex: 1"></div>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b7c3ce"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7dd89a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"></path></svg>Disinkron 5 dtk lalu · poll 60 dtk</span>
+<a href="OmesOperation.dc.html" style="height: 40px; padding: 0 16px; border-radius: 8px; background: #5fc8d6; color: #0d1115; font-weight: 700; display: flex; align-items: center; text-decoration: none">Rencanakan operasi</a>
+</header>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 28px; border-bottom: 1px solid #252e38; background: #10151a; font-size: 13px; color: #b7c3ce">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(244,154,139,.14); color: #f49a8b; font-weight: 600"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: #f49a8b"></span>Lingkungan produksi</span>
+<span>Perubahan di sini memengaruhi layanan pelanggan. Data contoh dari fixture <span style="font-family: 'JetBrains Mono', monospace">control-center/v1</span> + <span style="font-family: 'JetBrains Mono', monospace">sample-fleet.json</span> — bukan telemetri langsung.</span>
+</div>
+
+<main style="padding: 28px 28px 48px; display: flex; flex-direction: column; gap: 20px; max-width: 1400px; width: 100%; box-sizing: border-box">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em">Ringkasan armada</h1>
+<p style="margin: 0; color: #b7c3ce; font-size: 14px">12 host di jkt, sgp, dan lab · siklus check 60 dtk · ambang sumber daya: perhatian ≥75%, kritis ≥90%</p>
+</div>
+
+<section aria-label="Siklus hidup, 24 jam terakhir" style="background: #141a20; border: 1px solid #252e38; border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr))">
+<sc-for list="{{life}}" as="l" hint-placeholder-count="6">
+<div style="padding: 14px 18px; display: flex; flex-direction: column; gap: 4px; border-right: 1px solid #252e38">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600; color: #8d9ba8"><span style="font-family: 'JetBrains Mono', monospace; color: #5fc8d6">{{l.n}}</span>{{l.stage}}</span>
+<span style="font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: {{l.color}}">{{l.value}}</span>
+<span style="font-size: 12px; color: #b7c3ce">{{l.cap}}</span>
+</div>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: stretch">
+<section style="flex: 2 1 560px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; padding: 16px 20px; border-bottom: 1px solid #252e38"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Perlu tindakan</h2><span style="font-size: 13px; color: #8d9ba8">6 item · diurut menurut keparahan, lalu umur</span><a href="#" style="margin-left: auto; font-size: 13px; font-weight: 600">Lihat 2 lainnya</a></div>
+<sc-for list="{{queue}}" as="q" hint-placeholder-count="4">
+<div class="row" style="display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 13px 20px; border-bottom: 1px solid #1e262e">
+<span style="justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{q.bg}}; color: {{q.fg}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{q.icon}}"></path></svg>{{q.status}}</span>
+<div style="display: flex; flex-direction: column; gap: 3px; min-width: 0"><span style="font-weight: 600">{{q.title}}</span><span style="font-size: 13px; color: #b7c3ce"><span style="font-family: 'JetBrains Mono', monospace">{{q.ref}}</span> · {{q.sub}}</span></div>
+<a href="{{q.href}}" class="ghost" style="height: 36px; padding: 0 14px; border-radius: 8px; font-weight: 600; font-size: 13px; display: flex; align-items: center; text-decoration: none; white-space: nowrap; {{q.btn}}">{{q.action}}</a>
+</div>
+</sc-for>
+</section>
+<section style="flex: 1 1 300px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px; display: flex; flex-direction: column">
+<div style="padding: 16px 20px; border-bottom: 1px solid #252e38; display: flex; flex-direction: column; gap: 4px"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Kesegaran data per otoritas</h2><span style="font-size: 13px; color: #8d9ba8">OMES tidak menebak status sumber yang diam.</span></div>
+<sc-for list="{{auth}}" as="a" hint-placeholder-count="3">
+<div style="padding: 14px 20px; border-bottom: 1px solid #1e262e; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 600">{{a.name}}</span><span style="margin-left: auto; display: inline-flex; align-items: center; gap: 6px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{a.bg}}; color: {{a.fg}}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{a.icon}}"></path></svg>{{a.status}}</span></div>
+<span style="font-size: 13px; color: #b7c3ce; line-height: 1.45">{{a.note}}</span>
+</div>
+</sc-for>
+</section>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<section style="flex: 2 1 640px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 20px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Armada</h2><span style="font-size: 13px; color: #8d9ba8">diurut menurut risiko</span>
+<div role="group" aria-label="Filter armada" style="margin-left: auto; display: flex; padding: 3px; gap: 2px; background: #0d1115; border: 1px solid #252e38; border-radius: 9px">
+<sc-for list="{{filters}}" as="f" hint-placeholder-count="3">
+<button type="button" aria-pressed="{{f.sel}}" onClick="{{f.pick}}" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 0; font: inherit; font-size: 13px; cursor: pointer; {{f.st}}">{{f.label}}</button>
+</sc-for>
+</div>
+</div>
+<sc-if value="{{hasPicked}}" hint-placeholder-val="{{ false }}">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 20px; background: rgba(95,200,214,.10); border-top: 1px solid #252e38; font-size: 13px"><strong style="color: #5fc8d6">{{pickedCount}} host dipilih</strong><span style="color: #b7c3ce">Operasi diajukan per host dan melewati gerbang persetujuan yang sama.</span><a href="OmesOperation.dc.html" style="margin-left: auto; height: 32px; padding: 0 12px; border-radius: 7px; background: #5fc8d6; color: #0d1115; font-weight: 700; display: flex; align-items: center; text-decoration: none">Rencanakan operasi</a></div>
+</sc-if>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 760px; border-collapse: collapse; font-size: 13px">
+<thead><tr style="text-align: left; background: #10151a">
+<th style="padding: 10px 8px 10px 20px; width: 20px"><span style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0)">Pilih</span></th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8">Status</th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8">Host</th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8; width: 13%">CPU</th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8; width: 13%">Memori</th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8; width: 13%">Disk</th>
+<th style="padding: 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8">Drift</th>
+<th style="padding: 10px 20px 10px 12px; font-size: 12px; font-weight: 600; color: #8d9ba8">Laporan</th>
+</tr></thead>
+<tbody>
+<sc-for list="{{hosts}}" as="h" hint-placeholder-count="12">
+<tr class="row">
+<td style="padding: 10px 8px 10px 20px; border-top: 1px solid #1e262e"><input type="checkbox" aria-label="Pilih {{h.id}}" checked="{{h.checked}}" onChange="{{h.toggle}}" style="margin: 0; width: 16px; height: 16px; accent-color: #5fc8d6"></td>
+<td style="padding: 10px 12px; border-top: 1px solid #1e262e"><span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: {{h.bg}}; color: {{h.fg}}; white-space: nowrap"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{h.icon}}"></path></svg>{{h.status}}</span></td>
+<td style="padding: 10px 12px; border-top: 1px solid #1e262e"><div style="display: flex; flex-direction: column; gap: 2px"><span style="font-family: 'JetBrains Mono', monospace; font-weight: 500; color: #e8eef3">{{h.id}}</span><span style="font-size: 12px; color: #8d9ba8">{{h.role}} · {{h.os}}</span></div></td>
+<sc-for list="{{h.res}}" as="r" hint-placeholder-count="3">
+<td style="padding: 10px 12px; border-top: 1px solid #1e262e"><div style="display: flex; flex-direction: column; gap: 5px"><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: {{r.fg}}">{{r.v}}</span><div style="height: 4px; border-radius: 999px; background: #252e38"><div style="height: 4px; border-radius: 999px; width: {{r.w}}; background: {{r.bar}}"></div></div></div></td>
+</sc-for>
+<td style="padding: 10px 12px; border-top: 1px solid #1e262e; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: {{h.driftFg}}">{{h.drift}}</td>
+<td style="padding: 10px 20px 10px 12px; border-top: 1px solid #1e262e; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: {{h.lastFg}}">{{h.last}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<section style="flex: 1 1 300px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Aktivitas operasional</h2>
+<sc-for list="{{feed}}" as="f" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px">
+<span aria-hidden="true" style="width: 10px; height: 10px; margin-top: 5px; flex: none; {{f.shape}}"></span>
+<div style="display: flex; flex-direction: column; gap: 3px"><span style="line-height: 1.45">{{f.text}}</span><span style="font-size: 12px; color: #8d9ba8">{{f.meta}}</span></div>
+</div>
+</sc-for>
+<p style="margin: 0; padding-top: 12px; border-top: 1px solid #252e38; font-size: 13px; color: #8d9ba8; line-height: 1.5">2 peristiwa penagihan disembunyikan dari umpan ini · <a href="#">lihat di Jejak audit</a></p>
+</section>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { filter: 'all', picked: {} };
+  }
+  renderVals() {
+    const I = {
+      grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+      server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+      pulse: 'M3 12h4l3-8 4 16 3-8h4',
+      check: 'M4 5h16v14H4zM8 12l3 3 5-6',
+      up: 'M12 19V5M6 11l6-6 6 6',
+      job: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+      box: 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
+      agent: 'M12 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6M5 22v-3a7 7 0 0 1 14 0v3',
+      chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+      branch: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6M18 9a9 9 0 0 1-9 9',
+      target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+      list: 'M4 6h16M4 12h16M4 18h10',
+      key: 'M8 15a4 4 0 1 1 0-8 4 4 0 0 1 0 8M11 11h10M18 11v3M15 11v2',
+      lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+      layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+      ok: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12l3 3 5-6',
+      warn: 'M12 3l10 18H2zM12 10v4M12 17h.01',
+      crit: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 8v5M12 16h.01',
+      wait: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2',
+      unk: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.7M12 17h.01'
+    };
+    const S = {
+      crit: { status: 'Kritis', icon: I.crit, fg: '#f49a8b', bg: 'rgba(244,154,139,.14)' },
+      unk: { status: 'Tak diketahui', icon: I.unk, fg: '#c3cdd6', bg: 'rgba(195,205,214,.14)' },
+      warn: { status: 'Perhatian', icon: I.warn, fg: '#e8b44a', bg: 'rgba(232,180,74,.14)' },
+      wait: { status: 'Menunggu', icon: I.wait, fg: '#b4bffa', bg: 'rgba(180,191,250,.14)' },
+      ok: { status: 'Sehat', icon: I.ok, fg: '#7dd89a', bg: 'rgba(125,216,154,.12)' }
+    };
+    const act = 'background: #1a2531; color: #e8eef3; font-weight: 600; box-shadow: inset 0 0 0 1px #2c3a47';
+    const idle = 'color: #b7c3ce';
+    const n = (label, icon, extra) => Object.assign({ label, icon, href: '#', st: idle, cur: 'false', badge: '', bst: '' }, extra || {});
+    const primaryBtn = 'background: #5fc8d6; color: #0d1115';
+    const ghostBtn = 'border: 1px solid #6a7683; color: #e8eef3';
+    const raw = [
+      { id: 'omes-app-01', role: 'AWCMS app', os: 'Ubuntu 26.04', s: 'crit', cpu: 52, mem: 71, disk: 63, drift: '3 · 1 kritis', last: '7 dtk' },
+      { id: 'omes-mint-01', role: 'Build / lab', os: 'Linux Mint 22', s: 'unk', cpu: null, mem: null, disk: null, drift: '2 (lama)', last: '2 j 14 m' },
+      { id: 'omes-app-03', role: 'AWCMS app', os: 'Ubuntu 24.04', s: 'warn', cpu: 78, mem: 84, disk: 81, drift: '1', last: '14 dtk' },
+      { id: 'omes-bak-01', role: 'Backup vault', os: 'Ubuntu 26.04', s: 'warn', cpu: 8, mem: 22, disk: 88, drift: '0', last: '13 dtk' },
+      { id: 'omes-app-02', role: 'AWCMS app', os: 'Ubuntu 26.04', s: 'ok', cpu: 47, mem: 66, disk: 59, drift: '0', last: '11 dtk' },
+      { id: 'omes-db-01', role: 'Postgres 17', os: 'Ubuntu 26.04', s: 'ok', cpu: 33, mem: 62, disk: 57, drift: '0', last: '6 dtk' },
+      { id: 'omes-db-02', role: 'Postgres 17 replica', os: 'Ubuntu 26.04', s: 'ok', cpu: 21, mem: 58, disk: 57, drift: '0', last: '8 dtk' },
+      { id: 'omes-edge-01', role: 'Edge / Caddy', os: 'Ubuntu 26.04', s: 'ok', cpu: 14, mem: 38, disk: 44, drift: '0', last: '12 dtk' },
+      { id: 'omes-edge-02', role: 'Edge / Caddy', os: 'Ubuntu 26.04', s: 'ok', cpu: 11, mem: 35, disk: 41, drift: '0', last: '9 dtk' },
+      { id: 'omes-job-01', role: 'Hermes worker', os: 'Ubuntu 26.04', s: 'ok', cpu: 64, mem: 49, disk: 38, drift: '0', last: '4 dtk' },
+      { id: 'omes-job-02', role: 'Hermes worker', os: 'Ubuntu 24.04', s: 'ok', cpu: 58, mem: 44, disk: 36, drift: '0', last: '5 dtk' },
+      { id: 'omes-obs-01', role: 'Observability', os: 'Ubuntu 26.04', s: 'ok', cpu: 29, mem: 55, disk: 72, drift: '0', last: '10 dtk' }
+    ];
+    const res = (v) => {
+      if (v === null) return { v: '—', w: '0%', bar: '#252e38', fg: '#8d9ba8' };
+      const level = v >= 90 ? 'crit' : (v >= 75 ? 'warn' : 'ok');
+      return { v: v + '%', w: v + '%', bar: level === 'crit' ? '#f49a8b' : (level === 'warn' ? '#e8b44a' : '#6a7683'), fg: level === 'crit' ? '#f49a8b' : (level === 'warn' ? '#e8b44a' : '#b7c3ce') };
+    };
+    const f = this.state.filter;
+    const picked = this.state.picked;
+    const hosts = raw.filter((h) => f === 'all' || (f === 'act' && h.s !== 'ok') || (f === 'ok' && h.s === 'ok')).map((h) => Object.assign({}, h, S[h.s], {
+      res: [res(h.cpu), res(h.mem), res(h.disk)],
+      driftFg: h.drift === '0' ? '#8d9ba8' : (h.s === 'crit' ? '#f49a8b' : '#e8b44a'),
+      lastFg: h.s === 'unk' ? '#e8b44a' : '#b7c3ce',
+      checked: !!picked[h.id],
+      toggle: () => { const p = Object.assign({}, this.state.picked); p[h.id] = !p[h.id]; this.setState({ picked: p }); }
+    }));
+    const pickedCount = Object.keys(picked).filter((k) => picked[k]).length;
+    return {
+      nav: [
+        { label: 'Pantau', items: [n('Ringkasan', I.grid, { st: act, cur: 'page' }), n('Server', I.server, { badge: '3 drift', bst: 'color: #e8b44a' }), n('Kesehatan', I.pulse)] },
+        { label: 'Ubah & pulihkan', items: [n('Operasi', I.check, { href: 'OmesOperation.dc.html', badge: '1', bst: 'color: #0d1115; background: #e8b44a; border-radius: 999px; padding: 1px 7px' }), n('Deployment', I.up), n('Job', I.job), n('Backup & pemulihan', I.box)] },
+        { label: 'Agen', items: [n('Hermes', I.agent, { badge: '1 aktif', bst: 'color: #8d9ba8' }), n('Progres Hermes', I.chart), n('Orkestrasi langsung', I.branch), n('Mission Control', I.target)] },
+        { label: 'Tata kelola', items: [n('Jejak audit', I.list), n('Token pendaftaran', I.key), n('Privasi AI', I.lock), n('Arsitektur', I.layers)] }
+      ],
+      life: [
+        { n: '1', stage: 'Bootstrap', value: '12', cap: 'host terdaftar · 11 melapor', color: '#e8eef3' },
+        { n: '2', stage: 'Check', value: '288', cap: 'preflight read-only, 24 j', color: '#e8eef3' },
+        { n: '3', stage: 'Diff', value: '6', cap: 'modul drift di 3 host', color: '#e8b44a' },
+        { n: '4', stage: 'Apply', value: '2', cap: 'deployment dijalankan', color: '#e8eef3' },
+        { n: '5', stage: 'Verify', value: '1 / 2', cap: 'verifikasi lulus', color: '#e8b44a' },
+        { n: '6', stage: 'Rollback', value: '1', cap: 'versi 1.5.0 dipulihkan', color: '#e8b44a' }
+      ],
+      queue: [
+        Object.assign({}, S.crit, { title: 'Firewall membuka Postgres 5432/tcp ke publik', ref: 'omes-app-01', sub: 'ufw.rules kritis · php-fpm.pool tinggi', action: 'Tinjau rencana', btn: primaryBtn, href: 'OmesOperation.dc.html' }),
+        Object.assign({}, S.unk, { title: 'Heartbeat terakhir 2 j 14 m lalu — status tak bisa dipastikan', ref: 'omes-mint-01', sub: 'Build / lab · 2 drift dari laporan terakhir', action: 'Periksa worker', btn: ghostBtn, href: '#' }),
+        Object.assign({}, S.wait, { title: 'restart → server-acme-01 menunggu persetujuan owner', ref: 'corr-op-0001', sub: 'risiko sedang · diajukan user-jane', action: 'Buka persetujuan', btn: ghostBtn, href: 'OmesOperation.dc.html' }),
+        Object.assign({}, S.warn, { title: 'Deploy versi 1.5.0 berakhir rollback', ref: 'deployment-acme-hermes-01', sub: 'verify lulus 1 dari 2', action: 'Lihat deployment', btn: ghostBtn, href: '#' })
+      ],
+      auth: [
+        Object.assign({ name: 'omes-host', note: '11 dari 12 host melapor dalam 3 × interval poll. omes-mint-01 basi sejak 2 j 14 m.' }, S.warn),
+        Object.assign({ name: 'hermes', note: '1 sesi agen aktif. Event orkestrasi terakhir 21 Sep, 19.00 WIB. OMES hanya menampilkan sinyal yang dilaporkan Hermes.' }, S.ok),
+        Object.assign({ name: 'external-provider', note: 'Cloudflare, DNS, dan GitHub belum dikonfigurasi untuk tenant ini — ditampilkan "—", bukan sehat.' }, S.unk)
+      ],
+      filters: [['all', 'Semua · 12'], ['act', 'Perlu tindakan · 4'], ['ok', 'Sehat · 8']].map(([k, l]) => ({
+        label: l, sel: f === k ? 'true' : 'false', pick: () => this.setState({ filter: k }),
+        st: f === k ? 'background: #1e262e; color: #e8eef3; font-weight: 600' : 'background: transparent; color: #b7c3ce'
+      })),
+      hosts, hasPicked: pickedCount > 0, pickedCount,
+      feed: [
+        { text: 'Worker wrk-srv-prod-01-001 terdaftar, poll 10 dtk', meta: '21 Sep 2026, 19.00 WIB · srv-prod-01', shape: 'border-radius: 999px; border: 2px solid #5fc8d6; box-sizing: border-box' },
+        { text: 'Snapshot backup-0001 selesai, verifikasi SHA-256 lulus', meta: '19 Sep 2026, 17.00 WIB · srv-0001', shape: 'border-radius: 999px; background: #7dd89a' },
+        { text: 'Deploy versi 1.5.0 di-rollback', meta: '19 Sep 2026, 16.00 WIB · server-acme-01', shape: 'background: #e8b44a; transform: rotate(45deg)' },
+        { text: 'Deploy versi 1.4.0 sukses', meta: '19 Sep 2026, 15.00 WIB · server-acme-01', shape: 'border-radius: 999px; background: #7dd89a' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

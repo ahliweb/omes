@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<title>OMES · Persetujuan operasi</title>
+<script src="../../ui/control-center/support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&amp;family=JetBrains+Mono:wght@400;500;600&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#5fc8d6}a:hover{color:#7ed4df}
+.nv:hover{background:#1a222b;color:#e8eef3}
+.ghost:hover{background:#1e262e}
+input:focus-visible,textarea:focus-visible{outline:2px solid #5fc8d6;outline-offset:1px}
+</style>
+</helmet>
+<div style="min-height: 100vh; display: flex; flex-wrap: wrap; background: #0d1115; color: #e8eef3; font-family: 'Public Sans', system-ui, sans-serif; font-size: 14px">
+
+<aside style="flex: 1 1 248px; background: #10151a; color: #b7c3ce; display: flex; flex-direction: column; border-right: 1px solid #252e38">
+<div style="padding: 16px 14px 12px; display: flex; flex-direction: column; gap: 12px; border-bottom: 1px solid #252e38">
+<button type="button" aria-label="Ganti ruang kerja, saat ini OMES Control Center" style="display: flex; align-items: center; gap: 10px; background: transparent; border: 0; padding: 0; color: inherit; font: inherit; cursor: pointer; text-align: left">
+<span aria-hidden="true" style="width: 32px; height: 32px; border-radius: 8px; background: #5fc8d6; color: #0d1115; display: grid; place-items: center; font-weight: 800; font-size: 14px">O</span>
+<span style="display: flex; flex-direction: column; gap: 1px; flex: 1"><span style="color: #e8eef3; font-weight: 700; font-size: 15px">OMES Control Center</span><span style="font-size: 12px; color: #8d9ba8">ruang kerja di AWCMS</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8d9ba8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 9l5-5 5 5M7 15l5 5 5-5"></path></svg>
+</button>
+<button type="button" aria-label="Ganti lingkungan, saat ini Ahliweb Production" style="display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; background: #141a20; border: 1px solid #252e38; border-radius: 10px; color: #e8eef3; text-align: left; cursor: pointer; font: inherit">
+<span aria-hidden="true" style="width: 8px; height: 8px; border-radius: 999px; background: #f49a8b; flex: none"></span>
+<span style="display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1"><span style="font-size: 13px; font-weight: 600">Ahliweb Production</span><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #8d9ba8">tnt_8f21c · produksi</span></span>
+<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"></path></svg>
+</button>
+</div>
+<nav aria-label="OMES" style="padding: 12px 10px; display: flex; flex-direction: column; gap: 14px; flex: 1">
+<sc-for list="{{nav}}" as="g" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 12px; font-weight: 600; color: #8d9ba8; padding: 0 10px 4px">{{g.label}}</span>
+<sc-for list="{{g.items}}" as="it" hint-placeholder-count="4">
+<a href="{{it.href}}" class="nv" aria-current="{{it.cur}}" style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; text-decoration: none; {{it.st}}">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{it.icon}}"></path></svg>
+<span style="flex: 1">{{it.label}}</span>
+<sc-if value="{{it.badge}}" hint-placeholder-val="{{ false }}"><span style="font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600; {{it.bst}}">{{it.badge}}</span></sc-if>
+</a>
+</sc-for>
+</div>
+</sc-for>
+</nav>
+<div style="padding: 14px 16px 16px; border-top: 1px solid #252e38">
+<a href="#" style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b7c3ce; text-decoration: none"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Kembali ke admin AWCMS</a>
+</div>
+</aside>
+
+<div style="flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column">
+<header style="min-height: 64px; display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 10px 28px; border-bottom: 1px solid #252e38; box-sizing: border-box">
+<nav aria-label="Remah roti" style="display: flex; align-items: center; gap: 8px; font-size: 14px; color: #b7c3ce"><span>Ahliweb Production</span><span aria-hidden="true">/</span><a href="OmesFleet.dc.html" style="color: #b7c3ce; text-decoration: none">Operasi</a><span aria-hidden="true">/</span><span aria-current="page" style="color: #e8eef3; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 13px">corr-op-0001</span></nav>
+<div style="flex: 1"></div>
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #b7c3ce"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7dd89a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.9-3M4 4v4h4M4 13a8 8 0 0 0 14.9 3M20 20v-4h-4"></path></svg>Disinkron 5 dtk lalu</span>
+</header>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 28px; border-bottom: 1px solid #252e38; background: #10151a; font-size: 13px; color: #b7c3ce">
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; background: rgba(244,154,139,.14); color: #f49a8b; font-weight: 600"><span aria-hidden="true" style="width: 6px; height: 6px; border-radius: 999px; background: #f49a8b"></span>Lingkungan produksi</span>
+<span>Data contoh dari fixture <span style="font-family: 'JetBrains Mono', monospace">operation-request/valid-01.json</span> dan skenario desain v3.</span>
+</div>
+
+<main style="padding: 24px 28px 48px; display: flex; flex-direction: column; gap: 20px; max-width: 1400px; width: 100%; box-sizing: border-box">
+<a href="OmesFleet.dc.html" style="display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; text-decoration: none; align-self: flex-start"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>Semua operasi</a>
+<div style="display: flex; flex-direction: column; gap: 10px">
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
+<h1 style="margin: 0; font-size: 28px; font-weight: 700; letter-spacing: -0.01em">restart <span style="color: #8d9ba8; font-weight: 400">→</span> <span style="font-family: 'JetBrains Mono', monospace; font-weight: 600; font-size: 26px">server-acme-01</span></h1>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; {{statusPill}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="{{statusIcon}}"></path></svg>{{statusLabel}}</span>
+<span style="display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; background: rgba(232,180,74,.14); color: #e8b44a"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l10 18H2zM12 10v4M12 17h.01"></path></svg>Risiko sedang</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 13px; color: #b7c3ce">
+<span>Korelasi <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">corr-op-0001</span></span>
+<span>Idempotensi <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">idem-op-request-00000001</span></span>
+<span>Tenant <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">tenant-acme</span></span>
+<span>Diajukan <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">user-jane</span></span>
+</div>
+</div>
+
+<ol aria-label="Tahap operasi" style="list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr)); gap: 8px">
+<sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+<li aria-current="{{s.cur}}" style="padding: 12px 14px; border-radius: 10px; display: flex; flex-direction: column; gap: 4px; {{s.box}}">
+<span style="display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; {{s.tst}}"><span aria-hidden="true" style="width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; font-family: 'JetBrains Mono', monospace; font-size: 11px; {{s.dot}}">{{s.mark}}</span>{{s.label}}</span>
+<span style="font-size: 12px; color: #8d9ba8">{{s.note}}</span>
+</li>
+</sc-for>
+</ol>
+
+<sc-if value="{{approved}}" hint-placeholder-val="{{ false }}">
+<div role="status" style="display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: 10px; background: rgba(125,216,154,.10); border: 1px solid rgba(125,216,154,.35); color: #e8eef3"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#7dd89a" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 1px"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12l3 3 5-6"></path></svg><div style="display: flex; flex-direction: column; gap: 2px"><strong>Disetujui dan diantrekan.</strong><span style="font-size: 13px; color: #b7c3ce">Worker menarik job ini pada poll berikutnya (≤ 10 dtk). Status "berhasil" hanya muncul setelah module_verify lulus — timeout tidak dianggap sukses.</span></div></div>
+</sc-if>
+
+<div style="display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start">
+<div style="flex: 2 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section style="background: #141a20; border: 1px solid #252e38; border-radius: 12px">
+<div style="padding: 16px 20px; border-bottom: 1px solid #252e38"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Rencana</h2></div>
+<dl style="margin: 0; padding: 16px 20px; display: grid; grid-template-columns: minmax(140px, auto) 1fr; gap: 12px 20px; font-size: 13px">
+<dt style="color: #8d9ba8">Operasi</dt><dd style="margin: 0; display: flex; flex-wrap: wrap; gap: 8px; align-items: center"><span style="font-family: 'JetBrains Mono', monospace; font-weight: 600">restart</span><span style="font-size: 12px; color: #7dd89a">ada di allowlist operasi aman</span></dd>
+<dt style="color: #8d9ba8">Target</dt><dd style="margin: 0; font-family: 'JetBrains Mono', monospace">server-acme-01 · deployment-acme-hermes-01</dd>
+<dt style="color: #8d9ba8">Kebijakan</dt><dd style="margin: 0"><span style="font-family: 'JetBrains Mono', monospace">policy-operator-restart</span> · izin diberikan</dd>
+<dt style="color: #8d9ba8">Dampak</dt><dd style="margin: 0; line-height: 1.5">Layanan pada deployment ini dimulai ulang. Deployment lain di host yang sama tidak disentuh.</dd>
+<dt style="color: #8d9ba8">Titik pulih</dt><dd style="margin: 0"><span style="font-family: 'JetBrains Mono', monospace">backup-0001</span> (SHA-256 terverifikasi) · versi 1.4.0</dd>
+</dl>
+</section>
+
+<section style="background: #141a20; border: 1px solid #252e38; border-radius: 12px">
+<div style="padding: 16px 20px; border-bottom: 1px solid #252e38; display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px"><h2 style="margin: 0; font-size: 16px; font-weight: 700">Preflight</h2><span style="font-size: 13px; color: #8d9ba8">read-only · 5 lulus, 1 perhatian</span></div>
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{checks}}" as="c" hint-placeholder-count="6">
+<li style="display: flex; gap: 12px; padding: 12px 20px; border-bottom: 1px solid #1e262e; align-items: flex-start">
+<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="{{c.color}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="{{c.state}}" style="flex: none; margin-top: 1px"><path d="{{c.icon}}"></path></svg>
+<div style="display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">{{c.title}}</span><span style="font-size: 13px; color: #b7c3ce">{{c.detail}}</span></div>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section style="background: #141a20; border: 1px solid #252e38; border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Yang akan dijalankan worker</h2>
+<ol style="margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 8px; color: #b7c3ce; line-height: 1.5">
+<li>Worker menarik job lewat poll (pull) — Control Center tidak pernah membuka koneksi ke host.</li>
+<li>Menjalankan operasi <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">restart</span> dengan parameter dari kontrak; tidak ada perintah shell bebas.</li>
+<li>Menjalankan <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">module_verify</span> dan mengirim hasil beserta bukti audit.</li>
+<li>Bila verifikasi gagal, operator mendapat tawaran rollback ke versi 1.4.0 — tidak otomatis.</li>
+</ol>
+</section>
+</div>
+
+<div style="flex: 1 1 340px; min-width: 0; display: flex; flex-direction: column; gap: 16px">
+<section aria-labelledby="appr" style="background: #141a20; border: 1px solid #2c3a47; border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 14px">
+<h2 id="appr" style="margin: 0; font-size: 16px; font-weight: 700">Persetujuan owner</h2>
+<div style="display: flex; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #10151a; font-size: 13px; color: #b7c3ce; line-height: 1.5"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#b4bffa" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="flex: none; margin-top: 2px"><path d="M16 20v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 20v-1a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"></path></svg><span>Aturan empat mata: pengaju <span style="font-family: 'JetBrains Mono', monospace; color: #e8eef3">user-jane</span> tidak dapat menyetujui. Anda (owner) memenuhi syarat.</span></div>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Catatan persetujuan <span style="font-weight: 400; color: #8d9ba8">Wajib. Tersimpan di jejak audit.</span>
+<textarea rows="3" value="{{note}}" onChange="{{onNote}}" placeholder="Mis. disetujui untuk memulihkan layanan setelah rollback 1.5.0" style="resize: vertical; padding: 10px 12px; border-radius: 8px; border: 1px solid #6a7683; background: #0d1115; color: #e8eef3; font: inherit; font-weight: 400"></textarea>
+</label>
+<label style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600">Ketik <span style="font-family: 'JetBrains Mono', monospace; color: #5fc8d6">server-acme-01</span> untuk mengonfirmasi
+<input type="text" value="{{typed}}" onChange="{{onType}}" autocomplete="off" spellcheck="false" style="height: 44px; padding: 0 12px; border-radius: 8px; border: 1px solid {{inputBorder}}; background: #0d1115; color: #e8eef3; font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 400">
+<span style="font-size: 12px; font-weight: 400; color: {{hintColor}}">{{hint}}</span>
+</label>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" disabled="{{disabled}}" onClick="{{approve}}" style="height: 44px; padding: 0 18px; border-radius: 8px; border: 0; font: inherit; font-weight: 700; {{approveSt}}">Setujui &amp; antrekan</button>
+<button type="button" class="ghost" disabled="{{noteMissing}}" style="height: 44px; padding: 0 16px; border-radius: 8px; border: 1px solid #f49a8b; background: transparent; color: #f49a8b; font: inherit; font-weight: 600; cursor: pointer">Tolak</button>
+</div>
+</section>
+
+<section style="background: #141a20; border: 1px solid #252e38; border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; gap: 14px">
+<h2 style="margin: 0; font-size: 16px; font-weight: 700">Jejak operasi</h2>
+<sc-for list="{{trail}}" as="t" hint-placeholder-count="4">
+<div style="display: flex; gap: 12px"><span aria-hidden="true" style="width: 8px; height: 8px; margin-top: 6px; border-radius: 999px; flex: none; background: {{t.c}}"></span><div style="display: flex; flex-direction: column; gap: 2px"><span style="line-height: 1.45">{{t.text}}</span><span style="font-size: 12px; color: #8d9ba8; font-family: 'JetBrains Mono', monospace">{{t.meta}}</span></div></div>
+</sc-for>
+</section>
+</div>
+</div>
+</main>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1260}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { typed: '', note: '', approved: false };
+  }
+  renderVals() {
+    const I = {
+      grid: 'M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z',
+      server: 'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01',
+      pulse: 'M3 12h4l3-8 4 16 3-8h4',
+      check: 'M4 5h16v14H4zM8 12l3 3 5-6',
+      up: 'M12 19V5M6 11l6-6 6 6',
+      job: 'M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01',
+      box: 'M21 8l-9-5-9 5v8l9 5 9-5zM3 8l9 5 9-5M12 13v8',
+      agent: 'M12 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6M5 22v-3a7 7 0 0 1 14 0v3',
+      chart: 'M4 20V10M10 20V4M16 20v-7M22 20H2',
+      branch: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6M18 9a9 9 0 0 1-9 9',
+      target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
+      list: 'M4 6h16M4 12h16M4 18h10',
+      key: 'M8 15a4 4 0 1 1 0-8 4 4 0 0 1 0 8M11 11h10M18 11v3M15 11v2',
+      lock: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
+      layers: 'M12 3l9 5-9 5-9-5zM3 13l9 5 9-5',
+      ok: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M8 12l3 3 5-6',
+      warn: 'M12 3l10 18H2zM12 10v4M12 17h.01',
+      wait: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 7v5l3 2'
+    };
+    const act = 'background: #1a2531; color: #e8eef3; font-weight: 600; box-shadow: inset 0 0 0 1px #2c3a47';
+    const idle = 'color: #b7c3ce';
+    const n = (label, icon, extra) => Object.assign({ label, icon, href: '#', st: idle, cur: 'false', badge: '', bst: '' }, extra || {});
+    const typed = this.state.typed;
+    const note = this.state.note;
+    const approved = this.state.approved;
+    const match = typed === 'server-acme-01';
+    const noteOk = note.trim().length >= 5;
+    const can = match && noteOk && !approved;
+    const cur = approved ? 3 : 2;
+    const labels = [['Rencana', 'dibuat 19 Sep, 15.40'], ['Tinjau', 'preflight lulus'], ['Setujui', approved ? 'disetujui · Rina S.' : 'menunggu owner'], ['Jalankan via worker', approved ? 'diantrekan' : 'belum'], ['Verifikasi', 'belum']];
+    return {
+      nav: [
+        { label: 'Pantau', items: [n('Ringkasan', I.grid, { href: 'OmesFleet.dc.html' }), n('Server', I.server, { badge: '3 drift', bst: 'color: #e8b44a' }), n('Kesehatan', I.pulse)] },
+        { label: 'Ubah & pulihkan', items: [n('Operasi', I.check, { st: act, cur: 'page', badge: approved ? '' : '1', bst: 'color: #0d1115; background: #e8b44a; border-radius: 999px; padding: 1px 7px' }), n('Deployment', I.up), n('Job', I.job), n('Backup & pemulihan', I.box)] },
+        { label: 'Agen', items: [n('Hermes', I.agent, { badge: '1 aktif', bst: 'color: #8d9ba8' }), n('Progres Hermes', I.chart), n('Orkestrasi langsung', I.branch), n('Mission Control', I.target)] },
+        { label: 'Tata kelola', items: [n('Jejak audit', I.list), n('Token pendaftaran', I.key), n('Privasi AI', I.lock), n('Arsitektur', I.layers)] }
+      ],
+      approved,
+      statusLabel: approved ? 'Diantrekan' : 'Menunggu persetujuan',
+      statusIcon: I.wait,
+      statusPill: approved ? 'background: rgba(95,200,214,.12); color: #5fc8d6' : 'background: rgba(180,191,250,.14); color: #b4bffa',
+      steps: labels.map(([l, note2], i) => ({
+        label: l, note: note2, cur: i === cur ? 'step' : 'false',
+        mark: i < cur ? '✓' : String(i + 1),
+        box: i === cur ? 'background: #141a20; border: 1px solid #5fc8d6' : 'background: #10151a; border: 1px solid #252e38',
+        dot: i < cur ? 'background: #7dd89a; color: #0d1115' : (i === cur ? 'background: #5fc8d6; color: #0d1115' : 'border: 1px solid #6a7683; color: #b7c3ce'),
+        tst: i <= cur ? 'color: #e8eef3' : 'color: #b7c3ce'
+      })),
+      checks: [
+        { title: 'Platform didukung', detail: 'Ubuntu 26.04 LTS · profil server', icon: I.ok, color: '#7dd89a', state: 'Lulus' },
+        { title: 'Worker terhubung', detail: 'wrk-srv-prod-01-001 · heartbeat 9 dtk lalu', icon: I.ok, color: '#7dd89a', state: 'Lulus' },
+        { title: 'Backup terbaru terverifikasi', detail: 'backup-0001 · 19 Sep 2026, 17.00 WIB · SHA-256 cocok', icon: I.ok, color: '#7dd89a', state: 'Lulus' },
+        { title: 'Titik rollback tersedia', detail: 'versi 1.4.0 (deploy sukses 19 Sep, 15.00 WIB)', icon: I.ok, color: '#7dd89a', state: 'Lulus' },
+        { title: 'Tidak ada operasi lain berjalan di host', detail: 'kunci host bebas', icon: I.ok, color: '#7dd89a', state: 'Lulus' },
+        { title: 'Deployment terakhir berakhir rollback', detail: '1.5.0 → 1.4.0 pada 19 Sep, 16.00 WIB · verifikasi lulus 1 dari 2', icon: I.warn, color: '#e8b44a', state: 'Perhatian' }
+      ],
+      typed, note,
+      onType: (e) => this.setState({ typed: e.target.value }),
+      onNote: (e) => this.setState({ note: e.target.value }),
+      inputBorder: typed.length === 0 ? '#6a7683' : (match ? '#7dd89a' : '#e8b44a'),
+      hint: typed.length === 0 ? 'Nama host harus diketik persis — tempel tidak disarankan.' : (match ? 'Cocok.' : 'Belum cocok dengan nama host target.'),
+      hintColor: typed.length === 0 ? '#8d9ba8' : (match ? '#7dd89a' : '#e8b44a'),
+      disabled: !can,
+      noteMissing: !noteOk,
+      approveSt: can ? 'background: #5fc8d6; color: #0d1115; cursor: pointer' : 'background: #1e262e; color: #8d9ba8; cursor: not-allowed',
+      approve: () => this.setState({ approved: true }),
+      trail: [
+        { text: 'Operasi diajukan oleh user-jane', meta: '19 Sep 2026, 15.40 WIB', c: '#5fc8d6' },
+        { text: 'Kebijakan policy-operator-restart: izin diberikan', meta: '19 Sep 2026, 15.40 WIB', c: '#5fc8d6' },
+        { text: 'Preflight selesai: 5 lulus, 1 perhatian', meta: '19 Sep 2026, 15.41 WIB', c: '#e8b44a' },
+        approved ? { text: 'Disetujui oleh Rina Setiawati (owner): "' + note.trim() + '"', meta: 'baru saja', c: '#7dd89a' } : { text: 'Menunggu persetujuan owner', meta: 'sekarang', c: '#b4bffa' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

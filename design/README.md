@@ -11,3 +11,4 @@ until a proposal here is accepted through an ADR.
 | Folder | Contents | Status |
 |---|---|---|
 | [`control-center-v3/`](control-center-v3/README.md) | UX audit of the v2 Control Center prototype, redesign v3 (fleet overview, operations and approvals, health, on-call mobile, design tokens), and the Hermes agent office, task/agenda board and avatar kit | Proposal, not implemented ([#323](https://github.com/ahliweb/omes/issues/323)) |
+| [`redesain-ui-ux-2026-10/`](redesain-ui-ux-2026-10/README.md) | Control Center v3 carried into the AWCMS admin shell: an OMES workspace with its own navigation, lifecycle strip, freshness per authority, risk-sorted fleet, and the operation approval screen with four-eyes rule and typed confirmation; plus an analysis of awcms, awcms-one, omes and awcms-astro | Proposal, not implemented (follow-up to [#323](https://github.com/ahliweb/omes/issues/323)) |
