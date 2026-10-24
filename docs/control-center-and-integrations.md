@@ -478,3 +478,9 @@ Genuinely still deferred:
 - [Control Center contracts](control-center-contracts.md) (#89)
 - [Control Center threat model](control-center-threat-model.md) (#89)
 - [`contracts/control-center/v1/`](../contracts/control-center/v1/) — JSON Schema contracts and fixtures (#89)
+
+## AWCMS Bun realtime integration boundary (clarification, 2026-10-24)
+
+For CRM email/WhatsApp/Telegram/social broadcast and notification workloads, AWCMS is the source-of-truth business backend and uses its own **repository-pinned Bun** to run queues, dispatchers and any future approved authenticated SSE/WebSocket status projection. **Outbound provider delivery uses Bun worker → provider HTTPS**; SSE/WS is only an optional operator-facing progress transport. See [AWCMS Bun integration boundary](awcms-bun-channel-realtime-boundary.md), [AWCMS #1167](https://github.com/ahliweb/awcms/issues/1167) and [#1168](https://github.com/ahliweb/awcms/issues/1168).
+
+**Unchanged by this policy:** OMES's host `omes worker` is a **Python outbound-only signed HTTPS pull-client** per [ADR-0027](adr/0027-control-center-pull-worker-transport.md) and must not expose inbound privileged WebSocket listeners. Hermes Agent keeps its native runtime. No host-level operations, private agent data or tokens may transit a generic browser status socket.
