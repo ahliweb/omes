@@ -32,6 +32,12 @@
 #   SHIM_DOCKER_INSPECT_EXIT            exit code for `docker inspect ...` (default 1,
 #                                       i.e. "No such container", so an unconfigured
 #                                       test can never look like evidence)
+#                                       The shim replays this JSON verbatim, so a fixture
+#                                       chooses which HostConfig fields it carries
+#                                       (CapDrop, CapAdd, SecurityOpt, Devices, IpcMode,
+#                                       Privileged, NetworkMode, PidMode, ...). A field
+#                                       the fixture omits is "not observed", which the
+#                                       check must report as `unknown`, never `ok`.
 #   SHIM_DOCKER_NETWORK_INSPECT_OUTPUT  stdout for `docker network inspect ...` (default empty)
 #   SHIM_DOCKER_NETWORK_INSPECT_EXIT    exit code for `docker network inspect ...` (default 1)
 #

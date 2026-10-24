@@ -207,5 +207,25 @@ class TestCollectAndMain(unittest.TestCase):
             del os.environ["OMES_TEST_CANARY_SECRET"]
 
 
+class TestRunNeverInheritsStdin(unittest.TestCase):
+    """_run() is shared by every version/config probe (including
+    `hermes acp --version` via health/hermes_config.py). A probe must never
+    read the caller's stdin: a stdio server would otherwise block on an open
+    pipe until the timeout (#325)."""
+
+    def test_subprocess_gets_devnull_stdin(self):
+        completed = mock.Mock(returncode=0, stdout="v1\n", stderr="")
+        with mock.patch.object(versions.shutil, "which", return_value="/usr/bin/fake"), \
+             mock.patch.object(versions.subprocess, "run", return_value=completed) as run:
+            versions._run(["fake", "--version"])
+        self.assertIs(run.call_args.kwargs.get("stdin"), versions.subprocess.DEVNULL)
+
+    def test_stdin_reading_child_exits_immediately(self):
+        # `cat` with no arguments reads stdin until EOF; with /dev/null it
+        # returns at once instead of hitting the timeout (-2).
+        rc, out, _err = versions._run(["cat"], timeout=5.0)
+        self.assertEqual((rc, out), (0, ""))
+
+
 if __name__ == "__main__":
     unittest.main()

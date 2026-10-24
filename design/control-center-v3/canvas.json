@@ -1,0 +1,27 @@
+{
+  "v": 3,
+  "createdOnFiles": {"v": 1, "at": "2026-10-19T05:50:00Z"},
+  "title": "OMES Control Center — Analisis & Redesain UI/UX",
+  "launch": {"view": "canvas"},
+  "pages": [],
+  "boards": {
+    "Audit.dc.html": {"x": 0, "y": 0, "w": 1440, "h": 2900, "title": "01 · Audit UX prototipe v2 (kondisi saat ini)"},
+    "Main.dc.html": {"x": 0, "y": 3320, "w": 1440, "h": 1640, "title": "02 · Ringkasan armada (redesain v3)", "expand": "fill", "is_interactive": true},
+    "Operations.dc.html": {"x": 1520, "y": 3320, "w": 1440, "h": 1500, "title": "03 · Operasi & persetujuan (redesain v3)", "expand": "fill", "is_interactive": true},
+    "Health.dc.html": {"x": 3040, "y": 3320, "w": 1440, "h": 1400, "title": "04 · Kesehatan per otoritas (redesain v3)", "expand": "fill"},
+    "Mobile.dc.html": {"x": 4560, "y": 3320, "w": 390, "h": 844, "title": "05 · On-call ponsel (redesain v3)"},
+    "Tokens.dc.html": {"x": 0, "y": 5380, "w": 1440, "h": 1500, "title": "06 · Sistem desain v3"},
+    "HermesOffice.dc.html": {"x": 0, "y": 7300, "w": 1440, "h": 1840, "title": "07 · Kantor agen Hermes — multi-kantor & hierarki, 2D ↔ 3D", "expand": "fill", "is_interactive": true},
+    "HermesAgenda.dc.html": {"x": 1520, "y": 7300, "w": 1440, "h": 1500, "title": "08 · Manajemen, tugas & agenda agen", "expand": "fill", "is_interactive": true},
+    "AvatarKit.dc.html": {"x": 3040, "y": 7300, "w": 1440, "h": 1080, "title": "09 · Kit & pengaturan avatar", "is_interactive": true},
+    "Avatar.dc.html": {"x": 4560, "y": 7300, "w": 124, "h": 200, "title": "Komponen · Avatar"}
+  },
+  "order": ["Audit.dc.html", "Main.dc.html", "Operations.dc.html", "Health.dc.html", "Mobile.dc.html", "Tokens.dc.html", "HermesOffice.dc.html", "HermesAgenda.dc.html", "AvatarKit.dc.html", "Avatar.dc.html"],
+  "notes": {
+    "t_analisis": {"x": 0, "y": -300, "text": "01 · Analisis prototipe saat ini (ui/control-center, commit 8990850)", "kind": "title1", "maxW": 1440},
+    "t_redesain": {"x": 0, "y": 3020, "text": "02 · Redesain v3 — layar inti", "kind": "title1", "maxW": 4950},
+    "t_sistem": {"x": 0, "y": 5080, "text": "03 · Sistem desain v3", "kind": "title1", "maxW": 1440},
+    "t_hermes": {"x": 0, "y": 7000, "text": "04 · Hermes — kantor agen, tugas, agenda & avatar", "kind": "title1", "maxW": 4690}
+  },
+  "designSystems": []
+}
