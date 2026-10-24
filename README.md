@@ -294,3 +294,6 @@ flowchart LR
     V --> R[Rollback on failure]
 ```
 
+## Shipped versus planned OMES and Hermes AI UI/UX
+
+[**Control Center and AI Management UX contract v1.0**](docs/control-center-ai-ux-contract.md) distinguishes existing authorized AWCMS /admin/omes/* operator pages from planned typed Hermes AI Management, Mission Control 3D, browser-transfer and Bun SSE/WS status projection, using the accepted OMES design system (issue [#348](https://github.com/ahliweb/omes/issues/348)). UI contract is documentation, not runtime implementation.
