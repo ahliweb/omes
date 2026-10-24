@@ -200,8 +200,11 @@ privilege can't run it, or if the module was removed from disk), an optional per
 `module_doctor` hook (any module MAY define this function for deeper self-diagnosis — additive
 to the module contract in `docs/architecture.md` Section 4; not required), every **deployed**
 `omes agent` (issue #87/#96 follow-up — see section 4.18 `omes agent doctor` below; skipped
-entirely, not a `WARN`, when no agent has ever been declared), backup session availability, and
-log directory writability. Each check reports `OK`, `WARN`, or `FAIL`.
+entirely, not a `WARN`, when no agent has ever been declared), the opt-in `browser_worker` readiness
+row (issue #298 — see section 4.13 `omes health browser-worker`; skipped entirely unless
+`OMES_BROWSER_WORKER_ID` is set, `OK` only for state `ready`, otherwise `WARN` with the state and
+reason codes, never `FAIL`), backup session availability, and log directory writability. Each check
+reports `OK`, `WARN`, or `FAIL`.
 
 **Exit codes:** 0 when no check is `FAIL` (a `WARN` alone does not fail the run); 1 when at
 least one check is `FAIL`.
@@ -363,7 +366,8 @@ built-in commands.
 `omes health agent-runtime [--json] [--profile-home <path>]` /
 `omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]` /
 `omes health acp [--json] [--profile-home <path>]` /
-`omes health budget [--json] [--profile-home <path>]`
+`omes health budget [--json] [--profile-home <path>]` /
+`omes health browser-worker [--json] [--worker-id <id>] [--capability-profile <deterministic|ai_assisted>] [--model <id>]`
 
 `omes health` (or `omes health agent`) and `omes health gateway` run the
 layered host/runtime/gateway/provider/channel readiness model for the
@@ -787,6 +791,37 @@ separate, explicit operation — it does not run as part of the default `omes au
 last recorded verification is not re-hashed unless `--force` is also given. See
 [docs/provenance.md §1b](provenance.md#1b-modelruntime-artifact-provenance-issue-236-threat-ai-06).
 Exit codes: 0 clean, 7 findings.
+
+`omes health browser-worker [--json] [--worker-id <id>] [--capability-profile <deterministic|ai_assisted>]
+[--model <id>]` (issue [#298](https://github.com/ahliweb/omes/issues/298), via
+[`lib/omes/py/health/browser_worker.py`](../lib/omes/py/health/browser_worker.py)) prints read-only,
+metadata-only host-readiness evidence for an **optional, separately installed browser worker**:
+exactly the document defined by
+[`contracts/browser-transfer/v1/browser-worker-readiness.schema.json`](../contracts/browser-transfer/v1/browser-worker-readiness.schema.json)
+(`state` is one of `ready`, `degraded`, `blocked`, `unsupported`, `unknown`, with stable
+`reason_codes`, a browser version label and a UTC `observed_at`). It reuses the #71 Ollama probe, the
+#80 exposure audit's listener table and the #216 destination classifier, never launches a browser,
+and never reads a cookie, profile or heartbeat content. When it runs **as root** it refuses to execute a browser binary that is not root-owned or is group/world-writable: the result is `blocked` with `BROWSER_BINARY_UNSAFE` (engine and version `unknown`) and `<browser> --version` is not run; non-root runs are unaffected. **Per-job isolation evidence is Not
+implemented yet (tracked in #298, depends on #276), so the state is never `ready` on a real
+host today.** The tenant, server and worker ids come from `OMES_JOBS_TENANT_ID`, `OMES_JOBS_SERVER_ID`
+and `OMES_BROWSER_WORKER_ID` (or `--worker-id`) and are never invented. **Exit codes:** 0 `ready`; 7
+any other state (the document is still printed); 4 not configured (an id is missing — nothing on
+stdout, the missing variables named on stderr); 2 usage error or invalid configuration value; 1
+internal error (including a failed contract self-check). With `omes health browser-worker --json`,
+stdout is exactly one JSON object and logs go to stderr. When `OMES_BROWSER_WORKER_ID` is set,
+`omes doctor` also reports an advisory `browser_worker` row (OK for `ready`, otherwise WARN with the
+state and reason codes; never FAIL). See [docs/browser-worker-readiness.md](browser-worker-readiness.md)
+for the state precedence, every reason code and its test, and
+[configuration §15a](configuration.md#15a-omes-health-browser-worker--libomespyhealthbrowser_workerpy-issue-298)
+for the variables.
+
+**Examples:**
+
+```bash
+OMES_BROWSER_WORKER_ID=worker-1 omes health browser-worker
+omes health browser-worker --json --worker-id worker-1 | jq -r '.state, (.reason_codes | join(","))'
+```
+
 > Note: `omes health versions` and `omes audit provenance` (issues
 > [#83](https://github.com/ahliweb/omes/issues/83) and
 > [#84](https://github.com/ahliweb/omes/issues/84)) are implemented on

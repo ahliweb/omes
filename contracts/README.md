@@ -12,7 +12,7 @@ section 11 for what is actually implemented.
 
 ## Browser transfer (proposed)
 
-`contracts/browser-transfer/v1/` contains optional, sanitized browser worker readiness and per-record transfer event **wire contracts only** (#294/#296). They are not an executable Playwright/Hermes adapter, a second business workflow engine, an AWCMS record database, or a browser permission boundary. See [browser transfer v1 README](browser-transfer/v1/README.md); the corresponding design is tracked in #295 and [PR #307](https://github.com/ahliweb/omes/pull/307). Existing `contracts/control-center/v1/` safe host operations must not be expanded into free-form browser actions.
+`contracts/browser-transfer/v1/` contains optional, sanitized browser worker readiness and per-record transfer event **wire contracts only** (#294/#296). They are not an executable Playwright/Hermes adapter, a second business workflow engine, an AWCMS record database, or a browser permission boundary. See [browser transfer v1 README](browser-transfer/v1/README.md); the corresponding design is tracked in #295 and [PR #307](https://github.com/ahliweb/omes/pull/307). Existing `contracts/control-center/v1/` safe host operations must not be expanded into free-form browser actions. The readiness document has a read-only host-evidence producer, `omes health browser-worker` (#298, [docs/browser-worker-readiness.md](../docs/browser-worker-readiness.md)); it adds no executor, no worker and no public listener.
 
 ## Layout convention
 

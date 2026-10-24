@@ -282,6 +282,16 @@
     },
     {
       "authority": "omes",
+      "execution_semantics": "deterministic",
+      "id": "omes.health.browser_worker_readiness",
+      "implementation_status": "implemented",
+      "name": "OMES Browser Worker Host-Readiness Evidence (read-only; no browser executor)",
+      "omes_module": "health",
+      "plane": "host_control",
+      "upstream_project": "ahliweb/omes"
+    },
+    {
+      "authority": "omes",
       "execution_semantics": "observational",
       "id": "omes.health.inference_endpoint_evidence",
       "implementation_status": "implemented",

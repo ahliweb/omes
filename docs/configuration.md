@@ -182,6 +182,34 @@ Never referenced by any installer profile — see
 | `OMES_OLLAMA_LOAD_TIMEOUT` | `30` (seconds) | Operator | Bounded timeout for the model-load smoke test specifically, since a cold model load can legitimately take longer than a simple API call. |
 | `OMES_OLLAMA_ENABLED` | `0` | Operator | `1` makes `modules/hermes`'s `module_doctor` hook run this check unconditionally during `omes doctor`. Without it, the hook still runs automatically whenever the `ollama` binary is present *and* `OMES_OLLAMA_MODEL` is set. |
 
+## 15a. `omes health browser-worker` / `lib/omes/py/health/browser_worker.py` (issue #298)
+
+Read-only host-readiness evidence for an optional browser worker; see
+[docs/browser-worker-readiness.md](browser-worker-readiness.md). It also reads the
+`OMES_JOBS_TENANT_ID` / `OMES_JOBS_SERVER_ID` identity variables (section 23), the
+`OMES_OLLAMA_*` / `OLLAMA_HOST` variables (section 15, for an `ai_assisted` worker) and the shared
+`OMES_HEALTH_TIMEOUT`. A missing or invalid tenant id, server id or worker id is never replaced by a
+default: the command exits `4` (missing) or `2` (invalid) and prints nothing on stdout.
+
+| Variable | Default | Kind | Meaning |
+|---|---|---|---|
+| `OMES_BROWSER_WORKER_ID` | unset (**required**, or pass `--worker-id`) | Operator | The worker this evidence describes. Must match `^[A-Za-z0-9_.:-]{1,128}$` (the contract's pattern). Setting it also enables the advisory `browser_worker` row in `omes doctor`. |
+| `OMES_BROWSER_WORKER_CAPABILITY_PROFILE` | unset (reported as `unknown`) | Operator | `deterministic` (no model; `model_ready: not_required`) or `ai_assisted` (requires the Ollama model probe). Unset never defaults to `deterministic`. |
+| `OMES_BROWSER_WORKER_ADAPTER_VERSION` | unset (`unknown`, blocks `ready`) | Operator | The pinned browser adapter version, as **declared** by the operator (OMES cannot observe an adapter it does not own). Must match `^[A-Za-z0-9_.:+-]{1,64}$`; the literals `unknown`/`none` are rejected. |
+| `OMES_BROWSER_WORKER_BROWSER_BIN` | unset (auto-discovery) | Operator | Absolute path of the worker's Chromium-family browser. When set it is authoritative: if unusable, the result is `BROWSER_BINARY_MISSING` rather than falling back to another browser. Only `<path> --version` is ever run, and when the check runs as root a binary that is not root-owned or is group/world-writable is not run at all (`BROWSER_BINARY_UNSAFE`). |
+| `OMES_BROWSER_WORKER_BROWSER_PIN` | unset (`unknown`, blocks `ready`) | Operator | The expected browser version label: `chromium-<version>`, `chrome-<version>` or `playwright-chromium-<revision>`. A different observed label is `blocked`. |
+| `PLAYWRIGHT_BROWSERS_PATH` | `$HOME/.cache/ms-playwright` | Operator (existing Playwright variable) | Where the read-only discovery of the Hermes-bundled Playwright Chromium looks. `0` (inside `node_modules`) is not searched. |
+| `OMES_BROWSER_WORKER_PROFILE_ROOT` | unset (`unknown`) | Operator | Absolute path of the worker's per-job profile directory (a real directory, mode `0700`, owned by the invoking user). Only its immediate children's names, types and mtimes are read. |
+| `OMES_BROWSER_WORKER_SESSION_MAX_AGE_SECONDS` | `3600` | Operator | Session ceiling: an automation browser process or an unreferenced profile directory older than this is an orphan/leftover (`blocked`). OMES has no lease table, so raise it for legitimately long jobs. |
+| `OMES_BROWSER_WORKER_HEARTBEAT_FILE` | unset (`unknown`) | Operator | Absolute path of a file the worker touches periodically. Only its type, mode and **mtime** are read; its content never is. |
+| `OMES_BROWSER_WORKER_HEARTBEAT_MAX_AGE_SECONDS` | `120` | Operator | Heartbeat freshness window; older is `degraded`. |
+| `OMES_BROWSER_WORKER_DISK_MIN_MB` | `2048` | Operator | Minimum free disk on the profile root's (else `$HOME`'s) filesystem. |
+| `OMES_BROWSER_WORKER_MEM_MIN_MB` | `2048` | Operator | Minimum `MemAvailable`. |
+| `OMES_BROWSER_WORKER_CPU_MIN` | `2` | Operator | Minimum usable CPUs. |
+| `OMES_BROWSER_WORKER_CDP_PORTS` | `9222-9229` plus any listed | Operator | Comma-separated extra ports treated as CDP listeners (non-loopback bind is `blocked`). |
+| `OMES_BROWSER_WORKER_MCP_PORTS` | `8931` plus any listed | Operator | Comma-separated extra ports treated as MCP listeners (non-loopback bind is `blocked`). |
+| `OMES_PS_BIN` | `ps` | Test-only | Overrides the `ps` binary used for the process-table probe (same purpose as `OMES_SS_BIN`, section 18). Not intended for operator use. |
+
 ## 16. `omes health agent|gateway` / `lib/omes/py/health/hermes.py` (issue #79)
 
 See [docs/hermes-integration.md §17](hermes-integration.md#17-health-and-readiness-issue-79)

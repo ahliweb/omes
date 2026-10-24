@@ -51,6 +51,27 @@ class TestClassifyDestination(unittest.TestCase):
         self.assertEqual(ai_privacy.classify_destination(""), "unknown")
 
 
+class TestCollectDestinationClass(unittest.TestCase):
+    """The public composition other read-only health targets reuse (issue
+    #298): the allowlisted `model.provider` read plus the bounded classifier."""
+
+    def _classify(self, provider):
+        with mock.patch.object(ai_privacy, "_collect_provider_value", return_value=provider):
+            return ai_privacy.collect_destination_class(1.0)
+
+    def test_local_cloud_and_unknown(self):
+        self.assertEqual(self._classify("ollama"), "local")
+        self.assertEqual(self._classify("anthropic"), "cloud")
+        self.assertEqual(self._classify("some-future-provider"), "unknown")
+
+    def test_unreadable_provider_is_unknown_not_local(self):
+        self.assertEqual(self._classify(None), "unknown")
+
+    def test_without_a_hermes_binary_it_is_unknown(self):
+        with mock.patch.object(ai_privacy.shutil, "which", return_value=None):
+            self.assertEqual(ai_privacy.collect_destination_class(1.0), "unknown")
+
+
 class TestLocalEndpointClassification(unittest.TestCase):
     def test_not_applicable_when_destination_not_local(self):
         self.assertEqual(ai_privacy.collect_local_endpoint_classification("cloud", 1.0), "not_applicable")

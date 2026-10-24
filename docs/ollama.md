@@ -124,6 +124,12 @@ HTTP, not the CLI) and an intentionally unreachable endpoint. A real
 Ollama can be exercised by setting `OMES_TEST_REAL_OLLAMA=1`, but no test
 in this repository does so automatically — see [docs/testing.md](testing.md).
 
+`omes health ollama` is also reused, as a library and with its CLI/JSON output
+unchanged, by [`omes health browser-worker`](browser-worker-readiness.md) (issue
+#298) for the model-readiness field of an `ai_assisted` browser worker; a
+regression test pins the key sets of its result so that reuse cannot silently
+change this command.
+
 ## 8. Sources
 
 - <https://docs.ollama.com/linux>

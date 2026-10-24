@@ -147,6 +147,17 @@ def _collect_provider_value(timeout: float) -> Optional[str]:
     return value
 
 
+def collect_destination_class(timeout: float) -> str:
+    """Public, read-only composition of the two steps `build_observation()`
+    performs first: the allowlisted `model.provider` read and its bounded
+    local/cloud/unknown classification. Exposed so another read-only OMES
+    health target (issue #298, `omes health browser-worker`) can ask
+    "does Hermes route model calls to a cloud destination?" without
+    re-implementing the allowlist or the classifier. Returns one of
+    "local", "cloud", "unknown"; never raises for an unreadable config."""
+    return classify_destination(_collect_provider_value(timeout))
+
+
 def classify_fallback_model(value: Optional[str]) -> str:
     """Classifies a legacy `fallback_model` config value ("provider/model",
     the same shape as Hermes' `model` key) into the same bounded

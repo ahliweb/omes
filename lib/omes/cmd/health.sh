@@ -1,7 +1,7 @@
 # shellcheck shell=bash
-# omes-help: layered health checks for Ollama, the Hermes agent/gateway, and read-only inference endpoint evidence (issues #71, #79, #292)
+# omes-help: layered health checks for Ollama, the Hermes agent/gateway, read-only inference endpoint evidence and an optional browser worker (issues #71, #79, #292, #298)
 #
-# lib/omes/cmd/health.sh - `omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|inference-endpoint|acp]` dispatcher.
+# lib/omes/cmd/health.sh - `omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|inference-endpoint|acp|budget|browser-worker]` dispatcher.
 #
 # Sourced by bin/omes's extension-command mechanism (lib/omes/cmd/README.md)
 # after every lib/omes/*.sh library and with global flags already parsed.
@@ -20,7 +20,7 @@ _health_py_script() {
 # _health_usage
 _health_usage() {
   cat <<'EOF'
-Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|inference-endpoint|acp|budget] [options]
+Usage: omes health [agent|gateway|ollama|versions|ai-privacy|agent-runtime|inference-endpoint|acp|budget|browser-worker] [options]
 
 Targets:
   agent     (default) Layered host/runtime/gateway/provider/channel
@@ -104,6 +104,23 @@ Targets:
             infrastructure; OMES enforces no spend ceiling and never
             meters model calls (issue #275, ADR-0032 rule 8).
             Options: --json  --profile-home <path>
+  browser-worker  Read-only host-readiness evidence for an OPTIONAL,
+            separately installed browser worker (issue #298): state
+            (ready|degraded|blocked|unsupported|unknown) with stable reason
+            codes, browser runtime version label, CDP/MCP/Ollama listener
+            binding, model readiness (reuses the 'ollama' check above),
+            resource floors, orphan sessions/leftover profiles, and
+            heartbeat freshness. Metadata only - never a cookie, profile
+            content, URL, prompt or credential - and it never launches a
+            browser. As root it refuses (BROWSER_BINARY_UNSAFE) a browser
+            binary that is not root-owned or is group/world-writable rather
+            than executing it. --json prints exactly the document that validates
+            against contracts/browser-transfer/v1/browser-worker-readiness.schema.json.
+            Per-job isolation evidence is Not implemented yet (tracked in
+            #298, depends on #276), so the state is never 'ready' today.
+            Options: --json  --worker-id <id>  --capability-profile
+            <deterministic|ai_assisted>  --model <id>
+            See docs/browser-worker-readiness.md.
 
 Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.md):
   OMES_HEALTH_TIMEOUT           per-probe timeout in seconds (default 10)
@@ -129,6 +146,9 @@ Environment (see docs/configuration.md, docs/ollama.md, docs/hermes-integration.
   OMES_INFERENCE_MODEL          inference-endpoint: model id that must be advertised (or --model)
   OMES_INFERENCE_ENDPOINT_SCOPE inference-endpoint: loopback | private (default private)
   OMES_INFERENCE_CA_FILE        inference-endpoint: path to a PEM CA bundle for a private https CA
+  OMES_JOBS_TENANT_ID / OMES_JOBS_SERVER_ID / OMES_BROWSER_WORKER_ID
+                                 browser-worker identity (all three required; none is ever invented)
+  OMES_BROWSER_WORKER_*          browser-worker declarations and thresholds (docs/configuration.md section 15a)
 
 Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4 service missing.
             ai-privacy: 0 status is PASS/WARN, 7 status is FAIL/BLOCKED.
@@ -139,6 +159,8 @@ Exit codes: agent/gateway: 0 ready, 7 not ready. ollama: 0 ready, 7 not ready, 4
             not_applicable - see the JSON status), 2 usage error.
             acp: 0 status is ok/warn, 7 status is unknown, 2 usage error.
             budget: 0 status is ok/warn, 7 status is unknown, 2 usage error.
+            browser-worker: 0 ready, 7 any other state, 4 not configured (no tenant/server/worker
+            id: nothing is printed to stdout), 2 usage/invalid configuration value.
 EOF
 }
 
@@ -1194,6 +1216,121 @@ _health_run_budget() {
 # END omes health budget (issue #275)
 # =============================================================================
 
+# =============================================================================
+# BEGIN omes health browser-worker (issue #298) - see
+# docs/browser-worker-readiness.md
+# =============================================================================
+#
+# `omes health browser-worker` produces the read-only, metadata-only
+# host-readiness document defined by
+# contracts/browser-transfer/v1/browser-worker-readiness.schema.json. All of
+# the logic lives in lib/omes/py/health/browser_worker.py, which REUSES the
+# #71 Ollama probe, the #80 exposure audit, the #216 destination classifier
+# and the #83 Hermes version probe instead of duplicating any of them. This
+# wrapper only supplies the one host fact bash already owns (platform
+# support, from lib/omes/detect.sh) and maps flags and exit codes. Nothing
+# here mutates host state; it honours --dry-run trivially (it is read-only).
+
+# _health_browser_worker_facts_json
+# Prints {"platform":{"supported":<bool>,"tier":"<tier>"}} from
+# detect_tier, the same platform-support decision `omes doctor` uses.
+_health_browser_worker_facts_json() {
+  local tier="" supported="false"
+  detect_os >/dev/null 2>&1 || true
+  detect_arch >/dev/null 2>&1 || true
+  tier="$(detect_tier 2>/dev/null || true)"
+  [[ -n "$tier" ]] || tier="unsupported"
+  if [[ "$tier" != "unsupported" ]]; then
+    supported="true"
+  fi
+  json_obj \
+    "$(json_kv platform "$(json_obj "$(json_kv supported "$supported" --raw)" "$(json_kv tier "$tier")")" --raw)"
+}
+
+# _health_run_browser_worker [--json] [--worker-id <id>]
+#   [--capability-profile <deterministic|ai_assisted>] [--model <id>]
+_health_run_browser_worker() {
+  local -a py_args=()
+  local want_json=0
+  [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --json)
+        want_json=1
+        shift
+        ;;
+      --worker-id)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health browser-worker: --worker-id requires a value"
+        py_args+=(--worker-id "$2")
+        shift 2
+        ;;
+      --capability-profile)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health browser-worker: --capability-profile requires a value"
+        py_args+=(--capability-profile "$2")
+        shift 2
+        ;;
+      --model)
+        [[ $# -ge 2 ]] || omes_die "$OMES_EX_USAGE" "health browser-worker: --model requires a value"
+        py_args+=(--model "$2")
+        shift 2
+        ;;
+      -h | --help)
+        _health_usage
+        exit "$OMES_EX_OK"
+        ;;
+      *)
+        omes_die "$OMES_EX_USAGE" "health browser-worker: unknown argument: $1"
+        ;;
+    esac
+  done
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    log_error "health browser-worker: python3 not found (required for lib/omes/py/health/browser_worker.py)"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  local script
+  script="$(_health_py_script browser_worker.py)"
+  if [[ ! -r "$script" ]]; then
+    log_error "health browser-worker: ${script} not found"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  py_args+=(--facts-stdin)
+  if [[ "$want_json" -eq 1 ]]; then
+    py_args+=(--format json)
+  else
+    py_args+=(--format human)
+  fi
+
+  # stderr is deliberately NOT discarded here: the producer explains a
+  # "not configured" / invalid-value result there, while stdout stays the
+  # document alone (docs/cli.md JSON contract).
+  local output rc=0
+  output="$(_health_browser_worker_facts_json | OMES_ROOT="$OMES_ROOT" python3 "$script" "${py_args[@]}")" || rc=$?
+
+  case "$rc" in
+    0 | 7) ;;
+    *)
+      # 4 = not configured, 2 = usage/invalid value, 1 = internal error.
+      # The producer already explained on stderr and printed no stdout.
+      exit "$rc"
+      ;;
+  esac
+
+  if [[ -z "$output" ]]; then
+    log_error "health browser-worker: the readiness producer produced no output (exit ${rc})"
+    exit "$OMES_EX_PREFLIGHT"
+  fi
+
+  printf '%s\n' "$output"
+  exit "$rc"
+}
+# =============================================================================
+# END omes health browser-worker (issue #298)
+# =============================================================================
+
 cmd_health() {
   if [[ "${1:-}" == "-h" ]] || [[ "${1:-}" == "--help" ]]; then
     _health_usage
@@ -1215,6 +1352,12 @@ cmd_health() {
   if [[ "${1:-}" == "agent-runtime" ]]; then
     shift
     _health_run_agent_runtime "$@"
+    return 0
+  fi
+
+  if [[ "${1:-}" == "browser-worker" ]]; then
+    shift
+    _health_run_browser_worker "$@"
     return 0
   fi
 

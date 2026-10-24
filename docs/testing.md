@@ -75,6 +75,17 @@ Python logic under `lib/omes/py/<package>/` with tests under
 `tests/py/<package>/test_*.py`; `tests/run.sh` discovers them
 automatically.
 
+`tests/py/health/test_browser_worker.py` (issue #298) covers
+`lib/omes/py/health/browser_worker.py` with injected dependencies (no real browser, Ollama, `ss`,
+`ps`, Hermes or network): the state precedence, one scenario per reason code with every produced
+document validated against `contracts/browser-transfer/v1/browser-worker-readiness.schema.json`
+using the repository's own stdlib validator, not-configured handling, read-only/no-secret guarantees
+(filesystem snapshot, `open()` spy, canary values), a static no-mutation guard, and a golden-shape
+regression for `omes health ollama`. `tests/integration/health-browser-worker.bats` drives the real
+`bin/omes` entry point through the shims (the shim/container smoke test), and
+`tests/integration/doctor.bats` covers the opt-in `browser_worker` doctor row. Details:
+[docs/browser-worker-readiness.md §8](browser-worker-readiness.md#8-testing).
+
 `tests/py/agent/` (issue #87) covers the agent deployment lifecycle:
 `test_manifest.py` (schema + semantic validation against every fixture
 under `contracts/agent/v1/fixtures/agent-deployment/`, including duplicate/mismatched
