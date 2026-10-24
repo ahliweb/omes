@@ -18,40 +18,73 @@
       "title": "00 · Analisis 4 repo & fondasi bersama",
       "expand": "fill"
     },
+    "PolaData.dc.html": {
+      "x": 1520,
+      "y": 0,
+      "w": 1440,
+      "h": 2700,
+      "title": "00b · Pola halaman data: pencarian + paging",
+      "expand": "fill"
+    },
     "OmesFleet.dc.html": {
       "x": 0,
-      "y": 2660,
+      "y": 3120,
       "w": 1440,
-      "h": 1560,
+      "h": 1700,
       "title": "OMES · Ringkasan armada (ruang kerja OMES)",
       "expand": "fill",
       "is_interactive": true
     },
     "OmesOperation.dc.html": {
       "x": 1520,
-      "y": 2660,
+      "y": 3120,
       "w": 1440,
       "h": 1260,
       "title": "OMES · Persetujuan operasi",
       "expand": "fill",
       "is_interactive": true
+    },
+    "OmesSpec.dc.html": {
+      "x": 3040,
+      "y": 3120,
+      "w": 1440,
+      "h": 1560,
+      "title": "OMES · Spesifikasi 15 layar",
+      "expand": "fill",
+      "is_interactive": true
+    },
+    "OmesJobs.dc.html": {
+      "x": 4560,
+      "y": 3120,
+      "w": 1440,
+      "h": 1350,
+      "title": "OMES · Job (log keyset)",
+      "expand": "fill",
+      "is_interactive": true
     }
   },
-  "order": ["Main.dc.html", "OmesFleet.dc.html", "OmesOperation.dc.html"],
+  "order": [
+    "Main.dc.html",
+    "PolaData.dc.html",
+    "OmesFleet.dc.html",
+    "OmesOperation.dc.html",
+    "OmesSpec.dc.html",
+    "OmesJobs.dc.html"
+  ],
   "notes": {
     "t_analisis": {
       "x": 0,
       "y": -300,
-      "text": "00 · Analisis keluarga AWCMS",
+      "text": "00 · Analisis keluarga AWCMS + pola halaman data",
       "kind": "title1",
-      "maxW": 1440
+      "maxW": 2960
     },
     "t_layar": {
       "x": 0,
-      "y": 2360,
-      "text": "01 · omes — layar redesain",
+      "y": 2820,
+      "text": "01 · omes — layar redesain & spesifikasi",
       "kind": "title1",
-      "maxW": 2960
+      "maxW": 6000
     }
   },
   "designSystems": []

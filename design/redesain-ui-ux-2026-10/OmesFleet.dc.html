@@ -111,6 +111,7 @@ a{color:#5fc8d6}a:hover{color:#7ed4df}
 <section style="flex: 2 1 640px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px">
 <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 14px 20px">
 <h2 style="margin: 0; font-size: 16px; font-weight: 700">Armada</h2><span style="font-size: 13px; color: #8d9ba8">diurut menurut risiko</span>
+<label style="display: flex; align-items: center; gap: 8px; flex: 1 1 220px; max-width: 320px; height: 34px; padding: 0 10px; border: 1px solid #6a7683; border-radius: 8px; background: #0d1115; color: #8d9ba8"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14M21 21l-4.3-4.3"></path></svg><input type="search" aria-label="Cari host" placeholder="Host ID, peran, OS…" value="{{hq}}" onChange="{{onHq}}" style="border: 0; outline: none; flex: 1; min-width: 0; font: inherit; font-size: 13px; color: #e8eef3; background: transparent"></label>
 <div role="group" aria-label="Filter armada" style="margin-left: auto; display: flex; padding: 3px; gap: 2px; background: #0d1115; border: 1px solid #252e38; border-radius: 9px">
 <sc-for list="{{filters}}" as="f" hint-placeholder-count="3">
 <button type="button" aria-pressed="{{f.sel}}" onClick="{{f.pick}}" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 0; font: inherit; font-size: 13px; cursor: pointer; {{f.st}}">{{f.label}}</button>
@@ -148,6 +149,10 @@ a{color:#5fc8d6}a:hover{color:#7ed4df}
 </tbody>
 </table>
 </div>
+<nav aria-label="Paginasi armada" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 20px; border-top: 1px solid #252e38; background: #10151a; border-radius: 0 0 12px 12px; font-size: 13px; color: #b7c3ce">
+<span>{{hostRange}}</span>
+<div style="display: flex; gap: 6px; align-items: center"><button type="button" class="ghost" disabled="{{hNoPrev}}" onClick="{{hPrev}}" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #6a7683; background: transparent; color: #e8eef3; font: inherit; cursor: pointer">‹ Sebelumnya</button><span style="padding: 0 4px">Halaman {{hPage}}</span><button type="button" class="ghost" disabled="{{hNoNext}}" onClick="{{hNext}}" style="height: 32px; padding: 0 12px; border-radius: 7px; border: 1px solid #6a7683; background: transparent; color: #e8eef3; font: inherit; cursor: pointer">Berikutnya ›</button></div>
+</nav>
 </section>
 
 <section style="flex: 1 1 300px; min-width: 0; background: #141a20; border: 1px solid #252e38; border-radius: 12px; padding: 16px 20px; display: flex; flex-direction: column; gap: 16px">
@@ -169,7 +174,7 @@ a{color:#5fc8d6}a:hover{color:#7ed4df}
 class Component extends DCLogic {
   constructor(props) {
     super(props);
-    this.state = { filter: 'all', picked: {} };
+    this.state = { filter: 'all', picked: {}, hq: '', hpage: 0 };
   }
   renderVals() {
     const I = {
@@ -227,7 +232,22 @@ class Component extends DCLogic {
     };
     const f = this.state.filter;
     const picked = this.state.picked;
-    const hosts = raw.filter((h) => f === 'all' || (f === 'act' && h.s !== 'ok') || (f === 'ok' && h.s === 'ok')).map((h) => Object.assign({}, h, S[h.s], {
+    const hq = this.state.hq.trim().toLowerCase();
+    const matchedHosts = raw.filter((h) => (f === 'all' || (f === 'act' && h.s !== 'ok') || (f === 'ok' && h.s === 'ok')) && (!hq || (h.id + ' ' + h.role + ' ' + h.os).toLowerCase().indexOf(hq) >= 0));
+    const HPER = 8;
+    const hpages = Math.max(1, Math.ceil(matchedHosts.length / HPER));
+    const hpage = Math.min(this.state.hpage, hpages - 1);
+    const hostPaging = {
+      hq: this.state.hq,
+      onHq: (e) => this.setState({ hq: e.target.value, hpage: 0 }),
+      hostRange: matchedHosts.length ? 'Host ' + (hpage * HPER + 1) + '–' + Math.min(matchedHosts.length, hpage * HPER + HPER) + ' dari ' + matchedHosts.length + (hq ? ' cocok dengan "' + this.state.hq.trim() + '"' : '') + ' · contoh 8 per halaman (bawaan 25)' : 'Tidak ada host yang cocok',
+      hPage: String(hpage + 1),
+      hNoPrev: hpage === 0,
+      hNoNext: hpage >= hpages - 1,
+      hPrev: () => this.setState({ hpage: Math.max(0, hpage - 1) }),
+      hNext: () => this.setState({ hpage: Math.min(hpages - 1, hpage + 1) })
+    };
+    const hosts = matchedHosts.slice(hpage * HPER, hpage * HPER + HPER).map((h) => Object.assign({}, h, S[h.s], {
       res: [res(h.cpu), res(h.mem), res(h.disk)],
       driftFg: h.drift === '0' ? '#8d9ba8' : (h.s === 'crit' ? '#f49a8b' : '#e8b44a'),
       lastFg: h.s === 'unk' ? '#e8b44a' : '#b7c3ce',
@@ -235,7 +255,7 @@ class Component extends DCLogic {
       toggle: () => { const p = Object.assign({}, this.state.picked); p[h.id] = !p[h.id]; this.setState({ picked: p }); }
     }));
     const pickedCount = Object.keys(picked).filter((k) => picked[k]).length;
-    return {
+    return Object.assign(hostPaging, {
       nav: [
         { label: 'Pantau', items: [n('Ringkasan', I.grid, { st: act, cur: 'page' }), n('Server', I.server, { badge: '3 drift', bst: 'color: #e8b44a' }), n('Kesehatan', I.pulse)] },
         { label: 'Ubah & pulihkan', items: [n('Operasi', I.check, { href: 'OmesOperation.dc.html', badge: '1', bst: 'color: #0d1115; background: #e8b44a; border-radius: 999px; padding: 1px 7px' }), n('Deployment', I.up), n('Job', I.job), n('Backup & pemulihan', I.box)] },
@@ -262,7 +282,7 @@ class Component extends DCLogic {
         Object.assign({ name: 'external-provider', note: 'Cloudflare, DNS, dan GitHub belum dikonfigurasi untuk tenant ini — ditampilkan "—", bukan sehat.' }, S.unk)
       ],
       filters: [['all', 'Semua · 12'], ['act', 'Perlu tindakan · 4'], ['ok', 'Sehat · 8']].map(([k, l]) => ({
-        label: l, sel: f === k ? 'true' : 'false', pick: () => this.setState({ filter: k }),
+        label: l, sel: f === k ? 'true' : 'false', pick: () => this.setState({ filter: k, hpage: 0 }),
         st: f === k ? 'background: #1e262e; color: #e8eef3; font-weight: 600' : 'background: transparent; color: #b7c3ce'
       })),
       hosts, hasPicked: pickedCount > 0, pickedCount,
@@ -272,7 +292,7 @@ class Component extends DCLogic {
         { text: 'Deploy versi 1.5.0 di-rollback', meta: '19 Sep 2026, 16.00 WIB · server-acme-01', shape: 'background: #e8b44a; transform: rotate(45deg)' },
         { text: 'Deploy versi 1.4.0 sukses', meta: '19 Sep 2026, 15.00 WIB · server-acme-01', shape: 'border-radius: 999px; background: #7dd89a' }
       ]
-    };
+    });
   }
 }
 </script>

@@ -33,6 +33,15 @@ offline. [`canvas.json`](canvas.json) records the artboard layout.
 | [`Main.dc.html`](Main.dc.html)                   | 00 · Analysis of awcms, awcms-one, omes and awcms-astro                                                                                                   | no                       |
 | [`OmesFleet.dc.html`](OmesFleet.dc.html)         | Fleet overview: workspace switcher, production banner, lifecycle strip, "needs action", freshness per authority, risk-sorted fleet with multi-select        | filter, host selection   |
 | [`OmesOperation.dc.html`](OmesOperation.dc.html) | Operation approval for `corr-op-0001`: plan, preflight, worker steps, four-eyes rule, required note and typed host confirmation                             | note, typed confirmation |
+| [`PolaData.dc.html`](PolaData.dc.html)           | Data-page pattern shared by the AWCMS family: which search and paging each page function gets                                                              | no                       |
+| [`OmesSpec.dc.html`](OmesSpec.dc.html)           | Per-screen spec of the 15 Control Center screens mapped to the v3 navigation, with what the awcms code does today                                          | search, filter, paging   |
+| [`OmesJobs.dc.html`](OmesJobs.dc.html)           | Jobs as a log: "search in" job ID / correlation ID (exact) / server / worker, operation filter from the allowlist, status chips, keyset 50 without a total | search, filters, paging  |
+
+The fleet overview also gained a host search and a paging footer.
+[`spec-omes.json`](spec-omes.json) is the data behind the spec screen; its
+"current" column comes from a heuristic scan of `ahliweb/awcms`
+`src/pages/admin/omes/*.astro`. Job operations come from the
+`operation-request.schema.json` allowlist; the 140 jobs are synthetic.
 
 ## Data provenance
 
