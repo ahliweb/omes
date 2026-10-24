@@ -1438,6 +1438,23 @@ a capability that tries to own a guardrail outside its own plane fails the regis
   this document. With this, `provider.github.repository_progress`'s `implementation_status` moves
   from `staged` to `delegated_upstream` in `architecture/capabilities.json`, and issue #249 is
   closed.
+- Epic [#263](https://github.com/ahliweb/omes/issues/263) plans an additional AWCMS **3D Mission
+  Control** workspace. It is an **observability-plane composition** (`observational` execution
+  semantics) owned by AWCMS presentation: a derived, read-only, tenant-scoped scene assembled from
+  the existing projections, with no new authority, no mission/task lifecycle, no executor, no
+  approval inbox, and no operation name. It is not an interception point for Hermes-native tool
+  execution and does not change any plane's authority. Every object references one existing
+  authority and deep-links to its canonical 2D screen; the mapping and its guard (MC1–MC9) are in
+  `contracts/control-center/v1/mission-control-source-map.json` and
+  [ADR-0031](adr/0031-mission-control-compositional-projection.md), with the wire contracts in
+  [docs/control-center-contracts.md §2.13](control-center-contracts.md#213-mission-control-scene-view-and-replay-window-issue-264-adr-0031).
+  The OMES-side contracts, source map, and guard are implemented in this repository (#264, OMES
+  PR [#268](https://github.com/ahliweb/omes/pull/268), landed); the AWCMS workspace, history
+  mode, and contextual actions (#265, #266, #267) are **shipped** in `ahliweb/awcms` PRs
+  [#880](https://github.com/ahliweb/awcms/pull/880),
+  [#881](https://github.com/ahliweb/awcms/pull/881), and
+  [#882](https://github.com/ahliweb/awcms/pull/882); see
+  [docs/control-center-release-closeout.md](control-center-release-closeout.md) §6.2.
 - Issue [#298](https://github.com/ahliweb/omes/issues/298) (child of #294) registers
   `omes.health.browser_worker_readiness` (`host_control` / `deterministic` / `implemented`, module
   `health`): `omes health browser-worker`, the read-only producer of the
@@ -1478,7 +1495,7 @@ Epic [#269](https://github.com/ahliweb/omes/issues/269) evaluated Octop-style co
 
 OMES adopts patterns, not products. Coordinator-to-worker delegation (including model tiering such as Opus to Sonnet or Haiku), agent-run durability and the Agent Client Protocol (ACP) are Hermes-owned: Hermes `v2026.9.24` already ships `delegate_task` with concurrency and depth limits, marks a restarted running child `unknown`, and provides `hermes acp`. OMES owns only host-control concerns that these patterns touch: reconciling orphaned host jobs after a restart ([#271](https://github.com/ahliweb/omes/issues/271)), the cross-plane evidence envelope ([#272](https://github.com/ahliweb/omes/issues/272)), and OS-level isolation verification ([#276](https://github.com/ahliweb/omes/issues/276)). Registry invariant R9 (§16.2.1) reserves `acp`, `agent_client_protocol`, `coordinator`, `subagent` and `subagents` from OMES authority, and the registry gains the two existing upstream capabilities `hermes.agent.delegation` and `hermes.agent.acp_server`.
 
-The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native tool execution. OMES is not an ACP proxy, server or client, and not an agent scheduler; ACP traffic never reaches OMES host mutation, which remains the typed, allowlisted `operation-request` boundary. Mission Control presentation is AWCMS's (epic [#263](https://github.com/ahliweb/omes/issues/263); ADR-0031 is pending in PR [#268](https://github.com/ahliweb/omes/pull/268)).
+The statement in §18.2 is unchanged: OMES does not mediate all Hermes-native tool execution. OMES is not an ACP proxy, server or client, and not an agent scheduler; ACP traffic never reaches OMES host mutation, which remains the typed, allowlisted `operation-request` boundary. Mission Control presentation is AWCMS's (epic [#263](https://github.com/ahliweb/omes/issues/263); ADR-0031 landed in PR [#268](https://github.com/ahliweb/omes/pull/268)).
 
 | Concern | Authority | Status (2026-10-03) |
 |---|---|---|
