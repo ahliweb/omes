@@ -142,6 +142,18 @@ See `worker-result.request.schema.json` and
 `changes/221-worker-result-job-id-contract-fix.md` for the change
 fragment.
 
+### Additive change: issue #356 (correlation and trace IDs)
+
+Issue #356 added optional `causation_id`, `trace_id` and `span_id` properties to
+`operation-request`, `deployment.request`, `worker-poll.response` (`job`),
+`worker-result.request` and `job-status.response`, plus an optional
+`generated_ids` array on `worker-result.request` and `job-status.response`. This
+is a compatible change: nothing became required and existing fixtures still
+validate. The IDs are opaque, pattern-bounded tokens and are evidence, not
+authority (see [docs/jobs.md §8.1](../docs/jobs.md#81-correlation-and-trace-ids-issue-356)).
+AWCMS pins `contracts/control-center/v1/` by SHA-256, so it must re-vendor these
+five files; editing its vendored copy is drift.
+
 ## Areas
 
 | Area | Owner | Status |
