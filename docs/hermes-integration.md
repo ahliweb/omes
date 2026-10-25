@@ -670,6 +670,33 @@ no `--raw`, no Hermes files or databases):
   bridge such as an editor integration is attached, or auto-approves prompts, is outside what OMES can
   see; this is not proof that no ACP session is running.
 
+- The **OMES-owned gateway hardening and egress profile**, as recorded in the OMES state file
+  (`module.hermes-gateway.hardening_profile` from the `hermes-gateway` hardening step and
+  `module.hermes-restricted.network_policy` from the `hermes-restricted` module). This is a plain
+  read of OMES' own state, not a Hermes file, and it is recorded intent, not live unit state. It is
+  reported in a `profile` block (`present`, `not_present` for hardening recorded `off`, or `unknown`)
+  and as info findings `acp.hardening_profile_*` and `acp.egress_profile_*`. It adds a warning only
+  when hardening is recorded `off` while the ACP surface includes execution. Unknown profile
+  evidence never reads as `ok` and does not change the tool-surface status. Hardening and egress
+  limits apply to the gateway unit; they do not restrict what an already-attached ACP client does
+  with the tool surface Hermes grants it.
+
+**Absent-key semantics (decision, [ADR-0032](adr/0032-multi-agent-control-patterns-boundary.md)).**
+Absent never means safe. An absent OMES state key is `unknown` (`not_recorded`), because hardening
+removal and "never applied" leave the same absence. An absent `platform_toolsets.acp` is deliberately
+`warn`, not `unknown`: Hermes documents that it selects the curated `hermes-acp` toolset, which
+includes terminal and `execute_code`, so the absence is known evidence of an execution-capable
+surface. `unknown` is reserved for a key that cannot be read or is invalid. This is a recorded
+difference from the "absent or unknown config reports `unknown`" wording of the original acceptance
+text of #273.
+
+**"Allow always" guidance.** ACP approval prompts offer allow once, allow always and deny. For
+terminal and code-execution tools, operators should not choose `allow always` and should not use a
+client or bridge that auto-approves: it turns a per-call approval into a standing one for the
+session, so any later prompt-injected command runs without review. Prefer `allow once` and read each
+command, and reduce the surface at its source (below). The report states this as the info finding
+`acp.allow_always_discouraged`. OMES cannot see or change a client's approval choices.
+
 To reduce the ACP tool surface, configure Hermes itself (set `platform_toolsets.acp` to a list without
 `terminal` and `execute_code`, or add them to `agent.disabled_toolsets`); OMES does not write Hermes
 configuration or approve ACP prompts for you.
