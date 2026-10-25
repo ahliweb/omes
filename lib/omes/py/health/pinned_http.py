@@ -19,7 +19,8 @@ Guarantees, each covered by tests/py/health/test_inference_endpoint.py:
   turning verification off.
 - Redirects are never followed (http.client never does); a 3xx is
   reported to the caller as such.
-- Request: a single GET with no body, no Authorization/Cookie header and
+- Request: a single GET with no body (or, for the opt-in active probe of
+  issue #354, a single POST of a fixed JSON body), no Authorization/Cookie header and
   `Accept-Encoding: identity`. No credential is ever sent.
 - Total wall-clock deadline for connect + handshake + headers + body,
   enforced by a watchdog that shuts the socket down (a slow-drip server
@@ -103,8 +104,15 @@ def _tls_reason(exc: ssl.SSLError) -> str:
     return "tls_handshake_failed"
 
 
-def get(
+def get(**kwargs) -> Response:
+    """Performs the single allowlisted GET (see request())."""
+    return request(method="GET", **kwargs)
+
+
+def request(
     *,
+    method: str = "GET",
+    body: Optional[bytes] = None,
     scheme: str,
     host: str,
     host_header: str,
@@ -115,9 +123,13 @@ def get(
     max_bytes: int,
     ssl_context: Optional[ssl.SSLContext] = None,
 ) -> Response:
-    """Performs the single allowlisted GET. `addresses` MUST already be
-    vetted by endpoint_guard.resolve_and_vet; `path` MUST already be the
-    allowlisted probe path."""
+    """Performs one bounded request: the allowlisted GET, or (issue #354,
+    opt-in active probe only) one POST of a fixed JSON `body`. `addresses`
+    MUST already be vetted by endpoint_guard.resolve_and_vet; `path` MUST
+    already be an allowlisted probe path. The POST carries a Content-Type
+    but never any credential header; every other guarantee is shared."""
+    if method not in ("GET", "POST"):
+        raise ValueError("method not allowed")
     start = time.monotonic()
     state: dict = {"sock": None, "expired": False}
 
@@ -213,24 +225,23 @@ def get(
         phase = LAYER_API
         sock.settimeout(remaining())
         conn = _PinnedConnection(sock, host, port, timeout)
-        conn.request(
-            "GET",
-            path,
-            headers={
-                "Host": host_header,
-                "Accept": "application/json",
-                "Accept-Encoding": "identity",
-                "User-Agent": USER_AGENT,
-                "Connection": "close",
-            },
-        )
+        headers = {
+            "Host": host_header,
+            "Accept": "application/json",
+            "Accept-Encoding": "identity",
+            "User-Agent": USER_AGENT,
+            "Connection": "close",
+        }
+        if body is not None:
+            headers["Content-Type"] = "application/json"
+        conn.request(method, path, body=body, headers=headers)
         sock.settimeout(remaining())
         resp = conn.getresponse()
         status = resp.status
         date_header = resp.getheader("Date")
         content_encoding = resp.getheader("Content-Encoding")
 
-        body = b""
+        payload = b""
         if status == 200:
             declared = resp.getheader("Content-Length")
             if declared is not None:
@@ -250,8 +261,8 @@ def get(
                 if total > max_bytes:
                     raise ProbeError(LAYER_API, "fail", "response_too_large")
                 chunks.append(chunk)
-            body = b"".join(chunks)
-        return Response(status, date_header, body, tls_version, str(expected), content_encoding)
+            payload = b"".join(chunks)
+        return Response(status, date_header, payload, tls_version, str(expected), content_encoding)
 
     except ProbeError:
         raise

@@ -81,7 +81,11 @@ Targets:
             never ready on timeout, 401/403, bad response, missing model
             or absent evidence. It never configures Hermes' provider.
             Options: --json  --endpoint <url>  --model <id>
-            --scope <loopback|private>  --ca-file <path>
+            --scope <loopback|private>  --ca-file <path>  --active-probe
+            --active-probe (issue #354; off by default; flag only, no env
+            var) sends ONE fixed, non-sensitive chat request (max_tokens 8,
+            no credentials) through the same vetted path; a pass proves
+            only that fixture, not general model capability.
             (see docs/cli.md and docs/ai-inference-serving-architecture.md)
   acp       Read-only report of the CONFIGURED tool surface of Hermes'
             inbound ACP server (`hermes acp`): platform_toolsets.acp and
@@ -946,7 +950,7 @@ print("[omes]   note: a pass proves the model id is advertised by a policy-compl
 '
 }
 
-# _health_run_inference_endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <s>] [--ca-file <path>]
+# _health_run_inference_endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <s>] [--ca-file <path>] [--active-probe]
 _health_run_inference_endpoint() {
   local -a py_args=()
   local want_json=0
@@ -956,6 +960,10 @@ _health_run_inference_endpoint() {
     case "$1" in
       --json)
         want_json=1
+        shift
+        ;;
+      --active-probe)
+        py_args+=("$1")
         shift
         ;;
       --endpoint | --model | --scope | --ca-file)
