@@ -95,8 +95,36 @@
     },
     "reason_code": {
       "type": "string",
-      "description": "Stable machine-readable reason code in the AI_EGRESS_* style (upper snake case). There is deliberately no free-text reason field.",
-      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+      "description": "Stable machine-readable reason code, upper snake case. There is deliberately no free-text reason field. The `AI_EGRESS_` prefix is RESERVED for the codes of lib/omes/py/privacy/egress_policy.py (REASON_CODES, issue #214): a code in that namespace MUST be one of the listed values (reused, never duplicated or invented), and any other code MUST NOT start with `AI_EGRESS_`. Codes outside that namespace are an open set owned by the deciding authority (AWCMS, OMES, Hermes, infrastructure, providers) and are not enumerated here (issue #358 decision, docs/multi-agent-control-patterns.md section 4b). The composer's own codes (EVIDENCE_NOT_LIVE, DECISION_EXPIRED, AUTHORITY_DECISION_MISSING, NO_DECISIONS) appear only in a composed result.",
+      "anyOf": [
+        {
+          "enum": [
+            "AI_EGRESS_ALLOW_LOCAL_ONLY",
+            "AI_EGRESS_ALLOW_PRIVATE_ENDPOINT_APPROVED",
+            "AI_EGRESS_ALLOW_CLOUD_SANITIZED_APPROVED",
+            "AI_EGRESS_ALLOW_PUBLIC_CLOUD_POLICY",
+            "AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_PRIVATE_ENDPOINT",
+            "AI_EGRESS_APPROVAL_REQUIRED_CONFIDENTIAL_CLOUD_SANITIZED",
+            "AI_EGRESS_APPROVAL_REQUIRED_RESTRICTED_PRIVATE_ENDPOINT",
+            "AI_EGRESS_DENY_UNKNOWN_POLICY_VERSION",
+            "AI_EGRESS_DENY_UNKNOWN_CLASSIFICATION",
+            "AI_EGRESS_DENY_UNKNOWN_DESTINATION",
+            "AI_EGRESS_DENY_UNKNOWN_PROVIDER_POSTURE",
+            "AI_EGRESS_DENY_DESTINATION_EXPLICITLY_DENIED",
+            "AI_EGRESS_DENY_AUTHENTICATION_MATERIAL",
+            "AI_EGRESS_DENY_RESTRICTED_CLOUD_SANITIZED",
+            "AI_EGRESS_DENY_RESTRICTED_PROVIDER_NOT_APPROVED",
+            "AI_EGRESS_DENY_PROVIDER_NOT_APPROVED",
+            "AI_EGRESS_DENY_MISSING_SANITIZATION_EVIDENCE",
+            "AI_EGRESS_DENY_MISSING_PROVIDER_ASSURANCE",
+            "AI_EGRESS_DENY_PROVIDER_ASSURANCE_INCOMPLETE",
+            "AI_EGRESS_DENY_PROVIDER_ASSURANCE_MISMATCH"
+          ]
+        },
+        {
+          "pattern": "^(?!AI_EGRESS_)[A-Z][A-Z0-9_]{2,63}$"
+        }
+      ]
     },
     "evidence": {
       "type": "object",

@@ -133,3 +133,31 @@ assert "target" not in d and "layers" not in d
 '
   [ "$status" -eq 0 ]
 }
+
+@test "inference-endpoint --active-probe never sends a prompt to a refused destination (issue #354)" {
+  omes_run_stdout_only "$OMES_BIN" health inference-endpoint --json --active-probe --endpoint http://169.254.169.254 --model m
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["ready"] is False
+assert d["layers"]["policy"]["reason"] == "metadata_address"
+assert d["layers"]["active_probe"]["reason"] == "skipped_prior_failure"
+assert d["limits"]["prompt_sent"] is False
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "inference-endpoint without --active-probe reports active_probe_not_run (issue #354)" {
+  omes_run_stdout_only "$OMES_BIN" health inference-endpoint --json
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["layers"]["active_probe"]["reason"] == "active_probe_not_run"
+assert d["limits"]["prompt_sent"] is False
+'
+  [ "$status" -eq 0 ]
+}

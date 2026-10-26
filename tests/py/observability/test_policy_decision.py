@@ -178,6 +178,34 @@ class TestValidate(unittest.TestCase):
             sorted(policy_decision.PRECEDENCE),
         )
 
+    def test_egress_reason_codes_match_the_egress_evaluator_source_of_truth(self):
+        from privacy import egress_policy  # noqa: E402
+
+        listed = policy_decision.egress_reason_codes()
+        self.assertEqual(len(listed), len(set(listed)), "duplicate code in schema enum")
+        self.assertEqual(set(listed), set(egress_policy.REASON_CODES))
+        self.assertEqual(len(listed), 20)
+        for code in listed:
+            self.assertTrue(code.startswith(policy_decision.EGRESS_REASON_PREFIX))
+        # The open branch must refuse the reserved namespace.
+        open_branch = policy_decision.load_schema()["properties"]["reason_code"]["anyOf"][1]
+        self.assertTrue(open_branch["pattern"].startswith("^(?!AI_EGRESS_)"))
+
+    def test_every_egress_code_is_accepted_and_other_egress_codes_are_rejected(self):
+        from privacy import egress_policy  # noqa: E402
+
+        for code in sorted(egress_policy.REASON_CODES):
+            with self.subTest(code=code):
+                self.assertEqual(policy_decision.validate(_dec("dec-00000001", "omes", "allow", reason_code=code)), [])
+        for bad in ("AI_EGRESS_ALLOW_EVERYTHING", "AI_EGRESS_", "AI_EGRESS_DENY_UNKNOWN_DESTINATION_X"):
+            with self.subTest(code=bad):
+                self.assertTrue(policy_decision.validate(_dec("dec-00000001", "omes", "allow", reason_code=bad)))
+
+    def test_non_egress_codes_remain_an_open_set(self):
+        for code in ("OPERATION_NOT_ALLOWLISTED", "ENTITLEMENT_EXCEEDED", "NEW_AUTHORITY_SPECIFIC_CODE", "AI_EGRESSX_FOO"):
+            with self.subTest(code=code):
+                self.assertEqual(policy_decision.validate(_dec("dec-00000001", "awcms", "deny", reason_code=code)), [])
+
     def test_egress_decisions_are_a_subset_of_the_decision_enum(self):
         egress = json.loads(
             (REPO_ROOT / "contracts" / "ai-egress" / "v1" / "egress-decision-response.schema.json").read_text()

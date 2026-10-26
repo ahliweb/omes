@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import paths, runner, schema as schema_mod, store
+from . import correlation, paths, runner, schema as schema_mod, store
 
 SUPPORTED_CAPABILITIES = [
     "status",
@@ -420,6 +420,11 @@ def poll_and_dispatch_once(
         req_doc["backup_id"] = job["backup_id"]
     if job.get("rollback_ref"):
         req_doc["rollback_ref"] = job["rollback_ref"]
+    # Issue #356: forward caller-supplied causation/trace/span ids unchanged;
+    # store.submit() generates any missing trace/span id locally.
+    for _id_field in ("causation_id", "trace_id", "span_id"):
+        if job.get(_id_field):
+            req_doc[_id_field] = job[_id_field]
 
     job_record, _replayed = store.submit(
         req_doc,
@@ -452,6 +457,7 @@ def poll_and_dispatch_once(
             started_at=started_at,
             completed_at=completed_at,
             readback_status=run_record.get("evidence", {}).get("readback"),
+            ids=correlation.result_fields(job_record),
         )
     except Exception as exc:
         completed_at = _now_iso()
@@ -466,6 +472,7 @@ def poll_and_dispatch_once(
             started_at=started_at,
             completed_at=completed_at,
             error={"code": "execution_failed", "message": str(exc)},
+            ids=correlation.result_fields(job_record),
         )
 
 
@@ -481,6 +488,7 @@ def _submit_result(
     completed_at: str | None = None,
     readback_status: dict[str, Any] | None = None,
     error: dict[str, str] | None = None,
+    ids: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Uploads sanitized execution result and read-back evidence to Control Center.
 
@@ -510,6 +518,10 @@ def _submit_result(
             **({"readback_status": readback_status} if readback_status else {}),
         },
         **({"error": error} if error else {}),
+        # Issue #356: optional causation/trace/span ids. `ids` comes from the
+        # local job record when one exists; otherwise (a rejected job) only
+        # what the caller supplied is echoed - nothing is generated.
+        **(ids or correlation.echo_fields(job)),
     }
 
     # Verify no raw secrets leaked in result payload

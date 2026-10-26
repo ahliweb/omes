@@ -25,8 +25,12 @@ Two services are provided:
    (correlation_id, run_id, task_id). A terminal status is final; it is never
    reverted by a later-arriving older (or newer) non-terminal event.
 
-Not implemented yet (tracked in #272): propagation of these identifiers
-through the AWCMS -> job -> worker flows, and any producer wiring.
+Implemented (issue #356): the OMES job runner is the first producer
+(`jobs.correlation.envelopes_for_job`) and the identifiers propagate through
+the AWCMS -> job -> worker flow (docs/jobs.md section 8.1).
+Not implemented yet (tracked in #356): envelope persistence or a CLI emitter,
+other producers, and propagation across the Hermes delegation and ACP
+boundaries.
 """
 from __future__ import annotations
 

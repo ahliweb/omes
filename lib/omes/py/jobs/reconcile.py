@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from . import audit, identity, runner, store
+from . import audit, correlation, identity, runner, store
 
 DEFAULT_LEGACY_ORPHAN_SECONDS = 3600
 
@@ -274,6 +274,7 @@ def reconcile_job(record: dict[str, Any], root: Path | None = None, actor: str =
             "error": record["error"],
             "evidence": evidence,
         },
+        ids=correlation.audit_fields(record),
     )
     return {
         "job_id": job_id,

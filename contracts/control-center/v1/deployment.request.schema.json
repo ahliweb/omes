@@ -90,6 +90,21 @@
     },
     "parameters": {
       "type": "object"
+    },
+    "causation_id": {
+      "type": "string",
+      "description": "Optional opaque id of the event that caused this job (correlation-envelope event_id shape). Evidence for correlation only; never authority.",
+      "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+    },
+    "trace_id": {
+      "type": "string",
+      "description": "Optional W3C Trace Context trace-id: 32 lowercase hex, not all zeros.",
+      "pattern": "^(?!0{32}$)[0-9a-f]{32}$"
+    },
+    "span_id": {
+      "type": "string",
+      "description": "Optional W3C Trace Context span-id: 16 lowercase hex, not all zeros.",
+      "pattern": "^(?!0{16}$)[0-9a-f]{16}$"
     }
   }
 }
