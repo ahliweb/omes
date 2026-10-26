@@ -88,6 +88,7 @@ Grouped index of every document in this repository. See the top-level
 | Document | What it covers |
 |---|---|
 | [contracts/README.md](../contracts/README.md) | Versioned JSON schemas, request/response contracts, fixtures, and validation boundaries for OMES, AWCMS, and provider integrations. |
+| [worker-compatibility-manifest.md](worker-compatibility-manifest.md) | **#352:** non-secret OMES worker compatibility manifest (schema, producer, consumer rules for AWCMS and OMES-Web, fail-closed policy); signing and release publication are not implemented yet. |
 | [skills/content/SKILL.md](../skills/content/SKILL.md) | Repository-local content workflow guidance; documentation only, not a second OMES runtime. |
 | [modules/graphify/skill/SKILL.md](../modules/graphify/skill/SKILL.md) | Graphify module skill boundary; operational guidance, not a replacement for OMES runtime contracts. |
 
