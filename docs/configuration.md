@@ -325,7 +325,8 @@ reads no token or API key for this command, and nothing is read from Hermes conf
 | `OMES_INFERENCE_MODEL` | `--model <id>` | unset | Operator | Model id that must be advertised by `GET /v1/models` (exact match). Unset means model availability is `unknown`, so the result is never ready. |
 | `OMES_INFERENCE_ENDPOINT_SCOPE` | `--scope <loopback\|private>` | `private` | Operator | Allowed destination scope. `private` allows loopback plus RFC 1918/IPv6 ULA; `loopback` allows loopback only. Public, link-local (including instance metadata), multicast, unspecified, shared/CGNAT and reserved addresses are always refused; there is no override. |
 | `OMES_INFERENCE_CA_FILE` | `--ca-file <path>` | unset (system trust store) | Operator | PEM CA bundle used to verify an `https` private endpoint's certificate. Certificate and host name verification can never be disabled. |
-| `OMES_HEALTH_TIMEOUT` | — | `10` (seconds) | Operator | Shared with `omes health agent\|gateway\|ollama`. For this command it is the total deadline for DNS, connect, TLS and the single request (clamped to 0.1 to 30 seconds). |
+| `OMES_HEALTH_TIMEOUT` | — | `10` (seconds) | Operator | Shared with `omes health agent\|gateway\|ollama`. For this command it is the total deadline for DNS, connect, TLS and the single request (clamped to 0.1 to 30 seconds). With `--active-probe` (issue #354) the deadline applies separately to the GET and to the one synthetic POST. |
+| — | `--active-probe` | off | Operator | Opt-in only through this flag; there is deliberately no environment variable, so a stray variable can never cause a prompt to be sent. Sends one fixed, non-sensitive chat request after every other required layer passed; see [docs/cli.md §4.13](cli.md#413-omes-health-layered-healthreadiness-checks). |
 
 ## 25. Reserved but not read by any code path yet
 

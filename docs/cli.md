@@ -364,7 +364,7 @@ built-in commands.
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]` /
 `omes health agent-runtime [--json] [--profile-home <path>]` /
-`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]` /
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe]` /
 `omes health acp [--json] [--profile-home <path>]` /
 `omes health budget [--json] [--profile-home <path>]` /
 `omes health browser-worker [--json] [--worker-id <id>] [--capability-profile <deterministic|ai_assisted>] [--model <id>]`
@@ -427,7 +427,7 @@ omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 ```
 
-`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>]`
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe]`
 (issue [#292](https://github.com/ahliweb/omes/issues/292), via
 [`lib/omes/py/health/inference_endpoint.py`](../lib/omes/py/health/inference_endpoint.py),
 [`endpoint_guard.py`](../lib/omes/py/health/endpoint_guard.py) and
@@ -460,8 +460,37 @@ What it does, in order (each is a layer in the JSON):
   Not configured is `unknown`; absent is `fail` (`model_missing`).
 - **freshness**: the endpoint's HTTP `Date` is within 300 s of this host's clock; larger skew is `unknown`
   (`clock_skew_exceeded`). A server that sends no `Date` makes this layer `not_applicable`.
-- **active_probe**: always `not_applicable` (`active_probe_not_implemented`). An opt-in synthetic chat/tool probe is
-  **Not implemented yet (tracked in #292)**; this command never sends a prompt.
+- **active_probe**: `not_applicable` (`active_probe_not_run`) unless the explicit `--active-probe` flag is passed
+  (issue [#354](https://github.com/ahliweb/omes/issues/354)); no environment variable can enable it and no prompt is
+  sent without it. See "Opt-in active synthetic probe" below.
+
+**Opt-in active synthetic probe (`--active-probe`, off by default).** Only after config, policy, network, api,
+model (and, when the server sends a `Date`, freshness) have all passed, the command sends exactly one
+`POST <prefix>/v1/chat/completions` to the same vetted address through the same pinned connection as the GET: the
+same loopback/private-only destination policy (metadata, link-local, public and other refused addresses never get a
+request, with or without the flag), no redirects, verified TLS, the same `OMES_HEALTH_TIMEOUT` deadline for the
+request, and a 64 KiB response cap. The body is fixed and contains no user data: the configured model id, one
+constant user message, `max_tokens` 8, `temperature` 0, `stream` false, no tools. There is no user-supplied prompt or
+URL. No credential, `Authorization` or `Cookie` header is ever sent (this command has no `secret_reference`
+support; a 401/403 is `unknown`/`auth_required`, so authenticated endpoints stay with Hermes provider readiness).
+The prompt and completion text are never logged, persisted or printed: the layer records only a bounded completion
+character count and an allowlisted `finish_reason` (`stop|length|tool_calls|content_filter|other`).
+
+- `pass`: HTTP 200 with a JSON `choices[0].message.content` string that is non-empty. **This is model-dependent
+  evidence:** it proves only that this one fixture produced a well-formed completion from that model at that moment.
+  It does not prove correctness, quality, other prompts, tool calling, streaming, load or safety, and HTTP 200 alone
+  proves nothing.
+- never `pass`: timeout (`unknown`/`timeout`), 401/403 (`unknown`/`auth_required`), 404/405/501 (`fail`/`unsupported_api`),
+  3xx (`fail`/`redirect_not_followed`), 5xx, a non-JSON, wrongly shaped, content-encoded or oversized body, and an
+  empty completion (`fail`/`empty_completion`; a reasoning model may need more than 8 tokens, so this is
+  model-dependent). If the probe ran, `ready` additionally requires it to pass. If an earlier layer did not pass, or
+  the model is not configured/advertised, no prompt is sent (`skipped_prior_failure`) and `limits.prompt_sent` stays
+  `false`. With the flag, `limits.allowed_probes` also lists `POST /v1/chat/completions` and `limits.active_probe`
+  records the bounds.
+
+Not implemented yet (tracked in #354): credentialed (`secret_reference`) endpoints, tool-call and streaming probes,
+and an operator-supplied or per-model fixture. Output without the flag differs from the pre-#354 shape only in the
+`active_probe` layer reason (`active_probe_not_run` replaces `active_probe_not_implemented`).
 
 **A passing result proves** a loopback/private endpoint answered a well-formed model list that contains the
 configured id, over a verified channel if `https`. It does **not** prove the model is loaded, can generate, supports
@@ -497,7 +526,7 @@ that response. Example (abridged; `proves`/`remediation`/`signals` omitted):
     "api":          {"status": "unknown", "reason": "auth_required", "detail": "HTTP 401; OMES sends no credentials", "authority": "external-provider", "source": "http-get:/v1/models"},
     "model":        {"status": "not_applicable", "reason": "skipped_prior_failure"},
     "freshness":    {"status": "pass"},
-    "active_probe": {"status": "not_applicable", "reason": "active_probe_not_implemented", "detail": "Not implemented yet (tracked in #292)"}
+    "active_probe": {"status": "not_applicable", "reason": "active_probe_not_run", "detail": "opt-in; not requested (pass --active-probe to run)"}
   },
   "limits": {"allowed_probes": ["GET /v1/models"], "scope": "private", "timeout_seconds": 10.0, "max_response_bytes": 1048576, "redirects_followed": false, "prompt_sent": false, "credentials_sent": false}
 }
@@ -512,6 +541,7 @@ that response. Example (abridged; `proves`/`remediation`/`signals` omitted):
 OMES_INFERENCE_ENDPOINT=http://127.0.0.1:8000 OMES_INFERENCE_MODEL=my-model omes health inference-endpoint
 omes health inference-endpoint --json --endpoint https://llm.internal:8443 --ca-file /etc/ssl/internal-ca.pem --model my-model | jq -e '.ready'
 omes health --json inference-endpoint   # no endpoint configured: status "not_applicable", ready false, exit 7
+omes health inference-endpoint --active-probe --endpoint http://127.0.0.1:8000 --model my-model   # opt-in: one fixed synthetic chat request
 ```
 
 `omes health ai-privacy [--json]` (issue

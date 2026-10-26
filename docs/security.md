@@ -382,8 +382,9 @@ document changes that.
 [docs/ai-inference-serving-architecture.md §3](ai-inference-serving-architecture.md)) is a read-only preflight
 observation of an operator-configured, non-secret endpoint reference. It is not an inference gateway, does not
 select or route a provider (Hermes remains authoritative, ADR-0017/ADR-0029), reads no credential and no Hermes
-private store, and an active prompt/tool probe is **Not implemented yet (tracked in #292)**. The controls below are
-all implemented and tested in `tests/py/health/test_inference_endpoint.py`; threats are AI-09 to AI-14 in
+private store. By default it sends no prompt; an explicit, opt-in `--active-probe` flag (issue
+[#354](https://github.com/ahliweb/omes/issues/354)) adds one fixed synthetic chat request, bounded by the controls
+below and the active-probe row. The controls below are all implemented and tested in `tests/py/health/test_inference_endpoint.py`; threats are AI-09 to AI-14 in
 [docs/threat-model.md §5.x](threat-model.md#5x-ai-model-and-data-egress-threat-delta-issue-213).
 
 | Control | Implemented in |
@@ -396,10 +397,12 @@ all implemented and tested in `tests/py/health/test_inference_endpoint.py`; thre
 | Bounded: one allowlisted `GET /v1/models` (no body, no `Authorization`/`Cookie`, `Accept-Encoding: identity`, proxy variables ignored), 1 MiB response cap enforced while reading, total deadline (default 10 s, max 30 s) enforced by a socket watchdog, so a slow-drip server cannot extend it | `pinned_http.py`, `inference_endpoint.py` |
 | Fail closed: `ready` requires every required layer `pass`; timeout, 401/403 (`auth_required`), 404, 3xx, malformed/oversized/unexpected responses, TLS failure, missing model, clock skew over 300 s and absent evidence are never ready | `inference_endpoint.py` `_overall()`; `model.py` `aggregate()` treats `unknown` as blocking |
 | Evidence freshness: `checked_at` and `freshness.expires_at`; `revalidate()` downgrades stale, future-dated or unparseable evidence to `unknown` | `inference_endpoint.py` `revalidate()` |
+| Opt-in active probe (#354): enabled only by `--active-probe` (no environment variable); runs only after every other required layer passed, so a refused destination never receives a request; one fixed non-sensitive body (constant message, `max_tokens` 8, no stream, no tools) to the same vetted address, pinned connection, no-redirect, verified-TLS path; no credential or `Authorization` header; 64 KiB response cap; the prompt and completion are never logged, persisted or printed, only a bounded character count and an allowlisted finish reason; timeout, 401/403, malformed/oversized/empty response and missing model are never `pass`, and a requested probe must `pass` for `ready` | `inference_endpoint.py` `_run_active_probe()`/`_interpret_completion()`, `pinned_http.py` `request()` |
 | Redacted, fixed-string remediation; no endpoint, header, body or exception text is interpolated into output | `inference_endpoint.py` `_REMEDIATION` |
 
 Residual limits (documented, not hidden): a `pass` proves a policy-compliant endpoint advertises the model id, not
-that the model can generate, call tools or is the intended weights; OMES does not verify the serving process
+that the model can generate, call tools or is the intended weights (an active-probe `pass` proves only the one fixed
+fixture, model-dependent; credentialed endpoints, tool-call and streaming probes are Not implemented yet (tracked in #354)); OMES does not verify the serving process
 identity, its own authentication posture (an unauthenticated route on a private network is not detected), or model
 provenance beyond the existing `omes audit provenance` evidence; plain `http` to a non-loopback private address is
 permitted but flagged; an operator-trusted private CA is trusted for that endpoint only through the explicit CA file.
