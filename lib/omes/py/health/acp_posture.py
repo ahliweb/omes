@@ -28,6 +28,28 @@ What is observable through supported interfaces, and what is not:
   `session_exposure: unknown` and never claims otherwise. There is no
   daemon and no config key that enables or disables ACP.
 
+- The OMES-owned gateway hardening and egress profile, as RECORDED in the OMES
+  state file (`module.hermes-gateway.hardening_profile`, written by
+  modules/hermes-gateway/hardening.sh, and `module.hermes-restricted.network_policy`,
+  written by modules/hermes-restricted/module.sh). This is a plain read of
+  OMES' own key=value state file in the directory resolved by
+  `jobs.paths.state_root()`; it is not a Hermes file, runs no command and is
+  not live unit state. Absence semantics (deliberate, ADR-0032 and
+  hermes-integration.md section 17.2): an ABSENT state key is `unknown`, never
+  "safe" and never "off" (hardening.sh unsets the key when hardening is off or
+  removed, so absence cannot be told apart from "never applied" or "state
+  lost"). Only a recorded value is evidence. The profile block never makes the
+  tool-surface status `ok`: unknown profile evidence is reported inside
+  `profile` and as info findings; only POSITIVE evidence that hardening is
+  recorded off while the ACP surface includes execution adds a warning.
+
+Absent-key semantics for `platform_toolsets.acp` are different on purpose:
+Hermes documents that an absent key means the curated `hermes-acp` default
+toolset, which includes terminal and `execute_code`. That is known evidence of
+an execution-capable surface, so it reports `warn`, not `unknown`. `unknown`
+is reserved for a key that could not be read or was invalid. Absence is never
+reported as `ok`.
+
 Values are CONFIGURED ones, so the report carries `scope: "configured"`.
 
 Status: `ok`, `warn` (at least one warning finding) or `unknown` (a key could
@@ -47,6 +69,7 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 from typing import Any, Optional
 
 _HEALTH_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -54,6 +77,7 @@ if _HEALTH_DIR not in sys.path:
     sys.path.insert(0, _HEALTH_DIR)
 import hermes_config  # noqa: E402  (also puts lib/omes/py on sys.path)
 from provenance.versions import _run  # noqa: E402
+from jobs import paths as _jobs_paths  # noqa: E402  (state directory resolution only)
 
 EXIT_HEALTHY = 0
 EXIT_NOT_HEALTHY = 7
@@ -81,6 +105,14 @@ ACP_PROBE_ARGV = ["hermes", "acp", "--version"]
 
 PROBE_INSTALLED = "installed"
 PROBE_NOT_INSTALLED_OR_UNKNOWN = "not_installed_or_unknown"
+
+#: OMES-owned state keys (lib/omes/state.sh key=value file). Read-only.
+STATE_KEY_HARDENING = "module.hermes-gateway.hardening_profile"
+STATE_KEY_EGRESS = "module.hermes-restricted.network_policy"
+_HARDENING_PRESENT = frozenset({"conservative", "strict"})
+_HARDENING_VALUES = frozenset({"off", "conservative", "strict"})
+_EGRESS_PRESENT = frozenset({"deny_by_default"})
+_STATE_MAX_BYTES = 262144
 
 _LIST_MAX_ITEMS = 64
 _ITEM_MAX_LEN = 64
@@ -159,6 +191,60 @@ def probe_installability(hermes_home: Optional[str] = None, timeout: Optional[fl
     }
 
 
+def _read_state_keys(state_dir: Optional[str] = None) -> dict:
+    """Read-only parse of the OMES state file for the two profile keys.
+    Returns {"file": "ok" or a bounded reason, key: raw string if present}.
+    Never raises."""
+    try:
+        base = _jobs_paths.state_root(None if state_dir is None else Path(state_dir))
+        with open(os.path.join(str(base), "state"), "r", encoding="utf-8", errors="replace") as handle:
+            text = handle.read(_STATE_MAX_BYTES + 1)
+    except FileNotFoundError:
+        return {"file": "state_file_missing"}
+    except (OSError, RuntimeError, ValueError):
+        return {"file": "state_unreadable"}
+    if len(text) > _STATE_MAX_BYTES:
+        return {"file": "output_too_large"}
+    found: dict = {"file": "ok"}
+    for line in text.splitlines():
+        for key in (STATE_KEY_HARDENING, STATE_KEY_EGRESS):
+            if line.startswith(key + "="):
+                found[key] = line[len(key) + 1:].strip()
+    return found
+
+
+def read_profile(state_dir: Optional[str] = None) -> dict:
+    """Recorded OMES hardening/egress profile evidence. Each item is
+    `present`, `not_present` (hardening recorded `off`) or `unknown` with a
+    bounded reason. An absent key is `unknown` (`not_recorded`), never safe.
+    An unrecognised value is `unknown` (`out_of_range`) and is not echoed."""
+    raw = _read_state_keys(state_dir)
+    items: dict = {}
+    for name, key, present, known in (
+        ("hardening", STATE_KEY_HARDENING, _HARDENING_PRESENT, _HARDENING_VALUES),
+        ("egress", STATE_KEY_EGRESS, _EGRESS_PRESENT, _EGRESS_PRESENT),
+    ):
+        if raw["file"] != "ok":
+            items[name] = {"state": "unknown", "reason": raw["file"]}
+        elif key not in raw:
+            items[name] = {"state": "unknown", "reason": "not_recorded"}
+        elif raw[key] in present:
+            items[name] = {"state": "present", "recorded": raw[key]}
+        elif raw[key] in known:  # only hardening can reach here: "off"
+            items[name] = {"state": "not_present", "recorded": raw[key]}
+        else:
+            items[name] = {"state": "unknown", "reason": "out_of_range"}
+    states = {i["state"] for i in items.values()}
+    status = STATUS_UNKNOWN if "unknown" in states else (STATUS_WARN if "not_present" in states else STATUS_OK)
+    return {
+        "status": status,
+        "source": "omes state file (read-only; OMES-recorded, not live unit state)",
+        "absent_means": "unknown",
+        "hardening": items["hardening"],
+        "egress": items["egress"],
+    }
+
+
 def _finding(finding_id: str, severity: str, message: str, key: Optional[str] = None, value: Any = None) -> dict:
     finding: dict = {"id": finding_id, "severity": severity, "message": message}
     if key is not None:
@@ -168,12 +254,14 @@ def _finding(finding_id: str, severity: str, message: str, key: Optional[str] = 
     return finding
 
 
-def evaluate(keys: dict) -> dict:
-    """Pure evaluator over per-key results (as built by `_read_key`).
-    Unit-testable without Hermes."""
+def evaluate(keys: dict, profile: Optional[dict] = None) -> dict:
+    """Pure evaluator over per-key results (as built by `_read_key`) and the
+    optional recorded profile (as built by `read_profile`). Unit-testable
+    without Hermes. A missing profile is treated as unknown evidence."""
     findings: list = []
     unknown_reasons: list = []
     not_read = False
+    unknown_reasons_profile: list = []
 
     for key in (KEY_ACP_TOOLSETS, KEY_DISABLED_TOOLSETS):
         entry = keys.get(key) or {"state": "unknown", "reason": "not_collected"}
@@ -212,6 +300,41 @@ def evaluate(keys: dict) -> dict:
                 KEY_ACP_TOOLSETS,
             ))
 
+    exposure_known_exec = any(f["id"] == "acp.default_toolset_includes_execution" for f in findings)
+    profile = profile or {
+        "status": STATUS_UNKNOWN,
+        "hardening": {"state": "unknown", "reason": "not_collected"},
+        "egress": {"state": "unknown", "reason": "not_collected"},
+    }
+    for name, label in (("hardening", "gateway hardening profile"), ("egress", "restricted egress policy")):
+        item = profile.get(name) or {"state": "unknown", "reason": "not_collected"}
+        if item["state"] == "present":
+            findings.append(_finding(
+                f"acp.{name}_profile_present", SEV_INFO,
+                f"the OMES state records a {label} ({item.get('recorded')}); this is recorded intent for the "
+                "gateway unit, not proof of the running unit, and it does not restrict tool calls made by an "
+                "ACP client that is already attached",
+            ))
+        elif item["state"] == "not_present":
+            findings.append(_finding(
+                f"acp.{name}_profile_not_present",
+                SEV_WARN if exposure_known_exec else SEV_INFO,
+                f"the OMES state records the {label} as off while the ACP tool surface can include execution"
+                if exposure_known_exec else f"the OMES state records the {label} as off",
+            ))
+        else:
+            reason = item.get("reason") or "unknown"
+            unknown_reasons_profile.append(f"{name}_{reason}")
+            findings.append(_finding(
+                f"acp.{name}_profile_unknown", SEV_INFO,
+                f"the {label} could not be established from the OMES state ({reason}); an absent key means "
+                "unknown, never safe, and it is not reported as ok",
+            ))
+    findings.append(_finding(
+        "acp.allow_always_discouraged", SEV_INFO,
+        "do not choose `allow always` for terminal or code-execution tool prompts in an ACP client; it turns a "
+        "per-call approval into a standing one for the session. Prefer `allow once` and review each command",
+    ))
     findings.append(_finding(
         "acp.session_exposure_unobservable", SEV_INFO,
         "whether an ACP session is live, or exposed through an editor or bridge (for example one that "
@@ -231,13 +354,16 @@ def evaluate(keys: dict) -> dict:
     else:
         status = STATUS_OK
 
-    reason_codes = sorted({f["id"] for f in findings} | {f"acp.key_{r}" for r in unknown_reasons})
-    return {"status": status, "findings": findings, "reason_codes": reason_codes}
+    reason_codes = sorted({f["id"] for f in findings} | {f"acp.key_{r}" for r in unknown_reasons}
+                         | {f"acp.profile_{r}" for r in unknown_reasons_profile})
+    return {"status": status, "findings": findings, "reason_codes": reason_codes, "profile": profile}
 
 
-def collect(hermes_home: Optional[str] = None, timeout: Optional[float] = None, probe: bool = True) -> dict:
+def collect(hermes_home: Optional[str] = None, timeout: Optional[float] = None, probe: bool = True,
+            state_dir: Optional[str] = None) -> dict:
     keys = {key: _read_key(key, hermes_home, timeout) for key in (KEY_ACP_TOOLSETS, KEY_DISABLED_TOOLSETS)}
-    result = evaluate(keys)
+    profile = read_profile(state_dir)
+    result = evaluate(keys, profile)
     return {
         "check": "acp_posture",
         "status": result["status"],
@@ -249,6 +375,7 @@ def collect(hermes_home: Optional[str] = None, timeout: Optional[float] = None, 
         "keys": keys,
         "installability": probe_installability(hermes_home, timeout) if probe else {"state": "not_probed"},
         "session_exposure": "unknown",
+        "profile": result["profile"],
         "findings": result["findings"],
         "reason_codes": result["reason_codes"],
     }
