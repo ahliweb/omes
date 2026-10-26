@@ -34,6 +34,7 @@ import model as health_model  # noqa: E402
 
 SCRIPT = os.path.join(HEALTH_DIR, "inference_endpoint.py")
 
+CHAT_OK = json.dumps({"object": "chat.completion", "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]}).encode()
 MODELS_OK = json.dumps({"object": "list", "data": [{"id": "demo-model", "object": "model"}, {"id": "other"}]}).encode()
 
 
@@ -60,14 +61,22 @@ class Stub:
                 pass
 
             def do_GET(self):  # noqa: N802
+                length = int(self.headers.get("Content-Length") or 0)
+                raw = self.rfile.read(length) if length else b""
                 stub.requests.append(
                     {
-                        "method": "GET",
+                        "method": self.command,
                         "path": self.path,
                         "headers": {k.lower(): v for k, v in self.headers.items()},
+                        "body": raw.decode("utf-8", "replace"),
                     }
                 )
-                c = stub.cfg
+                c = dict(stub.cfg)
+                if self.command == "POST":
+                    # chat_* keys override the shared config for the active probe.
+                    c.update({k[5:]: v for k, v in stub.cfg.items() if k.startswith("chat_")})
+                    if "chat_body" not in stub.cfg:
+                        c["body"] = CHAT_OK
                 if c.get("delay"):
                     time.sleep(c["delay"])
                 status = c["status"]
@@ -164,11 +173,14 @@ class NoNetwork:
 
     def __enter__(self):
         self.patch = mock.patch.object(pinned_http, "get", side_effect=AssertionError("network used"))
+        self.patch_request = mock.patch.object(pinned_http, "request", side_effect=AssertionError("network used"))
         self.mock = self.patch.start()
+        self.patch_request.start()
         return self
 
     def __exit__(self, *exc):
         self.patch.stop()
+        self.patch_request.stop()
 
 
 # ---------------------------------------------------------------------------
@@ -446,7 +458,7 @@ class TestHappyPath(unittest.TestCase):
         self.assertEqual(states["api"][0], "pass")
         self.assertEqual(states["model"][0], "pass")
         self.assertEqual(states["freshness"][0], "pass")
-        self.assertEqual(states["active_probe"], ("not_applicable", "active_probe_not_implemented"))
+        self.assertEqual(states["active_probe"], ("not_applicable", "active_probe_not_run"))
         self.assertEqual(result["limits"]["prompt_sent"], False)
         self.assertEqual(result["limits"]["credentials_sent"], False)
 
@@ -841,7 +853,8 @@ class TestRedactionAndOutputHygiene(unittest.TestCase):
         self.assertEqual(list(result["layers"]), list(ie.LAYER_ORDER))
         self.assertEqual(result["layers"]["api"]["authority"], "external-provider")
         self.assertEqual(result["layers"]["policy"]["authority"], "omes-host")
-        self.assertIn("Not implemented yet (tracked in #292)", result["layers"]["active_probe"]["proves"])
+        self.assertIn("Model-dependent", result["layers"]["active_probe"]["proves"])
+        self.assertIn("Without the flag no prompt", result["layers"]["active_probe"]["proves"])
 
     def test_every_failure_reason_has_redacted_remediation(self):
         for reason in (
@@ -1133,3 +1146,262 @@ class TestOllamaHealthUnchanged(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Opt-in active synthetic probe (issue #354)
+# ---------------------------------------------------------------------------
+
+
+def active(url, model="demo-model", **kw):
+    kw.setdefault("timeout", 3.0)
+    return ie.probe(url, model, active_probe=True, **kw)
+
+
+class TestActiveProbeOffByDefault(unittest.TestCase):
+    def test_no_post_and_not_run_without_the_flag(self):
+        with Stub() as stub:
+            result = probe(stub.url)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertEqual(layer_states(result)["active_probe"], ("not_applicable", "active_probe_not_run"))
+        self.assertIs(result["limits"]["prompt_sent"], False)
+        self.assertNotIn("active_probe", result["limits"])
+        self.assertEqual(result["limits"]["allowed_probes"], ["GET /v1/models"])
+        self.assertTrue(result["ready"])
+
+    def test_environment_cannot_enable_the_probe(self):
+        with Stub() as stub:
+            env = {"OMES_INFERENCE_ENDPOINT": stub.url, "OMES_INFERENCE_MODEL": "demo-model", "OMES_ACTIVE_PROBE": "1", "OMES_INFERENCE_ACTIVE_PROBE": "1"}
+            result = ie.run([], env=env)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertEqual(layer_states(result)["active_probe"], ("not_applicable", "active_probe_not_run"))
+
+    def test_flag_enables_it_via_run(self):
+        with Stub() as stub:
+            result = ie.run(["--active-probe"], env={"OMES_INFERENCE_ENDPOINT": stub.url, "OMES_INFERENCE_MODEL": "demo-model"})
+        self.assertEqual([r["method"] for r in stub.requests], ["GET", "POST"])
+        self.assertEqual(result["layers"]["active_probe"]["status"], "pass")
+
+
+class TestActiveProbeRequest(unittest.TestCase):
+    def test_fixed_non_sensitive_request_without_credentials(self):
+        with Stub() as stub:
+            result = active(stub.url)
+        self.assertEqual(result["status"], "pass", layer_states(result))
+        self.assertTrue(result["ready"])
+        self.assertEqual([(r["method"], r["path"]) for r in stub.requests], [("GET", "/v1/models"), ("POST", "/v1/chat/completions")])
+        post = stub.requests[1]
+        self.assertEqual(
+            json.loads(post["body"]),
+            {"model": "demo-model", "messages": [{"role": "user", "content": ie.ACTIVE_PROBE_PROMPT}], "max_tokens": ie.ACTIVE_PROBE_MAX_TOKENS, "temperature": 0, "stream": False},
+        )
+        self.assertLessEqual(ie.ACTIVE_PROBE_MAX_TOKENS, 16)
+        for forbidden in ("authorization", "cookie", "proxy-authorization", "x-api-key"):
+            self.assertNotIn(forbidden, post["headers"])
+        self.assertEqual(post["headers"]["content-type"], "application/json")
+        self.assertTrue(result["limits"]["prompt_sent"])
+        self.assertFalse(result["limits"]["credentials_sent"])
+        self.assertIn("POST /v1/chat/completions", result["limits"]["allowed_probes"])
+
+    def test_path_prefix_is_preserved(self):
+        with Stub() as stub:
+            active(stub.url + "/team/a")
+        self.assertEqual(stub.requests[1]["path"], "/team/a/v1/chat/completions")
+
+    def test_pass_is_model_dependent_and_bounded(self):
+        with Stub() as stub:
+            result = active(stub.url)
+        layer = result["layers"]["active_probe"]
+        self.assertEqual(layer["authority"], "omes-host")
+        self.assertEqual(layer["checked_at"], result["checked_at"])
+        self.assertIn("Model-dependent", layer["proves"])
+        self.assertIn("HTTP 200 alone proves nothing", layer["proves"])
+        self.assertEqual(layer["signals"], {"completion_chars": 2, "finish_reason": "stop"})
+
+    def test_completion_and_prompt_never_appear_in_output(self):
+        secret = "SECRET-COMPLETION-TEXT-xyz"
+        body = json.dumps({"choices": [{"message": {"content": secret}, "finish_reason": "evil\nvalue"}]}).encode()
+        with Stub(chat_body=body) as stub:
+            result = active(stub.url)
+        dumped = json.dumps(result)
+        self.assertNotIn(secret, dumped)
+        self.assertNotIn(ie.ACTIVE_PROBE_PROMPT, dumped)
+        self.assertEqual(result["layers"]["active_probe"]["signals"]["finish_reason"], "other")
+        self.assertEqual(result["layers"]["active_probe"]["status"], "pass")
+
+    def test_cli_output_does_not_contain_prompt_or_completion(self):
+        secret = "SECRET-COMPLETION-TEXT-xyz"
+        body = json.dumps({"choices": [{"message": {"content": secret}, "finish_reason": "stop"}]}).encode()
+        with Stub(chat_body=body) as stub:
+            proc = subprocess.run(
+                [sys.executable, SCRIPT, "--active-probe", "--endpoint", stub.url, "--model", "demo-model"],
+                capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "")}, timeout=30,
+            )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn(secret, proc.stdout + proc.stderr)
+        self.assertNotIn(ie.ACTIVE_PROBE_PROMPT, proc.stdout + proc.stderr)
+
+
+class TestActiveProbeFailsClosed(unittest.TestCase):
+    def assertNotReady(self, result, status, reason):
+        self.assertFalse(result["ready"], layer_states(result))
+        self.assertEqual(result["status"], status)
+        self.assertEqual(layer_states(result)["active_probe"], (status, reason))
+
+    def test_timeout_is_unknown(self):
+        with Stub(chat_delay=2.0) as stub:
+            result = active(stub.url, timeout=0.3)
+        self.assertNotReady(result, "unknown", "timeout")
+
+    def test_auth_required(self):
+        for code in (401, 403):
+            with Stub(chat_status=code, chat_body=b"{}") as stub:
+                result = active(stub.url)
+            self.assertNotReady(result, "unknown", "auth_required")
+
+    def test_unsupported_api(self):
+        for code in (404, 405, 501):
+            with Stub(chat_status=code, chat_body=b"{}") as stub:
+                result = active(stub.url)
+            self.assertNotReady(result, "fail", "unsupported_api")
+
+    def test_server_error_and_unexpected_status(self):
+        with Stub(chat_status=500, chat_body=b"{}") as stub:
+            self.assertNotReady(active(stub.url), "fail", "server_error")
+        with Stub(chat_status=204, chat_body=b"") as stub:
+            self.assertNotReady(active(stub.url), "fail", "unexpected_status")
+
+    def test_http_200_alone_proves_nothing(self):
+        cases = {
+            b"not json": "malformed_json",
+            b"[]": "active_probe_invalid_response",
+            b"{}": "active_probe_invalid_response",
+            b'{"choices": []}': "active_probe_invalid_response",
+            b'{"choices": [{"message": {"content": 5}}]}': "active_probe_invalid_response",
+            b'{"choices": ["x"]}': "active_probe_invalid_response",
+            b'{"choices": [{"message": {"content": "   "}}]}': "empty_completion",
+            b'{"choices": [{"message": {"content": ""}}]}': "empty_completion",
+            b"[" * 30000: "malformed_json",
+        }
+        for body, reason in cases.items():
+            with Stub(chat_body=body) as stub:
+                result = active(stub.url)
+            self.assertNotReady(result, "fail", reason)
+
+    def test_redirect_is_not_followed(self):
+        with Stub(chat_status=302, chat_headers={"Location": "http://169.254.169.254/latest"}, chat_body=b"") as stub:
+            result = active(stub.url)
+        self.assertNotReady(result, "fail", "redirect_not_followed")
+        self.assertEqual([r["path"] for r in stub.requests], ["/v1/models", "/v1/chat/completions"])
+
+    def test_oversized_response(self):
+        with Stub(chat_body=b"x" * (ie.ACTIVE_PROBE_MAX_RESPONSE_BYTES + 10)) as stub:
+            result = active(stub.url)
+        self.assertNotReady(result, "fail", "response_too_large")
+
+    def test_content_encoding_rejected(self):
+        with Stub(chat_headers={"Content-Encoding": "gzip"}) as stub:
+            result = active(stub.url)
+        self.assertNotReady(result, "fail", "active_probe_invalid_response")
+
+    def test_connection_dropped_mid_probe(self):
+        with Stub() as stub:
+            real = pinned_http.request
+
+            def flaky(**kw):
+                if kw.get("method") == "POST":
+                    raise pinned_http.ProbeError("api", "fail", "connection_reset")
+                return real(**kw)
+
+            with mock.patch.object(pinned_http, "request", side_effect=flaky):
+                result = active(stub.url)
+        self.assertNotReady(result, "fail", "connection_reset")
+
+    def test_missing_model_never_sends_a_prompt(self):
+        with Stub() as stub:
+            result = active(stub.url, model="not-served")
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertFalse(result["ready"])
+        self.assertEqual(layer_states(result)["active_probe"], ("not_applicable", "skipped_prior_failure"))
+        self.assertIs(result["limits"]["prompt_sent"], False)
+
+    def test_no_model_configured_never_sends_a_prompt(self):
+        with Stub() as stub:
+            result = active(stub.url, model="")
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertFalse(result["ready"])
+        self.assertIs(result["limits"]["prompt_sent"], False)
+
+    def test_models_endpoint_auth_failure_never_sends_a_prompt(self):
+        with Stub(status=401, body=b"{}") as stub:
+            result = active(stub.url)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertFalse(result["ready"])
+
+    def test_clock_skew_unknown_never_sends_a_prompt(self):
+        with Stub() as stub:
+            future = lambda: datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=2)  # noqa: E731
+            result = active(stub.url, now=future)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertFalse(result["ready"])
+
+    def test_pass_requires_the_probe_when_requested(self):
+        with Stub(chat_status=500, chat_body=b"{}") as stub:
+            plain = probe(stub.url)
+            requested = active(stub.url)
+        self.assertTrue(plain["ready"])
+        self.assertFalse(requested["ready"])
+
+
+class TestActiveProbePolicyIsSharedWithTheGet(unittest.TestCase):
+    def test_blocked_destinations_send_nothing_even_with_the_flag(self):
+        for addr in ("169.254.169.254", "8.8.8.8", "fe80::1", "0.0.0.0", "224.0.0.1"):
+            with NoNetwork():
+                result = active("http://probe.example:8000", resolver=FakeResolver([addr]))
+            self.assertFalse(result["ready"], addr)
+            self.assertEqual(result["layers"]["policy"]["status"], "fail", addr)
+            self.assertIs(result["limits"]["prompt_sent"], False)
+
+    def test_scope_loopback_blocks_private_with_the_flag(self):
+        with NoNetwork():
+            result = active("http://probe.example:8000", scope="loopback", resolver=FakeResolver(["10.0.0.5"]))
+        self.assertEqual(result["layers"]["policy"]["reason"], "private_address_outside_scope")
+        self.assertIs(result["limits"]["prompt_sent"], False)
+
+    def test_probe_connects_only_to_vetted_address(self):
+        with Stub() as stub:
+            seen = []
+            real = pinned_http.request
+
+            def spy(**kw):
+                seen.append((kw["method"], tuple(kw["addresses"]), kw["host_header"]))
+                return real(**kw)
+
+            with mock.patch.object(pinned_http, "request", side_effect=spy), mock.patch.object(pinned_http, "get", side_effect=lambda **kw: spy(method="GET", **kw)):
+                result = active(f"http://probe.example:{stub.port}", resolver=FakeResolver(["127.0.0.1"]))
+        self.assertTrue(result["ready"], layer_states(result))
+        self.assertEqual([m for m, _a, _h in seen], ["GET", "POST"])
+        for _m, addrs, host in seen:
+            self.assertEqual(addrs, ("127.0.0.1",))
+            self.assertEqual(host, f"probe.example:{stub.port}")
+
+    def test_only_get_and_post_are_possible(self):
+        with self.assertRaises(ValueError):
+            pinned_http.request(method="DELETE", scheme="http", host="x", host_header="x", port=1, path="/", addresses=[], timeout=1, max_bytes=1)
+
+
+class TestActiveProbeCli(unittest.TestCase):
+    def run_cli(self, *args, env=None):
+        full_env = {"PATH": os.environ.get("PATH", "")}
+        full_env.update(env or {})
+        return subprocess.run([sys.executable, SCRIPT, *args], capture_output=True, text=True, env=full_env, timeout=30)
+
+    def test_exit_codes(self):
+        with Stub() as stub:
+            ok = self.run_cli("--active-probe", "--endpoint", stub.url, "--model", "demo-model")
+        self.assertEqual(ok.returncode, 0, ok.stdout)
+        self.assertEqual(json.loads(ok.stdout)["layers"]["active_probe"]["status"], "pass")
+        with Stub(chat_body=b"{}") as stub:
+            bad = self.run_cli("--active-probe", "--endpoint", stub.url, "--model", "demo-model")
+        self.assertEqual(bad.returncode, 7)
+        self.assertFalse(json.loads(bad.stdout)["ready"])

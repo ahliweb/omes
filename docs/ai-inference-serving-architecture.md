@@ -84,7 +84,7 @@ The phrase *implemented* above refers to the named OMES baseline components on `
 | `observed_at`, `freshness` | `checked_at`; `freshness.{state, max_age_seconds, expires_at}`; layer `freshness` (endpoint `Date` skew); `revalidate()` for stale/future/unparseable records |
 | `service_reachable` | layers `network` (TCP to a vetted address) and `tls` (verified session, `https` only) |
 | `model_available` | layer `api` (valid `GET /v1/models` list, never HTTP 200 alone) and layer `model` (configured id advertised, exact match) |
-| `capability_results` | **Not implemented yet (tracked in #292)**: layer `active_probe` is always `not_applicable` (`active_probe_not_implemented`) and no prompt is sent |
+| `capability_results` | layer `active_probe`: `not_applicable` (`active_probe_not_run`) and no prompt sent by default; with the explicit `--active-probe` flag (issue [#354](https://github.com/ahliweb/omes/issues/354), section 3.2) one fixed synthetic chat request yields `pass|fail|unknown`. Tool-call and streaming probes: Not implemented yet (tracked in #354) |
 | `health_status`, `proves`, `remediation` | `status` (`pass`/`fail`/`not_applicable`/`unknown`), `proves` (what a pass does and does not establish), fixed redacted `remediation` |
 | `endpoint_exposure` | layer `policy` (loopback/private scope; public, link-local, metadata, multicast and reserved addresses refused before any request); the host-wide listener audit stays with `omes audit exposure` |
 | `egress_policy_ref`, `artifact_provenance_ref` | not copied: use `omes health ai-privacy` and `omes audit provenance --verify-artifacts` |
@@ -93,6 +93,22 @@ The phrase *implemented* above refers to the named OMES baseline components on `
 The only request is one `GET <prefix>/v1/models`; server-specific `/health`, `/version` and `/metrics` paths are intentionally excluded (not part of the OpenAI-compatible contract, extra surface). An endpoint that needs authentication yields `unknown` (`auth_required`); OMES never sends or reads a token, so authenticated endpoints remain covered by Hermes provider readiness.
 
 For vLLM, upstream documentation specifically warns that `--api-key` does **not** protect every HTTP endpoint; it must not be treated as a sufficient perimeter control. See the [vLLM OpenAI-compatible API security notes](https://docs.vllm.ai/en/latest/serving/online_serving/openai_compatible_server/). This is a **future security requirement**, not permission to install vLLM.
+
+### 3.2 Opt-in active synthetic probe (issue #354)
+
+`omes health inference-endpoint --active-probe` adds the one thing the metadata `GET` cannot show: that the advertised model returns a completion at all. It is off by default and **only** the flag enables it (no environment variable). It is a bounded fixture check, not a benchmark or a quality evaluation.
+
+| Property | Behavior |
+| --- | --- |
+| Trigger | Explicit `--active-probe`; otherwise `active_probe` is `not_applicable` (`active_probe_not_run`) and `limits.prompt_sent` is `false` |
+| Ordering | Runs only if config, policy, network, api, model (and a not-`unknown` freshness) passed, so a refused destination or missing model never receives a prompt |
+| Destination | Identical to the metadata `GET`: vetted loopback/private address, pinned connection with the original name as `Host`/SNI, no redirects, TLS verified, bounded deadline; metadata, link-local and public addresses are refused before any request |
+| Request | One `POST <prefix>/v1/chat/completions`: constant message, validated model id, `max_tokens` 8, `temperature` 0, `stream` false, no tools; no user-supplied prompt or URL |
+| Credentials | None are sent. There is no `secret_reference` support in this command, so authenticated endpoints answer 401/403 (`unknown`/`auth_required`) and stay covered by Hermes provider readiness |
+| Output | Only a bounded completion character count and an allowlisted `finish_reason`; the prompt and completion are never logged, persisted or printed |
+| Interpretation | **Model-dependent.** `pass` (HTTP 200, non-empty `choices[0].message.content`) proves only that this fixture produced a well-formed completion at that moment. HTTP 200 alone proves nothing; timeout, 401/403, 3xx, 404/405/501, 5xx, malformed/oversized/content-encoded bodies and an empty completion are never `pass`. A requested probe must pass for `ready` |
+
+Not implemented yet (tracked in #354): `secret_reference` credentialed endpoints, tool-calling and streaming probes, and per-model fixtures. It does not select a model, route requests or add vLLM (#289) or Kubernetes (#290); Hermes stays authoritative for provider routing.
 
 ## 4. Host service lifecycle principle (when individually authorized)
 
@@ -121,7 +137,7 @@ No service deployment, Kubernetes manifest or endpoint enrollment is specified b
 | Use case | Status / present approach | Required evidence before enabling new work |
 | --- | --- | --- |
 | A. Single Ubuntu/Mint developer, Ollama | Existing Ollama host checks (#71) + Hermes provider/runtime separation (#79). Model choice remains Hermes-owned | Model/capability-specific synthetic check; local exposure, RAM/VRAM and privacy posture |
-| B. Private compatible endpoint operated outside OMES | Hermes config may reference a supported endpoint; OMES provides read-only observation via `omes health inference-endpoint` (#292, section 3.1); the active capability probe is **Not implemented yet (tracked in #292)** | Valid released Hermes API compatibility and safe observation source, trust roots and endpoint ownership |
+| B. Private compatible endpoint operated outside OMES | Hermes config may reference a supported endpoint; OMES provides read-only observation via `omes health inference-endpoint` (#292, section 3.1); the opt-in active capability probe is implemented by #354 (section 3.2); credentialed endpoints are **Not implemented yet (tracked in #354)** | Valid released Hermes API compatibility and safe observation source, trust roots and endpoint ownership |
 | C. Multi-user shared inference service | External operator owns inference; no OMES-managed serving adapter is assumed | Benchmark latency/TTFT/p95, throughput, isolation/quotas, failure modes and SLO |
 | D. Cloud model with local restricted-data plane | Existing classification/egress rules and provider assurance may apply; do not send `RESTRICTED` records to cloud | Sanitization/aggregate re-identification analysis, egress policy decision, provider assurance evidence |
 | E. vLLM server or Kubernetes/OpenShift GPU cluster | **Both deferred:** Not implemented yet (tracked in #289); Not implemented yet (tracked in #290) | Explicit go decision, measured workload need, separate threat/ADR review, hardware/licensing and disposable integration tests |
@@ -141,7 +157,7 @@ Use [OMES security](security.md) and [threat model](threat-model.md) for mandato
 ### Related work and sequencing
 
 1. **Now:** document and review this neutral boundary via #291 (no changes to existing runtime schemas/enums).
-2. **Phase 1 (implemented):** secure, generic, read-only inference endpoint observation in #292 as a *separate* issue, branch and PR on top of the #291 review. The opt-in active synthetic probe is **Not implemented yet (tracked in #292)**.
+2. **Phase 1 (implemented):** secure, generic, read-only inference endpoint observation in #292 as a *separate* issue, branch and PR on top of the #291 review. The opt-in active synthetic probe is implemented separately by [#354](https://github.com/ahliweb/omes/issues/354) (section 3.2).
 3. **Not now:** keep #289 vLLM and #290 Kubernetes/OpenShift OPEN with **DEFERRED — DO NOT IMPLEMENT** until explicitly unblocked.
 4. Existing #269/#272/#276/#277 and #263/#264/PR #268 own cross-plane trace, isolation and Mission Control; extend existing sources only after their coupled work merges.
 

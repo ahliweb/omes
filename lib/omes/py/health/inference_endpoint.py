@@ -13,13 +13,25 @@ Standard library only (ADR-0012). What this is and is not:
   it never reads Hermes configuration, Hermes credentials or any Hermes
   private store: the endpoint is an explicit, non-secret operator
   reference (--endpoint / OMES_INFERENCE_ENDPOINT).
-- The default - and in phase 1 the ONLY - probe is a single metadata
-  `GET <base>/v1/models`: no prompt, no tool call, no credential. An
-  active synthetic chat/tool probe is Not implemented yet (tracked in
-  #292); the `active_probe` layer says so explicitly. A passing result
-  therefore proves "reachable, policy-compliant, TLS-verified endpoint
-  that advertises the configured model id", NOT that the model can
-  generate, call tools or is correct.
+- The default probe is a single metadata `GET <base>/v1/models`: no
+  prompt, no tool call, no credential. A passing result therefore proves
+  "reachable, policy-compliant, TLS-verified endpoint that advertises the
+  configured model id", NOT that the model can generate, call tools or is
+  correct.
+- Issue #354: an OPT-IN active synthetic probe, enabled ONLY by the
+  explicit `--active-probe` flag (no environment variable can enable it).
+  After every other required layer has passed it sends ONE fixed,
+  non-sensitive chat-completion request (`POST <base>/v1/chat/completions`,
+  fixed prompt, `max_tokens` 8, no stream, no tools) through the same
+  vetted address, pinned connection, no-redirect, TLS-verified, bounded
+  deadline/size path as the GET. No credential is sent (this command has
+  no `secret_reference` support). The prompt and completion are never
+  logged, persisted or echoed: only a bounded character count and an
+  allowlisted finish reason are recorded. A pass proves ONLY that this
+  fixture produced a well-formed non-empty completion from that model at
+  that moment (model-dependent); HTTP 200 alone proves nothing. A timeout,
+  401/403, malformed response or empty completion is never a pass. When
+  the probe ran, `ready` additionally requires it to pass.
 - Result shape: the existing layered model of lib/omes/py/health/model.py
   (status, signals, proves, remediation, detail, authority, source), with
   the additive `unknown` status and optional `reason`/`checked_at`
@@ -32,6 +44,7 @@ Standard library only (ADR-0012). What this is and is not:
 Usage:
   python3 inference_endpoint.py [--json] [--endpoint <url>] [--model <id>]
                                 [--scope loopback|private] [--ca-file <path>]
+                                [--active-probe]
 
 Exit codes: 0 status is pass (ready); 7 anything else (fail, unknown or
 not_applicable). The JSON `status` distinguishes them.
@@ -73,6 +86,13 @@ MIN_TIMEOUT_SECONDS = 0.1
 MAX_TIMEOUT_SECONDS = 30.0
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_MODELS = 10000
+#: Opt-in active probe (issue #354). The method/path is fixed; the body is
+#: built only from the constants below plus the validated model id.
+ACTIVE_PROBE = ("POST", "/v1/chat/completions")
+ACTIVE_PROBE_PROMPT = "Reply with the single word: ok"
+ACTIVE_PROBE_MAX_TOKENS = 8
+ACTIVE_PROBE_MAX_RESPONSE_BYTES = 64 * 1024
+_FINISH_REASONS = ("stop", "length", "tool_calls", "content_filter")
 #: How long an evidence record may be trusted (see revalidate()).
 MAX_AGE_SECONDS = 300
 #: Largest tolerated difference between the endpoint's HTTP Date and
@@ -90,7 +110,7 @@ _PROVES = {
     "api": "Proves GET /v1/models returned HTTP 200 and a well-formed OpenAI-style model list within the size and time bounds. Does NOT prove any model can generate.",
     "model": "Proves the configured model id appears in the endpoint's advertised model list. Does NOT prove the model is loaded, can generate, supports tools or is the intended weights.",
     "freshness": "Proves the endpoint's HTTP Date is within the tolerated skew of this host's clock, so the observation time is trustworthy. Absent when the server sends no Date header.",
-    "active_probe": "No prompt, chat or tool request is ever sent by this command. An opt-in synthetic capability probe is Not implemented yet (tracked in #292).",
+    "active_probe": "Only when --active-probe is passed: proves that ONE fixed, non-sensitive synthetic chat request (max_tokens 8, no tools, no credentials) returned HTTP 200 and a well-formed non-empty completion from the configured model at that moment. Model-dependent: it proves nothing about other prompts, tool calling, quality or correctness, and HTTP 200 alone proves nothing. Without the flag no prompt, chat or tool request is sent.",
 }
 
 # Stable reason -> remediation. Fixed strings only: nothing derived from
@@ -141,6 +161,8 @@ _REMEDIATION = {
     "model_not_configured": "set OMES_INFERENCE_MODEL (or pass --model) so model availability can be proven",
     "clock_skew_exceeded": "synchronise this host's and the endpoint's clocks (NTP)",
     "server_date_invalid": "the endpoint sent an unparseable Date header",
+    "empty_completion": "the model returned no completion text for the fixed probe; check that the model is loaded and can generate (model-dependent)",
+    "active_probe_invalid_response": "the endpoint answered the probe with a response that is not a valid OpenAI-style chat completion",
     "plaintext_http_non_loopback": "traffic to this private address is unencrypted; serve the endpoint over https and supply its CA via OMES_INFERENCE_CA_FILE",
 }
 
@@ -276,20 +298,24 @@ def _freshness_layer(resp: "pinned_http.Response", now: Clock, checked_at: str) 
 def _overall(layers: dict) -> str:
     if layers["config"]["status"] == STATUS_NOT_APPLICABLE:
         return STATUS_NOT_APPLICABLE
-    statuses = [layer["status"] for name, layer in layers.items() if name != "active_probe"]
+    # The active probe only participates when it was requested (issue
+    # #354): without --active-probe it is not_applicable and never blocks.
+    statuses = [layer["status"] for layer in layers.values()]
     if STATUS_FAIL in statuses:
         return STATUS_FAIL
     if STATUS_UNKNOWN in statuses:
         return STATUS_UNKNOWN
-    if all(layers[name]["status"] == STATUS_PASS for name in _REQUIRED_PASS):
+    requested = layers["active_probe"].get("reason") != "active_probe_not_run"
+    required = _REQUIRED_PASS + (("active_probe",) if requested else ())
+    if all(layers[name]["status"] == STATUS_PASS for name in required):
         return STATUS_PASS
     return STATUS_UNKNOWN  # defensive: a required layer is neither pass nor failing
 
 
-def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, checked_at: str) -> dict:
+def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, checked_at: str, active_probe: bool = False, prompt_sent: bool = False) -> dict:
     status = _overall(layers)
     expires = _parse_iso(checked_at)
-    return {
+    result = {
         "target": "inference-endpoint",
         "evidence_version": EVIDENCE_VERSION,
         "endpoint": display,
@@ -309,10 +335,88 @@ def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, ch
             "timeout_seconds": timeout,
             "max_response_bytes": MAX_RESPONSE_BYTES,
             "redirects_followed": False,
-            "prompt_sent": False,
+            "prompt_sent": prompt_sent,
             "credentials_sent": False,
         },
     }
+    if active_probe:
+        # Added only on opt-in so the default output shape is unchanged.
+        result["limits"]["allowed_probes"].append(" ".join(ACTIVE_PROBE))
+        result["limits"]["active_probe"] = {
+            "requested": True,
+            "max_tokens": ACTIVE_PROBE_MAX_TOKENS,
+            "max_response_bytes": ACTIVE_PROBE_MAX_RESPONSE_BYTES,
+        }
+    return result
+
+
+def _active_body(model_id: str) -> bytes:
+    """The fixed synthetic request. Contains no user data: only constants
+    and the already-validated, non-secret model id."""
+    return json.dumps(
+        {
+            "model": model_id,
+            "messages": [{"role": "user", "content": ACTIVE_PROBE_PROMPT}],
+            "max_tokens": ACTIVE_PROBE_MAX_TOKENS,
+            "temperature": 0,
+            "stream": False,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _interpret_completion(resp: "pinned_http.Response") -> tuple:
+    """Maps the probe response to (status, reason, detail, signals). Never
+    returns the prompt or completion text: only a character count and an
+    allowlisted finish reason leave this function."""
+    if resp.status != 200:
+        status, reason, detail, _ = _interpret(resp)
+        if status == STATUS_PASS:  # defensive: only HTTP 200 can pass
+            status, reason = STATUS_FAIL, "unexpected_status"
+        return status, reason, detail, {}
+    encoding = (resp.content_encoding or "identity").strip().lower()
+    if encoding not in ("", "identity"):
+        return STATUS_FAIL, "active_probe_invalid_response", "HTTP 200 with a content encoding", {}
+    try:
+        doc = json.loads(resp.body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return STATUS_FAIL, "malformed_json", "HTTP 200 but the body is not valid JSON", {}
+    choices = doc.get("choices") if isinstance(doc, dict) else None
+    first = choices[0] if isinstance(choices, list) and choices else None
+    message = first.get("message") if isinstance(first, dict) else None
+    content = message.get("content") if isinstance(message, dict) else None
+    if not isinstance(content, str):
+        return STATUS_FAIL, "active_probe_invalid_response", "HTTP 200 but no valid chat completion", {}
+    if not content.strip():
+        return STATUS_FAIL, "empty_completion", "HTTP 200 but the completion is empty", {"completion_chars": 0}
+    finish = first.get("finish_reason")
+    finish = finish if finish in _FINISH_REASONS else "other"
+    chars = min(len(content), 1_000_000)
+    return STATUS_PASS, None, f"HTTP 200, well-formed completion ({chars} char(s), finish_reason={finish}); proves this fixture only", {"completion_chars": chars, "finish_reason": finish}
+
+
+def _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked_at) -> dict:
+    path = target.probe_path[: -len("/models")] + "/chat/completions"
+    try:
+        resp = pinned_http.request(
+            method="POST",
+            body=_active_body(model_id),
+            scheme=target.scheme,
+            host=target.host,
+            host_header=target.host_header,
+            port=target.port,
+            path=path,
+            addresses=addresses,
+            timeout=timeout,
+            max_bytes=ACTIVE_PROBE_MAX_RESPONSE_BYTES,
+            ssl_context=ssl_context,
+        )
+    except pinned_http.ProbeError as exc:
+        # Never pass on any transport/TLS/timeout failure; the reason is a
+        # fixed code, never exception text.
+        return _layer("active_probe", exc.status, exc.reason, checked_at, "the synthetic probe did not complete")
+    status, reason, detail, signals = _interpret_completion(resp)
+    return _layer("active_probe", status, reason, checked_at, detail, signals=signals)
 
 
 def probe(
@@ -324,6 +428,7 @@ def probe(
     timeout: float = DEFAULT_TIMEOUT_SECONDS,
     resolver: Optional[endpoint_guard.Resolver] = None,
     now: Clock = _utc_now,
+    active_probe: bool = False,
 ) -> dict:
     """Runs the read-only evidence probe and returns the result object.
     Never raises for an operator-input problem; every outcome is a layer
@@ -332,12 +437,18 @@ def probe(
     timeout = min(max(timeout, MIN_TIMEOUT_SECONDS), MAX_TIMEOUT_SECONDS)
     display = endpoint_guard.redact_endpoint(endpoint) if endpoint else None
     layers: dict = {}
+    sent = {"prompt": False}
 
     def finish(skip_reason: str) -> dict:
         for name in LAYER_ORDER:
-            layers.setdefault(name, _skip(name, skip_reason))
-        layers["active_probe"] = _layer("active_probe", STATUS_NOT_APPLICABLE, "active_probe_not_implemented", None, "Not implemented yet (tracked in #292)")
-        return _finish(layers, display, scope if scope in endpoint_guard.SCOPES else "invalid", timeout, checked_at)
+            if name != "active_probe":
+                layers.setdefault(name, _skip(name, skip_reason))
+        if "active_probe" not in layers:
+            if active_probe:
+                layers["active_probe"] = _layer("active_probe", STATUS_NOT_APPLICABLE, "skipped_prior_failure", None, "requested but not run: an earlier required layer did not pass", advise=False)
+            else:
+                layers["active_probe"] = _layer("active_probe", STATUS_NOT_APPLICABLE, "active_probe_not_run", None, "opt-in; not requested (pass --active-probe to run)", advise=False)
+        return _finish(layers, display, scope if scope in endpoint_guard.SCOPES else "invalid", timeout, checked_at, active_probe, sent["prompt"])
 
     # ---- config -------------------------------------------------------
     if not endpoint:
@@ -428,6 +539,10 @@ def probe(
         layers["model"] = _layer("model", STATUS_UNKNOWN, "model_not_configured", checked_at, "no model id configured, so availability cannot be proven")
     elif model_id in model_ids:
         layers["model"] = _layer("model", STATUS_PASS, None, checked_at, f"model '{model_id}' is advertised")
+        if active_probe and layers["freshness"]["status"] != STATUS_UNKNOWN:
+            # ---- opt-in active synthetic probe (issue #354) ---------------
+            sent["prompt"] = True
+            layers["active_probe"] = _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked_at)
     else:
         layers["model"] = _layer("model", STATUS_FAIL, "model_missing", checked_at, f"model '{model_id}' is not advertised ({len(model_ids)} other id(s))")
     return finish("skipped_prior_failure")
@@ -484,6 +599,8 @@ def run(
     parser.add_argument("--model", default=None)
     parser.add_argument("--scope", choices=endpoint_guard.SCOPES, default=None)
     parser.add_argument("--ca-file", default=None)
+    # Deliberately flag-only: no environment variable can enable the probe.
+    parser.add_argument("--active-probe", action="store_true")
     args = parser.parse_args(argv)
 
     return probe(
@@ -494,6 +611,7 @@ def run(
         timeout=_timeout_from_env(environ.get("OMES_HEALTH_TIMEOUT")),
         resolver=resolver,
         now=now,
+        active_probe=args.active_probe,
     )
 
 
