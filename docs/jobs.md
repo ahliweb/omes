@@ -328,6 +328,64 @@ and no issue currently owns adding one.
   capped to the last 4096 characters (a failure reason is usually at the
   end, not the beginning) with the same redaction applied.
 
+### 8.1 Correlation and trace IDs (issue #356)
+
+Evidence, not authority (ADR-0032): these identifiers line up what AWCMS asked
+for, what the job store recorded and what the worker reported. They are never
+read by the operation allowlist, approval policy, tenant check or argv builder,
+and grant nothing. They are opaque tokens with a pattern and a length bound; they
+never carry free text or secrets, and a malformed value is rejected, never
+sanitised, truncated or echoed back.
+
+| Field | Shape | Origin |
+| --- | --- | --- |
+| `correlation_id` | `^[A-Za-z0-9_.:-]{1,128}$`, required | Caller (AWCMS). Flows unchanged. |
+| `causation_id` | `^[A-Za-z0-9_.:-]{8,128}$`, optional | Caller only (the `event_id` that caused the job). Never generated: absent means a root job. |
+| `trace_id` | W3C trace-id, 32 lowercase hex, not all zero, optional | Caller, else generated locally. |
+| `span_id` | W3C span-id, 16 lowercase hex, not all zero, optional | Caller, else generated locally. |
+
+- **Contracts.** `causation_id`, `trace_id` and `span_id` are optional, additive
+  properties on `operation-request`, `deployment.request`,
+  `worker-poll.response` (`job`), `worker-result.request` and
+  `job-status.response`; the last two also carry optional `generated_ids`
+  (`trace_id` and/or `span_id`) naming the IDs OMES generated locally. No required
+  field changed, no command, shell or argv key was added, and every existing
+  fixture still validates.
+- **Submit.** `store.submit()` validates the IDs before anything is written
+  (`InvalidCorrelationError`; `omes job submit --json` reports
+  `invalid_correlation_id`). Supplied `trace_id`/`span_id` are stored unchanged;
+  missing ones are generated and listed in the record's `generated_ids`. An
+  idempotent replay returns the original record and its original IDs.
+- **Audit.** Every job audit line carries `correlation_id` and, when present,
+  `causation_id`, `trace_id` and `span_id` as top-level fields. The hash chain
+  covers them. Records written before #356 simply lack the optional ones.
+- **Worker.** `poll_and_dispatch_once()` forwards the caller's IDs into the local
+  submit and echoes `correlation_id`, `causation_id`, `trace_id`, `span_id` and
+  `generated_ids` in the `worker-result.request`. A malformed ID in a poll
+  response fails the poll-response contract check, so nothing is stored or
+  executed. A job that is rejected locally (wrong tenant, unsupported operation)
+  echoes only the IDs the caller supplied; nothing is generated for it.
+- **Envelopes.** `jobs.correlation.envelopes_for_job(record)` is a pure,
+  rebuildable projection of a job record's state history into
+  `contracts/observability/v1/correlation-envelope` events (`source_authority`
+  `omes`, `classification` `INTERNAL`, `redaction_state` `none_required`). The
+  `event_id` is `<job_id>.<index>`, so re-projecting yields identical events and
+  `observability.envelope.reduce_events()` dedupes and orders them regardless of
+  delivery order. Each event's `causation_id` is the previous event, the first
+  one's is the job's caller-supplied `causation_id`. Envelopes carry identifiers
+  and closed enums only: no parameters, output, error text or actor. If an
+  identifier cannot be expressed in the envelope contract (for example a
+  `correlation_id` shorter than the envelope's 8-character minimum) the projection
+  raises `CorrelationError` rather than rewriting it. Nothing persists envelopes
+  and no CLI command emits them.
+- **OpenTelemetry: deferred.** The IDs are W3C Trace Context shaped so a later
+  exporter can use them, but OMES adds no OpenTelemetry SDK, exporter or
+  collector. Revisit when an operator actually runs a collector.
+- Not implemented yet (tracked in #356): an envelope store or `omes job`
+  subcommand that emits envelopes, producers other than the job record, the AWCMS
+  side (it must re-vendor the changed contracts), and propagation across the
+  Hermes delegation and ACP boundaries (only where upstream exposes IDs).
+
 ## 9. Tenant and target scope
 
 `OMES_JOBS_TENANT_ID` names the tenant this OMES instance is enrolled

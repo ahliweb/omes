@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from . import audit, identity, store
+from . import audit, correlation, identity, store
 
 DEFAULT_TIMEOUT_SECONDS = 120
 
@@ -261,6 +261,7 @@ def _fail(
         event="failed",
         to_state="failed",
         detail={"error": record["error"], "evidence": record.get("evidence") or {}},
+        ids=correlation.audit_fields(record),
     )
     return record
 
@@ -285,7 +286,7 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
                 f"operation {record['operation']!r} requires `omes job approve` before it can run"
             )
         store.apply_transition(record, "approved", actor="system", note="auto-approved (policy)")
-        audit.append(root, actor="system", job_id=record["job_id"], event="approved", from_state="queued", to_state="approved", detail={"auto": True})
+        audit.append(root, actor="system", job_id=record["job_id"], event="approved", from_state="queued", to_state="approved", detail={"auto": True}, ids=correlation.audit_fields(record))
         store.apply_transition(record, "running", actor, note="run started")
     elif state == "approved":
         store.apply_transition(record, "running", actor, note="run started")
@@ -296,7 +297,7 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     # record is orphaned if this process dies before reaching a terminal state.
     record["runner"] = identity.runner_identity()
     store.save_job(record, root)
-    audit.append(root, actor=actor, job_id=record["job_id"], event="run_started", to_state="running")
+    audit.append(root, actor=actor, job_id=record["job_id"], event="run_started", to_state="running", ids=correlation.audit_fields(record))
 
     record["attempts"] += 1
 
@@ -346,7 +347,7 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
         record["error"] = None
         store.apply_transition(record, "succeeded", actor="system", note="no read-back required")
         store.save_job(record, root)
-        audit.append(root, actor="system", job_id=record["job_id"], event="succeeded", to_state="succeeded")
+        audit.append(root, actor="system", job_id=record["job_id"], event="succeeded", to_state="succeeded", ids=correlation.audit_fields(record))
         return record
 
     try:
@@ -372,5 +373,5 @@ def run(record: dict[str, Any], actor: str, root: Path | None = None) -> dict[st
     to_state = "rolled_back" if record["operation"] == "rollback" else "succeeded"
     store.apply_transition(record, to_state, actor="system", note="read-back confirmed")
     store.save_job(record, root)
-    audit.append(root, actor="system", job_id=record["job_id"], event=to_state, to_state=to_state)
+    audit.append(root, actor="system", job_id=record["job_id"], event=to_state, to_state=to_state, ids=correlation.audit_fields(record))
     return record

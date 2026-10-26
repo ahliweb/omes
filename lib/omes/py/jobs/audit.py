@@ -51,6 +51,9 @@ _SECRET_VALUE_RE = re.compile(
 )
 
 
+_ID_KEYS = ("correlation_id", "causation_id", "trace_id", "span_id")
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -135,8 +138,13 @@ def append(
     from_state: str | None = None,
     to_state: str | None = None,
     detail: dict[str, Any] | None = None,
+    ids: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Appends one redacted, hash-chained JSON line to <state-dir>/jobs/audit.jsonl."""
+    """Appends one redacted, hash-chained JSON line to <state-dir>/jobs/audit.jsonl.
+
+    `ids` (issue #356) carries the job's opaque correlation_id /
+    causation_id / trace_id / span_id as top-level entry fields; keys outside
+    that closed set are ignored so it can never become a free-text channel."""
     audit_path = paths.audit_log_path(root)
     audit_path.parent.mkdir(parents=True, exist_ok=True)
     os.chmod(audit_path.parent, 0o700)
@@ -150,6 +158,9 @@ def append(
         "to": to_state,
         "detail": detail or {},
     }
+    for key in _ID_KEYS:
+        if ids and isinstance(ids.get(key), str):
+            entry[key] = ids[key]
     entry = redact_structure(entry)
 
     prev_hash = _last_line_hash(audit_path)

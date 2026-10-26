@@ -74,6 +74,12 @@ def cmd_submit(args: argparse.Namespace) -> int:
         else:
             print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
+    except store.InvalidCorrelationError as exc:
+        if args.json:
+            _print_json({"error": "invalid_correlation_id", "reason": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
 
     if args.json:
         _print_json({**_job_summary(record), "replayed": replayed})
