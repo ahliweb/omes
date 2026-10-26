@@ -271,7 +271,7 @@ has no free-text reason field, and it never creates or grants an approval.
 | Fail-closed validation (unsupported major version, forbidden field names, secret-shaped values, control characters, calendar-invalid timestamps, `expires_at` not after `evidence.observed_at`) | Implemented | `lib/omes/py/observability/policy_decision.py` (`validate`), reusing `lib/omes/py/jobs/schema.py` and the helpers of `lib/omes/py/observability/envelope.py` |
 | Pure, order-independent composition of decisions for one `(tenant_id, correlation_id, requested_action)` | Implemented | `policy_decision.compose` (clock and required authorities are parameters) |
 | Registry: the existing `omes.observability.correlation_envelope` capability (module `observability`) was broadened in title and evidence URLs instead of adding a second capability for the same module | Implemented | `architecture/capabilities.json` |
-| An authority (AWCMS, OMES job runner, Hermes) emitting the envelope; the job runner, worker or AWCMS consuming the composed result | Not implemented yet (tracked in #274) | none |
+| An authority (AWCMS, OMES job runner, Hermes) emitting the envelope; the job runner, worker or AWCMS consuming the composed result | Not implemented yet (tracked in #358) | none |
 | A policy engine, rule evaluation, approval inbox or approval creation by OMES | Not implemented; rejected by ADR-0032 rule 7 | none |
 
 Composition rules:
@@ -295,6 +295,41 @@ Composition rules:
 - **Determinism.** The result depends only on the set of input decisions. The
   composed result carries the earliest input `expires_at` so an allow cannot
   outlive its shortest-lived input.
+- **Reason codes (decision of [#358](https://github.com/ahliweb/omes/issues/358)
+  item 3).** The `AI_EGRESS_` prefix is a **reserved, pinned namespace**: a
+  `reason_code` that starts with it must be one of the 20 codes of
+  `lib/omes/py/privacy/egress_policy.py` (`REASON_CODES`), which the schema
+  lists as an enum. Any other code must not start with `AI_EGRESS_`. Codes
+  outside that namespace (for example `OPERATION_NOT_ALLOWLISTED`) stay an
+  **open set** (`^[A-Z][A-Z0-9_]{2,63}$`) owned by the deciding authority.
+  A fully closed enum was rejected. Rationale:
+  - *Security.* The pinned namespace means an egress decision cannot carry an
+    invented or look-alike code (`AI_EGRESS_ALLOW_EVERYTHING` fails closed), a
+    typo cannot masquerade as a vetted code, and the existing code stays the
+    only place egress meaning is defined (reused, not duplicated). The pattern
+    still bounds every code to a short upper-snake identifier, so no free text
+    can be smuggled through it.
+  - *Compatibility.* No existing valid fixture changes and `schema_version`
+    stays `1.0.0`: the only newly rejected values are `AI_EGRESS_*` strings
+    outside the 20 codes, which no fixture or producer used. Strictly this
+    narrows one value space, so it is a documented exception to the
+    `contracts/README.md` compatibility rules, acceptable only because no
+    producer or consumer exists yet (see the open item above); adding an
+    egress code later is an enum addition made together with
+    `egress_policy.REASON_CODES`.
+  - *Maintainability.* Enumerating AWCMS, Hermes, provider and OMES-job codes
+    here would force an OMES contract release for each new upstream reason and
+    would turn the envelope into a policy catalogue, which ADR-0032 rule 7
+    rules out. Those authorities own their vocabularies; the composer's own
+    codes (`EVIDENCE_NOT_LIVE`, `DECISION_EXPIRED`, `AUTHORITY_DECISION_MISSING`,
+    `NO_DECISIONS`) appear only in a composed result.
+  - *Guard.* `tests/py/observability/test_policy_decision.py` asserts that the
+    schema's list equals `egress_policy.REASON_CODES` exactly, that every code
+    validates, and that unknown `AI_EGRESS_*` values are rejected. Adding a
+    code to the evaluator without the schema (or the reverse) fails that test.
+  Mapping a code to its decision (an `ALLOW` code only with `allow`) is not
+  checked by the schema; that stays with the emitter. Not implemented yet
+  (tracked in #358).
 - The composed result is a Python value, not a second contract. A decision
   made by an authority OMES does not control (for example Hermes direct
   channels) is still not mediated by OMES (architecture §18.2).
@@ -307,7 +342,7 @@ posture check of #270 (`omes health agent-runtime`, §3.1; #270's per-task tieri
 the contract, validator and convergence reducer of [#272](https://github.com/ahliweb/omes/issues/272) (§4a; propagation and producer wiring remain not implemented yet, tracked in #272),
 the read-only inbound ACP posture check of #273 (`omes health acp`, §3.2; outbound ACP is deferred upstream),
 the budget governance model plus read-only configured run-limit posture of #275 (`omes health budget`, §4.1; no metering, no enforcement, usage unknown),
-the contracts, validators and pure decision composer of [#274](https://github.com/ahliweb/omes/issues/274) (§4b; emission by authorities and consumption in the job runner, worker or AWCMS remain not implemented yet, tracked in #274),
+the contracts, validators and pure decision composer of [#274](https://github.com/ahliweb/omes/issues/274) (§4b; emission by authorities and consumption in the job runner, worker or AWCMS remain not implemented yet, tracked in #358),
 and the parts of #276 recorded in its row below.
 
 | Issue | Title (summary) | Authority | Depends on | Deliverable |
@@ -316,7 +351,7 @@ and the parts of #276 recorded in its row below.
 | [#271](https://github.com/ahliweb/omes/issues/271) | Restart/orphan reconciliation and consumption of Hermes `unknown` | OMES | None | Implemented: executor identity (boot id, pid, start time) in place of a lease or heartbeat, plus `omes job reconcile` of orphaned `running` host jobs; observer treats Hermes `UNKNOWN` as terminal non-success. Not implemented: confirmed cancellation |
 | [#272](https://github.com/ahliweb/omes/issues/272) | Cross-plane correlation/event envelope and trace propagation | OMES contract (observability plane) | None | Schema with causation/trace identifiers, redaction state and convergence rules; evidence only. **Implemented:** schema, fixtures, validator, convergence reducer, registry entry. **Not implemented yet (tracked in #272):** propagation and producer wiring |
 | [#273](https://github.com/ahliweb/omes/issues/273) | ACP interoperability | Hermes | #270 | Posture and evidence for inbound `hermes acp` (implemented, §3.2: configured tool surface, installability hint, exposure reported unknown); outbound deferred to upstream |
-| [#274](https://github.com/ahliweb/omes/issues/274) | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | #272 | Composition schema; deny/unavailable wins; no new policy engine. **Implemented:** schema, fixtures, validator, pure composer, registry title. **Not implemented yet (tracked in #274):** emission by AWCMS/OMES/Hermes and use in the job runner, worker or AWCMS |
+| [#274](https://github.com/ahliweb/omes/issues/274) | Policy/capability decision envelope | OMES envelope; decisions by AWCMS, OMES, Hermes, infrastructure | #272 | Composition schema; deny/unavailable wins; no new policy engine. **Implemented:** schema, fixtures, validator, pure composer, registry title. **Not implemented yet (tracked in #358):** emission by AWCMS/OMES/Hermes and use in the job runner, worker or AWCMS |
 | [#275](https://github.com/ahliweb/omes/issues/275) | Budget, token and cost governance | AWCMS policy; Hermes and infrastructure enforce | #270 | Governance model and configured run-limit evidence (implemented, §4.1: `omes health budget`; usage always `unknown`, never zero); a machine-readable AWCMS budget policy contract and any usage metering are Not implemented yet (tracked in [#275](https://github.com/ahliweb/omes/issues/275)) |
 | [#276](https://github.com/ahliweb/omes/issues/276) | Workload isolation profile and verification | OMES/infrastructure (logical isolation: Hermes) | None | Declared-versus-running drift verification (capabilities added or dropped, `no-new-privileges`, seccomp/AppArmor overrides, devices, IPC mode, privileged, mounts, network `internal`) and per-deployment egress mode: implemented for the compose backend (shim-tested). Per-destination egress allowlist, runtime egress probe, real rootless-daemon evidence, orphan cleanup and retention, and `omes agent doctor` or schedule wiring: Not implemented yet (tracked in #276) |
 | [#277](https://github.com/ahliweb/omes/issues/277) | Mission Control projection | AWCMS presentation | #270–#276, PR [#268](https://github.com/ahliweb/omes/pull/268) | Read-only projection of existing sources |
