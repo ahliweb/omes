@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -37,15 +38,21 @@ def _read(key, spec):
     return hermes_config.ConfigRead(key=key, state="value", value=spec)
 
 
-def collect_with(acp="ABSENT", disabled="ABSENT", probe_rc=1):
+def collect_with(acp="ABSENT", disabled="ABSENT", probe_rc=1, state=None):
+    """`state`: None => no OMES state file (profile unknown); else the text of the state file."""
     config = {ACP: acp, DISABLED: disabled}
+    tmp = tempfile.TemporaryDirectory()
+    if state is not None:
+        with open(os.path.join(tmp.name, "state"), "w", encoding="utf-8") as handle:
+            handle.write(state)
 
     def fake(key, *, hermes_home=None, timeout=None):
         return _read(key, config[key])
 
     with mock.patch.object(posture.hermes_config, "config_get_json", side_effect=fake) as reader, \
             mock.patch.object(posture, "_run", return_value=(probe_rc, "", "")) as runner:
-        result = posture.collect()
+        result = posture.collect(state_dir=tmp.name)
+    tmp.cleanup()
     return result, reader, runner
 
 
@@ -115,6 +122,105 @@ class TestFindings(unittest.TestCase):
         result, _, _ = collect_with(acp=[])
         finding = next(f for f in result["findings"] if f["id"] == "acp.session_exposure_unobservable")
         self.assertIn("not observable", finding["message"])
+
+
+HARD = "module.hermes-gateway.hardening_profile"
+EGR = "module.hermes-restricted.network_policy"
+
+
+class TestAbsentKeySemantics(unittest.TestCase):
+    """Decision (ADR-0032): an absent platform_toolsets.acp is WARN (the upstream default is known to include
+    execution), not unknown; unknown is only for unreadable or invalid evidence; absence is never ok."""
+
+    def test_absent_toolset_key_is_warn_not_unknown_and_not_ok(self):
+        result, _, _ = collect_with(acp="ABSENT", state=f"{HARD}=strict\n{EGR}=deny_by_default\n")
+        self.assertEqual(result["status"], "warn")
+        self.assertEqual(result["keys"][ACP], {"state": "absent"})
+
+    def test_unreadable_toolset_key_is_unknown(self):
+        result, _, _ = collect_with(acp=("UNKNOWN", "timeout"))
+        self.assertEqual(result["status"], "unknown")
+
+    def test_absent_profile_state_keys_are_unknown_never_safe_or_off(self):
+        result, _, _ = collect_with(acp=[], state="other=1\n")
+        for name in ("hardening", "egress"):
+            self.assertEqual(result["profile"][name], {"state": "unknown", "reason": "not_recorded"})
+            self.assertIn(f"acp.{name}_profile_unknown", finding_ids(result))
+            self.assertNotIn(f"acp.{name}_profile_present", finding_ids(result))
+            self.assertNotIn(f"acp.{name}_profile_not_present", finding_ids(result))
+        self.assertEqual(result["profile"]["status"], "unknown")
+        self.assertEqual(result["profile"]["absent_means"], "unknown")
+        self.assertIn("acp.profile_hardening_not_recorded", result["reason_codes"])
+
+
+class TestHardeningEgressProfile(unittest.TestCase):
+    def test_recorded_profile_is_reported_present_as_info(self):
+        result, _, _ = collect_with(acp=[], state=f"{HARD}=conservative\n{EGR}=deny_by_default\n")
+        self.assertEqual(result["profile"]["status"], "ok")
+        self.assertEqual(result["profile"]["hardening"], {"state": "present", "recorded": "conservative"})
+        self.assertEqual(result["profile"]["egress"], {"state": "present", "recorded": "deny_by_default"})
+        for fid in ("acp.hardening_profile_present", "acp.egress_profile_present"):
+            finding = next(f for f in result["findings"] if f["id"] == fid)
+            self.assertEqual(finding["severity"], "info")
+            self.assertIn("not proof of the running unit", finding["message"])
+        self.assertEqual(result["status"], "ok")
+
+    def test_strict_hardening_is_present(self):
+        result, _, _ = collect_with(acp=[], state=f"{HARD}=strict\n")
+        self.assertEqual(result["profile"]["hardening"]["state"], "present")
+        self.assertEqual(result["profile"]["egress"]["state"], "unknown")
+
+    def test_hardening_recorded_off_warns_only_when_execution_is_exposed(self):
+        result, _, _ = collect_with(acp=["terminal"], state=f"{HARD}=off\n{EGR}=deny_by_default\n")
+        finding = next(f for f in result["findings"] if f["id"] == "acp.hardening_profile_not_present")
+        self.assertEqual(finding["severity"], "warn")
+        self.assertEqual(result["status"], "warn")
+        result, _, _ = collect_with(acp=[], state=f"{HARD}=off\n{EGR}=deny_by_default\n")
+        finding = next(f for f in result["findings"] if f["id"] == "acp.hardening_profile_not_present")
+        self.assertEqual(finding["severity"], "info")
+        self.assertEqual(result["status"], "ok")
+        self.assertEqual(result["profile"]["status"], "warn")
+
+    def test_unknown_profile_evidence_is_never_ok(self):
+        for state, reason in ((None, "state_file_missing"), (f"{HARD}=bogus\n{EGR}=bogus\n", "out_of_range")):
+            result, _, _ = collect_with(acp=[], state=state)
+            self.assertEqual(result["profile"]["status"], "unknown", state)
+            self.assertEqual(result["profile"]["hardening"]["reason"], reason)
+            self.assertNotEqual(result["profile"]["status"], "ok")
+            self.assertNotIn("bogus", json.dumps(result))
+
+    def test_egress_off_value_is_not_a_known_value(self):
+        result, _, _ = collect_with(acp=[], state=f"{HARD}=strict\n{EGR}=off\n")
+        self.assertEqual(result["profile"]["egress"], {"state": "unknown", "reason": "out_of_range"})
+
+    def test_state_directory_without_a_file_or_a_directory_instead_is_unknown(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            os.mkdir(os.path.join(tmp, "state"))
+            self.assertEqual(posture.read_profile(tmp)["hardening"]["reason"], "state_unreadable")
+
+    def test_evaluate_without_profile_is_unknown_profile_and_never_claims_present(self):
+        result = posture.evaluate({ACP: {"state": "value", "value": []}, DISABLED: {"state": "absent"}})
+        ids = [f["id"] for f in result["findings"]]
+        self.assertIn("acp.hardening_profile_unknown", ids)
+        self.assertEqual(result["profile"]["status"], "unknown")
+        self.assertEqual(result["status"], "ok")
+
+    def test_profile_read_does_not_touch_hermes_or_run_commands(self):
+        with mock.patch.object(posture, "_run") as runner, \
+                mock.patch.object(posture.hermes_config, "config_get_json") as reader:
+            posture.read_profile(tempfile.gettempdir() + "/omes-no-such-dir")
+        runner.assert_not_called()
+        reader.assert_not_called()
+
+
+class TestAllowAlwaysGuidance(unittest.TestCase):
+    def test_allow_always_guidance_is_always_present_as_info(self):
+        for acp in ("ABSENT", [], ["terminal"], ("UNKNOWN", "timeout")):
+            result, _, _ = collect_with(acp=acp)
+            finding = next(f for f in result["findings"] if f["id"] == "acp.allow_always_discouraged")
+            self.assertEqual(finding["severity"], "info")
+            self.assertIn("allow always", finding["message"])
+            self.assertIn("allow once", finding["message"])
 
 
 class TestUnknownIsNeverOk(unittest.TestCase):

@@ -36,7 +36,14 @@ Composition rules (`compose`):
 The result depends only on the SET of input decisions (any order or
 duplication gives an identical result). The input is not mutated.
 
-Not implemented yet (tracked in #274): any producer that emits these
+Reason codes (issue #358 decision): the `AI_EGRESS_` prefix is reserved for the
+codes of `privacy.egress_policy.REASON_CODES`; the schema pins that namespace
+to an enum (reused, never duplicated) and rejects any other `AI_EGRESS_*`
+value. Codes outside the namespace stay an open upper-snake-case set owned by
+the deciding authority. This module does not import the egress evaluator; a
+test keeps the schema list in sync with it.
+
+Not implemented yet (tracked in #358): any producer that emits these
 envelopes and any caller in the job runner, worker or AWCMS flows.
 """
 from __future__ import annotations
@@ -79,6 +86,15 @@ def load_schema() -> dict[str, Any]:
         schema_mod.validate_schema(schema)
         _schema_cache = schema
     return _schema_cache
+
+
+EGRESS_REASON_PREFIX = "AI_EGRESS_"
+
+
+def egress_reason_codes() -> list[str]:
+    """The AI_EGRESS_* codes the contract accepts (the reserved namespace)."""
+    branches = load_schema()["properties"]["reason_code"]["anyOf"]
+    return list(branches[0]["enum"])
 
 
 def authorities() -> list[str]:
