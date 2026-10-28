@@ -12,6 +12,7 @@ from typing import Any
 
 from . import _pathfix  # noqa: F401
 from jobs import audit, correlation, schema, store, worker
+from jobs import worker_signing as signing
 from observability import envelope
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -37,11 +38,17 @@ def _job(**extra: Any) -> dict[str, Any]:
     return job
 
 
+_KEY_DIR = tempfile.TemporaryDirectory()  # throwaway Ed25519 key minted at runtime, removed at exit
+
+
 def _creds(tenant: str = "tenant-acme") -> worker.WorkerCredentials:
+    key = Path(_KEY_DIR.name) / signing.KEY_FILE_NAME
+    if not key.exists():
+        signing.generate_private_key(key)
     return worker.WorkerCredentials(
         tenant_id=tenant, server_id="srv-test-01", worker_id="wrk-001",
         control_center_endpoint="https://control-center.example.com",
-        public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345", private_key="priv12345",
+        public_key=signing.public_key_b64(key), private_key_path=str(key),
     )
 
 

@@ -429,6 +429,20 @@ evidence is **Not implemented yet (tracked in #298, depends on #276)**.
 | No fabricated identity: a missing tenant, server or worker id exits 4 with no stdout instead of defaulting; an id that does not match the contract pattern exits 2 | `browser_worker.load_config()` |
 | Runtime provenance: the browser version label must equal the operator's pin (explicit binary > Hermes-bundled Playwright cache > `PATH`); the bundled browser is found by name/marker only and never executed | `probe_browser()`. Cryptographic pinning of the executable is Not implemented yet (tracked in #298) |
 
+### 8.11 Pull-worker key and request signing controls implemented today (issue #362)
+
+| Control | Implemented in |
+|---|---|
+| Enrollment generates a real Ed25519 key locally through `openssl genpkey` (fixed argv list, 15 s timeout, `shell=False`, no Python crypto dependency); a missing or too old OpenSSL raises `EnrollmentError`, never a fallback key | `lib/omes/py/jobs/worker_signing.py`, `worker.enroll_worker()` |
+| The private key lives in its own file `$OMES_STATE_DIR/worker/worker_ed25519.key`, created mode `0600` before OpenSSL writes to it, in a `0700` directory; `credentials.json` holds the public key and the key file name only; a key file that is not a regular file or is accessible to group/other is refused | `worker_signing.generate_private_key()`, `check_key_file()`, `save_credentials()` |
+| The key file is not named by any OMES backup path (`backup_path` copies explicit paths only) and the Hermes backup code never touches the worker directory; a test pins this | `tests/py/jobs/test_worker_signing.py` `TestBackupExclusion` |
+| Proof of possession: `challenge_signature` over the enrollment challenge | `worker_signing.sign_challenge()` |
+| Poll, result and heartbeat requests are signed (`OMES-WORKER-SIG-V1` over method, path, body digest, nonce, timestamp) and a signing failure sends nothing | `HttpClient.post_json()`, `worker_signing.sign_request()` |
+| The private key never appears in payloads, headers, logs or stdout/stderr | `tests/py/jobs/test_worker_signing.py` |
+| Credentials from before #362 (fabricated key) are refused and never migrated | `LegacyCredentialsError` |
+
+**Not implemented yet (tracked in #362):** Control Center verification of the enrollment proof and of request signatures, nonce replay rejection and clock-skew enforcement on the receiving side, key rotation and revocation, and encrypting the key at rest (the file is protected by mode `0600` and the `0700` directory only; root on the host can read it). A tampered body, a changed path, a reused nonce and a stale timestamp are rejected only by the test fake verifier today.
+
 ## 9. What OMES does NOT claim
 
 To keep security claims honest and bounded to what OMES actually controls:

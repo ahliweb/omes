@@ -53,9 +53,10 @@ CONTRACT_MAJOR = "v1"
 # (jobs/worker.py send_heartbeat); a unit test keeps the two in step.
 CONTRACT_VERSION = "1.0.0"
 WORKER_PROTOCOL_VERSION = "1.0.0"
-# Per-request signing is the ADR-0027 target but is not in jobs/worker.py yet;
-# a unit test fails when it lands so this constant is updated deliberately.
-REQUEST_SIGNING = "not_implemented"
+# Per-request Ed25519 signing (issue #362): jobs/worker.py signs poll, result and
+# heartbeat requests through jobs/worker_signing.py. Control Center verification is
+# Not implemented yet (tracked in #362). A unit test pins this value.
+REQUEST_SIGNING = "ed25519-v1"
 
 # The files a worker or its Control Center peer must agree on byte for byte.
 CONTRACT_FILES = (

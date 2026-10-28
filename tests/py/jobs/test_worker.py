@@ -16,6 +16,7 @@ if str(PY_ROOT) not in sys.path:
     sys.path.insert(0, str(PY_ROOT))
 
 from jobs import runner, worker
+from jobs import worker_signing as signing
 
 
 class TestWorkerTransport(unittest.TestCase):
@@ -28,6 +29,13 @@ class TestWorkerTransport(unittest.TestCase):
     def tearDown(self) -> None:
         self.tmp_dir.cleanup()
         os.environ.pop("OMES_STATE_DIR", None)
+
+    def key_kwargs(self) -> dict[str, str]:
+        """A throwaway Ed25519 key minted at runtime inside the temp state dir (never committed)."""
+        key = self.state_dir / "test_worker.key"
+        if not key.exists():
+            signing.generate_private_key(key)
+        return {"public_key": signing.public_key_b64(key), "private_key_path": str(key)}
 
     def test_enrollment_success(self) -> None:
         """Scenario: Worker enrolls via valid challenge, persists mode 0600 credentials."""
@@ -64,6 +72,9 @@ class TestWorkerTransport(unittest.TestCase):
         cred_file = worker._credentials_path(self.state_dir)
         mode = oct(cred_file.stat().st_mode & 0o777)
         self.assertEqual(mode, "0o600")
+        key_file = cred_file.parent / signing.KEY_FILE_NAME
+        self.assertEqual(oct(key_file.stat().st_mode & 0o777), "0o600")
+        self.assertNotIn("PRIVATE KEY", cred_file.read_text())
 
     def test_enrollment_rejected(self) -> None:
         """Scenario: Control Center rejects enrollment challenge -> raises EnrollmentError."""
@@ -98,8 +109,7 @@ class TestWorkerTransport(unittest.TestCase):
             server_id="srv-test-01",
             worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.com",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
-            private_key="priv12345",
+            **self.key_kwargs(),
         )
 
         mock_handlers = {
@@ -121,8 +131,7 @@ class TestWorkerTransport(unittest.TestCase):
             server_id="srv-test-01",
             worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.com",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
-            private_key="priv12345",
+            **self.key_kwargs(),
         )
         mock_handlers = {
             "/api/v1/worker/poll": {
@@ -144,8 +153,7 @@ class TestWorkerTransport(unittest.TestCase):
             server_id="srv-test-01",
             worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.com",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
-            private_key="priv12345",
+            **self.key_kwargs(),
         )
 
         job_payload = {
@@ -215,8 +223,7 @@ class TestWorkerTransport(unittest.TestCase):
             server_id="srv-test-01",
             worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.com",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
-            private_key="priv12345",
+            **self.key_kwargs(),
         )
         job_payload = {
             "tenant_id": "tenant-acme",
@@ -264,8 +271,7 @@ class TestWorkerTransport(unittest.TestCase):
             server_id="srv-test-01",
             worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.com",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKey12345",
-            private_key="priv12345",
+            **self.key_kwargs(),
         )
 
         job_payload = {

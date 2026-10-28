@@ -34,7 +34,7 @@ We evaluated two primary architectural options:
 | Criterion | Option A (Inbound Listener / SSH) | Option B (Outbound Pull-Worker) |
 |---|---|---|
 | **1. Advantages & Disadvantages** | Pro: Real-time immediate job push. Con: Inbound firewall holes required, public attack surface, complex NAT traversal, credential storage risk. | Pro: Zero inbound ports, works seamlessly behind NAT/firewalls, host controls execution rate, no stored root credentials. Con: Polling introduces slight dispatch latency (configurable debounced polling / long-polling). |
-| **2. Security** | Critical Risk: Exposes privileged listening port to host network; SSH keys in web DB create single point of failure for fleet compromise. | Outstanding: Outbound TLS only; challenge-based enrollment with local key generation; strict request signing/nonce verification; zero arbitrary shell escape. |
+| **2. Security** | Critical Risk: Exposes privileged listening port to host network; SSH keys in web DB create single point of failure for fleet compromise. | Outstanding: Outbound TLS only; challenge-based enrollment with a locally generated Ed25519 key and proof of possession (OMES side implemented, issue #362); signed poll/result/heartbeat requests with nonce and timestamp (OMES side implemented, issue #362); Control Center signature, nonce and clock-skew verification Not implemented yet (tracked in #362); zero arbitrary shell escape. |
 | **3. Performance** | Direct socket push. | Highly efficient: Lightweight JSON poll requests with backoff and heartbeat telemetry; low CPU/bandwidth consumption. |
 | **4. Maintainability** | Complex: Managing dynamic port bindings, mTLS certificates, firewall rules, and SSH key rotations per host. | High: Standardized REST/JSON contracts validated with JSON Schema; isolated worker module (`lib/omes/py/jobs/worker.py`). |
 | **5. Scalability** | Degrades across multi-cloud, hybrid, and dynamic IP environments. | Seamless: Target hosts behind private VPCs, NAT gateways, or mobile connections poll out reliably without network reconfiguration. |
@@ -56,8 +56,10 @@ We adopt **Option B**:
    - The worker does not listen on any network port.
 2. **Challenge-Based Enrollment:**
    - Control Center generates a short-lived, single-use enrollment token for a server record.
-   - Host runs `omes worker enroll --token <token> --endpoint <url>`.
-   - Host generates local worker keypair, exchanges enrollment token with Control Center, and stores credentials securely under mode `0600` (`$OMES_STATE_DIR/worker/credentials.json`).
+   - Host runs `omes worker enroll --endpoint <url> --tenant <id> --server <id> --challenge <token>`.
+   - Host generates a real Ed25519 key pair locally with the OpenSSL 3 command line (fixed argv, timeout, no shell; no Python crypto dependency). The private key is written to its own file `$OMES_STATE_DIR/worker/worker_ed25519.key`, created mode `0600` before OpenSSL writes to it; `credentials.json` (mode `0600`) holds only the public key, the worker id and the key file name. Neither file is part of any OMES backup.
+   - The enrollment request carries the raw 32-byte public key (base64), `public_key_algorithm: "ed25519"` and `challenge_signature`, the base64 raw 64-byte signature over the UTF-8 `enrollment_challenge` (proof of possession).
+   - Fail closed: a missing or too old OpenSSL raises `EnrollmentError`; there is no fallback key. Credentials written before #362 contain a fabricated key; they are refused with a re-enrollment message and are never migrated.
    - Private key material never leaves the host.
 3. **Execution Safety Boundaries:**
    - Worker polls `/api/v1/worker/poll`.
@@ -71,3 +73,9 @@ We adopt **Option B**:
    - Post-mutation read-back verification (`status --json`) confirms host state before reporting success.
 5. **Heartbeat & Telemetry:**
    - Worker transmits periodic heartbeats (`contracts/control-center/v1/worker-heartbeat.request.schema.json`) detailing OMES version, supported contract version, capability digest, and platform telemetry.
+6. **Request Signing (OMES side implemented, issue #362):**
+   - Every poll, result and heartbeat request is signed with the enrolled key over the canonical string `OMES-WORKER-SIG-V1 \n METHOD \n PATH \n hex(sha256(body)) \n nonce \n timestamp` (newline separated) and carries the headers `X-OMES-Worker-Id`, `X-OMES-Timestamp`, `X-OMES-Nonce` and `X-OMES-Signature`. The format is specified in [contracts/README.md](../../contracts/README.md); the headers are not part of the JSON schemas.
+   - If signing fails (key missing, key file accessible to group/other, OpenSSL error) the request is not sent.
+   - The enrollment request itself is not header-signed: the Control Center does not know the key yet. Its proof is `challenge_signature`.
+   - The compatibility manifest reports `worker_protocol.request_signing: "ed25519-v1"`, which describes the worker only.
+   - **Not implemented yet (tracked in #362):** Control Center verification of `challenge_signature` and of request signatures, nonce storage and replay rejection, and clock-skew enforcement (the documented bound is 300 seconds). Until AWCMS verifies, signing is evidence the worker produces, not a control that rejects anything. Key rotation and revocation are also not implemented.

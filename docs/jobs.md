@@ -415,6 +415,21 @@ The pull worker (`omes worker`, issue #192) does not read
 `store.submit(enrolled_tenant_id=...)`, so the local check is against the
 enrolled tenant and works on hosts without the variable.
 
+**Worker key and request signing (issue #362, ADR-0027).** `omes worker enroll`
+generates a real Ed25519 key locally with the OpenSSL 3 command line (no Python
+crypto dependency), keeps the private key in its own mode `0600` file
+`$OMES_STATE_DIR/worker/worker_ed25519.key` (never in `credentials.json`, and not
+included in any OMES backup) and sends the raw public key plus a
+`challenge_signature` over the enrollment challenge. Every poll, result and
+heartbeat request is signed (`X-OMES-Worker-Id`, `X-OMES-Timestamp`,
+`X-OMES-Nonce`, `X-OMES-Signature`; the canonical string is specified in
+[contracts/README.md](../contracts/README.md)); a request that cannot be signed is
+never sent. Enrollment fails closed when OpenSSL is missing or lacks Ed25519.
+Credentials from before #362 held a fabricated key and are refused with a
+re-enrollment message, not migrated. **Not implemented yet (tracked in #362):**
+the Control Center verifying the proof of possession, signatures, nonce replay and
+clock skew, and key rotation or revocation.
+
 **Effective-tenant precedence (`store.resolve_local_tenant()`).** There is
 one resolver, used by `store.submit()` and by orphan reconciliation
 (`store.assert_record_in_local_scope()` / `reconcile.reconcile()`, issue #318):

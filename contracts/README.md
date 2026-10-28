@@ -154,6 +154,61 @@ authority (see [docs/jobs.md §8.1](../docs/jobs.md#81-correlation-and-trace-ids
 AWCMS pins `contracts/control-center/v1/` by SHA-256, so it must re-vendor these
 five files; editing its vendored copy is drift.
 
+### Change: issue #362 (worker enrollment key and request signing)
+
+Issue #362 changes `worker-enrollment.request.schema.json` **in place within `v1`**.
+Unlike #356 this is not purely additive: the worker had been sending a fabricated
+`public_key`, and a real key needs a proof, so the contract now requires:
+
+- `public_key`: base64 of the raw 32-byte Ed25519 public key (pattern
+  `^[A-Za-z0-9+/]{43}=$`; the old `ssh-ed25519 ...` shape no longer validates);
+- `public_key_algorithm`: `"ed25519"` (required, the only allowed value);
+- `challenge_signature`: base64 of the raw 64-byte Ed25519 signature over the UTF-8
+  bytes of `enrollment_challenge` (required).
+
+`worker-enrollment.request/valid-01.json` was updated and the invalid fixtures
+`invalid-missing-challenge-signature`, `invalid-missing-public-key-algorithm`,
+`invalid-unsupported-algorithm`, `invalid-ssh-formatted-public-key` and
+`invalid-short-challenge-signature` were added. The fixture values are synthetic
+byte patterns, not keys. AWCMS pins `contracts/control-center/v1/` by SHA-256: it
+must re-vendor `worker-enrollment.request.schema.json` and its fixtures (editing its
+vendored copy is drift) and verify the enrollment proof. The compatibility manifest
+schema (`compatibility/v1`) gained the `worker_protocol.request_signing` value
+`ed25519-v1`.
+
+#### Request signature headers (`OMES-WORKER-SIG-V1`)
+
+The headers are transport metadata, not JSON body fields, so they are not in the
+JSON schemas. The worker adds them to every `poll`, `result` and `heartbeat` POST:
+
+| Header | Value |
+|---|---|
+| `X-OMES-Worker-Id` | the `worker_id` returned by enrollment |
+| `X-OMES-Timestamp` | UTC time, `YYYY-MM-DDTHH:MM:SSZ` |
+| `X-OMES-Nonce` | single-use, `nonce_` plus 32 hex characters (pattern `^[A-Za-z0-9_.:-]{16,128}$`); for `poll` it equals the body's `nonce` |
+| `X-OMES-Signature` | base64 of the raw 64-byte Ed25519 signature |
+
+The signed message is these six fields joined by a single `\n` (no trailing newline),
+UTF-8 encoded:
+
+```text
+OMES-WORKER-SIG-V1
+<METHOD, upper case, always POST today>
+<URL path only, e.g. /api/v1/worker/poll - no scheme, host or query>
+<lowercase hex sha256 of the exact request body bytes as sent>
+<X-OMES-Nonce>
+<X-OMES-Timestamp>
+```
+
+A verifier must: look up the public key enrolled for `X-OMES-Worker-Id`; hash the
+raw body bytes it received (not a re-serialization); verify the Ed25519 signature;
+reject a timestamp more than 300 seconds from its clock; and reject a nonce already
+seen for that worker within the skew window (keep nonces at least that long). The
+`enroll` request is not header-signed; its proof of possession is `challenge_signature`.
+Control Center verification is Not implemented yet (tracked in #362). The reference
+implementation of the signer is `lib/omes/py/jobs/worker_signing.py`; the test
+fake verifier is in `tests/py/jobs/test_worker_signing.py`.
+
 ## Areas
 
 | Area | Owner | Status |

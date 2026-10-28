@@ -5,7 +5,10 @@ and telemetry heartbeats for distributed OMES hosts.
 
 Guarantees:
   - Zero inbound listening ports on OMES hosts.
-  - Challenge-based enrollment: private keys remain strictly on the host.
+  - Challenge-based enrollment (issue #362): a real Ed25519 key is generated locally with OpenSSL 3,
+    stays in its own 0600 file, and the worker proves possession by signing the enrollment challenge.
+  - Every poll, result and heartbeat request carries X-OMES-Worker-Id/Timestamp/Nonce/Signature
+    headers (see worker_signing.py). AWCMS-side verification is Not implemented yet (tracked in #362).
   - No arbitrary shell, eval, or unvetted command execution (dispatches exclusively via jobs.runner).
   - Strict tenant and server scope validation (rejects mismatched requests).
   - Zero raw secrets in results, logs, or telemetry.
@@ -20,6 +23,7 @@ import secrets
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -27,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from . import correlation, paths, runner, schema as schema_mod, store
+from . import worker_signing as signing
 
 SUPPORTED_CAPABILITIES = [
     "status",
@@ -54,30 +59,50 @@ class ScopeMismatchError(WorkerError):
     pass
 
 
+class LegacyCredentialsError(WorkerError):
+    """Credentials written before issue #362 hold a fabricated key; they are refused, never migrated."""
+
+
+LEGACY_CREDENTIALS_MESSAGE = (
+    "stored worker credentials predate request signing (issue #362) and contain a fabricated key; "
+    "they are refused. Re-enroll with a fresh challenge: 'omes worker enroll --endpoint <url> "
+    "--tenant <id> --server <id> --challenge <token>'. The old credentials are not migrated."
+)
+
+
 @dataclass
 class WorkerCredentials:
     tenant_id: str
     server_id: str
     worker_id: str
     control_center_endpoint: str
-    public_key: str
-    private_key: str
+    public_key: str  # base64 of the raw 32-byte Ed25519 public key
+    private_key_path: str  # path of the 0600 key file; the key itself is never held in this object
+    public_key_algorithm: str = signing.ALGORITHM
     poll_interval_seconds: int = DEFAULT_POLL_INTERVAL
     heartbeat_interval_seconds: int = DEFAULT_HEARTBEAT_INTERVAL
     enrolled_at: str = ""
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        d = asdict(self)
+        # Persist only the key file's name (resolved against the worker dir on load), never key bytes.
+        d["private_key_file"] = Path(d.pop("private_key_path")).name
+        return d
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> WorkerCredentials:
+    def from_dict(cls, data: dict[str, Any], worker_dir: Path | None = None) -> WorkerCredentials:
+        if "private_key" in data or "private_key_file" not in data:
+            raise LegacyCredentialsError(LEGACY_CREDENTIALS_MESSAGE)
+        key_name = Path(str(data["private_key_file"])).name
+        key_path = str((worker_dir or _worker_dir()) / key_name)
         return cls(
             tenant_id=data["tenant_id"],
             server_id=data["server_id"],
             worker_id=data["worker_id"],
             control_center_endpoint=data["control_center_endpoint"],
             public_key=data["public_key"],
-            private_key=data["private_key"],
+            private_key_path=key_path,
+            public_key_algorithm=data.get("public_key_algorithm", signing.ALGORITHM),
             poll_interval_seconds=int(data.get("poll_interval_seconds", DEFAULT_POLL_INTERVAL)),
             heartbeat_interval_seconds=int(data.get("heartbeat_interval_seconds", DEFAULT_HEARTBEAT_INTERVAL)),
             enrolled_at=data.get("enrolled_at", ""),
@@ -99,7 +124,9 @@ def load_credentials(state_dir: Path | None = None) -> WorkerCredentials | None:
         return None
     try:
         data = json.loads(p.read_text(encoding="utf-8"))
-        return WorkerCredentials.from_dict(data)
+        return WorkerCredentials.from_dict(data, _worker_dir(state_dir))
+    except LegacyCredentialsError:
+        raise
     except Exception:
         return None
 
@@ -111,7 +138,9 @@ def save_credentials(creds: WorkerCredentials, state_dir: Path | None = None) ->
     p = _credentials_path(state_dir)
 
     tmp = p.with_suffix(".tmp")
-    tmp.write_text(json.dumps(creds.to_dict(), indent=2), encoding="utf-8")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # 0600 before any data is written
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(json.dumps(creds.to_dict(), indent=2))
     os.chmod(tmp, 0o600)
     tmp.replace(p)
     return p
@@ -145,21 +174,43 @@ def _load_schema(name: str) -> dict[str, Any]:
 
 
 class HttpClient:
-    """HTTP client wrapper with timeout, headers, and mock injection for testing."""
+    """HTTP client wrapper with timeout, headers, request signing and mock injection for testing."""
 
     def __init__(self, timeout: int = 15, mock_handlers: dict[str, Any] | None = None) -> None:
         self.timeout = timeout
         self.mock_handlers = mock_handlers or {}
+        # Every request as sent on the wire (path, exact body bytes, headers); only populated for mocks,
+        # so tests can verify what a Control Center would have received.
+        self.sent: list[dict[str, Any]] = []
 
-    def post_json(self, url: str, data: dict[str, Any], headers: dict[str, str] | None = None) -> dict[str, Any]:
+    def post_json(
+        self,
+        url: str,
+        data: dict[str, Any],
+        headers: dict[str, str] | None = None,
+        creds: WorkerCredentials | None = None,
+        nonce: str | None = None,
+        timestamp: str | None = None,
+    ) -> dict[str, Any]:
+        """POST `data` as JSON. With `creds`, the exact body bytes are signed and the X-OMES-* headers added.
+
+        If signing fails the request is not sent (fail closed).
+        """
         path = urllib.parse.urlparse(url).path
+        payload = json.dumps(data).encode("utf-8")
+        all_headers = dict(headers or {})
+        if creds is not None:
+            all_headers.update(
+                signing.sign_request(creds.private_key_path, creds.worker_id, "POST", path, payload, nonce, timestamp)
+            )
+
         if path in self.mock_handlers:
+            self.sent.append({"method": "POST", "path": path, "body": payload, "headers": all_headers})
             handler = self.mock_handlers[path]
             if callable(handler):
                 return handler(data)
             return handler
 
-        payload = json.dumps(data).encode("utf-8")
         req = urllib.request.Request(
             url,
             data=payload,
@@ -167,7 +218,7 @@ class HttpClient:
                 "Content-Type": "application/json",
                 "Accept": "application/json",
                 "User-Agent": "OMES-Pull-Worker/1.0",
-                **(headers or {}),
+                **all_headers,
             },
             method="POST",
         )
@@ -193,10 +244,44 @@ def enroll_worker(
     """Enrolls this host with the Control Center using a challenge token."""
     http_client = client or HttpClient()
 
-    # Generate local keypair
-    priv_key = secrets.token_hex(32)
-    pub_key = f"ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI{hashlib.sha256(priv_key.encode('utf-8')).hexdigest()}"
+    wdir = _worker_dir(state_dir)
+    wdir.mkdir(parents=True, exist_ok=True)
+    os.chmod(wdir, 0o700)
+    key_final = wdir / signing.KEY_FILE_NAME
+    key_pending = wdir / f"{signing.KEY_FILE_NAME}.pending"
 
+    # Generate a real Ed25519 key locally (OpenSSL 3, fixed argv, mode 0600). Fail closed: there is no
+    # fallback key. A key left by an interrupted enrollment is ours and is replaced.
+    key_pending.unlink(missing_ok=True)
+    try:
+        signing.generate_private_key(key_pending)
+        pub_key = signing.public_key_b64(key_pending)
+        challenge_signature = signing.sign_challenge(key_pending, enrollment_challenge)
+    except signing.SigningError as exc:
+        key_pending.unlink(missing_ok=True)
+        raise EnrollmentError(f"cannot generate or use a local Ed25519 key: {exc}") from exc
+
+    try:
+        return _finish_enrollment(
+            http_client, endpoint, tenant_id, server_id, enrollment_challenge,
+            pub_key, challenge_signature, key_pending, key_final, state_dir,
+        )
+    finally:
+        key_pending.unlink(missing_ok=True)  # no-op after a successful rename
+
+
+def _finish_enrollment(
+    http_client: HttpClient,
+    endpoint: str,
+    tenant_id: str,
+    server_id: str,
+    enrollment_challenge: str,
+    pub_key: str,
+    challenge_signature: str,
+    key_pending: Path,
+    key_final: Path,
+    state_dir: Path | None,
+) -> WorkerCredentials:
     hostname = os.uname().nodename
     platform_info = _detect_platform()
 
@@ -205,6 +290,8 @@ def enroll_worker(
         "server_id": server_id,
         "enrollment_challenge": enrollment_challenge,
         "public_key": pub_key,
+        "public_key_algorithm": signing.ALGORITHM,
+        "challenge_signature": challenge_signature,
         "hostname": hostname,
         "platform": platform_info,
         "capabilities": list(SUPPORTED_CAPABILITIES),
@@ -229,13 +316,15 @@ def enroll_worker(
     if status != "enrolled":
         raise EnrollmentError(f"enrollment failed with status '{status}'")
 
+    # The control center accepted the key: only now does it replace any earlier key file.
+    os.replace(key_pending, key_final)
     creds = WorkerCredentials(
         tenant_id=tenant_id,
         server_id=server_id,
         worker_id=resp_data["worker_id"],
         control_center_endpoint=endpoint,
         public_key=pub_key,
-        private_key=priv_key,
+        private_key_path=str(key_final),
         poll_interval_seconds=resp_data.get("poll_interval_seconds", DEFAULT_POLL_INTERVAL),
         heartbeat_interval_seconds=resp_data.get("heartbeat_interval_seconds", DEFAULT_HEARTBEAT_INTERVAL),
         enrolled_at=resp_data.get("enrolled_at", _now_iso()),
@@ -282,7 +371,7 @@ def send_heartbeat(
         raise WorkerError(f"heartbeat request schema violation: {'; '.join(req_errors)}")
 
     hb_url = f"{creds.control_center_endpoint.rstrip('/')}/api/v1/worker/heartbeat"
-    resp = http_client.post_json(hb_url, req_payload)
+    resp = http_client.post_json(hb_url, req_payload, creds=creds)
 
     resp_schema = _load_schema("worker-heartbeat.response")
     resp_errors = schema_mod.validate(resp, resp_schema)
@@ -300,13 +389,14 @@ def poll_and_dispatch_once(
     """Polls Control Center for queued jobs and executes allowlisted operations."""
     http_client = client or HttpClient()
 
-    nonce = f"nonce_{secrets.token_hex(16)}"
+    nonce = signing.new_nonce()
+    poll_timestamp = _now_iso()
     poll_payload = {
         "tenant_id": creds.tenant_id,
         "server_id": creds.server_id,
         "worker_id": creds.worker_id,
         "nonce": nonce,
-        "timestamp": _now_iso(),
+        "timestamp": poll_timestamp,
         "capabilities": list(SUPPORTED_CAPABILITIES),
     }
 
@@ -317,7 +407,9 @@ def poll_and_dispatch_once(
         raise WorkerError(f"poll request schema violation: {'; '.join(poll_req_errors)}")
 
     poll_url = f"{creds.control_center_endpoint.rstrip('/')}/api/v1/worker/poll"
-    poll_resp = http_client.post_json(poll_url, poll_payload)
+    poll_resp = http_client.post_json(
+        poll_url, poll_payload, creds=creds, nonce=nonce, timestamp=poll_timestamp
+    )
 
     # Validate poll response contract
     poll_resp_schema = _load_schema("worker-poll.response")
@@ -535,7 +627,7 @@ def _submit_result(
         raise WorkerError(f"worker-result.request schema violation: {'; '.join(schema_errors)}")
 
     result_url = f"{creds.control_center_endpoint.rstrip('/')}/api/v1/worker/result"
-    resp = client.post_json(result_url, result_payload)
+    resp = client.post_json(result_url, result_payload, creds=creds)
 
     res_resp_schema = _load_schema("worker-result.response")
     resp_errors = schema_mod.validate(resp, res_resp_schema)
@@ -582,7 +674,11 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[omes-worker] ERROR: Enrollment failed: {exc}", file=sys.stderr)
             return 1
 
-    creds = load_credentials()
+    try:
+        creds = load_credentials()
+    except LegacyCredentialsError as exc:
+        print(f"[omes-worker] ERROR: {exc}", file=sys.stderr)
+        return 1
     if not creds:
         print("[omes-worker] ERROR: Host is not enrolled. Run 'omes worker enroll' first.", file=sys.stderr)
         return 1
@@ -594,6 +690,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"  Tenant ID: {creds.tenant_id}")
         print(f"  Endpoint:  {creds.control_center_endpoint}")
         print(f"  Enrolled:  {creds.enrolled_at}")
+        print(f"  Key:       {creds.public_key_algorithm} (public key {creds.public_key})")
         return 0
 
     if args.subcommand == "heartbeat":

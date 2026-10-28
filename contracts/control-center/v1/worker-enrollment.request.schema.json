@@ -2,13 +2,15 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "contracts/control-center/v1/worker-enrollment.request.schema.json",
   "title": "worker-enrollment.request",
-  "description": "Challenge-based enrollment request from an OMES host pull-worker to the Control Center (ADR-0027, issue #192).",
+  "description": "Challenge-based enrollment request from an OMES host pull-worker to the Control Center (ADR-0027, issue #192). The worker generates an Ed25519 key locally (OpenSSL 3) and proves possession by signing the enrollment challenge; later requests are signed through the X-OMES-* headers documented in contracts/README.md (issue #362).",
   "type": "object",
   "required": [
     "tenant_id",
     "server_id",
     "enrollment_challenge",
     "public_key",
+    "public_key_algorithm",
+    "challenge_signature",
     "hostname",
     "platform",
     "capabilities"
@@ -29,8 +31,20 @@
     },
     "public_key": {
       "type": "string",
-      "minLength": 16,
-      "maxLength": 1024
+      "pattern": "^[A-Za-z0-9+/]{43}=$",
+      "description": "Base64 (standard alphabet, padded) of the raw 32-byte Ed25519 public key. Never an SSH-formatted key."
+    },
+    "public_key_algorithm": {
+      "type": "string",
+      "enum": [
+        "ed25519"
+      ],
+      "description": "Only ed25519 is supported."
+    },
+    "challenge_signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{86}==$",
+      "description": "Base64 of the raw 64-byte Ed25519 signature over the UTF-8 bytes of enrollment_challenge made with the private key matching public_key (proof of possession)."
     },
     "hostname": {
       "type": "string",
@@ -38,19 +52,29 @@
     },
     "platform": {
       "type": "object",
-      "required": ["os", "version", "arch"],
+      "required": [
+        "os",
+        "version",
+        "arch"
+      ],
       "additionalProperties": false,
       "properties": {
         "os": {
           "type": "string",
-          "enum": ["ubuntu", "linuxmint"]
+          "enum": [
+            "ubuntu",
+            "linuxmint"
+          ]
         },
         "version": {
           "type": "string"
         },
         "arch": {
           "type": "string",
-          "enum": ["amd64", "arm64"]
+          "enum": [
+            "amd64",
+            "arm64"
+          ]
         }
       }
     },
