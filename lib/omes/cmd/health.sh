@@ -103,7 +103,12 @@ Targets:
             values, read through `hermes config get <key> --json`.
             Token usage, spend and cost are not observable through any
             supported interface and are always reported as unknown,
-            never zero; host cgroup limits are reported as not_collected.
+            never zero. Host cgroup limits (MemoryMax, CPUQuota, TasksMax of the
+            hermes-gateway unit) are read from `systemctl [--user] show`
+            and labelled systemctl_runtime_property: unit properties, not
+            proof of the kernel's effective limit. infinity is unlimited,
+            an unreadable value is unknown, a missing unit is
+            not_applicable; none of them changes the status or exit code.
             Budget policy belongs to AWCMS, enforcement to Hermes and
             infrastructure; OMES enforces no spend ceiling and never
             meters model calls (issue #275, ADR-0032 rule 8).
@@ -1154,7 +1159,15 @@ for key, entry in d.get("keys", {}).items():
         print("[omes]   %-32s %s %s" % (key, entry.get("state"), entry.get("reason") or ""))
 usage = d.get("usage") or {}
 print("[omes]   %-32s tokens=%s cost=%s" % ("usage", usage.get("tokens"), usage.get("cost")))
-print("[omes]   %-32s %s" % ("host limits", d.get("host_limits")))
+hl = d.get("host_limits") or {}
+print("[omes]   %-32s %s (%s) %s" % ("host limits", hl.get("state"), hl.get("scope"), hl.get("reason") or ""))
+for name, entry in (hl.get("limits") or {}).items():
+    shown = entry.get("state")
+    if entry.get("state") == "bounded":
+        shown += " %s %s" % (entry.get("value"), entry.get("unit"))
+    elif entry.get("reason"):
+        shown += " " + entry["reason"]
+    print("[omes]     %-30s %s" % (name, shown))
 for f in d.get("findings", []):
     print("[omes]   %s %s: %s" % (f.get("severity", "").upper(), f.get("id"), f.get("message")))
 print("[omes]   note: %s" % d.get("scope_note"))

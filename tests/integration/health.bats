@@ -285,7 +285,7 @@ d = json.loads(os.environ["OMES_TEST_JSON"])
 assert d["status"] == "unknown", d["status"]
 assert d["scope"] == "configured"
 assert d["usage"] == {"tokens": "unknown", "cost": "unknown", "source": "none", "confidence": "none"}, d["usage"]
-assert d["host_limits"] == "not_collected"
+assert d["host_limits"]["state"] == "not_applicable", d["host_limits"]
 '
   [ "$status" -eq 0 ]
 }

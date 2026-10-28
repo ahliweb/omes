@@ -47,13 +47,25 @@ def _read(key, spec):
     return hermes_config.ConfigRead(key=key, state="value", value=spec)
 
 
-def collect_with(turns=100, budget=3600, subagents=50, searches=50):
+def _show(load="loaded", mem="2147483648", cpu="infinity", tasks="512"):
+    lines = [f"LoadState={load}", f"MemoryMax={mem}", f"CPUQuotaPerSecUSec={cpu}", f"TasksMax={tasks}"]
+    return 0, "\n".join(lines) + "\n", ""
+
+
+def _by_scope(user=(0, "LoadState=not-found\n", ""), system=(0, "LoadState=not-found\n", "")):
+    def fake(argv, timeout=None, env=None):
+        return user if "--user" in argv else system
+    return fake
+
+
+def collect_with(turns=100, budget=3600, subagents=50, searches=50, host=None):
     config = {TURNS: turns, BUDGET: budget, SUBAGENTS: subagents, SEARCHES: searches}
 
     def fake(key, *, hermes_home=None, timeout=None):
         return _read(key, config[key])
 
-    with mock.patch.object(posture.hermes_config, "config_get_json", side_effect=fake) as reader:
+    with mock.patch.object(posture.hermes_config, "config_get_json", side_effect=fake) as reader, \
+            mock.patch.object(posture, "_run", side_effect=host or _by_scope()):
         result = posture.collect()
     return result, reader
 
@@ -141,10 +153,108 @@ class TestUsageIsNeverZero(unittest.TestCase):
         again, _ = collect_with()
         self.assertEqual(again["usage"]["tokens"], "unknown")
 
-    def test_host_limits_are_not_collected_and_related_check_is_named(self):
+    def test_related_check_is_named(self):
         result, _ = collect_with()
-        self.assertEqual(result["host_limits"], "not_collected")
         self.assertEqual(result["related_checks"], {"delegation_limits": "omes health agent-runtime"})
+
+
+class TestHostLimits(unittest.TestCase):
+    def host(self, **kw):
+        result, _ = collect_with(host=_by_scope(**kw))
+        return result
+
+    def test_no_gateway_unit_is_not_applicable_and_keeps_status(self):
+        result = self.host()
+        self.assertEqual(result["host_limits"]["state"], "not_applicable")
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("budget.host_limits_not_applicable", result["reason_codes"])
+
+    def test_loaded_user_unit_bounded_values_are_labelled_runtime_property(self):
+        result = self.host(user=_show(cpu="500ms"))
+        host = result["host_limits"]
+        self.assertEqual(host["state"], "runtime_properties")
+        self.assertEqual(host["scope"], "systemctl_runtime_property")
+        self.assertEqual(host["manager_scope"], "user")
+        self.assertEqual(host["limits"]["memory_max"]["value"], 2147483648)
+        self.assertEqual(host["limits"]["cpu_quota"], {
+            "state": "bounded", "value": 50.0, "unit": "percent_of_one_cpu",
+            "deciding_authority": posture._HOST_DECIDING, "enforcing_authority": posture._HOST_ENFORCING})
+        self.assertEqual(host["limits"]["tasks_max"]["value"], 512)
+        for entry in host["limits"].values():
+            self.assertIn("deciding_authority", entry)
+            self.assertIn("enforcing_authority", entry)
+
+    def test_system_unit_is_used_when_user_manager_has_none(self):
+        host = self.host(system=_show(cpu="1s"))["host_limits"]
+        self.assertEqual(host["manager_scope"], "system")
+        self.assertEqual(host["limits"]["cpu_quota"]["value"], 100.0)
+
+    def test_infinity_and_uint64_max_are_unlimited_never_bounded(self):
+        host = self.host(user=_show(mem="infinity", cpu="infinity", tasks=str(2**64 - 1)))["host_limits"]
+        for entry in host["limits"].values():
+            self.assertEqual(entry["state"], "unlimited")
+            self.assertNotIn("value", entry)
+
+    def test_unlimited_is_info_and_does_not_change_status(self):
+        result = self.host(user=_show(mem="infinity", cpu="infinity", tasks="infinity"))
+        self.assertEqual(result["status"], "ok")
+        unlimited = [f for f in result["findings"] if f["id"] == "budget.host_limit_unlimited"]
+        self.assertEqual(len(unlimited), 3)
+        self.assertTrue(all(f["severity"] == "info" for f in unlimited))
+
+    def test_unparseable_or_absent_values_are_unknown_not_ok(self):
+        host = self.host(user=_show(mem="[not set]", cpu="", tasks="-1"))["host_limits"]
+        for entry in host["limits"].values():
+            self.assertEqual(entry["state"], "unknown")
+        absent = self.host(user=(0, "LoadState=loaded\n", ""))["host_limits"]
+        self.assertEqual(absent["limits"]["memory_max"], {
+            "state": "unknown", "reason": "property_absent",
+            "deciding_authority": posture._HOST_DECIDING, "enforcing_authority": posture._HOST_ENFORCING})
+
+    def test_unreadable_systemctl_is_unknown(self):
+        for rc, reason in ((-1, "systemctl_not_found"), (-2, "systemctl_timeout"), (1, "systemctl_failed")):
+            host = self.host(user=(rc, "", "x"), system=(rc, "", "x"))["host_limits"]
+            self.assertEqual(host["state"], "unknown")
+            self.assertEqual(host["reason"], reason)
+            self.assertEqual(host["limits"], {})
+
+    def test_unreadable_user_manager_with_no_system_unit_is_unknown_not_not_applicable(self):
+        host = self.host(user=(1, "", "no bus"))["host_limits"]
+        self.assertEqual(host["state"], "unknown")
+
+    def test_unexpected_load_state_is_unknown(self):
+        host = self.host(user=_show(load="masked"), system=(1, "", ""))["host_limits"]
+        self.assertEqual(host["state"], "unknown")
+        self.assertEqual(host["reason"], "unit_load_state_unreadable")
+
+    def test_unknown_host_limits_do_not_change_status_or_exit_semantics(self):
+        result = self.host(user=(-1, "", ""), system=(-1, "", ""))
+        self.assertEqual(result["status"], "ok")
+        self.assertIn("budget.host_limits_unknown", result["reason_codes"])
+
+    def test_argv_is_fixed_read_only_and_never_sudo(self):
+        argvs = []
+
+        def fake(argv, timeout=None, env=None):
+            argvs.append(list(argv))
+            return 0, "LoadState=not-found\n", ""
+
+        with mock.patch.object(posture, "_run", side_effect=fake):
+            posture.collect_host_limits(timeout=3)
+        self.assertEqual(len(argvs), 2)
+        for argv in argvs:
+            self.assertEqual(argv[0], "systemctl")
+            self.assertIn("show", argv)
+            self.assertNotIn("sudo", argv)
+            self.assertEqual(argv[argv.index("show") + 1], "hermes-gateway")
+        self.assertIn("--user", argvs[0])
+        self.assertNotIn("--user", argvs[1])
+
+    def test_cpu_quota_timespan_parsing(self):
+        self.assertEqual(posture._parse_cpu_quota("2s 500ms")["value"], 250.0)
+        self.assertEqual(posture._parse_cpu_quota("10ms")["value"], 1.0)
+        self.assertEqual(posture._parse_cpu_quota("garbage")["state"], "unknown")
+        self.assertEqual(posture._parse_cpu_quota("0")["state"], "unknown")
 
 
 class TestUnknownIsNeverOk(unittest.TestCase):
@@ -247,7 +357,10 @@ class TestCollect(unittest.TestCase):
     def test_module_has_no_subprocess_of_its_own(self):
         source = open(os.path.join(HEALTH_DIR, "budget_posture.py"), encoding="utf-8").read()
         self.assertNotIn("subprocess", source)
-        self.assertNotIn("_run(", source)
+        # The only runner is the shared bounded no-shell helper, imported not copied.
+        self.assertIn("from provenance.versions import _run", source)
+        self.assertNotIn("shell=True", source)
+        self.assertNotIn('"sudo"', source)
         # The only references to usage/insights commands are in prose and findings.
         self.assertNotIn('"usage"]', source)
         self.assertNotIn('"insights"', source)

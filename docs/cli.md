@@ -750,13 +750,16 @@ and `ok` does not mean spend is bounded.
 
 `usage` is always `{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"}`: no Hermes
 configuration key defines a token, spend or cost ceiling and no supported interface reports usage, so it
-is never reported as 0. `host_limits` is always `"not_collected"`: the systemd `MemoryMax`, `CPUQuota`
-and `TasksMax` drop-in values are not read by this command (`omes doctor` prints the gateway unit's
-`MemoryMax` and `TasksMax`).
+is never reported as 0. `host_limits` reports the `hermes-gateway` unit's `MemoryMax`, `CPUQuota` and `TasksMax` read with
+`systemctl [--user] show` (fixed argv, no `sudo`, read-only). They are labelled
+`scope: "systemctl_runtime_property"`, which means unit properties and not proof of the kernel's effective
+limit; each is `bounded`, `unlimited` (`infinity`) or `unknown`, and the state is `runtime_properties`,
+`not_applicable` (no gateway unit) or `unknown`. Host limits never change `status` or the exit code.
+Compose limits are Not implemented yet (tracked in #359).
 
 Exit codes: 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
 
-**JSON schema:** `{"check":"budget_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"agent.max_turns":{"state":"value","value":90|null}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.run_budget_seconds":{...},"agent.loop_caps.max_subagents":{...},"agent.loop_caps.max_web_searches":{...}},"usage":{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"},"host_limits":"not_collected","related_checks":{"delegation_limits":"omes health agent-runtime"},"findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
+**JSON schema:** `{"check":"budget_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"agent.max_turns":{"state":"value","value":90|null}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.run_budget_seconds":{...},"agent.loop_caps.max_subagents":{...},"agent.loop_caps.max_web_searches":{...}},"usage":{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"},"host_limits":{"state":"runtime_properties|not_applicable|unknown","scope":"systemctl_runtime_property","scope_note":"...","unit":"hermes-gateway","manager_scope":"user|system|null","source":"systemctl show","reason":"...","limits":{"memory_max|cpu_quota|tasks_max":{"state":"bounded|unlimited|unknown","value":N,"unit":"bytes|percent_of_one_cpu|tasks","reason":"...","deciding_authority":"...","enforcing_authority":"..."}}},"related_checks":{"delegation_limits":"omes health agent-runtime"},"findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
 
 ```bash
 omes health budget
