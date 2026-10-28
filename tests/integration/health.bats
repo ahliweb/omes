@@ -315,7 +315,8 @@ assert d["usage"]["tokens"] == "unknown" and d["usage"]["cost"] == "unknown"
   [ "$output" = "0" ]
   run grep -c -E -- "^hermes (usage|insights)" "$SHIM_LOG"
   [ "$output" = "0" ]
-  run grep -v -- "^hermes config get .* --json$" "$SHIM_LOG"
+  # The only other permitted call is the read-only host-limit probe (#359).
+  run grep -v -E -- "^hermes config get .* --json$|^systemctl (--user )?show hermes-gateway -p LoadState -p MemoryMax -p CPUQuotaPerSecUSec -p TasksMax$" "$SHIM_LOG"
   [ -z "$output" ]
 }
 
@@ -362,5 +363,5 @@ assert "budget.unlimited_turns" not in [f["id"] for f in d["findings"]]
   [ "$status" -eq 0 ]
   [[ "$output" == *"health budget: status=ok scope=configured"* ]]
   [[ "$output" == *"usage"*"tokens=unknown cost=unknown"* ]]
-  [[ "$output" == *"host limits"*"not_collected"* ]]
+  [[ "$output" == *"host limits"*"not_applicable"* ]]
 }
