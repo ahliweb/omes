@@ -84,6 +84,8 @@ The native MVP remains OMES + Hermes + systemd. Rootless Docker Compose, the Con
 9. Use a Conventional Commit message and a PR that links the owning issue without falsely closing implementation work.
 10. After any GitHub write, read back the exact issue/PR/milestone and verify the external state.
 
+Product and feature work is placed on the portfolio's development flow v2.0.0 ([`ahliweb/personal-coding`, alur-pengembangan-produk](https://github.com/ahliweb/personal-coding/blob/main/docs/alur-pengembangan-produk.md), network/infrastructure profile in its §7). For this toolkit, the flow's UX/UI step (step 4) is the **operator-facing interface**: CLI commands and flags, `--json` output, configuration schema, and any Control Center screen. Define it and validate it with `--dry-run` or a stub before implementing it, and record what an operator could not do or misread. Implementation then follows the flow's step 11 order: interface first, then the host/backend logic behind it, then integration in the disposable matrix. Authorization and safety checks live in the host-side logic (§3), never only in the interface. OMES is not part of the AWCMS family; this only shares the process vocabulary.
+
 One issue, one branch, and one PR is the default. A cross-cutting documentation change may reference several issues, but it must have one primary owning issue and must not create duplicate implementation issues.
 
 ## 5. Implementation-specific rules
