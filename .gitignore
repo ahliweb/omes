@@ -36,3 +36,21 @@ redesign/
 # --json, consumed by scripts/release.sh --ci-evidence; issue #315) - per-run,
 # self-reported evidence, never committed.
 /.omes-ci/
+
+# BEGIN:pengetahuan-ringkas
+# graphify: hanya graph.json, GRAPH_REPORT.md, STATUS.md, dan label yang dilacak.
+graphify-out/cache/
+graphify-out/manifest.json
+graphify-out/cost.json
+graphify-out/graph.html
+graphify-out/GRAPH_TREE.html
+graphify-out/obsidian/
+graphify-out/.graphify_*
+!graphify-out/.graphify_labels.json
+!graphify-out/.graphify_labels.json.sig
+# Graf melebihi batas ukuran: bangun lokal, jangan di-commit.
+graphify-out/graph.json
+graphify-out/GRAPH_REPORT.md
+graphify-out/.graphify_labels.json
+graphify-out/.graphify_labels.json.sig
+# END:pengetahuan-ringkas
