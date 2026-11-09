@@ -3,8 +3,9 @@
 from the Control Center v1 contract fixtures (issue #211).
 
 The Control Center UI prototype (ui/control-center/index.html) is a
-reference-only, presentation prototype: the functional screens themselves
-are tracked in #200/#201 and are NOT implemented yet. To keep the prototype
+reference-only, presentation prototype: the functional screens are
+implemented in ahliweb/awcms (#200/#201, see
+docs/control-center-release-closeout.md), not in this file. To keep the prototype
 honest about where its example numbers come from, its domain data (fleet,
 deployments, jobs/operations, health checks, backups, audit events,
 workers, and the Hermes orchestration tree/events) is generated - not
@@ -60,8 +61,8 @@ HEADER = """// ui/control-center/data.js
 // module docstring for exactly which fixtures feed which section.
 //
 // This is reference/prototype data for ui/control-center/index.html
-// (issue #211). The functional Control Center screens are NOT
-// implemented yet (tracked in #200/#201) - this file only feeds a static
+// (issue #211). The functional Control Center screens live in
+// ahliweb/awcms (#200/#201), not here - this file only feeds a static
 // UI/UX prototype.
 """
 

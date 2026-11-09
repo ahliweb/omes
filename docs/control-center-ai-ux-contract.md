@@ -51,7 +51,7 @@ Show last verified backup artifact, checksum, retention, restore rehearsal and r
 Immutable timeline of who requested/approved/denied/applied operations, correlation ID, typed target, result and evidence pointer, redacted actor-sensitive details. Export only policy-limited records, scrub commands/secrets/PII. Query filters and pagination survive reload; roles do not see other tenant data.
 
 ### OM-08 Enrollment
-Guided enrollment via short-lived token and signed key exchange that preserves OMES **outbound-only HTTPS pull-worker**. UI shows enrollment requested/enrolled/offline/revoked, token expiry and last heartbeat without exposing stored key material. No button to open inbound privileged WebSocket/gRPC/SSH port.
+Guided enrollment via short-lived token exchange (end-to-end key proof and request-signature verification: Not implemented yet, tracked in [#362](https://github.com/ahliweb/omes/issues/362)) that preserves OMES **outbound-only HTTPS pull-worker**. UI shows enrollment requested/enrolled/offline/revoked, token expiry and last heartbeat without exposing stored key material. No button to open inbound privileged WebSocket/gRPC/SSH port.
 
 ### OM-09 Architecture and Mission Control (current read-only)
 Architecture release view is a **pinned snapshot**; tree/graph use bounded read-only states with labels “Observed” and “Snapshot”, timestamps and provenance. Mission Control may show session/subagent activity tree and events that current AWCMS contracts support. 3D twin (#263) is a **planned addition**, not a currently operating company/org digital twin. Provide keyboard-accessible 2D alternative and “data stale” overlays.

@@ -53,7 +53,7 @@ Navigasi: Fleet → Servers & Drift → Deployments → Operations & Jobs → He
 
 **OM-12 Browser Transfer (rencana):** wizard Sumber/Tujuan→Mapping→Privasi & Approval→Dry-run→Login/MFA manusia→Submit durable job→Progress checkpoint per-record→Read-back tujuan→Hasil final rekonsiliasi. Status menunggu/MFA/running/uncertain write/verified/gagal/dibatalkan; retry tidak boleh menulis ganda. Eksekusi melalui adapter terotorisasi, bukan perintah browser arbitrary dari OMES.
 
-**OM-13 Bun realtime (rencana):** AWCMS server dapat menyediakan SSE Bun untuk progres satu arah; WS native Bun hanya jika ADR #1168 membuktikan kebutuhan dua arah. **OMES host tetap Python/Bash/systemd**, HTTP signed pull keluar tanpa listener privileged inbound. Origin/role/tiket dan redaksi status wajib, frame tidak membawa arbitrary host command/prompt/secret.
+**OM-13 Bun realtime (rencana):** AWCMS server dapat menyediakan SSE Bun untuk progres satu arah; WS native Bun hanya jika ADR #1168 membuktikan kebutuhan dua arah. **OMES host tetap Python/Bash/systemd**, HTTP pull keluar tanpa listener privileged inbound (penandatanganan request ujung ke ujung belum diimplementasikan, dilacak di #362). Origin/role/tiket dan redaksi status wajib, frame tidak membawa arbitrary host command/prompt/secret.
 
 **OM-14 Dependency/versions (rencana):** tabel installed/latest available/latest supported/held back/risk/last verified pada host, agent, tool. Bun v1.4.4 relevan untuk AWCMS atau tooling Bun in-repo, **tidak memaksa Python host menjadi Bun**. Python, OS, systemd dan Hermes mengikuti matriks kompatibilitas Ubuntu 22.04/24.04/26.04 serta Mint 22. Pembaruan menjadi PR atomic dan rollback, tanpa tombol “upgrade all hosts” yang menjalankan shell tanpa kontrol.
 
