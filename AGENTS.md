@@ -193,7 +193,7 @@ Backlog ownership:
 
 ## Orchestrator & Agent (model AI)
 
-> Standar lintas-portofolio dari [`ahliweb/personal-coding`](https://github.com/ahliweb/personal-coding/blob/main/docs/tingkatan-model-ai-claude-openai.md) (docs/tingkatan-model-ai-claude-openai.md, snapshot 2026-10-28). Harga, effort, dan lini model dipelihara di sana — jangan disalin ke repo ini.
+> Standar lintas-portofolio internal (snapshot 2026-10-28). Harga, effort, dan lini model dipelihara di standar itu — jangan disalin ke repo ini.
 
 Pekerjaan yang perlu dipecah ke beberapa agent memakai pola **orchestrator → agent**. Orchestrator memecah pekerjaan, membagi tugas, mengatur ketergantungan, lalu memeriksa dan menyatukan hasil; agent mengerjakan satu bagian yang sudah dibatasi.
 
