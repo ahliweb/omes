@@ -59,8 +59,8 @@
         },
         "request_signing": {
           "type": "string",
-          "enum": ["not_implemented", "implemented"],
-          "description": "Honest status of per-request signing in the shipped worker (ADR-0027 target). Consumers must not assume signing when this is not_implemented."
+          "enum": ["not_implemented", "ed25519-v1"],
+          "description": "Honest status of per-request signing in the shipped worker (ADR-0027, issue #362). ed25519-v1 means the worker signs poll, result and heartbeat requests with a locally generated Ed25519 key (contracts/README.md, OMES-WORKER-SIG-V1); it says nothing about Control Center verification. Consumers must not assume signing when this is not_implemented."
         }
       }
     },

@@ -1,0 +1,20 @@
+{
+  "tenant_id": "tenant-acme",
+  "server_id": "srv-prod-01",
+  "enrollment_challenge": "challenge_abcdef1234567890",
+  "public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
+  "public_key_algorithm": "ed25519",
+  "challenge_signature": "AAAA",
+  "hostname": "srv-prod-01.acme.corp",
+  "platform": {
+    "os": "ubuntu",
+    "version": "24.04",
+    "arch": "amd64"
+  },
+  "capabilities": [
+    "status",
+    "preflight",
+    "backup",
+    "restore"
+  ]
+}

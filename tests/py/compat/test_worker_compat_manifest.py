@@ -24,6 +24,7 @@ if str(PY_ROOT) not in sys.path:
 
 from jobs import schema as schema_mod  # noqa: E402
 from jobs import worker  # noqa: E402
+from jobs import worker_signing as signing  # noqa: E402
 
 _spec = importlib.util.spec_from_file_location("gen_compat", REPO_ROOT / "scripts" / "generate-worker-compat-manifest.py")
 gen = importlib.util.module_from_spec(_spec)
@@ -41,7 +42,19 @@ def fixture(name: str) -> dict[str, Any]:
 
 # Assembled at runtime so the secret scanner never sees a key-shaped literal;
 # the tests only assert that this value never appears in payloads or logs.
-_KEY_SENTINEL = "-".join(["PRIVATE", "KEY", "SENTINEL", "0123456789"])
+
+
+def _real_creds(directory: Path, **kw: Any) -> "worker.WorkerCredentials":
+    """Credentials backed by a throwaway Ed25519 key minted at runtime (never committed)."""
+    key = Path(directory) / signing.KEY_FILE_NAME
+    signing.generate_private_key(key)
+    base = dict(
+        tenant_id="tenant-x", server_id="srv-x", worker_id="wrk-x",
+        control_center_endpoint="https://cc.example.invalid",
+        public_key=signing.public_key_b64(key), private_key_path=str(key),
+    )
+    base.update(kw)
+    return worker.WorkerCredentials(**base)
 
 class TestProducer(unittest.TestCase):
     def test_unreleased_manifest_validates_and_is_deterministic(self):
@@ -83,10 +96,9 @@ class TestProducer(unittest.TestCase):
             sent.append(data)
             return {"status": "acknowledged", "server_id": data["server_id"], "received_at": "2026-01-01T00:00:00Z", "next_heartbeat_seconds": 60}
 
-        creds = worker.WorkerCredentials(
-            tenant_id="tenant-x", server_id="srv-x", worker_id="wrk-x",
-            control_center_endpoint="https://cc.example.invalid", public_key="pub", private_key="priv",
-        )
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        creds = _real_creds(Path(tmp.name))
         worker.send_heartbeat(creds, client=worker.HttpClient(mock_handlers={"/api/v1/worker/heartbeat": hb}))
         m = gen.build_manifest()
         self.assertEqual(sent[0]["capability_registry_digest"], m["capability_posture"]["capability_registry_digest"])
@@ -94,12 +106,19 @@ class TestProducer(unittest.TestCase):
         self.assertEqual(m["capability_posture"]["worker_capabilities"], list(worker.SUPPORTED_CAPABILITIES))
 
     def test_request_signing_claim_is_honest(self):
-        # ADR-0027 targets signed requests; the shipped worker has none.
-        # If signing lands this fails, forcing REQUEST_SIGNING to be updated.
-        src = (PY_ROOT / "jobs" / "worker.py").read_text(encoding="utf-8").lower()
-        self.assertEqual(gen.REQUEST_SIGNING, "not_implemented")
-        for marker in ("hmac", "\"authorization\"", "'authorization'", "x-omes-signature"):
-            self.assertNotIn(marker, src)
+        # Issue #362: the worker signs poll/result/heartbeat requests with Ed25519
+        # (jobs/worker_signing.py). If signing is ever removed this fails, forcing
+        # REQUEST_SIGNING back to "not_implemented" instead of a stale claim.
+        self.assertEqual(gen.REQUEST_SIGNING, "ed25519-v1")
+        self.assertEqual(gen.REQUEST_SIGNING, f"{signing.ALGORITHM}-v1")
+        worker_src = (PY_ROOT / "jobs" / "worker.py").read_text(encoding="utf-8")
+        for call in ("post_json(hb_url, req_payload, creds=creds)", "client.post_json(result_url, result_payload, creds=creds)",
+                     "creds=creds, nonce=nonce, timestamp=poll_timestamp"):
+            self.assertIn(call, worker_src)  # heartbeat, result, poll
+        sign_src = (PY_ROOT / "jobs" / "worker_signing.py").read_text(encoding="utf-8")
+        for header in ("X-OMES-Worker-Id", "X-OMES-Timestamp", "X-OMES-Nonce", "X-OMES-Signature"):
+            self.assertIn(header, sign_src)
+        self.assertNotIn("hmac", (worker_src + sign_src).lower())
 
     def test_platform_versions_match_detect_sh(self):
         detect = (REPO_ROOT / "lib" / "omes" / "detect.sh").read_text(encoding="utf-8")
@@ -195,12 +214,11 @@ class TestWorkerFlowFixtures(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.state = Path(self.tmp.name)
         self.calls: list[tuple[str, dict[str, Any]]] = []
-        self.creds = worker.WorkerCredentials(
-            tenant_id="tenant-acme", server_id="srv-prod-01", worker_id="wrk-001",
+        self.creds = _real_creds(
+            self.state, tenant_id="tenant-acme", server_id="srv-prod-01", worker_id="wrk-001",
             control_center_endpoint="https://control-center.example.invalid",
-            public_key="ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPubKeyFixture",
-            private_key=_KEY_SENTINEL,
         )
+        self.key_body = Path(self.creds.private_key_path).read_text().split("-----")[2].strip()
 
     def _recording(self, path: str, response: Any):
         def handler(data):
@@ -307,7 +325,7 @@ class TestWorkerFlowFixtures(unittest.TestCase):
             root.removeHandler(handler)
             root.setLevel(old_level)
         blob = json.dumps([d for _, d in self.calls]) + out.getvalue() + err.getvalue() + stream.getvalue()
-        self.assertNotIn(self.creds.private_key, blob)
+        self.assertNotIn(self.key_body, blob)
         self.assertFalse(SECRET_SHAPES.search(blob))
         for _, payload in self.calls:
             self.assertEqual(schema_mod.scan_for_raw_secrets(payload), [])

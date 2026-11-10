@@ -154,6 +154,85 @@ authority (see [docs/jobs.md §8.1](../docs/jobs.md#81-correlation-and-trace-ids
 AWCMS pins `contracts/control-center/v1/` by SHA-256, so it must re-vendor these
 five files; editing its vendored copy is drift.
 
+### Change: issue #362 (worker enrollment key and request signing)
+
+Issue #362 changes `worker-enrollment.request.schema.json` **in place within `v1`**.
+Unlike #356 this is not purely additive: the worker had been sending a fabricated
+`public_key`, and a real key needs a proof, so the contract now requires:
+
+- `public_key`: base64 of the raw 32-byte Ed25519 public key (pattern
+  `^[A-Za-z0-9+/]{43}=$`; the old `ssh-ed25519 ...` shape no longer validates);
+- `public_key_algorithm`: `"ed25519"` (required, the only allowed value);
+- `challenge_signature`: base64 of the raw 64-byte Ed25519 signature over the
+  `OMES-WORKER-ENROLL-V1` string below (required).
+
+The enrollment proof is bound to its context. The signed message is these five
+fields joined by a single `\n` (no trailing newline), UTF-8 encoded:
+
+```text
+OMES-WORKER-ENROLL-V1
+<enrollment_challenge>
+<tenant_id>
+<server_id>
+<public_key, the base64 of the raw 32 bytes exactly as sent>
+```
+
+A signer rejects a line break (`\n` or `\r`) in any of the four values, so one
+message cannot be read as another. Signing only the challenge would let a proof be
+reused with another tenant, server or key; the Control Center must rebuild this exact
+string from the request body it received and verify `challenge_signature` against the
+`public_key` in that same body before it trusts the key.
+
+`worker-enrollment.request/valid-01.json` was updated and the invalid fixtures
+`invalid-missing-challenge-signature`, `invalid-missing-public-key-algorithm`,
+`invalid-unsupported-algorithm`, `invalid-ssh-formatted-public-key` and
+`invalid-short-challenge-signature` were added. The fixture values are synthetic
+byte patterns, not keys. AWCMS pins `contracts/control-center/v1/` by SHA-256: it
+must re-vendor `worker-enrollment.request.schema.json` and its fixtures (editing its
+vendored copy is drift) and verify the enrollment proof. The compatibility manifest
+schema (`compatibility/v1`) gained the `worker_protocol.request_signing` value
+`ed25519-v1`.
+
+#### Request signature headers (`OMES-WORKER-SIG-V1`)
+
+The headers are transport metadata, not JSON body fields, so they are not in the
+request/response JSON schemas; they have their own machine-checkable contract,
+`worker-request-signature.headers.schema.json` (a map from the canonical header name
+to its value, with valid and invalid fixtures validated by
+`python3 scripts/check-contracts.py`; a unit test checks that the headers the worker
+really emits validate against it). The worker adds them to every `poll`, `result` and `heartbeat` POST:
+
+| Header | Value |
+|---|---|
+| `X-OMES-Worker-Id` | the `worker_id` returned by enrollment |
+| `X-OMES-Timestamp` | UTC time, `YYYY-MM-DDTHH:MM:SSZ` |
+| `X-OMES-Nonce` | single-use, `nonce_` plus 32 hex characters (pattern `^[A-Za-z0-9_.:-]{16,128}$`); for `poll` it equals the body's `nonce` |
+| `X-OMES-Signature` | base64 of the raw 64-byte Ed25519 signature |
+
+The signed message is these six fields joined by a single `\n` (no trailing newline),
+UTF-8 encoded:
+
+```text
+OMES-WORKER-SIG-V1
+<METHOD, upper case, always POST today; no line break>
+<URL path only, e.g. /api/v1/worker/poll - no scheme, host or query; no line break>
+<lowercase hex sha256 of the exact request body bytes as sent>
+<X-OMES-Nonce>
+<X-OMES-Timestamp>
+```
+
+A verifier must: look up the public key enrolled for `X-OMES-Worker-Id`; hash the
+raw body bytes it received (not a re-serialization); verify the Ed25519 signature;
+reject a timestamp more than 300 seconds from its clock; and reject a nonce already
+seen for that worker within the skew window (keep nonces at least that long). The
+`enroll` request carries no `X-OMES-*` headers: the Control Center does not know the
+key yet, so there is nothing to verify a header signature against; its proof of
+possession is `challenge_signature`. The signer also refuses a line break in the
+method, path, nonce or timestamp and a timestamp that is not `YYYY-MM-DDTHH:MM:SSZ`.
+Control Center verification is Not implemented yet (tracked in #362). The reference
+implementation of the signer is `lib/omes/py/jobs/worker_signing.py`; the test
+fake verifier is in `tests/py/jobs/test_worker_signing.py`.
+
 ## Areas
 
 | Area | Owner | Status |

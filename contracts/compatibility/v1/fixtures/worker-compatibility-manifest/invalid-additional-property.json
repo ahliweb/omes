@@ -110,7 +110,7 @@
       "result",
       "heartbeat"
     ],
-    "request_signing": "not_implemented",
+    "request_signing": "ed25519-v1",
     "transport": "outbound_https_pull",
     "version": "1.0.0"
   }

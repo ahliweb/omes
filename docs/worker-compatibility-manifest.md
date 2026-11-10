@@ -27,7 +27,7 @@ Every field comes from a repository fact; nothing is typed by hand at release ti
 |---|---|
 | `product_version` | `VERSION` |
 | `channel`, `release_tag`, `release_time`, `commit_sha` | Producer arguments. `stable` needs all three and `release_tag == v<VERSION>`; `unreleased` carries none |
-| `worker_protocol` | Pull-worker facts: outbound HTTPS only, operations `enroll`, `poll`, `result`, `heartbeat`. `request_signing` is `not_implemented` because `lib/omes/py/jobs/worker.py` does not sign requests yet; a test fails when that changes |
+| `worker_protocol` | Pull-worker facts: outbound HTTPS only, operations `enroll`, `poll`, `result`, `heartbeat`. `request_signing` is `ed25519-v1` because `lib/omes/py/jobs/worker.py` signs poll, result and heartbeat requests (issue #362); it describes the worker only, and Control Center verification is Not implemented yet (tracked in #362). A test pins the value |
 | `control_contract` | sha256 of each pinned `contracts/control-center/v1` worker schema plus `operation-request`, and one digest over the sorted `path:sha256` lines |
 | `awcms_omes_control` | Declared contract range (`>= contract_version`, `< next major`) and `verified_builds`, empty until tested fixtures exist |
 | `platform_support` | Supported Ubuntu/Mint versions and architectures, mirroring `lib/omes/detect.sh` |
@@ -56,7 +56,7 @@ Output is deterministic (sorted keys, no wall-clock value). A stable manifest mu
 2. Resolve the manifest at **build or deploy time**, from the pinned release. OMES hosts never fetch it at boot, and `consumer_policy.fetch_at_host_boot` is always `false`.
 3. Fail closed. Reject `channel != stable`, an unknown `schema_version`, any schema or secret violation, a missing release identity, a tag that disagrees with `product_version`, a `control_contract.digest` that does not recompute from `files`, a digest that differs from the consumer's vendored copy, and a contract version outside the declared range. Show the result as **unsupported/unknown** with an upgrade hint; never as healthy.
 4. Treat an empty `verified_builds` as "range declared, build unverified". Do not display it as tested.
-5. Do not assume signed requests while `worker_protocol.request_signing` is `not_implemented`.
+5. Do not assume signed requests while `worker_protocol.request_signing` is `not_implemented`. `ed25519-v1` means the worker sends `OMES-WORKER-SIG-V1` signatures; a consumer must verify them itself (Not implemented yet in AWCMS, tracked in #362).
 6. Replay [`consumer-scenarios.json`](../contracts/compatibility/v1/consumer-scenarios.json) in the consumer's own CI. The expected `reason_codes` are the stable vocabulary: `manifest_invalid`, `unknown_schema_version`, `unsupported_channel`, `stable_release_identity_missing`, `release_tag_version_mismatch`, `manifest_digest_inconsistent`, `contract_version_out_of_range`, `contract_digest_mismatch`, `installer_not_published`, `installer_incomplete`.
 7. Do not import OMES host internals and do not install a Bun runtime for the Python worker. The inputs are this schema, its fixtures and the pinned control-center contract files.
 
