@@ -37,13 +37,23 @@ What is NOT observable, and therefore never reported as a number:
   uses the operator's provider credentials. None of those is run here. The
   report always carries `usage: {tokens: "unknown", cost: "unknown", source:
   "none", confidence: "none"}`. Unknown usage is never zero.
-- Host resource limits (systemd `MemoryMax`, `CPUQuota`, `TasksMax`) are
-  rendered by modules/hermes-gateway/hardening.sh and the agent plan, but
-  reading them back needs `systemctl show` against a unit scope; no
-  Python-side read-only reader exists in the repository, so the report
-  states `host_limits: "not_collected"` instead of guessing.
+- Host cgroup limits (issue #359 item 1). `MemoryMax`, `CPUQuota` and
+  `TasksMax` are rendered by modules/hermes-gateway/hardening.sh (opt-in
+  drop-in, default off) and enforced by the kernel through systemd. They are
+  read back with one fixed argv, `systemctl [--user] show hermes-gateway -p
+  LoadState -p MemoryMax -p CPUQuotaPerSecUSec -p TasksMax`, through the
+  shared bounded no-shell runner (provenance.versions._run), never with
+  sudo, never mutating. The values are labelled
+  `scope: "systemctl_runtime_property"`: they are the unit properties as the
+  service manager reports them, NOT a read of the kernel cgroup files, so
+  they are not proof of the effective limit. `infinity`, an absent value or
+  an unreadable one maps to `unlimited` or `unknown`, never to a bounded or
+  ok state. A host without the gateway unit reports `not_applicable`. Host
+  limits are informational and never change the overall status or exit code.
+  Compose limits (`mem_limit`, `cpus`, `pids_limit`) are Not implemented yet
+  (tracked in #359).
 
-Values are CONFIGURED ones, so the report carries `scope: "configured"`.
+Run-limit values are CONFIGURED ones, so the report carries `scope: "configured"`.
 `ok` therefore means "the two run-limit keys were read and set to finite
 values", never "spend is bounded".
 
@@ -63,6 +73,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import sys
 from typing import Any, Optional
 
@@ -70,6 +81,13 @@ _HEALTH_DIR = os.path.dirname(os.path.abspath(__file__))
 if _HEALTH_DIR not in sys.path:
     sys.path.insert(0, _HEALTH_DIR)
 import hermes_config  # noqa: E402
+
+_PY_ROOT = os.path.dirname(_HEALTH_DIR)  # lib/omes/py
+if _PY_ROOT not in sys.path:
+    sys.path.insert(0, _PY_ROOT)
+# The one existing bounded, no-shell, fixed-argv runner (also used by
+# hermes_config.py); this module has no process-spawning code of its own.
+from provenance.versions import _run  # noqa: E402
 
 EXIT_HEALTHY = 0
 EXIT_NOT_HEALTHY = 7
@@ -110,7 +128,22 @@ _SPECS = (
 #: Always-present usage statement. There is no supported interface for it.
 USAGE_UNKNOWN = {"tokens": "unknown", "cost": "unknown", "source": "none", "confidence": "none"}
 
-HOST_LIMITS_NOT_COLLECTED = "not_collected"
+HOST_UNIT = "hermes-gateway"
+HOST_SCOPE = "systemctl_runtime_property"
+HOST_STATE_RUNTIME = "runtime_properties"
+HOST_STATE_NOT_APPLICABLE = "not_applicable"
+HOST_STATE_UNKNOWN = "unknown"
+_UINT64_MAX = 2**64 - 1
+
+# (report name, systemctl property, unit of the reported number)
+_HOST_LIMITS = (
+    ("memory_max", "MemoryMax", "bytes"),
+    ("cpu_quota", "CPUQuotaPerSecUSec", "percent_of_one_cpu"),
+    ("tasks_max", "TasksMax", "tasks"),
+)
+_HOST_PROPS = ("LoadState",) + tuple(p for _n, p, _u in _HOST_LIMITS)
+_HOST_DECIDING = "operator, or the OMES hermes-gateway hardening drop-in when OMES_HERMES_HARDENING is enabled"
+_HOST_ENFORCING = "kernel cgroup via systemd"
 
 #: Where the delegation limits live; this check does not duplicate those reads.
 RELATED_CHECKS = {"delegation_limits": "omes health agent-runtime"}
@@ -118,6 +151,139 @@ RELATED_CHECKS = {"delegation_limits": "omes health agent-runtime"}
 
 def _now_iso() -> str:
     return datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+_TIME_UNITS_USEC = {"us": 1, "ms": 1000, "s": 1_000_000, "min": 60_000_000, "h": 3_600_000_000}
+_TIME_TOKEN = re.compile(r"^(\d+(?:\.\d+)?)(us|ms|min|s|h)$")
+
+
+def _parse_count(raw: str) -> dict:
+    """MemoryMax / TasksMax: infinity (or uint64 max, which older systemd
+    prints for it) is unlimited; a decimal integer is bounded; anything else,
+    including an empty or `[not set]` value, is unknown."""
+    raw = raw.strip()
+    if raw == "infinity" or raw == str(_UINT64_MAX):
+        return {"state": "unlimited"}
+    if raw.isdigit() and 0 < int(raw) < _UINT64_MAX:
+        return {"state": "bounded", "value": int(raw)}
+    return {"state": "unknown", "reason": "unparseable_value"}
+
+
+def _parse_cpu_quota(raw: str) -> dict:
+    """CPUQuotaPerSecUSec is a systemd timespan per second ("1s" is 100%
+    of one CPU, "500ms" is 50%) or `infinity`."""
+    raw = raw.strip()
+    if raw == "infinity":
+        return {"state": "unlimited"}
+    total = 0.0
+    tokens = raw.split()
+    if not tokens:
+        return {"state": "unknown", "reason": "unparseable_value"}
+    for token in tokens:
+        match = _TIME_TOKEN.match(token)
+        if not match:
+            return {"state": "unknown", "reason": "unparseable_value"}
+        total += float(match.group(1)) * _TIME_UNITS_USEC[match.group(2)]
+    if total <= 0:
+        return {"state": "unknown", "reason": "unparseable_value"}
+    return {"state": "bounded", "value": round(total / 10_000, 2)}
+
+
+def _parse_show(stdout: str) -> dict:
+    props: dict = {}
+    for line in stdout.splitlines():
+        name, sep, value = line.partition("=")
+        if sep and name in _HOST_PROPS:
+            props[name] = value
+    return props
+
+
+def _show_argv(manager_scope: str) -> list:
+    argv = ["systemctl"]
+    if manager_scope == "user":
+        argv.append("--user")
+    argv += ["show", HOST_UNIT]
+    for prop in _HOST_PROPS:
+        argv += ["-p", prop]
+    return argv
+
+
+def _host_envelope(state: str, manager_scope: Optional[str], reason: Optional[str], limits: Optional[dict]) -> dict:
+    out: dict = {
+        "state": state,
+        "scope": HOST_SCOPE,
+        "scope_note": "unit properties as reported by the service manager, not a read of the kernel cgroup files; "
+                      "not proof of the effective limit",
+        "unit": HOST_UNIT,
+        "manager_scope": manager_scope,
+        "source": "systemctl show",
+        "limits": limits or {},
+    }
+    if reason:
+        out["reason"] = reason
+    return out
+
+
+def collect_host_limits(timeout: Optional[float] = None) -> dict:
+    """Read-only host cgroup limit posture of the gateway unit. Tries the
+    user manager, then the system manager (the module supports both); the
+    first scope that has the unit loaded wins. Absence of the unit in every
+    scope is `not_applicable`; a scope that could not be queried and no loaded
+    unit elsewhere is `unknown`."""
+    timeout = timeout if timeout is not None else hermes_config.default_timeout()
+    unreadable: list = []
+    for manager_scope in ("user", "system"):
+        rc, out, _err = _run(_show_argv(manager_scope), timeout=timeout)
+        if rc != 0:
+            unreadable.append("systemctl_not_found" if rc == -1 else "systemctl_timeout" if rc == -2 else "systemctl_failed")
+            continue
+        props = _parse_show(out)
+        load_state = props.get("LoadState", "").strip()
+        if load_state == "not-found":
+            continue
+        if load_state != "loaded":
+            unreadable.append("unit_load_state_unreadable")
+            continue
+        limits: dict = {}
+        for name, prop, unit in _HOST_LIMITS:
+            if prop not in props:
+                entry = {"state": "unknown", "reason": "property_absent"}
+            elif prop == "CPUQuotaPerSecUSec":
+                entry = _parse_cpu_quota(props[prop])
+            else:
+                entry = _parse_count(props[prop])
+            if entry["state"] == "bounded":
+                entry["unit"] = unit
+            entry["deciding_authority"] = _HOST_DECIDING
+            entry["enforcing_authority"] = _HOST_ENFORCING
+            limits[name] = entry
+        return _host_envelope(HOST_STATE_RUNTIME, manager_scope, None, limits)
+    if unreadable:
+        return _host_envelope(HOST_STATE_UNKNOWN, None, unreadable[0], None)
+    return _host_envelope(HOST_STATE_NOT_APPLICABLE, None, "gateway_unit_not_loaded", None)
+
+
+def _host_findings(host: dict) -> list:
+    """Info-only findings: host limits never change the overall status."""
+    state = host.get("state")
+    if state == HOST_STATE_NOT_APPLICABLE:
+        return [_finding("budget.host_limits_not_applicable", SEV_INFO,
+                         f"the {HOST_UNIT} unit is not loaded in the user or system manager, so no host cgroup limit applies to it")]
+    if state != HOST_STATE_RUNTIME:
+        return [_finding("budget.host_limits_unknown", SEV_INFO,
+                         f"host cgroup limits could not be read ({host.get('reason')}); reported as unknown, never as bounded or ok")]
+    findings = []
+    for name, entry in (host.get("limits") or {}).items():
+        if entry["state"] == "unlimited":
+            findings.append(_finding(
+                "budget.host_limit_unlimited", SEV_INFO,
+                f"host {name} is unlimited (infinity) in the unit properties; no cgroup ceiling is configured for it",
+                name))
+        elif entry["state"] == "unknown":
+            findings.append(_finding(
+                "budget.host_limit_unknown", SEV_INFO,
+                f"host {name} could not be read ({entry.get('reason')}); reported as unknown", name))
+    return findings
 
 
 def _validate(nullable: bool, value: Any) -> Optional[str]:
@@ -232,6 +398,10 @@ def evaluate(keys: dict) -> dict:
 def collect(hermes_home: Optional[str] = None, timeout: Optional[float] = None) -> dict:
     keys = {key: _read_key(key, nullable, hermes_home, timeout) for key, nullable, _req in _SPECS}
     result = evaluate(keys)
+    host = collect_host_limits(timeout)
+    host_findings = _host_findings(host)
+    result["findings"].extend(host_findings)
+    result["reason_codes"] = sorted(set(result["reason_codes"]) | {f["id"] for f in host_findings})
     return {
         "check": "budget_posture",
         "status": result["status"],
@@ -242,7 +412,7 @@ def collect(hermes_home: Optional[str] = None, timeout: Optional[float] = None) 
         "observed_at": _now_iso(),
         "keys": keys,
         "usage": dict(USAGE_UNKNOWN),
-        "host_limits": HOST_LIMITS_NOT_COLLECTED,
+        "host_limits": host,
         "related_checks": dict(RELATED_CHECKS),
         "findings": result["findings"],
         "reason_codes": result["reason_codes"],

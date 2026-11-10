@@ -733,9 +733,21 @@ What OMES reads and reports, through the shared reader of §17.1 (`hermes config
 - `usage` is always `{"tokens":"unknown","cost":"unknown","source":"none","confidence":"none"}`, with the
   finding `budget.token_spend_unobservable`. It is never 0. `hermes usage` and `hermes insights` are never
   run, so no network call and no provider credential is involved.
-- `host_limits` is always `"not_collected"`. The systemd `MemoryMax`, `CPUQuota` and `TasksMax` values
-  OMES renders (`modules/hermes-gateway/hardening.sh`) are enforced by infrastructure and are not read back
-  by this command; `omes doctor` prints the gateway unit's `MemoryMax` and `TasksMax`.
+- `host_limits` reports the host cgroup limits of the `hermes-gateway` unit (issue #359, item 1). OMES runs
+  the fixed read-only argv `systemctl [--user] show hermes-gateway -p LoadState -p MemoryMax -p
+  CPUQuotaPerSecUSec -p TasksMax` (user manager first, then the system manager; bounded timeout, no
+  `sudo`, nothing is changed). The values are labelled `scope: "systemctl_runtime_property"`: they are the
+  unit properties as the service manager reports them, not a read of the kernel cgroup files, so they are
+  not proof of the effective limit. Each limit is `bounded` (with a value and unit), `unlimited`
+  (`infinity`; never reported as ok or bounded) or `unknown` (absent or unparseable). The `host_limits`
+  state is `runtime_properties`, `not_applicable` (the unit is loaded in no manager) or `unknown`
+  (`systemctl` missing, failing, timing out or returning an unexpected `LoadState`, including a user
+  manager that cannot be reached when the unit is not loaded in the system manager). Every limit names its
+  deciding authority (the operator, or the OMES hardening drop-in when `OMES_HERMES_HARDENING` is enabled)
+  and its enforcing authority (the kernel cgroup via systemd). Findings `budget.host_limits_not_applicable`,
+  `budget.host_limits_unknown`, `budget.host_limit_unlimited` and `budget.host_limit_unknown` are info
+  only: host limits never change the overall `status` or the exit code. Rootless Compose limits
+  (`mem_limit`, `cpus`, `pids_limit`) are Not implemented yet (tracked in #359).
 - Delegation limits are reported by `omes health agent-runtime` (§17.1) and are not read again.
 
 OMES enforces no spend ceiling. To change a limit, configure Hermes itself (`agent.max_turns`,
