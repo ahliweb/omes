@@ -84,7 +84,7 @@ The phrase *implemented* above refers to the named OMES baseline components on `
 | `observed_at`, `freshness` | `checked_at`; `freshness.{state, max_age_seconds, expires_at}`; layer `freshness` (endpoint `Date` skew); `revalidate()` for stale/future/unparseable records |
 | `service_reachable` | layers `network` (TCP to a vetted address) and `tls` (verified session, `https` only) |
 | `model_available` | layer `api` (valid `GET /v1/models` list, never HTTP 200 alone) and layer `model` (configured id advertised, exact match) |
-| `capability_results` | layer `active_probe`: `not_applicable` (`active_probe_not_run`) and no prompt sent by default; with the explicit `--active-probe` flag (issue [#354](https://github.com/ahliweb/omes/issues/354), section 3.2) one fixed synthetic chat request yields `pass|fail|unknown`. Tool-call and streaming probes: Not implemented yet (tracked in #354) |
+| `capability_results` | layer `active_probe`: `not_applicable` (`active_probe_not_run`) and no prompt sent by default; with the explicit `--active-probe` flag (issue [#354](https://github.com/ahliweb/omes/issues/354), section 3.2) one fixed synthetic chat request yields `pass|fail|unknown`; with the additional opt-in `--probe-tool-call` / `--probe-stream` flags (valid only with `--active-probe`, section 3.2) the extra layers `active_probe_tool_call` and `active_probe_stream` report one fixed tool-call and one fixed streaming fixture, present only when requested |
 | `health_status`, `proves`, `remediation` | `status` (`pass`/`fail`/`not_applicable`/`unknown`), `proves` (what a pass does and does not establish), fixed redacted `remediation` |
 | `endpoint_exposure` | layer `policy` (loopback/private scope; public, link-local, metadata, multicast and reserved addresses refused before any request); the host-wide listener audit stays with `omes audit exposure` |
 | `egress_policy_ref`, `artifact_provenance_ref` | not copied: use `omes health ai-privacy` and `omes audit provenance --verify-artifacts` |
@@ -108,7 +108,19 @@ For vLLM, upstream documentation specifically warns that `--api-key` does **not*
 | Output | Only a bounded completion character count and an allowlisted `finish_reason`; the prompt and completion are never logged, persisted or printed |
 | Interpretation | **Model-dependent.** `pass` (HTTP 200, non-empty `choices[0].message.content`) proves only that this fixture produced a well-formed completion at that moment. HTTP 200 alone proves nothing; timeout, 401/403, 3xx, 404/405/501, 5xx, malformed/oversized/content-encoded bodies and an empty completion are never `pass`. A requested probe must pass for `ready` |
 
-Not implemented yet (tracked in #354): `secret_reference` credentialed endpoints, tool-calling and streaming probes, and per-model fixtures. It does not select a model, route requests or add vLLM (#289) or Kubernetes (#290); Hermes stays authoritative for provider routing.
+**Opt-in capability probes (`--probe-tool-call`, `--probe-stream`).** Two further flags, valid only together with `--active-probe` (otherwise exit 2; no environment variable), add the layers `active_probe_tool_call` and `active_probe_stream`. They are separate flags so that `--active-probe` keeps its meaning and an endpoint that legitimately lacks tools or streaming is not failed unless the operator asks. The layers exist in the output only when requested, so existing output shapes are unchanged. Each requested layer must `pass` for `ready`.
+
+| Property | Tool call (`--probe-tool-call`) | Streaming (`--probe-stream`) |
+| --- | --- | --- |
+| Ordering | After config, policy, network, api, model, freshness and the plain `active_probe` all passed; otherwise `skipped_prior_failure` and nothing is sent | Same |
+| Transport | Identical to section 3.2 above: vetted address, pinned connection, no redirects, verified TLS, per-request deadline, 64 KiB cap, no credential header | Same; `Accept: text/event-stream`; an endless or slow-drip stream ends as `response_too_large` or `timeout`; at most 256 events |
+| Fixture | Constant message and one fixed harmless tool `omes_probe_echo` (one string argument restricted to `ok`; nothing is executed), `tool_choice` `auto`, `max_tokens` 64, no stream, no user data | Constant message, `max_tokens` 8, `stream` true, no tools, no user data |
+| Pass | HTTP 200 and `tool_calls` is a bounded non-empty list whose every call has `type` `function`, a non-empty `id`, exactly that name and `arguments` equal to `{"value": "ok"}` | HTTP 200, `text/event-stream`, only well-formed `data:` OpenAI-style chunks with at least some text, ending with `data: [DONE]` |
+| Never pass | text-only reply (`tool_call_missing`), other tool (`tool_call_wrong_name`), bad shape or arguments (`tool_call_invalid`), plus malformed, oversized, encoded, empty, timeout, 401/403, 3xx, 4xx/5xx | non-SSE body (`stream_not_sse`), `stream_malformed`, `stream_empty`, `stream_truncated`, `stream_too_long`, `empty_completion`, plus oversized, encoded, timeout, 401/403, 3xx, 4xx/5xx |
+| Output | Call count and allowlisted `finish_reason` only; tool arguments, prompt and text are never logged or printed | Chunk count, character count and allowlisted `finish_reason` only; streamed text and prompt are never logged or printed |
+| Interpretation | **Model-dependent.** Proves only this one fixture at that moment; not other tools, argument quality, parallel or multi-turn use, or correctness | **Model-dependent.** Proves only this one fixture streamed well-formed chunks; not long or sustained streams, backpressure, quality or correctness |
+
+Not implemented yet (tracked in #354): `secret_reference` credentialed endpoints and per-model or operator-supplied fixtures. It does not select a model, route requests or add vLLM (#289) or Kubernetes (#290); Hermes stays authoritative for provider routing.
 
 ## 4. Host service lifecycle principle (when individually authorized)
 

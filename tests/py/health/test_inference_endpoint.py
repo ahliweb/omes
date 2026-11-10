@@ -35,6 +35,27 @@ import model as health_model  # noqa: E402
 SCRIPT = os.path.join(HEALTH_DIR, "inference_endpoint.py")
 
 CHAT_OK = json.dumps({"object": "chat.completion", "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}]}).encode()
+def _tool_resp(calls, content=None, finish="tool_calls"):
+    return json.dumps({"choices": [{"index": 0, "message": {"role": "assistant", "content": content, "tool_calls": calls}, "finish_reason": finish}]}).encode()
+
+
+def _call(name="omes_probe_echo", args='{"value": "ok"}', call_id="call_1", typ="function"):
+    return {"id": call_id, "type": typ, "function": {"name": name, "arguments": args}}
+
+
+def _sse(*events, done=True, eol="\n\n"):
+    lines = [f"data: {json.dumps(e)}{eol}" for e in events]
+    if done:
+        lines.append(f"data: [DONE]{eol}")
+    return "".join(lines).encode()
+
+
+def _delta(text, finish=None):
+    return {"choices": [{"index": 0, "delta": {"content": text}, "finish_reason": finish}]}
+
+
+TOOL_OK = _tool_resp([_call()])
+SSE_OK = _sse({"choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}]}, _delta("o"), _delta("k", "stop"))
 MODELS_OK = json.dumps({"object": "list", "data": [{"id": "demo-model", "object": "model"}, {"id": "other"}]}).encode()
 
 
@@ -73,10 +94,19 @@ class Stub:
                 )
                 c = dict(stub.cfg)
                 if self.command == "POST":
-                    # chat_* keys override the shared config for the active probe.
-                    c.update({k[5:]: v for k, v in stub.cfg.items() if k.startswith("chat_")})
-                    if "chat_body" not in stub.cfg:
-                        c["body"] = CHAT_OK
+                    # chat_* keys override the shared config for the active probe;
+                    # tool_* / stream_* do the same for the #354 capability probes.
+                    kind = "chat"
+                    if '"tools"' in stub.requests[-1]["body"]:
+                        kind = "tool"
+                    elif '"stream":true' in stub.requests[-1]["body"]:
+                        kind = "stream"
+                    prefix = kind + "_"
+                    c.update({k[len(prefix):]: v for k, v in stub.cfg.items() if k.startswith(prefix)})
+                    if prefix + "body" not in stub.cfg:
+                        c["body"] = {"chat": CHAT_OK, "tool": TOOL_OK, "stream": SSE_OK}[kind]
+                    if kind == "stream" and "stream_content_type" not in stub.cfg:
+                        c["content_type"] = "text/event-stream"
                 if c.get("delay"):
                     time.sleep(c["delay"])
                 status = c["status"]
@@ -97,6 +127,7 @@ class Stub:
                     return
                 body = c["body"]
                 if c.get("drip"):
+                    self.send_header("Content-Type", c.get("content_type", "application/json"))
                     self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
                     try:
@@ -107,7 +138,7 @@ class Stub:
                     except OSError:
                         pass
                     return
-                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Type", c.get("content_type", "application/json"))
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
@@ -1405,3 +1436,310 @@ class TestActiveProbeCli(unittest.TestCase):
             bad = self.run_cli("--active-probe", "--endpoint", stub.url, "--model", "demo-model")
         self.assertEqual(bad.returncode, 7)
         self.assertFalse(json.loads(bad.stdout)["ready"])
+
+
+# ---------------------------------------------------------------------------
+# Opt-in tool-call and streaming capability probes (issue #354)
+# ---------------------------------------------------------------------------
+
+
+def caps(url, tool=True, stream=True, model="demo-model", **kw):
+    kw.setdefault("timeout", 3.0)
+    return ie.probe(url, model, active_probe=True, probe_tool_call=tool, probe_stream=stream, **kw)
+
+
+class TestCapabilityProbesOffByDefault(unittest.TestCase):
+    def test_default_and_plain_active_probe_have_no_extra_layers_or_requests(self):
+        with Stub() as stub:
+            plain = probe(stub.url)
+            act = active(stub.url)
+        self.assertEqual(list(plain["layers"]), list(ie.LAYER_ORDER))
+        self.assertEqual(list(act["layers"]), list(ie.LAYER_ORDER))
+        self.assertNotIn("tool_call", act["limits"]["active_probe"])
+        self.assertEqual([r["method"] for r in stub.requests], ["GET", "GET", "POST"])
+        for r in stub.requests:
+            self.assertNotIn('"tools"', r["body"])
+            self.assertNotIn('"stream":true', r["body"])
+
+    def test_flags_without_active_probe_do_nothing_via_probe(self):
+        with Stub() as stub:
+            result = ie.probe(stub.url, "demo-model", timeout=3.0, probe_tool_call=True, probe_stream=True)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertEqual(list(result["layers"]), list(ie.LAYER_ORDER))
+
+    def test_cli_rejects_capability_flags_without_active_probe(self):
+        for flag in ("--probe-tool-call", "--probe-stream"):
+            with self.assertRaises(SystemExit) as cm, mock.patch("sys.stderr"):
+                ie.run([flag], env={})
+            self.assertEqual(cm.exception.code, 2)
+
+    def test_environment_cannot_enable_them(self):
+        with Stub() as stub:
+            env = {"OMES_INFERENCE_ENDPOINT": stub.url, "OMES_INFERENCE_MODEL": "demo-model", "OMES_PROBE_TOOL_CALL": "1", "OMES_PROBE_STREAM": "1", "OMES_INFERENCE_PROBE_STREAM": "1"}
+            result = ie.run([], env=env)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertNotIn("active_probe_stream", result["layers"])
+
+    def test_flags_via_run(self):
+        with Stub() as stub:
+            result = ie.run(["--active-probe", "--probe-tool-call", "--probe-stream"], env={"OMES_INFERENCE_ENDPOINT": stub.url, "OMES_INFERENCE_MODEL": "demo-model"})
+        self.assertEqual([r["method"] for r in stub.requests], ["GET", "POST", "POST", "POST"])
+        self.assertTrue(result["ready"], layer_states(result))
+
+
+class TestToolCallProbe(unittest.TestCase):
+    def test_pass_and_fixed_request(self):
+        with Stub() as stub:
+            result = caps(stub.url, stream=False)
+        self.assertEqual(result["status"], "pass", layer_states(result))
+        self.assertTrue(result["ready"])
+        self.assertEqual(list(result["layers"])[-1], "active_probe_tool_call")
+        self.assertNotIn("active_probe_stream", result["layers"])
+        post = stub.requests[2]
+        self.assertEqual((post["method"], post["path"]), ("POST", "/v1/chat/completions"))
+        body = json.loads(post["body"])
+        self.assertEqual(body["model"], "demo-model")
+        self.assertEqual(body["messages"], [{"role": "user", "content": ie.TOOL_PROBE_PROMPT}])
+        self.assertEqual(len(body["tools"]), 1)
+        self.assertEqual(body["tools"][0]["function"]["name"], "omes_probe_echo")
+        self.assertEqual(body["max_tokens"], ie.TOOL_PROBE_MAX_TOKENS)
+        self.assertLessEqual(ie.TOOL_PROBE_MAX_TOKENS, 128)
+        self.assertIs(body["stream"], False)
+        for forbidden in ("authorization", "cookie", "proxy-authorization", "x-api-key"):
+            self.assertNotIn(forbidden, post["headers"])
+        # the fixture is constant: a second run sends byte-identical bodies
+        with Stub() as stub2:
+            caps(stub2.url, stream=False)
+        self.assertEqual(stub2.requests[2]["body"], post["body"])
+        layer = result["layers"]["active_probe_tool_call"]
+        self.assertEqual(layer["authority"], "omes-host")
+        self.assertEqual(layer["signals"], {"tool_calls": 1, "finish_reason": "tool_calls"})
+        self.assertIn("Model-dependent", layer["proves"])
+        self.assertIn("HTTP 200 alone proves nothing", layer["proves"])
+        self.assertEqual(result["limits"]["active_probe"]["tool_call"]["tool"], "omes_probe_echo")
+
+    def test_arguments_and_prompt_never_in_output(self):
+        marker = "SECRET-ARG-xyz"
+        body = _tool_resp([_call(args=json.dumps({"value": "ok", "x": marker}))], content=marker)
+        with Stub(tool_body=body) as stub:
+            result = caps(stub.url, stream=False)
+        dumped = json.dumps(result)
+        self.assertNotIn(marker, dumped)
+        self.assertNotIn(ie.TOOL_PROBE_PROMPT, dumped)
+        self.assertEqual(result["layers"]["active_probe_tool_call"]["reason"], "tool_call_invalid")
+        ok = _tool_resp([_call()], content=marker)
+        with Stub(tool_body=ok) as stub:
+            passed = caps(stub.url, stream=False)
+        self.assertNotIn(marker, json.dumps(passed))
+        self.assertEqual(passed["layers"]["active_probe_tool_call"]["status"], "pass")
+
+    def assertTool(self, body, reason, status="fail", **cfg):
+        with Stub(tool_body=body, **cfg) as stub:
+            result = caps(stub.url, stream=False)
+        self.assertFalse(result["ready"], layer_states(result))
+        self.assertEqual(result["status"], status)
+        self.assertEqual(layer_states(result)["active_probe_tool_call"], (status, reason))
+
+    def test_missing_wrong_name_and_malformed_never_pass(self):
+        self.assertTool(CHAT_OK, "tool_call_missing")
+        self.assertTool(_tool_resp([]), "tool_call_missing")
+        self.assertTool(_tool_resp(None), "tool_call_missing")
+        self.assertTool(_tool_resp([_call(name="get_weather")]), "tool_call_wrong_name")
+        self.assertTool(_tool_resp([_call(), _call(name="rm_rf")]), "tool_call_wrong_name")
+        self.assertTool(_tool_resp([_call(args="not json")]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(args="[]")]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(args='{"value": "no"}')]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(args='{"value": "ok", "extra": 1}')]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(args={"value": "ok"})]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(args="x" * 5000)]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(call_id="")]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call(typ="other")]), "tool_call_invalid")
+        self.assertTool(_tool_resp(["x"]), "tool_call_invalid")
+        self.assertTool(_tool_resp({"a": 1}), "tool_call_invalid")
+        self.assertTool(_tool_resp([{"id": "c", "type": "function", "function": "bad"}]), "tool_call_invalid")
+        self.assertTool(_tool_resp([_call()] * 20), "tool_call_invalid")
+        self.assertTool(b"not json", "malformed_json")
+        self.assertTool(b"[]", "active_probe_invalid_response")
+        self.assertTool(b'{"choices": []}', "active_probe_invalid_response")
+        self.assertTool(b"", "malformed_json")
+
+    def test_empty_body_oversized_encoding_and_statuses(self):
+        self.assertTool(b"x" * (ie.ACTIVE_PROBE_MAX_RESPONSE_BYTES + 10), "response_too_large")
+        self.assertTool(TOOL_OK, "active_probe_invalid_response", tool_headers={"Content-Encoding": "gzip"})
+        self.assertTool(b"{}", "auth_required", status="unknown", tool_status=401)
+        self.assertTool(b"{}", "unsupported_api", tool_status=404)
+        self.assertTool(b"{}", "server_error", tool_status=500)
+        self.assertTool(b"", "redirect_not_followed", tool_status=302, tool_headers={"Location": "http://169.254.169.254/"})
+
+    def test_slow_drip_hits_the_deadline(self):
+        started = time.monotonic()
+        self.assertTool(TOOL_OK, "timeout", status="unknown", tool_drip=0.05)
+        # default timeout in caps() is 3 s; the drip alone would need much longer
+        self.assertLess(time.monotonic() - started, 10)
+        with Stub(tool_drip=0.05) as stub:
+            started = time.monotonic()
+            result = caps(stub.url, stream=False, timeout=0.5)
+        self.assertEqual(layer_states(result)["active_probe_tool_call"], ("unknown", "timeout"))
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_runs_only_after_plain_probe_passed(self):
+        with Stub(chat_body=b"{}") as stub:
+            result = caps(stub.url)
+        self.assertEqual([r["method"] for r in stub.requests], ["GET", "POST"])
+        self.assertEqual(layer_states(result)["active_probe"], ("fail", "active_probe_invalid_response"))
+        self.assertEqual(layer_states(result)["active_probe_tool_call"], ("not_applicable", "skipped_prior_failure"))
+        self.assertEqual(layer_states(result)["active_probe_stream"], ("not_applicable", "skipped_prior_failure"))
+        self.assertFalse(result["ready"])
+
+    def test_failure_blocks_ready_even_if_other_layers_pass(self):
+        with Stub(tool_body=CHAT_OK) as stub:
+            result = caps(stub.url, stream=False)
+        self.assertEqual(result["layers"]["active_probe"]["status"], "pass")
+        self.assertFalse(result["ready"])
+        self.assertEqual(result["status"], "fail")
+
+    def test_missing_model_and_blocked_destination_send_nothing(self):
+        with Stub() as stub:
+            result = caps(stub.url, model="not-served")
+        self.assertEqual([r["method"] for r in stub.requests], ["GET"])
+        self.assertEqual(layer_states(result)["active_probe_tool_call"], ("not_applicable", "skipped_prior_failure"))
+        self.assertIs(result["limits"]["prompt_sent"], False)
+        for addr in ("169.254.169.254", "8.8.8.8"):
+            with NoNetwork():
+                blocked = caps("http://probe.example:8000", resolver=FakeResolver([addr]))
+            self.assertFalse(blocked["ready"])
+            self.assertEqual(layer_states(blocked)["active_probe_stream"], ("not_applicable", "skipped_prior_failure"))
+            self.assertIs(blocked["limits"]["prompt_sent"], False)
+
+
+class TestStreamProbe(unittest.TestCase):
+    def test_pass_and_fixed_request(self):
+        with Stub() as stub:
+            result = caps(stub.url, tool=False)
+        self.assertEqual(result["status"], "pass", layer_states(result))
+        self.assertTrue(result["ready"])
+        self.assertEqual(list(result["layers"])[-1], "active_probe_stream")
+        self.assertNotIn("active_probe_tool_call", result["layers"])
+        post = stub.requests[2]
+        body = json.loads(post["body"])
+        self.assertEqual(body, {"model": "demo-model", "messages": [{"role": "user", "content": ie.STREAM_PROBE_PROMPT}], "max_tokens": ie.STREAM_PROBE_MAX_TOKENS, "temperature": 0, "stream": True})
+        self.assertEqual(post["headers"]["accept"], "text/event-stream")
+        for forbidden in ("authorization", "cookie", "proxy-authorization", "x-api-key"):
+            self.assertNotIn(forbidden, post["headers"])
+        layer = result["layers"]["active_probe_stream"]
+        self.assertEqual(layer["signals"], {"stream_chunks": 3, "completion_chars": 2, "finish_reason": "stop"})
+        self.assertIn("Model-dependent", layer["proves"])
+        self.assertEqual(result["limits"]["active_probe"]["stream"]["max_events"], ie.STREAM_PROBE_MAX_EVENTS)
+
+    def test_streamed_text_never_in_output_and_variants_pass(self):
+        marker = "SECRET-STREAM-xyz"
+        body = _sse(_delta(marker), _delta("!", "stop"), eol="\r\n\r\n")
+        with Stub(stream_body=body) as stub:
+            result = caps(stub.url, tool=False)
+        self.assertEqual(result["layers"]["active_probe_stream"]["status"], "pass")
+        self.assertNotIn(marker, json.dumps(result))
+        self.assertNotIn(ie.STREAM_PROBE_PROMPT, json.dumps(result))
+        keepalive = b": keep-alive\n\n" + SSE_OK
+        with Stub(stream_body=keepalive, stream_content_type="text/event-stream; charset=utf-8") as stub:
+            self.assertEqual(caps(stub.url, tool=False)["layers"]["active_probe_stream"]["status"], "pass")
+
+    def assertStream(self, body, reason, status="fail", **cfg):
+        with Stub(stream_body=body, **cfg) as stub:
+            result = caps(stub.url, tool=False)
+        self.assertFalse(result["ready"], layer_states(result))
+        self.assertEqual(result["status"], status)
+        self.assertEqual(layer_states(result)["active_probe_stream"], (status, reason))
+
+    def test_non_sse_and_malformed_never_pass(self):
+        self.assertStream(CHAT_OK, "stream_not_sse", stream_content_type="application/json")
+        self.assertStream(SSE_OK, "stream_not_sse", stream_content_type="text/plain")
+        self.assertStream(b"just text\n\n", "stream_malformed")
+        self.assertStream(b"event: message\ndata: {}\n\n", "stream_malformed")
+        self.assertStream(b"data: not json\n\ndata: [DONE]\n\n", "stream_malformed")
+        self.assertStream(b"data: []\n\ndata: [DONE]\n\n", "stream_malformed")
+        self.assertStream(b'data: {"choices": []}\n\ndata: [DONE]\n\n', "stream_malformed")
+        self.assertStream(b'data: {"choices": [{"delta": {"content": 5}}]}\n\ndata: [DONE]\n\n', "stream_malformed")
+        self.assertStream(b"data: {}\ndata: {}\n\n", "stream_malformed")
+        self.assertStream(SSE_OK + b'data: {"choices": [{"delta": {"content": "x"}}]}\n\n', "stream_malformed")
+        self.assertStream(b"\xff\xfe\n\n", "stream_malformed")
+        self.assertStream(SSE_OK, "stream_malformed", stream_headers={"Content-Encoding": "gzip"})
+
+    def test_empty_truncated_and_too_long_never_pass(self):
+        self.assertStream(b"", "stream_empty")
+        self.assertStream(b"data: [DONE]\n\n", "stream_empty")
+        self.assertStream(b": only a comment\n\n", "stream_empty")
+        self.assertStream(_sse(_delta("o"), _delta("k"), done=False), "stream_truncated")
+        self.assertStream(SSE_OK[:-2], "stream_truncated")
+        self.assertStream(_sse(_delta(""), {"choices": [{"delta": {}, "finish_reason": "stop"}]}), "empty_completion")
+        many = _sse(*[_delta("a") for _ in range(ie.STREAM_PROBE_MAX_EVENTS + 5)])
+        self.assertStream(many, "stream_too_long")
+
+    def test_oversized_and_statuses(self):
+        self.assertStream(b"data: " + b"x" * (ie.ACTIVE_PROBE_MAX_RESPONSE_BYTES + 10), "response_too_large")
+        self.assertStream(b"{}", "auth_required", status="unknown", stream_status=403)
+        self.assertStream(b"{}", "unsupported_api", stream_status=404)
+        self.assertStream(b"{}", "server_error", stream_status=503)
+        self.assertStream(b"", "redirect_not_followed", stream_status=301, stream_headers={"Location": "http://169.254.169.254/"})
+
+    def test_endless_stream_is_bounded(self):
+        started = time.monotonic()
+        self.assertStream(b"", "response_too_large", stream_endless=True)
+        self.assertLess(time.monotonic() - started, 10)
+
+    def test_slow_drip_hits_the_deadline(self):
+        with Stub(stream_drip=0.05) as stub:
+            started = time.monotonic()
+            result = caps(stub.url, tool=False, timeout=0.5)
+        self.assertEqual(layer_states(result)["active_probe_stream"], ("unknown", "timeout"))
+        self.assertFalse(result["ready"])
+        self.assertLess(time.monotonic() - started, 5)
+
+    def test_tool_failure_does_not_stop_stream_probe_but_blocks_ready(self):
+        with Stub(tool_body=CHAT_OK) as stub:
+            result = caps(stub.url)
+        self.assertEqual(layer_states(result)["active_probe_tool_call"], ("fail", "tool_call_missing"))
+        self.assertEqual(layer_states(result)["active_probe_stream"], ("pass", None))
+        self.assertFalse(result["ready"])
+
+
+class TestCapabilityProbesShareTheTransport(unittest.TestCase):
+    def test_vetted_address_only_and_no_extra_methods(self):
+        with Stub() as stub:
+            seen = []
+            real = pinned_http.request
+
+            def spy(**kw):
+                seen.append((kw["method"], tuple(kw["addresses"]), kw["host_header"], kw["max_bytes"]))
+                return real(**kw)
+
+            with mock.patch.object(pinned_http, "request", side_effect=spy), mock.patch.object(pinned_http, "get", side_effect=lambda **kw: spy(method="GET", **kw)):
+                result = caps(f"http://probe.example:{stub.port}", resolver=FakeResolver(["127.0.0.1"]))
+        self.assertTrue(result["ready"], layer_states(result))
+        self.assertEqual([m for m, *_ in seen], ["GET", "POST", "POST", "POST"])
+        for _m, addrs, host, _max in seen:
+            self.assertEqual(addrs, ("127.0.0.1",))
+            self.assertEqual(host, f"probe.example:{stub.port}")
+        for _m, _a, _h, limit in seen[1:]:
+            self.assertEqual(limit, ie.ACTIVE_PROBE_MAX_RESPONSE_BYTES)
+
+    def test_accept_header_is_restricted(self):
+        with self.assertRaises(ValueError):
+            pinned_http.request(method="POST", accept="text/html", scheme="http", host="x", host_header="x", port=1, path="/", addresses=[], timeout=1, max_bytes=1)
+
+    def test_cli_exit_code_and_output_hygiene(self):
+        marker = "SECRET-CLI-xyz"
+        body = _sse(_delta(marker), _delta("!", "stop"))
+        with Stub(stream_body=body) as stub:
+            proc = subprocess.run(
+                [sys.executable, SCRIPT, "--active-probe", "--probe-tool-call", "--probe-stream", "--endpoint", stub.url, "--model", "demo-model"],
+                capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "")}, timeout=30,
+            )
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertNotIn(marker, proc.stdout + proc.stderr)
+        self.assertNotIn(ie.TOOL_PROBE_PROMPT, proc.stdout + proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["layers"]["active_probe_tool_call"]["status"], "pass")
+        self.assertEqual(out["layers"]["active_probe_stream"]["status"], "pass")
+        bad = subprocess.run([sys.executable, SCRIPT, "--probe-stream", "--endpoint", "http://127.0.0.1:1"], capture_output=True, text=True, env={"PATH": os.environ.get("PATH", "")}, timeout=30)
+        self.assertEqual(bad.returncode, 2)
+        self.assertEqual(bad.stdout, "")

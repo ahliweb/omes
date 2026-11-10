@@ -1196,7 +1196,8 @@ inference endpoint is implemented in phase 1 as `omes health inference-endpoint`
 [docs/ai-inference-serving-architecture.md §3.1](ai-inference-serving-architecture.md)): it extends the
 existing health layer model, sends one metadata `GET`, never configures or routes a Hermes provider,
 and only with the explicit `--active-probe` flag sends one fixed synthetic chat completion over the
-same vetted destination path ([#354](https://github.com/ahliweb/omes/issues/354);
+same vetted destination path, plus, only with `--probe-tool-call` / `--probe-stream`, one fixed tool-call and one
+fixed streaming request ([#354](https://github.com/ahliweb/omes/issues/354);
 [docs/ai-inference-serving-architecture.md §3.2](ai-inference-serving-architecture.md)).
 The full policy, regulatory context, standards mapping, and examples are in
 [docs/ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md).

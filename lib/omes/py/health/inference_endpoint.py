@@ -32,6 +32,16 @@ Standard library only (ADR-0012). What this is and is not:
   that moment (model-dependent); HTTP 200 alone proves nothing. A timeout,
   401/403, malformed response or empty completion is never a pass. When
   the probe ran, `ready` additionally requires it to pass.
+- Issue #354, two further opt-in layers that are only valid together with
+  `--active-probe`: `--probe-tool-call` (one fixed request declaring one
+  fixed harmless tool; pass only on a well-formed call of that tool) and
+  `--probe-stream` (one fixed `stream: true` request; pass only on
+  well-formed SSE `data:` chunks that end with `[DONE]`). Each is a
+  separate layer (`active_probe_tool_call`, `active_probe_stream`) that
+  exists in the output only when requested, so the default output shape is
+  unchanged. They reuse every safety property above, run only after the
+  plain active probe passed, and never print the tool arguments, the
+  prompt or the streamed text. A pass proves only that fixture.
 - Result shape: the existing layered model of lib/omes/py/health/model.py
   (status, signals, proves, remediation, detail, authority, source), with
   the additive `unknown` status and optional `reason`/`checked_at`
@@ -44,7 +54,8 @@ Standard library only (ADR-0012). What this is and is not:
 Usage:
   python3 inference_endpoint.py [--json] [--endpoint <url>] [--model <id>]
                                 [--scope loopback|private] [--ca-file <path>]
-                                [--active-probe]
+                                [--active-probe [--probe-tool-call]
+                                [--probe-stream]]
 
 Exit codes: 0 status is pass (ready); 7 anything else (fail, unknown or
 not_applicable). The JSON `status` distinguishes them.
@@ -93,6 +104,21 @@ ACTIVE_PROBE_PROMPT = "Reply with the single word: ok"
 ACTIVE_PROBE_MAX_TOKENS = 8
 ACTIVE_PROBE_MAX_RESPONSE_BYTES = 64 * 1024
 _FINISH_REASONS = ("stop", "length", "tool_calls", "content_filter")
+#: Optional capability probes (issue #354). Fixed constants only; the tool
+#: schema and prompts carry no user data. Names/args are harmless: the tool
+#: takes one constant enum value and nothing is ever executed.
+TOOL_PROBE_NAME = "omes_probe_echo"
+TOOL_PROBE_PROMPT = 'Call the function omes_probe_echo with the argument value set to "ok". Do not answer with text.'
+TOOL_PROBE_ARG_VALUE = "ok"
+TOOL_PROBE_MAX_TOKENS = 64
+TOOL_PROBE_MAX_CALLS = 8
+TOOL_PROBE_MAX_ARGUMENT_CHARS = 1024
+TOOL_PROBE_MAX_ID_CHARS = 256
+STREAM_PROBE_PROMPT = "Reply with the single word: ok"
+STREAM_PROBE_MAX_TOKENS = 8
+STREAM_PROBE_MAX_EVENTS = 256
+STREAM_PROBE_DONE = "[DONE]"
+EXTRA_LAYERS = ("active_probe_tool_call", "active_probe_stream")
 #: How long an evidence record may be trusted (see revalidate()).
 MAX_AGE_SECONDS = 300
 #: Largest tolerated difference between the endpoint's HTTP Date and
@@ -110,6 +136,8 @@ _PROVES = {
     "api": "Proves GET /v1/models returned HTTP 200 and a well-formed OpenAI-style model list within the size and time bounds. Does NOT prove any model can generate.",
     "model": "Proves the configured model id appears in the endpoint's advertised model list. Does NOT prove the model is loaded, can generate, supports tools or is the intended weights.",
     "freshness": "Proves the endpoint's HTTP Date is within the tolerated skew of this host's clock, so the observation time is trustworthy. Absent when the server sends no Date header.",
+    "active_probe_tool_call": "Only when --active-probe --probe-tool-call is passed: proves that ONE fixed synthetic chat request declaring ONE fixed harmless tool (constant name and schema, no user data, no credentials, max_tokens 64) returned HTTP 200 and a well-formed tool call of exactly that tool with schema-valid constant arguments at that moment. Model-dependent: it proves nothing about other tools, argument quality, parallel calls, multi-turn tool use or correctness, and HTTP 200 alone proves nothing. Nothing is executed. Without the flag no tool request is sent.",
+    "active_probe_stream": "Only when --active-probe --probe-stream is passed: proves that ONE fixed synthetic chat request with stream true (constant message, max_tokens 8, no tools, no credentials) returned HTTP 200, a text/event-stream content type and well-formed SSE data chunks with non-empty content that end with the [DONE] terminator within the size, event and time bounds. Model-dependent: it proves nothing about other prompts, sustained or long streams, backpressure, quality or correctness. Without the flag no streaming request is sent.",
     "active_probe": "Only when --active-probe is passed: proves that ONE fixed, non-sensitive synthetic chat request (max_tokens 8, no tools, no credentials) returned HTTP 200 and a well-formed non-empty completion from the configured model at that moment. Model-dependent: it proves nothing about other prompts, tool calling, quality or correctness, and HTTP 200 alone proves nothing. Without the flag no prompt, chat or tool request is sent.",
 }
 
@@ -163,6 +191,14 @@ _REMEDIATION = {
     "server_date_invalid": "the endpoint sent an unparseable Date header",
     "empty_completion": "the model returned no completion text for the fixed probe; check that the model is loaded and can generate (model-dependent)",
     "active_probe_invalid_response": "the endpoint answered the probe with a response that is not a valid OpenAI-style chat completion",
+    "tool_call_missing": "the model did not return a tool call for the fixed tool probe; the model or serving configuration may not support tool calling (model-dependent; tool-call parsing may need enabling on the server)",
+    "tool_call_wrong_name": "the model called a tool other than the one fixed tool declared by the probe",
+    "tool_call_invalid": "the tool call was not well formed (shape, id, type or arguments did not match the fixed schema)",
+    "stream_not_sse": "the endpoint did not answer the streaming probe with a text/event-stream response; streaming may not be supported or enabled",
+    "stream_malformed": "the streaming response was not well-formed OpenAI-style SSE data chunks",
+    "stream_empty": "the streaming response carried no data chunks",
+    "stream_truncated": "the stream did not end with the [DONE] terminator",
+    "stream_too_long": "the stream exceeded the event bound for the fixed probe and was not accepted",
     "plaintext_http_non_loopback": "traffic to this private address is unencrypted; serve the endpoint over https and supply its CA via OMES_INFERENCE_CA_FILE",
 }
 
@@ -202,7 +238,7 @@ def _timeout_from_env(raw: Optional[str]) -> float:
 def _authority(name: str) -> str:
     # OMES owns evaluating its own policy and clock; the serving operator
     # (not OMES, not Hermes) is authoritative for the endpoint's own state.
-    return AUTHORITY_OMES_HOST if name in ("config", "policy", "freshness", "active_probe") else AUTHORITY_EXTERNAL_PROVIDER
+    return AUTHORITY_OMES_HOST if name in ("config", "policy", "freshness", "active_probe", *EXTRA_LAYERS) else AUTHORITY_EXTERNAL_PROVIDER
 
 
 _SOURCE = {
@@ -214,6 +250,8 @@ _SOURCE = {
     "model": "http-get:/v1/models",
     "freshness": "http-date-header",
     "active_probe": "omes-endpoint-config",
+    "active_probe_tool_call": "omes-endpoint-config",
+    "active_probe_stream": "omes-endpoint-config",
 }
 
 
@@ -306,7 +344,8 @@ def _overall(layers: dict) -> str:
     if STATUS_UNKNOWN in statuses:
         return STATUS_UNKNOWN
     requested = layers["active_probe"].get("reason") != "active_probe_not_run"
-    required = _REQUIRED_PASS + (("active_probe",) if requested else ())
+    extras = tuple(name for name in EXTRA_LAYERS if name in layers)
+    required = _REQUIRED_PASS + (("active_probe",) if requested else ()) + extras
     if all(layers[name]["status"] == STATUS_PASS for name in required):
         return STATUS_PASS
     return STATUS_UNKNOWN  # defensive: a required layer is neither pass nor failing
@@ -314,6 +353,7 @@ def _overall(layers: dict) -> str:
 
 def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, checked_at: str, active_probe: bool = False, prompt_sent: bool = False) -> dict:
     status = _overall(layers)
+    order = LAYER_ORDER + tuple(name for name in EXTRA_LAYERS if name in layers)
     expires = _parse_iso(checked_at)
     result = {
         "target": "inference-endpoint",
@@ -328,7 +368,7 @@ def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, ch
             "max_age_seconds": MAX_AGE_SECONDS,
             "expires_at": _iso(expires + datetime.timedelta(seconds=MAX_AGE_SECONDS)) if expires else None,
         },
-        "layers": {name: layers[name] for name in LAYER_ORDER},
+        "layers": {name: layers[name] for name in order},
         "limits": {
             "allowed_probes": [f"{method} {path}" for method, path in endpoint_guard.ALLOWED_PROBES],
             "scope": scope,
@@ -347,6 +387,10 @@ def _finish(layers: dict, display: Optional[str], scope: str, timeout: float, ch
             "max_tokens": ACTIVE_PROBE_MAX_TOKENS,
             "max_response_bytes": ACTIVE_PROBE_MAX_RESPONSE_BYTES,
         }
+        if "active_probe_tool_call" in layers:
+            result["limits"]["active_probe"]["tool_call"] = {"requested": True, "tool": TOOL_PROBE_NAME, "max_tokens": TOOL_PROBE_MAX_TOKENS}
+        if "active_probe_stream" in layers:
+            result["limits"]["active_probe"]["stream"] = {"requested": True, "max_tokens": STREAM_PROBE_MAX_TOKENS, "max_events": STREAM_PROBE_MAX_EVENTS}
     return result
 
 
@@ -395,12 +439,179 @@ def _interpret_completion(resp: "pinned_http.Response") -> tuple:
     return STATUS_PASS, None, f"HTTP 200, well-formed completion ({chars} char(s), finish_reason={finish}); proves this fixture only", {"completion_chars": chars, "finish_reason": finish}
 
 
-def _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked_at) -> dict:
+def _tool_body(model_id: str) -> bytes:
+    """Fixed tool-call fixture: one constant harmless tool, no user data."""
+    return json.dumps(
+        {
+            "model": model_id,
+            "messages": [{"role": "user", "content": TOOL_PROBE_PROMPT}],
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": TOOL_PROBE_NAME,
+                        "description": "Fixed OMES health probe function. Echoes one constant value; nothing is executed.",
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"value": {"type": "string", "enum": [TOOL_PROBE_ARG_VALUE]}},
+                            "required": ["value"],
+                            "additionalProperties": False,
+                        },
+                    },
+                }
+            ],
+            "tool_choice": "auto",
+            "max_tokens": TOOL_PROBE_MAX_TOKENS,
+            "temperature": 0,
+            "stream": False,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _stream_body(model_id: str) -> bytes:
+    """Fixed streaming fixture: constant message, stream true, no tools."""
+    return json.dumps(
+        {
+            "model": model_id,
+            "messages": [{"role": "user", "content": STREAM_PROBE_PROMPT}],
+            "max_tokens": STREAM_PROBE_MAX_TOKENS,
+            "temperature": 0,
+            "stream": True,
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _non_200(resp: "pinned_http.Response") -> tuple:
+    status, reason, detail, _ = _interpret(resp)
+    if status == STATUS_PASS:  # defensive: only HTTP 200 can pass
+        status, reason = STATUS_FAIL, "unexpected_status"
+    return status, reason, detail, {}
+
+
+def _identity_encoding(resp: "pinned_http.Response") -> bool:
+    return (resp.content_encoding or "identity").strip().lower() in ("", "identity")
+
+
+def _interpret_tool_call(resp: "pinned_http.Response") -> tuple:
+    """Maps the tool probe response to (status, reason, detail, signals).
+    The tool arguments and any text never leave this function: only a call
+    count and an allowlisted finish reason are returned."""
+    if resp.status != 200:
+        return _non_200(resp)
+    if not _identity_encoding(resp):
+        return STATUS_FAIL, "active_probe_invalid_response", "HTTP 200 with a content encoding", {}
+    try:
+        doc = json.loads(resp.body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError, RecursionError):
+        return STATUS_FAIL, "malformed_json", "HTTP 200 but the body is not valid JSON", {}
+    choices = doc.get("choices") if isinstance(doc, dict) else None
+    first = choices[0] if isinstance(choices, list) and choices else None
+    message = first.get("message") if isinstance(first, dict) else None
+    if not isinstance(message, dict):
+        return STATUS_FAIL, "active_probe_invalid_response", "HTTP 200 but no valid chat completion", {}
+    calls = message.get("tool_calls")
+    if calls is None or calls == []:
+        return STATUS_FAIL, "tool_call_missing", "HTTP 200 but the response contains no tool call", {"tool_calls": 0}
+    if not isinstance(calls, list) or len(calls) > TOOL_PROBE_MAX_CALLS:
+        return STATUS_FAIL, "tool_call_invalid", "HTTP 200 but tool_calls is not a bounded list", {}
+    for call in calls:
+        function = call.get("function") if isinstance(call, dict) else None
+        if not isinstance(function, dict) or not isinstance(function.get("name"), str):
+            return STATUS_FAIL, "tool_call_invalid", "a tool call is malformed", {}
+        if function["name"] != TOOL_PROBE_NAME:
+            return STATUS_FAIL, "tool_call_wrong_name", "the model called a tool other than the fixed probe tool", {}
+        call_id = call.get("id")
+        arguments = function.get("arguments")
+        if call.get("type") != "function" or not isinstance(call_id, str) or not call_id or len(call_id) > TOOL_PROBE_MAX_ID_CHARS:
+            return STATUS_FAIL, "tool_call_invalid", "a tool call has no valid id or type", {}
+        if not isinstance(arguments, str) or len(arguments) > TOOL_PROBE_MAX_ARGUMENT_CHARS:
+            return STATUS_FAIL, "tool_call_invalid", "tool call arguments are not a bounded JSON string", {}
+        try:
+            parsed = json.loads(arguments)
+        except (ValueError, RecursionError):
+            return STATUS_FAIL, "tool_call_invalid", "tool call arguments are not valid JSON", {}
+        if not isinstance(parsed, dict) or set(parsed) != {"value"} or parsed["value"] != TOOL_PROBE_ARG_VALUE:
+            return STATUS_FAIL, "tool_call_invalid", "tool call arguments do not match the fixed schema", {}
+    finish = first.get("finish_reason")
+    finish = finish if finish in _FINISH_REASONS else "other"
+    return STATUS_PASS, None, f"HTTP 200, {len(calls)} well-formed call(s) of the fixed tool (finish_reason={finish}); proves this fixture only", {"tool_calls": len(calls), "finish_reason": finish}
+
+
+def _interpret_stream(resp: "pinned_http.Response") -> tuple:
+    """Maps the streaming probe response to (status, reason, detail,
+    signals). Streamed text is only counted, never returned."""
+    if resp.status != 200:
+        return _non_200(resp)
+    if not _identity_encoding(resp):
+        return STATUS_FAIL, "stream_malformed", "HTTP 200 with a content encoding", {}
+    media = (resp.content_type or "").split(";", 1)[0].strip().lower()
+    if media != "text/event-stream":
+        return STATUS_FAIL, "stream_not_sse", "HTTP 200 but the response is not text/event-stream", {}
+    try:
+        text = resp.body.decode("utf-8")
+    except UnicodeDecodeError:
+        return STATUS_FAIL, "stream_malformed", "the stream is not valid UTF-8", {}
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+    parts = text.split("\n\n")
+    tail = parts.pop()  # "" when the last event is properly terminated
+    chunks = 0
+    chars = 0
+    done = False
+    finish = None
+    events = 0
+    for event in parts + ([tail] if tail else []):
+        data_lines = []
+        for line in event.split("\n"):
+            if line.startswith(":") or not line:
+                continue
+            if not line.startswith("data:"):
+                return STATUS_FAIL, "stream_malformed", "the stream has a non-data field", {}
+            value = line[5:]
+            data_lines.append(value[1:] if value.startswith(" ") else value)
+        if not data_lines:
+            continue  # comment-only keep-alive event
+        events += 1
+        if events > STREAM_PROBE_MAX_EVENTS:
+            return STATUS_FAIL, "stream_too_long", "the stream exceeded the event bound", {}
+        if len(data_lines) != 1 or done:
+            return STATUS_FAIL, "stream_malformed", "unexpected data after the terminator or a multi-line event", {}
+        payload = data_lines[0]
+        if payload == STREAM_PROBE_DONE:
+            done = True
+            continue
+        try:
+            doc = json.loads(payload)
+        except (ValueError, RecursionError):
+            return STATUS_FAIL, "stream_malformed", "a stream chunk is not valid JSON", {}
+        choices = doc.get("choices") if isinstance(doc, dict) else None
+        first = choices[0] if isinstance(choices, list) and choices else None
+        delta = first.get("delta") if isinstance(first, dict) else None
+        if not isinstance(delta, dict):
+            return STATUS_FAIL, "stream_malformed", "a stream chunk is not an OpenAI-style delta", {}
+        content = delta.get("content")
+        if content is not None and not isinstance(content, str):
+            return STATUS_FAIL, "stream_malformed", "a stream chunk has non-text content", {}
+        chunks += 1
+        chars = min(chars + len(content or ""), 1_000_000)
+        if first.get("finish_reason") in _FINISH_REASONS:
+            finish = first["finish_reason"]
+    if chunks == 0:
+        return STATUS_FAIL, "stream_empty", "HTTP 200 but no data chunks", {"stream_chunks": 0}
+    if tail or not done:
+        return STATUS_FAIL, "stream_truncated", "the stream did not end with [DONE]", {"stream_chunks": chunks}
+    if chars == 0:
+        return STATUS_FAIL, "empty_completion", "HTTP 200 stream but the streamed completion is empty", {"stream_chunks": chunks, "completion_chars": 0}
+    return STATUS_PASS, None, f"HTTP 200, {chunks} well-formed SSE chunk(s) ending with [DONE] ({chars} char(s)); proves this fixture only", {"stream_chunks": chunks, "completion_chars": chars, "finish_reason": finish or "other"}
+
+
+def _run_post(name, body, interpret, accept, target, addresses, timeout, ssl_context, checked_at) -> dict:
     path = target.probe_path[: -len("/models")] + "/chat/completions"
     try:
         resp = pinned_http.request(
             method="POST",
-            body=_active_body(model_id),
+            body=body,
             scheme=target.scheme,
             host=target.host,
             host_header=target.host_header,
@@ -410,13 +621,18 @@ def _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked
             timeout=timeout,
             max_bytes=ACTIVE_PROBE_MAX_RESPONSE_BYTES,
             ssl_context=ssl_context,
+            accept=accept,
         )
     except pinned_http.ProbeError as exc:
         # Never pass on any transport/TLS/timeout failure; the reason is a
         # fixed code, never exception text.
-        return _layer("active_probe", exc.status, exc.reason, checked_at, "the synthetic probe did not complete")
-    status, reason, detail, signals = _interpret_completion(resp)
-    return _layer("active_probe", status, reason, checked_at, detail, signals=signals)
+        return _layer(name, exc.status, exc.reason, checked_at, "the synthetic probe did not complete")
+    status, reason, detail, signals = interpret(resp)
+    return _layer(name, status, reason, checked_at, detail, signals=signals)
+
+
+def _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked_at) -> dict:
+    return _run_post("active_probe", _active_body(model_id), _interpret_completion, "application/json", target, addresses, timeout, ssl_context, checked_at)
 
 
 def probe(
@@ -429,6 +645,8 @@ def probe(
     resolver: Optional[endpoint_guard.Resolver] = None,
     now: Clock = _utc_now,
     active_probe: bool = False,
+    probe_tool_call: bool = False,
+    probe_stream: bool = False,
 ) -> dict:
     """Runs the read-only evidence probe and returns the result object.
     Never raises for an operator-input problem; every outcome is a layer
@@ -438,6 +656,11 @@ def probe(
     display = endpoint_guard.redact_endpoint(endpoint) if endpoint else None
     layers: dict = {}
     sent = {"prompt": False}
+    # The capability probes are only ever additions to the active probe.
+    extras = {
+        "active_probe_tool_call": bool(active_probe and probe_tool_call),
+        "active_probe_stream": bool(active_probe and probe_stream),
+    }
 
     def finish(skip_reason: str) -> dict:
         for name in LAYER_ORDER:
@@ -448,6 +671,9 @@ def probe(
                 layers["active_probe"] = _layer("active_probe", STATUS_NOT_APPLICABLE, "skipped_prior_failure", None, "requested but not run: an earlier required layer did not pass", advise=False)
             else:
                 layers["active_probe"] = _layer("active_probe", STATUS_NOT_APPLICABLE, "active_probe_not_run", None, "opt-in; not requested (pass --active-probe to run)", advise=False)
+        for name in EXTRA_LAYERS:
+            if extras[name] and name not in layers:
+                layers[name] = _layer(name, STATUS_NOT_APPLICABLE, "skipped_prior_failure", None, "requested but not run: an earlier required layer did not pass", advise=False)
         return _finish(layers, display, scope if scope in endpoint_guard.SCOPES else "invalid", timeout, checked_at, active_probe, sent["prompt"])
 
     # ---- config -------------------------------------------------------
@@ -543,6 +769,12 @@ def probe(
             # ---- opt-in active synthetic probe (issue #354) ---------------
             sent["prompt"] = True
             layers["active_probe"] = _run_active_probe(target, model_id, addresses, timeout, ssl_context, checked_at)
+            # ---- opt-in capability probes: only after the plain probe passed
+            if layers["active_probe"]["status"] == STATUS_PASS:
+                if extras["active_probe_tool_call"]:
+                    layers["active_probe_tool_call"] = _run_post("active_probe_tool_call", _tool_body(model_id), _interpret_tool_call, "application/json", target, addresses, timeout, ssl_context, checked_at)
+                if extras["active_probe_stream"]:
+                    layers["active_probe_stream"] = _run_post("active_probe_stream", _stream_body(model_id), _interpret_stream, "text/event-stream", target, addresses, timeout, ssl_context, checked_at)
     else:
         layers["model"] = _layer("model", STATUS_FAIL, "model_missing", checked_at, f"model '{model_id}' is not advertised ({len(model_ids)} other id(s))")
     return finish("skipped_prior_failure")
@@ -601,7 +833,12 @@ def run(
     parser.add_argument("--ca-file", default=None)
     # Deliberately flag-only: no environment variable can enable the probe.
     parser.add_argument("--active-probe", action="store_true")
+    # Issue #354: extra opt-in capability probes, only valid with --active-probe.
+    parser.add_argument("--probe-tool-call", action="store_true")
+    parser.add_argument("--probe-stream", action="store_true")
     args = parser.parse_args(argv)
+    if (args.probe_tool_call or args.probe_stream) and not args.active_probe:
+        parser.error("--probe-tool-call and --probe-stream require --active-probe")
 
     return probe(
         args.endpoint if args.endpoint is not None else environ.get("OMES_INFERENCE_ENDPOINT", ""),
@@ -612,6 +849,8 @@ def run(
         resolver=resolver,
         now=now,
         active_probe=args.active_probe,
+        probe_tool_call=args.probe_tool_call,
+        probe_stream=args.probe_stream,
     )
 
 

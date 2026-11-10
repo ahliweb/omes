@@ -161,3 +161,34 @@ assert d["limits"]["prompt_sent"] is False
 '
   [ "$status" -eq 0 ]
 }
+
+@test "inference-endpoint --probe-tool-call/--probe-stream never send to a refused destination (issue #354)" {
+  omes_run_stdout_only "$OMES_BIN" health inference-endpoint --json --active-probe --probe-tool-call --probe-stream --endpoint http://169.254.169.254 --model m
+  [ "$status" -eq 7 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["ready"] is False
+assert d["layers"]["policy"]["reason"] == "metadata_address"
+assert d["layers"]["active_probe_tool_call"]["reason"] == "skipped_prior_failure"
+assert d["layers"]["active_probe_stream"]["reason"] == "skipped_prior_failure"
+assert d["limits"]["prompt_sent"] is False
+'
+  [ "$status" -eq 0 ]
+}
+
+@test "inference-endpoint capability probes require --active-probe and are absent by default (issue #354)" {
+  run "$OMES_BIN" health inference-endpoint --json --probe-tool-call --endpoint http://127.0.0.1:1 --model m
+  [ "$status" -eq 2 ]
+  run "$OMES_BIN" health inference-endpoint --json --probe-stream --endpoint http://127.0.0.1:1 --model m
+  [ "$status" -eq 2 ]
+  omes_run_stdout_only "$OMES_BIN" health inference-endpoint --json
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert "active_probe_tool_call" not in d["layers"] and "active_probe_stream" not in d["layers"]
+'
+  [ "$status" -eq 0 ]
+}
