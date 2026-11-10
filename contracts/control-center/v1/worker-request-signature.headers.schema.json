@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "contracts/control-center/v1/worker-request-signature.headers.schema.json",
+  "title": "worker-request-signature.headers",
+  "description": "The four X-OMES-* HTTP headers the pull worker adds to every poll, result and heartbeat POST (OMES-WORKER-SIG-V1, ADR-0027 section 6, issue #362), as a map from canonical header name to value. Transport metadata, not a JSON body. HTTP header names are case-insensitive on the wire; this map uses the canonical spelling the worker emits. The enrollment request carries none of these headers. Verification is Not implemented yet (tracked in #362).",
+  "type": "object",
+  "required": [
+    "X-OMES-Worker-Id",
+    "X-OMES-Timestamp",
+    "X-OMES-Nonce",
+    "X-OMES-Signature"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "X-OMES-Worker-Id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{1,128}$"
+    },
+    "X-OMES-Timestamp": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"
+    },
+    "X-OMES-Nonce": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9_.:-]{16,128}$"
+    },
+    "X-OMES-Signature": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]{85}[AQgw]==$"
+    }
+  }
+}

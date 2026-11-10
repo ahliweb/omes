@@ -72,6 +72,7 @@ Each has at least one valid and one invalid fixture under
 | Worker heartbeat response (issue #192, ADR-0027) | `worker-heartbeat.response.schema.json` | Control Center → OMES Worker |
 | Worker result request (issue #192, ADR-0027) | `worker-result.request.schema.json` | OMES Worker → Control Center |
 | Worker result response (issue #192, ADR-0027) | `worker-result.response.schema.json` | Control Center → OMES Worker |
+| Worker request signature headers (issue #362, ADR-0027 section 6) | `worker-request-signature.headers.schema.json` | OMES Worker → Control Center (HTTP headers, not a body) |
 | Hermes orchestration event (issue #183, ADR-0028) | `hermes-orchestration-event.schema.json` | Hermes Observer → OMES |
 | Hermes orchestration tree (issue #183, ADR-0028) | `hermes-orchestration-tree.schema.json` | OMES → Control Center |
 | Architecture capabilities view (issue #246, part 3) | `architecture-capabilities-view.schema.json` | OMES → Control Center |
