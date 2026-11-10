@@ -11,8 +11,8 @@
 // module docstring for exactly which fixtures feed which section.
 //
 // This is reference/prototype data for ui/control-center/index.html
-// (issue #211). The functional Control Center screens are NOT
-// implemented yet (tracked in #200/#201) - this file only feeds a static
+// (issue #211). The functional Control Center screens live in
+// ahliweb/awcms (#200/#201), not here - this file only feeds a static
 // UI/UX prototype.
 window.OMES_CC_DATA = {
   "audit": [

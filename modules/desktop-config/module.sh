@@ -243,7 +243,7 @@ module_verify() {
 }
 
 module_rollback() {
-  log_warn "desktop-config: rollback removes only the OMES-managed shell snippet and its ~/.bashrc marker block; installed hypr/waybar/foot config files are left in place - restore your previous versions with 'omes restore' (not implemented yet, tracked in #10) using the backups made before each write"
+  log_warn "desktop-config: rollback removes only the OMES-managed shell snippet and its ~/.bashrc marker block; installed hypr/waybar/foot config files are left in place - restore your previous versions with 'omes restore' using the backups made before each write"
 
   if omes_dry_run; then
     log_info "[dry-run] would remove $(_dc_shell_snippet_file) and the OMES marker block from ~/.bashrc"

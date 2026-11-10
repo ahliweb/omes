@@ -16,7 +16,7 @@ The OMES Control Panel redesign adds a **Progres Hermes** view: milestone name, 
 - No `contracts/control-center/v1/` schema covered milestone/issue progress before this ADR.
 - Issue #101 already defined the GitHub App installation, repository/environment mapping, webhook-envelope, and generic `github-provider-observation` contracts (`contracts/domains/v1/`) plus a stdlib HMAC-SHA256 webhook verifier (`lib/omes/py/domains/github.py`), but never a Control-Center-facing progress *view*, and never a decision on which system fetches the data.
 
-This ADR decides only the fetch path and the wire contract (`repository-progress-view.schema.json`) for that view. It does not implement the AWCMS-side polling job, screen, or database — see "AWCMS consumption expectations" below for what remains open, tracked in #249.
+This ADR decides only the fetch path and the wire contract (`repository-progress-view.schema.json`) for that view. It does not implement the AWCMS-side polling job, screen, or database — see "AWCMS consumption expectations" below. That AWCMS-side consumption has since shipped under #249 (closed); see [the Control Center release close-out](../control-center-release-closeout.md).
 
 ### Constraints
 
