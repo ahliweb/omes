@@ -43,8 +43,10 @@ value. Codes outside the namespace stay an open upper-snake-case set owned by
 the deciding authority. This module does not import the egress evaluator; a
 test keeps the schema list in sync with it.
 
-Not implemented yet (tracked in #358): any producer that emits these
-envelopes and any caller in the job runner, worker or AWCMS flows.
+Wired (#358): the OMES job store produces its own decisions and consumes the
+composed result at submit time (jobs/decisions.py, jobs/store.py). Not
+implemented yet (tracked in #358): AWCMS and Hermes emission and callers in
+the worker or AWCMS flows.
 """
 from __future__ import annotations
 

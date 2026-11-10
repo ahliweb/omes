@@ -132,6 +132,49 @@ destroying/overwriting current state.
 Every approval records the deciding `actor` in the audit log
 (`lib/omes/py/jobs/audit.py`'s `append(event="approved", ...)`).
 
+### 4.1 Policy decision envelopes (issue #358)
+
+`store.submit()` records the decisions OMES itself makes as
+`policy-decision` envelopes (`contracts/observability/v1/policy-decision.schema.json`,
+produced by `lib/omes/py/jobs/decisions.py`) and composes them with the
+existing pure composer (`observability.policy_decision.compose`) before a job
+is queued. This is not a second policy engine: the allowlist, tenant resolver
+and approval policy above remain the only sources of these facts.
+
+| Policy id | Decision | Reason code |
+|---|---|---|
+| `omes.jobs.allowlist` | allow / deny | `OPERATION_ALLOWLISTED` / `OPERATION_NOT_ALLOWLISTED` |
+| `omes.jobs.tenant_scope` | allow / deny | `TENANT_SCOPE_MATCH` / `TENANT_MISMATCH` / `TENANT_NOT_CONFIGURED` |
+| `omes.jobs.approval` | allow / approval_required | `APPROVAL_NOT_REQUIRED` / `APPROVAL_REQUIRED_DESTRUCTIVE_OPERATION` / `APPROVAL_REQUIRED_NOT_AUTO_APPROVED` |
+
+`approval_required` carries an opaque `approval_ref`
+(`omes:job-approval/<digest>`) that points at the existing `omes job approve`
+step. It is a reference only: OMES never creates or grants an approval here
+and runs no approval inbox. The `AI_EGRESS_*` codes are reserved for egress
+decisions and are never used.
+
+Consumption: `submit(..., external_decisions=[...], required_authorities=(...))`
+accepts decisions about the same tenant, correlation id and operation (for
+example from a fake provider in tests). Any `deny` wins. `unavailable`, stale
+or non-live evidence, a missing required authority, an invalid decision and a
+mixed tenant, correlation or action all fail closed (`PolicyUnavailableError`
+or `PolicyDeniedError`; nothing is written). An external decision claiming
+authority `omes` is rejected. `allow` and `approval_required` queue the job
+exactly as before; OMES's own denials still raise `TenantNotConfiguredError`,
+`CrossTenantError` or `ValidationFailedError` (tenant messages unchanged). The
+envelope `correlation_id` is the request's, prefixed `corr:` when shorter than
+the envelope's 8-character minimum.
+
+Evidence: a new job record has a bounded `policy` object (the composed
+result's closed fields and the three OMES envelopes) and the `submitted`
+audit line carries `detail.policy` (decision, reason code, policy id,
+approval refs). No free text and no secrets.
+
+Not implemented yet (tracked in #358): AWCMS and Hermes emitting the
+envelope, a field in `deployment.request.schema.json` that carries an
+external decision (it needs schema, fixtures and docs together), a re-check
+at `omes job run` time, and Mission Control reading the composed result.
+
 ## 5. Operation → command table
 
 `lib/omes/py/jobs/runner.py`'s `build_argv()` is the **only** place a
