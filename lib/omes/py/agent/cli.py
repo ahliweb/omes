@@ -346,7 +346,35 @@ def _doctor_one(name: str, omes_root: Path, timeout: float) -> Dict[str, Any]:
     entry["ready"] = bool(health_result.get("ready"))
     entry["connected"] = bool(health_result.get("connected"))
     entry["ok"] = entry["ready"]
+
+    drift = _doctor_isolation_drift(backend, plan, timeout)
+    entry["isolationDrift"] = drift
+    if drift["status"] in (isolation_drift.STATUS_DRIFT, isolation_drift.STATUS_UNKNOWN):
+        # Drift is at least a warning and unknown never reads as healthy:
+        # `ok` goes false (a WARN row, never an `error`/FAIL, and never a
+        # non-zero doctor exit - doctor stays a read-only report).
+        entry["ok"] = False
+        entry["warning"] = f"isolation drift {drift['status']}" + (f": {drift['reason']}" if drift.get("reason") else "")
     return entry
+
+
+def _doctor_isolation_drift(backend: str, plan: Dict[str, Any], timeout: float) -> Dict[str, Any]:
+    """Compact result of the read-only isolation-drift check (issue #276)
+    for `omes agent doctor`. `not_applicable` for non-compose backends
+    (never `ok`); any failure to run the check is `unknown`."""
+    if backend != "compose":
+        return {"status": "not_applicable", "reason": f"isolation drift is only checked for backend=compose (backend={backend})", "findings": []}
+    try:
+        result = isolation_drift.check(plan, timeout=timeout)
+    except Exception as exc:  # pragma: no cover - defensive: doctor must never crash the whole report  # nosec B110 - reported below
+        return {"status": isolation_drift.STATUS_UNKNOWN, "reason": f"isolation drift check failed: {exc}", "findings": []}
+    return {
+        "status": result["status"],
+        "container": result.get("container"),
+        "findings": result.get("findings", []),
+        "unverified": result.get("unverified", []),
+        "reason": result.get("reason"),
+    }
 
 
 def cmd_doctor(args: argparse.Namespace) -> int:
@@ -372,6 +400,8 @@ def cmd_doctor(args: argparse.Namespace) -> int:
         for r in results:
             status = "OK" if r.get("ok") else ("WARN" if "error" not in r else "FAIL")
             detail = r.get("error") or f"state={r.get('state')} ready={r.get('ready')} connected={r.get('connected')}"
+            if r.get("isolationDrift"):
+                detail += f" isolation={r['isolationDrift']['status']}"
             print(f"{r['name']}: {status} {detail}")
     return EX_OK
 

@@ -1191,6 +1191,16 @@ crashing the whole report. `--json` shape:
 {"agents": [{"name": "researcher", "state": "healthy", "backend": "systemd", "serviceMode": "user", "ok": true, "ready": true, "connected": true, "health": {"layers": {"...": "..."}}}], "ok": true}
 ```
 
+For `backend: "compose"` agents it also runs the read-only isolation-drift
+check (`omes agent isolation-drift`, `docs/agent-deployment.md` section 9.7)
+and adds `"isolationDrift": {"status", "container", "findings",
+"unverified", "reason"}` to the agent entry. `status` is `ok`, `drift`,
+`unknown` (daemon unreachable or inspect failed; never `ok`) or
+`not_applicable` (non-compose backend; never `ok`). `drift` and `unknown`
+set the agent's `ok` to `false` and add a `warning` field (a `WARN` row,
+not an error); the exit code stays `0`. A scheduled run is not implemented
+yet (tracked in #276).
+
 `omes doctor` (the top-level platform doctor, section 4.10) calls this
 automatically whenever `lib/omes/cmd/agent.sh` is present and at least
 one agent has been declared, adding one `agent:<name>` row per agent
