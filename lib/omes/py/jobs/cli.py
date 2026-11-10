@@ -80,6 +80,13 @@ def cmd_submit(args: argparse.Namespace) -> int:
         else:
             print(f"error: {exc}", file=sys.stderr)
         return EX_ERROR
+    except (store.ValidationFailedError, store.PolicyDeniedError, store.PolicyUnavailableError) as exc:
+        code = "policy_unavailable" if isinstance(exc, store.PolicyUnavailableError) else "policy_denied"
+        if args.json:
+            _print_json({"error": code, "reason": str(exc)})
+        else:
+            print(f"error: {exc}", file=sys.stderr)
+        return EX_ERROR
 
     if args.json:
         _print_json({**_job_summary(record), "replayed": replayed})

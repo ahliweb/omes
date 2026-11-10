@@ -14,9 +14,9 @@ import re
 import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
-from . import audit, correlation, paths
+from . import audit, correlation, decisions, paths
 
 SCHEMA_VERSION = 1
 
@@ -153,6 +153,26 @@ class TenantNotConfiguredError(CrossTenantError):
 
 class ValidationFailedError(JobsError):
     pass
+
+
+class PolicyDeniedError(JobsError):
+    """The composed policy decision is `deny` (issue #358). `reason_code`
+    is the closed winning code; the message never echoes request values."""
+
+    def __init__(self, reason_code: str, authority: str | None):
+        super().__init__(f"policy decision deny ({reason_code}) by {authority or 'unknown authority'}")
+        self.reason_code = reason_code
+        self.authority = authority
+
+
+class PolicyUnavailableError(JobsError):
+    """The composed policy decision is `unavailable` (stale or unknown
+    evidence, missing required authority, invalid or mixed-tenant decisions):
+    never treated as allow (issue #358, fail closed)."""
+
+    def __init__(self, reason_code: str):
+        super().__init__(f"policy decision unavailable ({reason_code}); failing closed")
+        self.reason_code = reason_code
 
 
 def now_iso() -> str:
@@ -373,12 +393,73 @@ def apply_transition(record: dict[str, Any], to_state: str, actor: str, note: st
 # ---------------------------------------------------------------------------
 
 
+def _enforce_policy(
+    request: dict[str, Any],
+    *,
+    enrolled_tenant_id: str | None,
+    external_decisions: Iterable[Any] | None,
+    required_authorities: Iterable[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The submit-time consumer (issue #358). Produces OMES's own decision
+    envelopes from the facts this module already decides, composes them with
+    `external_decisions` and raises on `deny` / `unavailable`. Returns
+    (record evidence, audit summary). Not a policy engine: it records and
+    composes; the allowlist, tenant resolver and approval policy above stay
+    the only sources of those facts."""
+    try:
+        tenant: str | None = resolve_local_tenant(enrolled_tenant_id)
+        tenant_message = ""
+    except TenantNotConfiguredError as exc:
+        tenant, tenant_message = None, str(exc)
+    try:
+        correlation.validate_inbound(request)
+    except correlation.CorrelationError as exc:
+        # A request that cannot be described by an envelope keeps the
+        # pre-#358 precedence: tenant scope first, then the correlation error.
+        if tenant is None:
+            raise TenantNotConfiguredError(tenant_message) from exc
+        if request["tenant_id"] != tenant:
+            raise CrossTenantError(
+                f"request tenant_id={request['tenant_id']!r} does not match local tenant {tenant!r}"
+            ) from exc
+        raise InvalidCorrelationError(str(exc)) from exc
+    now = datetime.now(timezone.utc)
+    omes = decisions.omes_decisions(
+        request,
+        operations=OPERATIONS,
+        local_tenant=tenant,
+        destructive=is_destructive(request["operation"]),
+        auto_approvable=can_auto_approve(request["operation"]),
+        now=now,
+    )
+    composed = decisions.evaluate(
+        omes, external_decisions, required_authorities=required_authorities, now=now
+    )
+    outcome = composed["decision"]
+    if outcome == "deny":
+        if composed["winning_authority"] == decisions.AUTHORITY:
+            by_reason = {d["reason_code"]: d for d in omes if d["decision"] == "deny"}
+            if decisions.REASON_TENANT_NOT_CONFIGURED in by_reason:
+                raise TenantNotConfiguredError(tenant_message)
+            if decisions.REASON_TENANT_MISMATCH in by_reason:
+                raise CrossTenantError(
+                    f"request tenant_id={request['tenant_id']!r} does not match local tenant {tenant!r}"
+                )
+            raise ValidationFailedError(f"operation {request['operation']!r} is not in the allowlist")
+        raise PolicyDeniedError(composed["winning_reason_code"], composed["winning_authority"])
+    if outcome == "unavailable":
+        raise PolicyUnavailableError(composed["winning_reason_code"])
+    return decisions.evidence_for_record(composed, omes), decisions.audit_detail(composed)
+
+
 def submit(
     request: dict[str, Any],
     root: Path | None = None,
     actor_for_audit: str | None = None,
     *,
     enrolled_tenant_id: str | None = None,
+    external_decisions: Iterable[Any] | None = None,
+    required_authorities: Iterable[str] = decisions.REQUIRED_AUTHORITIES,
 ) -> tuple[dict[str, Any], bool]:
     """Creates (or replays) a job for `request` (already schema-validated
     by the caller). Returns (record, replayed).
@@ -392,12 +473,25 @@ def submit(
     checks run before anything is written and before the idempotency
     replay lookup, so a rejected request leaves no job record, index
     entry, or audit line. OMES_JOBS_SERVER_ID stays optional: when unset
-    the target server is not checked."""
-    tenant = resolve_local_tenant(enrolled_tenant_id)
-    if request["tenant_id"] != tenant:
-        raise CrossTenantError(
-            f"request tenant_id={request['tenant_id']!r} does not match local tenant {tenant!r}"
-        )
+    the target server is not checked.
+
+    Policy decisions (issue #358): the operation allowlist, tenant scope and
+    approval requirement are recorded as policy-decision envelopes
+    (`decisions.omes_decisions`) and composed with `external_decisions`
+    (in-process, e.g. a fake provider) by the existing pure composer. A
+    composed `deny` raises (the existing TenantNotConfiguredError /
+    CrossTenantError for OMES's own tenant decision, ValidationFailedError
+    for the allowlist, else PolicyDeniedError); `unavailable` raises
+    PolicyUnavailableError. `allow` and `approval_required` queue the job
+    exactly as before (an approval-required job waits for `omes job
+    approve`). The new record carries the evidence as `policy` and the
+    `submitted` audit line a closed summary."""
+    policy_evidence, policy_audit = _enforce_policy(
+        request,
+        enrolled_tenant_id=enrolled_tenant_id,
+        external_decisions=external_decisions,
+        required_authorities=required_authorities,
+    )
     try:
         correlation.validate_inbound(request)
     except correlation.CorrelationError as exc:
@@ -423,6 +517,7 @@ def submit(
         return existing, True
 
     record = new_job_record(request)
+    record["policy"] = policy_evidence
     save_job(record, root)
     index = _load_idempotency_index(root)
     index[request["idempotency_key"]] = record["job_id"]
@@ -433,7 +528,7 @@ def submit(
         job_id=record["job_id"],
         event="submitted",
         to_state="queued",
-        detail={"operation": record["operation"], "target": record["target"]},
+        detail={"operation": record["operation"], "target": record["target"], "policy": policy_audit},
         ids=correlation.audit_fields(record),
     )
     return record, False
