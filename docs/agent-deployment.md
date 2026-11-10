@@ -487,7 +487,8 @@ automatically mounts `<state-dir>/agents/<name>/data` (dedicated) or
 to support in-container s6 supervision.
 
 `spec.compose.egress` (and `compose.egress` in RuntimeDeployment v2) selects
-the network egress mode: `"open"` (default when omitted) or `"none"`; see
+the network egress mode: `"open"` (default when omitted), `"none"` or the
+opt-in `"allowlist"` (with `egressAllowlist` and `egressProxyImage`); see
 section 9.6.
 
 `spec.compose.project` and `.network` default to `omes-agent-<name>` and
@@ -578,46 +579,125 @@ values - so a secret value never appears in the compose file, in
 
 ### 9.6 Per-deployment egress mode (issue #276)
 
-`spec.compose.egress` (v1) / `compose.egress` (v2) is an optional enum, `"open"`
-or `"none"`. It lives in the compose spec next to `network` (it configures that
-network), so it applies to both manifest versions; the v2 `security` object is
-host-systemd hardening and was deliberately not extended.
+`spec.compose.egress` (v1) / `compose.egress` (v2) is an optional enum:
+`"open"`, `"none"` or `"allowlist"`. It lives in the compose spec next to
+`network` (it configures that network), so it applies to both manifest versions;
+the v2 `security` object is host-systemd hardening and was deliberately not
+extended.
 
-| Value | Rendered network | Effect |
+| Value | Rendered topology | Effect |
 |---|---|---|
-| omitted or `"open"` | `driver: bridge`, `internal: false` | Unchanged from before #276: outbound access through the Docker bridge. This stays the default, so existing manifests re-render byte-identically; defaulting to `"none"` would break every existing deployment that needs a model provider, and there is no repository precedent for a breaking secure-by-default change here. |
-| `"none"` | `driver: bridge`, `internal: true` | Docker gives the network no route to the outside world: no external egress at all. |
+| omitted or `"open"` | agent on `driver: bridge`, `internal: false` | Unchanged from before #276: outbound access through the Docker bridge. This stays the default, so existing manifests re-render byte-identically; defaulting to `"none"` would break every existing deployment that needs a model provider, and there is no repository precedent for a breaking secure-by-default change here. |
+| `"none"` | agent on `driver: bridge`, `internal: true` | Docker gives the network no route to the outside world: no external egress at all. |
+| `"allowlist"` | agent only on an `internal: true` network; a proxy sidecar on that network and on a second, non-internal `<network>-egress` network | The agent has no direct route out; its `HTTP_PROXY`/`HTTPS_PROXY` (and lowercase variants) point at the sidecar, which permits only the declared hostnames. |
+
+#### `egress: "allowlist"` (opt-in)
+
+Additional fields (same compose object, both manifest versions):
+
+- `egressAllowlist`: non-empty list (at most 64) of hostnames.
+- `egressProxyImage`: the forward-proxy image, **operator-supplied and pinned by
+  digest** (`name@sha256:<64 hex>`). OMES ships no default proxy image and
+  invents no digest. A missing, tag-only or otherwise unpinned image is a
+  validation error (fail closed).
+
+Validation (`lib/omes/py/agent/compose.py`, `hostname_error`): hostnames only,
+lowercase RFC 1123 labels, at least two labels, at most 253 characters. Rejected:
+wildcards, IPv4/IPv6 literals (and ports/URLs), `localhost`, single-label names,
+`.local`, `.localhost` and `.internal` names, an empty list, duplicates. Matching
+is exact: `api.example.com` does not permit `www.api.example.com`; list each
+name. `allowlist` is also rejected in combination with published `ports` (the
+agent sits only on an internal network, where Docker does not publish host
+ports), with a shared topology (one allowlist would apply to every profile in the
+container; for v2 this includes the implicit `shared` of `isolationClass:
+"standard"`), and `egressAllowlist`/`egressProxyImage` are rejected unless
+`egress` is `"allowlist"`.
+
+Rendering (`render_compose_yaml`, still a single deterministic `compose.yaml`):
+
+```yaml
+services:
+  <agent>:
+    networks:
+      - "<network>"                       # internal: true, the only network
+    depends_on:
+      - "<agent>-egress-proxy"
+    environment:
+      HTTPS_PROXY: "http://<agent>-egress-proxy:8888"   # plus HTTP_PROXY, http_proxy, https_proxy
+      NO_PROXY: "localhost,127.0.0.1,::1"               # plus no_proxy
+  <agent>-egress-proxy:
+    image: "<egressProxyImage>"
+    user: "65534:65534"
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    networks:
+      - "<network>"
+      - "<network>-egress"
+networks:
+  <network>:
+    internal: true
+  <network>-egress:
+    internal: false
+```
+
+The sidecar publishes no ports, mounts no host path, reads no `env_file`, has a
+tmpfs for `/run` and `/tmp`, and has fixed small limits. Its configuration is
+rendered inline as two Compose top-level `configs:` entries (`content:`, which
+needs Docker Compose 2.23.1 or newer), so the compose file stays the only managed
+file and `apply`, re-apply (byte-identical output for the same manifest,
+independent of allowlist order) and `rollback` (restore of the previous compose
+file) behave exactly as for existing renders. The config holds hostnames only;
+no secret is ever rendered into it or into the agent `environment:`.
+
+Config dialect: the renderer (`render_proxy_config`, a pure function) emits
+**tinyproxy** configuration: `FilterDefaultDeny Yes`, `FilterURLs Off`,
+`ConnectPort 443`, `Filter "/etc/tinyproxy/allowlist.filter"`, and a filter file
+with one anchored, dot-escaped pattern per hostname (`^api\.example\.com$`),
+sorted. The sidecar starts with `tinyproxy -d -c /etc/tinyproxy/tinyproxy.conf`,
+so the operator's image must provide a `tinyproxy` binary at that path
+convention. OMES does not build, pull-test or vouch for that image.
 
 Exact behavior and limits:
 
-- `"none"` is all-or-nothing, Docker's `internal: true`. **There is no
-  per-destination allowlist.** An allowlist would need a proxy or firewall
-  layer plus capability detection; that is Not implemented yet (tracked in
-  [#276](https://github.com/ahliweb/omes/issues/276)), and unsupported values
-  such as `"allowlist"` are rejected rather than silently approximated.
+- `"none"` is all-or-nothing, Docker's `internal: true`, and cannot be combined
+  with `ports`.
 - `"none"` also cuts the container off from model providers and from any
   service on the host, including a host-loopback Ollama, so it only fits agents
   whose model and tools are reachable inside the container's own network. The
   `provider` health layer probes from inside the container and will report
-  `fail` for such an agent if `OMES_OLLAMA_ENABLED=1`.
-- `"none"` cannot be combined with `ports`: Docker does not publish host ports
-  for a container attached only to an internal network, so the manifest is
-  rejected (`spec.compose.egress`) instead of rendering a port mapping that does
-  nothing.
+  `fail` for such an agent if `OMES_OLLAMA_ENABLED=1`. `"allowlist"` has the same
+  property for anything not on the allowlist and not reachable through the proxy.
+- The allowlist is enforced by a proxy, so it only covers clients that honor the
+  proxy environment variables and speak HTTP/HTTPS; a process in the agent that
+  ignores them has no route out at all (the network is internal), it is not
+  silently allowed. CONNECT is limited to port 443.
 - All existing refusals are unchanged (rootless daemon required, no Docker
   socket, no `privileged`/host PID/host network, loopback-only ports,
   digest-pinned images, host paths under the agent's state directory).
 - This is a declaration that `apply` renders; it is not proven by a packet
   probe. `omes agent isolation-drift` (section 9.7) checks that the running
-  network's `Internal` flag matches it.
+  agent network's `Internal` flag matches it (for `"allowlist"` the agent network
+  must be internal); it does not yet inspect the sidecar or its network. Not
+  implemented yet (tracked in [#276](https://github.com/ahliweb/omes/issues/276)):
+  the drift extension for the sidecar, runtime egress probe, doctor/schedule
+  wiring, orphan cleanup, and a matrix job.
 - Only the compose backend has this option. The systemd backend's equivalent is
   the opt-in `hermes-restricted` module (`IPAddressDeny=any`).
+- Shim-tested only: the rendered tinyproxy config and compose structure are
+  asserted by unit tests and a golden file, never run against a real proxy image
+  or a real rootless daemon (see section 12).
 
-Fixtures: `valid-compose-egress-none.json` and `invalid-compose-egress-unknown.json`
+Fixtures: `valid-compose-egress-none.json`, `valid-compose-egress-allowlist.json`,
+`invalid-compose-egress-unknown.json` and the `invalid-compose-egress-allowlist-*.json`
+schema-level cases (wildcard, single-label, empty list, unpinned proxy image)
 under `contracts/agent/v1/fixtures/agent-deployment/` and
 `contracts/agent/v2/fixtures/runtime-deployment/`, plus
-`invalid-compose-egress-none-with-ports.json` under
-`contracts/agent/v1/fixtures-semantic/agent-deployment/`.
+`invalid-compose-egress-none-with-ports.json` and the
+`invalid-compose-egress-allowlist-*.json` semantic cases (ports, IP literal,
+duplicate, `.internal`, missing proxy image, list without `allowlist` mode)
+under `contracts/agent/v1/fixtures-semantic/agent-deployment/`. The rendered
+sidecar golden is `tests/py/agent/golden/compose-egress-allowlist-sidecar.yaml`.
 
 ### 9.7 Declared-versus-running isolation drift check (issue #276)
 
@@ -720,7 +800,7 @@ Docker's default is the expectation.
 | devices | none, never rendered | Container engine | `devices` (any mapping is drift) | `DeviceCgroupRules`, `DeviceRequests` |
 | IPC namespace | default `private` (nothing rendered) | Container engine / kernel | `ipcMode` (`host`, `container:*`, `shareable`, `none` are drift) | none beyond real-daemon evidence |
 | privileged / host PID / host network | impossible to declare (schema and `validate_compose_spec` refuse) | OMES validation, then the engine | `privileged`, `pidMode`, `networkMode` | real-daemon evidence |
-| egress | `egress: "open"` (default) or `"none"` (`internal: true`) | Container engine network (Docker `internal`) | `network.internal`, `network.attached` | per-destination allowlist, runtime egress probe |
+| egress | `egress: "open"` (default), `"none"` (`internal: true`) or `"allowlist"` (agent on an `internal: true` network plus a proxy sidecar, section 9.6) | Container engine network (Docker `internal`) | `network.internal`, `network.attached` (agent container only) | sidecar and egress-network drift, runtime egress probe |
 
 For the systemd backend the equivalent controls are the hardening profile units
 and, for egress, the opt-in `hermes-restricted` module
@@ -731,7 +811,8 @@ not inspected.
 Limits (Not implemented yet, tracked in
 [#276](https://github.com/ahliweb/omes/issues/276)): the check proves the
 configuration the container engine holds, not runtime behavior (no egress packet
-probe); there is no per-destination allowlist to verify; cleanup and retention
+probe); the proxy sidecar of `egress: "allowlist"` and its network are not
+inspected; cleanup and retention
 of orphaned compose projects, containers and networks is not implemented; it is
 not wired into `omes agent doctor` or any scheduled job; and it has been
 exercised only against the Docker shim, never a real rootless daemon (see
@@ -817,13 +898,14 @@ section 9.4/7a above rather than here.
   daemon. Real-host verification for both backends is tracked as
   follow-up (see the PR body).
 - **Compose backend (#276) - real-daemon evidence and egress allowlist**:
-  `omes agent isolation-drift` and `egress: "none"` are tested only against
+  `omes agent isolation-drift`, `egress: "none"` and the `egress: "allowlist"`
+  rendering are tested only against
   `tests/shims/docker`; there is no run against a real rootless daemon, so the
   `docker inspect` field names (including `CapAdd`, `SecurityOpt`, `Devices` and
   `IpcMode`) are asserted from Docker's documented output, not observed live (Not implemented yet, tracked in
-  [#276](https://github.com/ahliweb/omes/issues/276)). A per-destination egress
-  allowlist and a runtime egress probe are likewise Not implemented yet (tracked
-  in #276).
+  [#276](https://github.com/ahliweb/omes/issues/276)). A runtime egress probe,
+  the drift extension for the allowlist sidecar and a real proxy image run are
+  likewise Not implemented yet (tracked in #276).
 - **Compatibility recording** (#83) and a dedicated **provenance**
   issue (#84) are referenced by `provenance.collect()` but not
   otherwise integrated here.
