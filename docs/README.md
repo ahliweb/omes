@@ -51,6 +51,7 @@ Grouped index of every document in this repository. See the top-level
 | [ai-data-privacy-and-model-security.md](ai-data-privacy-and-model-security.md) | AI data classification, local/private vs cloud-model boundary, model egress rules, RAG/embedding privacy, and governance references. |
 | [ai-inference-serving-architecture.md](ai-inference-serving-architecture.md) | Inference-serving boundary and deployment-readiness blueprint (#291): OMES is not an inference gateway or model router; vLLM and Kubernetes/OpenShift remain deferred. |
 | [multi-agent-control-patterns.md](multi-agent-control-patterns.md) | Octop-inspired multi-agent control patterns: gap analysis, authority decision matrix and child issues #270–#277 for epic #269 (ADR-0032). |
+| [fastplaz-concepts.md](fastplaz-concepts.md) | **Concept classification only (#393):** FastPlaz Agent Plane patterns (IDE context, MCP/ACP mediation, wizards, diagnostics, reference resources, standalone deployment) classified DELEGATE/ADAPT/REJECT under OMES/Hermes authority, source and license status, verification scenarios, license gate; no source reuse, no ACP/MCP gateway. |
 | [threat-model.md](threat-model.md) | Trust boundaries, assets, the full STRIDE threat table and mitigations. |
 | [compatibility-matrix.md](compatibility-matrix.md) | Supported OS/hardware matrix, tiers, detection contract. |
 | [scope.md](scope.md) | What OMES is and is not, non-goals, the destructive-operation policy. |
