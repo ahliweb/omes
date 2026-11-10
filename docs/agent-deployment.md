@@ -644,7 +644,10 @@ networks:
 The sidecar publishes no ports, mounts no host path, reads no `env_file`, has a
 tmpfs for `/run` and `/tmp`, and has fixed small limits. Its configuration is
 rendered inline as two Compose top-level `configs:` entries (`content:`, which
-needs Docker Compose 2.23.1 or newer), so the compose file stays the only managed
+needs Docker Compose 2.23.1 or newer; the compose preflight does not check the
+Compose version yet, so an older Compose rejects the file at apply time and the
+render is rolled back — a preflight version check is Not implemented yet (tracked
+in #276)), so the compose file stays the only managed
 file and `apply`, re-apply (byte-identical output for the same manifest,
 independent of allowlist order) and `rollback` (restore of the previous compose
 file) behave exactly as for existing renders. The config holds hostnames only;
