@@ -177,6 +177,7 @@ check-links|lint.yml|check-links|fast|blocking|generic|python3||python3 scripts/
 check-contracts|lint.yml|check-contracts|fast|blocking|generic|python3||python3 scripts/check-contracts.py
 check-architecture|lint.yml|check-architecture|fast|blocking|generic|python3||python3 scripts/check-architecture.py
 check-control-center-data|lint.yml|check-control-center-data|fast|blocking|generic|python3||python3 scripts/generate-control-center-data.py --check
+check-worker-compat-manifest|lint.yml|check-worker-compat-manifest|fast|blocking|generic|python3||python3 scripts/generate-worker-compat-manifest.py --check
 validate-change-fragments|lint.yml|validate-change-fragments|fast|blocking|generic|none||scripts/release.sh --validate-fragments
 matrix|compatibility.yml|matrix|full|per-image|custom|-||scripts/test-matrix.sh (OMES_MATRIX_IMAGES=<image>)
 real-install-ubuntu-26-04|compatibility.yml|real-install-ubuntu-26-04|full|blocking|custom|-||scripts/test-matrix.sh (images and scenarios from the workflow)

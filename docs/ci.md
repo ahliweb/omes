@@ -86,6 +86,7 @@ action above).
 | `check-contracts` | Runs `scripts/check-contracts.py` over `contracts/**/fixtures` against their JSON Schema specifications. | **Yes.** |
 | `check-architecture` | Runs `scripts/check-architecture.py` to enforce ADR-0017 capability registry and layer boundaries. | **Yes.** |
 | `check-control-center-data` | Runs `scripts/generate-control-center-data.py --check` to catch a stale `ui/control-center/data.js` (issue #211) — see [ui/control-center/README.md](../ui/control-center/README.md). | **Yes.** |
+| `check-worker-compat-manifest` | Runs `scripts/generate-worker-compat-manifest.py --check` (issue #352): regenerates the unreleased worker compatibility manifest from repository facts, validates it against its schema, recomputes the contract digest, checks deterministic output and that the reference consumer rejects an unreleased manifest. Offline, stdlib only, no wall-clock; see [worker-compatibility-manifest.md](worker-compatibility-manifest.md). | **Yes.** |
 | `validate-change-fragments` | Runs `scripts/release.sh --validate-fragments` (issue #238) to reject a malformed `changes/*.md` fragment on the pull request that introduces it, using the exact same parser `scripts/release.sh` uses to compile `CHANGELOG.md` at release time — see §9. | **Yes.** |
 
 
@@ -572,6 +573,7 @@ they run only on demand and never gate anything.
 | `lint.yml` `check-contracts` | `check-contracts` | `python3 scripts/check-contracts.py` | **yes** | fast |
 | `lint.yml` `check-architecture` | `check-architecture` | `python3 scripts/check-architecture.py` | **yes** | fast |
 | `lint.yml` `check-control-center-data` | `check-control-center-data` | `python3 scripts/generate-control-center-data.py --check` | **yes** | fast |
+| `lint.yml` `check-worker-compat-manifest` | `check-worker-compat-manifest` | `python3 scripts/generate-worker-compat-manifest.py --check` | **yes** | fast |
 | `lint.yml` `validate-change-fragments` | `validate-change-fragments` | `scripts/release.sh --validate-fragments` | **yes** | fast |
 | (none; runner-owned) | `workflow-sync` | the drift guard of §10.8 | **yes** | fast |
 | `compatibility.yml` `matrix` | `matrix:<image>` per `include` row | `scripts/test-matrix.sh` with `OMES_MATRIX_IMAGES=<image>`; image list, tier and `advisory` read from the workflow | tier 1 **yes**; `ubuntu:22.04` (tier 2) advisory | full |
