@@ -151,7 +151,7 @@ Key properties:
 - **Observer Hook Ingestion**: Collects read-only events from `hermes.observer.v1` (`subagent_start`, `subagent_stop`, `subagent_step`) and validates against `contracts/control-center/v1/hermes-orchestration-event.schema.json`.
 - **Hierarchical Process Trees**: Assembles nested parent-child hierarchies from opaque correlation IDs (`session_id`, `parent_subagent_id`, `subagent_id`).
 - **Privacy & Sanitization**: Prohibits chain-of-thought, raw prompts, full transcripts, shell commands, or credentials. Binds goals and summaries to 512 characters with HTML escaping.
-- **Freshness & Staleness**: The tree reports `freshness: stale` when an active subagent has not been observed for more than 300 seconds (there is no per-node `STALE` state yet; tracked in [#271](https://github.com/ahliweb/omes/issues/271)).
+- **Freshness & Staleness**: The tree reports `freshness: stale` when an active subagent has not been observed for more than 300 seconds (a per-node `STALE` state is **not planned**: owner decision 2026-11-10, #387; ADR-0028's implementation note records that only tree-level freshness exists, and Hermes `UNKNOWN` is consumed as terminal non-success).
 
 ## 5. Domain provider abstraction
 
@@ -471,7 +471,7 @@ All of the following, previously deferred, have shipped and are removed from thi
 Genuinely still deferred:
 
 - Enforcing stale-target, decommissioned-target, and unverified-backup conditions in the canonical operation, job, and backup-restore endpoints — a possible follow-up **proposal**, not tracked by a numbered issue. Mission Control shows these conditions as non-blocking advisories because the canonical endpoints do not enforce them today ([release close-out §6.2.1](control-center-release-closeout.md#621-source-action-matrix)).
-- Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
+- Live Cloudflare, SRS-X, and GitHub provider clients — Not implemented yet (tracked in #396; #99–#101 are closed); only contracts, capability profiles as data, and fake-provider tests exist here.
 - The `github_webhook` source, per-tenant distinct credentials, and GitHub App installation tokens for the repository-progress projection — deferred per ADR-0030, not tracked by a numbered issue.
 
 ## 12. Related documents

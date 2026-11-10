@@ -149,10 +149,9 @@ define how (if at all) OMES surfaces or validates it.
 handled upstream via `graphify hook install` (git post-commit/post-checkout
 hooks), and the installed `graphify` package itself is upgraded via `uv
 tool upgrade graphifyy` / `pipx upgrade graphifyy` — an OMES-module-managed
-concern (#50), not a graphify CLI flag. How OMES/Hermes trigger re-runs is
-explicitly **not implemented yet (tracked in #51)**; the current
-expectation is re-invoking `extract` on demand, not running a watch daemon,
-but that is a design note for #51 to confirm, not a decision this PR makes.
+concern (#50), not a graphify CLI flag. An OMES/Hermes trigger for re-runs
+is **not planned** (owner decision 2026-11-10, #387; #51 is closed): re-run
+`extract` on demand. A watch daemon is out of scope.
 
 ## §2 Installation module
 

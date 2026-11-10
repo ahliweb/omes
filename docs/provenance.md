@@ -287,7 +287,7 @@ is required to execute an unmapped baseline without verification, recording prov
   manager itself reports (`dpkg-query`, `apt-cache policy`, `uv tool
   list`, `pipx list --json`) — never a re-verification against the
   upstream registry. npm-managed component provenance is **not
-  implemented yet** (tracked in #84's remaining scope, if ever needed).
+  planned** (owner decision 2026-11-10, #387; #84 is closed).
 - It is not a replacement for `scripts/check-supply-chain.sh` (CI-time
   checks) or `docs/security.md` §6's supply-chain rules — it is a
   runtime, host-side, diagnostic layer on top of them.
