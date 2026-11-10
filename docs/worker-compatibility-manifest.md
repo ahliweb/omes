@@ -48,7 +48,7 @@ python3 scripts/generate-worker-compat-manifest.py --verify worker-compatibility
   --consumer-contract-version 1.0.0 --consumer-contract-digest sha256:<pinned digest>
 ```
 
-Output is deterministic (sorted keys, no wall-clock value). A stable manifest must be generated from the tagged checkout, so the digests describe the contract bytes of that tag. `--check` is not yet wired into `scripts/ci-local.sh` or `scripts/lint.sh`; see the change fragment for the exact line to add.
+Output is deterministic (sorted keys, no wall-clock value). A stable manifest must be generated from the tagged checkout, so the digests describe the contract bytes of that tag. `--check` runs as the blocking `check-worker-compat-manifest` job in `scripts/ci-local.sh` and the `lint.yml` workflow (see [ci.md](ci.md)); it is not part of `scripts/lint.sh`.
 
 ## 4. Consumer rules (AWCMS and OMES-Web)
 
