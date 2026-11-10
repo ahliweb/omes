@@ -102,3 +102,7 @@ flowchart TD
     Operate --> Design[Design and security]
     Design --> Business[Business]
 ```
+
+## CarikBot conversation architecture reference (research only)
+
+[CarikBot concept evaluation](carikbot-conversation-reference.md) and [Bahasa Indonesia](carikbot-conversation-reference.id.md) document flow/menu/form ideas, current-versus-proposed status, provider boundaries, privacy risks, tests and cross-repository ownership. No chatbot engine or production API is added by this documentation.
