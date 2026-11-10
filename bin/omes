@@ -1114,6 +1114,8 @@ for a in data.get("agents", []):
     error = a.get("error")
     level = "OK" if ok else "WARN"
     detail = error or "state={} ready={} connected={}".format(state, ready, connected)
+    if a.get("warning"):
+        detail += " ({})".format(a["warning"])
     print("{}\t{}\t{}".format(level, name, detail))
 ' 2>/dev/null)"
         if [[ -n "$agent_rows" ]]; then

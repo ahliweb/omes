@@ -733,7 +733,9 @@ Limits (Not implemented yet, tracked in
 configuration the container engine holds, not runtime behavior (no egress packet
 probe); there is no per-destination allowlist to verify; cleanup and retention
 of orphaned compose projects, containers and networks is not implemented; it is
-not wired into `omes agent doctor` or any scheduled job; and it has been
+not run by any scheduled job (a timer is not implemented yet, tracked in
+[#276](https://github.com/ahliweb/omes/issues/276); `omes agent doctor` runs
+it on demand, section 11.1); and it has been
 exercised only against the Docker shim, never a real rootless daemon (see
 section 12). The new hardening fields are asserted from Docker's documented
 `docker inspect` output, not observed live.
@@ -775,6 +777,29 @@ sections for the exact schema, and
 [`tests/py/agent/test_cli.py`](../tests/py/agent/test_cli.py) /
 [`tests/integration/agent.bats`](../tests/integration/agent.bats) for the
 tests.
+
+For `backend: "compose"` agents, `omes agent doctor` also runs the
+read-only isolation-drift check of section 9.7 (the same
+`isolation_drift.check`, the same two fixed-argv `docker inspect` calls,
+the same `OMES_HEALTH_TIMEOUT` bound; nothing is mutated) and adds an
+`isolationDrift` object to each agent entry:
+
+```json
+{"status": "ok", "container": "omes-agent-researcher", "findings": [], "unverified": [], "reason": null}
+```
+
+`status` is `ok`, `drift`, `unknown` (daemon unreachable, container absent
+or stopped, inspect failed or malformed, or a field not observed; never
+reported as `ok`) or `not_applicable` (non-compose backend, where the check
+is not implemented; never reported as `ok`). Effect on the report: `ok` and
+`not_applicable` leave the agent's `ok` as health decided it; `drift` and
+`unknown` set the agent's `ok` to `false` and add a `warning` field (never
+an `error`), so the row reads `WARN` and the top-level `omes doctor` row is a
+`WARN` that names the drift status. The process exit code is unchanged:
+`omes agent doctor` always exits `0`; read `agents[].isolationDrift.status`
+(or run `omes agent isolation-drift`, which exits `7` for `drift` and
+`unknown`) to act on it. Agents with no drift behave exactly as before. A
+scheduled run is not implemented yet (tracked in #276).
 
 This intentionally does **not** detect "manifest edited since last
 apply" drift - see section 12.
@@ -856,6 +881,7 @@ section 9.4/7a above rather than here.
   last `apply` (i.e. "declared spec no longer matches what is running").
   For compose agents, `omes agent isolation-drift` (section 9.7, issue
   #276) now compares the declared isolation posture with the running
-  container on demand; it is not run by `omes agent doctor`, and
+  container on demand; `omes agent doctor` runs it for compose agents
+  (section 11.1) but no timer does, and
   manifest-versus-last-applied drift for the systemd backend (and for
   compose fields other than isolation) is still not implemented.
