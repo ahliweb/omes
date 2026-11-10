@@ -11,7 +11,8 @@
 > Everything in this document describes the actual, implemented behavior of the `omes` CLI
 > (`bin/omes`, `lib/omes/detect.sh`, `lib/omes/pkg.sh`) — detection, tiering, and preflight
 > are all live code, not a design contract awaiting implementation. Tiers are re-evaluated
-> periodically — see [8. Re-evaluation cadence](#8-re-evaluation-cadence).
+> periodically — see [8. Re-evaluation cadence](#8-re-evaluation-cadence). Runtime and dependency
+> status (Hermes, Python, Bun, Playwright) is in [9. Dependency and runtime compatibility status](#9-dependency-and-runtime-compatibility-status-issue-347).
 
 ## 1. Support tiers
 
@@ -297,6 +298,77 @@ change) on each of the following triggers, whichever comes first:
   at least one tier in the same PR that acknowledges the EOL date;
 - a Tier 2 platform accumulates repeated periodic-test failures — downgraded to Tier 3
   pending investigation.
+
+## 9. Dependency and runtime compatibility status (issue #347)
+
+> Scope (issue #347): OMES is a Python/Bash/systemd host platform plus Hermes Agent
+> integration. It is not an AWCMS Bun app worker, the signed outbound HTTPS pull-worker
+> transport ([ADR-0027](adr/0027-control-center-pull-worker-transport.md)) is unchanged, and no
+> OMES Python is rewritten to Bun. This section records what the repository itself pins or
+> declares. A newer upstream release is a **candidate**, never automatically supported on every
+> distro in [section 2](#2-os-matrix). Last reviewed against repository state: 2026-11-10.
+
+### 9.1 Current status matrix
+
+"Latest available" is deliberately not recorded here: it is network data that goes stale, and
+the only automation that observes it is the drift report in [9.3](#93-recurring-review-process).
+Where the repository does not pin a value, the cell says so instead of guessing.
+
+| Component | Supported / pinned in this repo | Source of the value | Status |
+|---|---|---|---|
+| Hermes Agent | `v2026.9.24` (v0.21.5); installer SHA-256 pinned, unmapped baselines fail closed unless an operator digest or explicit unsafe override is set | `HERMES_BASELINE_VERSION` in `lib/omes/versions.sh`; `supported_baseline` of `hermes.agent.reasoning` in `architecture/capabilities.json` | Supported baseline |
+| Ubuntu Server 26.04 / 24.04 (amd64) | Tier 1 | [2.1](#21-server-profile); `.github/workflows/compatibility.yml` matrix | Supported, CI container tested |
+| Ubuntu Server 22.04 (amd64) | Tier 2 | [2.1](#21-server-profile); `.github/workflows/compatibility.yml` | Best effort, advisory CI |
+| Linux Mint 22.x (amd64, desktop) | Tier 1 (desktop) | [2.2](#22-desktop-profile); `linuxmintd/mint22-amd64` image in `scripts/test-matrix.sh` | Supported, CI container tested |
+| Ubuntu Desktop, arm64, other distros | Tier 2 / Tier 3 / Unsupported per [section 2](#2-os-matrix) | [section 2](#2-os-matrix) | As documented |
+| Python (system `python3` per OS) | No minimum version is declared or enforced: no `pyproject.toml`, `requirements*` or `.python-version` exists, and `omes check` only requires `python3` to be present ([5.1](#51-server-profile)). The interpreter version is recorded at runtime as the `python3` component of `omes health versions`. | `docs/compatibility-evidence.md` section 1; `lib/omes/py/provenance/versions.py` | **UNVERIFIED** per OS (the Python shipped by each Ubuntu/Mint release is not stated or tested anywhere in the repo) |
+| Python for Graphify | Graphify `0.9.87` verified in a fresh Python 3.11 venv only (not a statement about system Python) | `docs/graphify.md`; `docs/graphify-privacy.md`; ADR-0025 | Verified for that combination only |
+| Bash / systemd | Required by preflight (`systemd` as PID 1, `bash`); no minimum version declared | [5.1](#51-server-profile) | **UNVERIFIED** minimum versions |
+| Bun for OMES UI tooling | No Bun manifest exists in this repo: no `package.json`, `bun.lock` or `.bun-version`. `ui/control-center` and `design/control-center-v3` are static files served with `python3 -m http.server`. | `ui/control-center/README.md`; `design/control-center-v3/README.md` | Not applicable now. If a `dc-runtime` or other Bun manifest is added, its own manifest becomes the source of truth and this row must be updated in that PR |
+| Bun in AWCMS (out of this repo) | Mentioned as "Bun 1.4.4" in design text and "1.3.0 floor" in a closeout note; not pinned or verifiable here | `docs/control-center-ai-ux-contract.md`; `docs/control-center-release-closeout.md` | **UNVERIFIED** from this repo; owned by AWCMS |
+| Playwright SDK / Playwright MCP | Not pinned by OMES or Hermes; releases recorded as candidates only | `docs/browser-transfer-compatibility-matrix.md` section 3 | Candidate, not supported |
+| Chromium used by Hermes | Resolved at Hermes install time | `docs/browser-transfer-compatibility-matrix.md` section 3 | **UNVERIFIED** |
+| Docker / container images | CI uses `ubuntu:26.04`, `ubuntu:24.04`, `ubuntu:22.04`, `linuxmintd/mint22-amd64`; Docker client version only recorded at runtime | `.github/workflows/compatibility.yml`; `scripts/test-matrix.sh` | CI images pinned by tag only |
+| Ollama | No pin | `docs/browser-transfer-compatibility-matrix.md` section 3 | **UNVERIFIED** |
+| GitHub Actions | SHA-pinned; Dependabot `github-actions` ecosystem, weekly | `.github/dependabot.yml`; `docs/ci.md` section 6 | Automated |
+
+The columns "latest available" and "installed" per host are runtime evidence, not repository
+facts: use `omes health versions` ([compatibility-evidence.md](compatibility-evidence.md)) for
+installed values. A fleet-wide "installed vs latest supported vs held back" view is described as
+a Control Center design contract in `docs/control-center-ai-ux-contract.md` and is **Not
+implemented yet (tracked in #347)** as a maintained data source.
+
+### 9.2 Holdbacks and risk register
+
+| Item | Holdback or risk | Decision record |
+|---|---|---|
+| Hermes releases newer than `v2026.9.24` | Not supported until verified against the surface OMES uses; the drift report surfaces them as candidates | ADR-0026; `architecture/capabilities.json` |
+| Playwright / Playwright MCP | Candidates only; pin choice belongs to the browser-transfer work | `docs/browser-transfer-compatibility-matrix.md` |
+| Graphify releases newer than `0.9.87` | Candidates until re-verified | ADR-0025 |
+| Latest-published runtimes on older distros | A latest release is not assumed compatible with Ubuntu 22.04 or Mint 22; each needs a compatibility audit | this section |
+
+### 9.3 Recurring review process
+
+| Aspect | Definition |
+|---|---|
+| Cadence | Weekly review as requested in #347, plus the event triggers in [8](#8-re-evaluation-cadence). The weekly cadence is a manual commitment. **No scheduled automation exists**: `upstream-drift.yml` is manual-only since issue #312 and Dependabot covers only GitHub Actions. |
+| Owner | The repository owner or a maintainer they delegate. Not implemented yet (tracked in #347): no named rotation or calendar commitment is recorded. |
+| Inputs | (1) `scripts/ci-local.sh --job upstream-drift` (report only, never writes to GitHub) or `gh workflow run upstream-drift.yml --ref main` (creates or updates the deduplicated tracking issue), covering Hermes, Omarchy, Graphify and Coolify per ADR-0026; (2) Dependabot pull requests for GitHub Actions; (3) `omes health versions` output from representative hosts; (4) distribution release-cycle pages named in [8](#8-re-evaluation-cadence). |
+| Steps | Compare each input to the matrix in [9.1](#91-current-status-matrix); for each difference record latest available, supported, installed, holdback and risk; do not upgrade blindly. |
+| Outputs | A matrix update PR when a value changes, and one issue per verified gap (one atomic change each, with isolation, security tests, backup/rollback and provenance notes per #347). Issues are opened by the owner or an authorized maintainer. |
+| Not covered by existing automation | Python, Bash and systemd versions per distro, Bun, Playwright, Docker images and Ollama are not checked by any script. Not implemented yet (tracked in #347). |
+| Constraints | No third-party production credentials, no inbound privileged WebSocket listener, no Node campaign server, no second agent runtime. |
+
+### 9.4 Remaining work for #347
+
+Not done by this documentation change and still open:
+
+- Owner decision on the weekly cadence owner and schedule.
+- Opening issues for the verified gaps (per-OS Python and Bash/systemd minimums, Bun policy
+  if a UI manifest is added, Playwright and Ollama pins).
+- Tests for supported host profiles that assert the matrix against code (for example Python
+  version per distro image).
+- Automated detection of drift for runtimes other than the four upstream projects.
 
 <!-- OMES-MERMAID: docs/compatibility-matrix.md -->
 
