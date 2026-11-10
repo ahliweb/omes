@@ -709,9 +709,29 @@ exposed. `hermes acp --check` is not used because its output format is undocumen
 `session_exposure` is always `unknown`: whether an ACP session is live, or reachable through a bridge
 (some bridges auto-approve `allow_once`), is not observable through any supported Hermes interface.
 
+**Hardening and egress profile** (issue [#357](https://github.com/ahliweb/omes/issues/357), PR
+[#364](https://github.com/ahliweb/omes/pull/364)): the `profile` block reports what the OMES state file
+*records* for `module.hermes-gateway.hardening_profile` (`conservative`, `strict` or `off`) and
+`module.hermes-restricted.network_policy` (`deny_by_default`). It is read-only and runs no extra command;
+no Hermes file is read. These are recorded intent, not live unit state. Each item is `present`,
+`not_present` (hardening recorded `off`) or `unknown` with a bounded reason (`not_recorded`,
+`out_of_range`, `state_file_missing`, `state_unreadable`, `output_too_large`). An absent key or an
+unrecognised value is `unknown`, is not echoed, and is never reported as `ok` or safe. `profile.status` is
+`ok` only when both items are present, `warn` when hardening is recorded off, otherwise `unknown`; unknown
+profile evidence does not change the top-level exit code. Findings: `acp.hardening_profile_present|not_present|unknown`
+and `acp.egress_profile_present|not_present|unknown` (info; `not_present` is `warn` when the ACP tool surface
+includes execution), and `acp.allow_always_discouraged` (info, always: do not choose `allow always` for terminal or
+code-execution prompts; see [hermes-integration.md](hermes-integration.md) section 17.2).
+
+The human (non `--json`) output renders the block as three `[omes]` lines, `profile status`, `hardening profile` and
+`egress profile`; for example `hardening profile  unknown (not_recorded)` or
+`hardening profile  present (strict)`. A missing or unrecognised `profile` is rendered as `unknown`. With `--json`,
+stdout stays the machine-readable document only. Live verification of the hardening and egress unit state is not
+implemented (tracked in [#357](https://github.com/ahliweb/omes/issues/357)); it needs a real host.
+
 Exit codes: 0 status is `ok`/`warn`, 7 status is `unknown`, 2 usage error.
 
-**JSON schema:** `{"check":"acp_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"platform_toolsets.acp":{"state":"value","value":["..."]}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.disabled_toolsets":{...}},"installability":{"state":"installed|not_installed_or_unknown|not_probed","meaning":"..."},"session_exposure":"unknown","findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
+**JSON schema:** `{"check":"acp_posture","status":"ok|warn|unknown","scope":"configured","scope_note":"...","source":"hermes config get --json","profile_home_override":bool,"observed_at":"...","keys":{"platform_toolsets.acp":{"state":"value","value":["..."]}|{"state":"absent"}|{"state":"unknown","reason":"..."},"agent.disabled_toolsets":{...}},"installability":{"state":"installed|not_installed_or_unknown|not_probed","meaning":"..."},"session_exposure":"unknown","profile":{"status":"ok|warn|unknown","source":"...","absent_means":"unknown","hardening":{"state":"present|not_present","recorded":"conservative|strict|off"}|{"state":"unknown","reason":"..."},"egress":{"state":"present","recorded":"deny_by_default"}|{"state":"unknown","reason":"..."}},"findings":[{"id":"...","severity":"info|warn","message":"...","key":"...","value":...}],"reason_codes":["..."]}`
 
 ```bash
 omes health acp

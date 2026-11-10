@@ -1049,6 +1049,30 @@ for key, entry in d.get("keys", {}).items():
         print("[omes]   %-26s %s %s" % (key, entry.get("state"), entry.get("reason") or ""))
 print("[omes]   %-26s %s" % ("hermes acp installability", (d.get("installability") or {}).get("state")))
 print("[omes]   %-26s %s" % ("session exposure", d.get("session_exposure")))
+# Recorded gateway hardening / egress profile (issue #357). Anything absent,
+# malformed or unrecognised renders as `unknown`; it is never shown as ok or
+# safe, and a raw value is only echoed for the two recorded states below.
+profile = d.get("profile")
+if not isinstance(profile, dict):
+    profile = {}
+pstatus = profile.get("status")
+if pstatus not in ("ok", "warn", "unknown"):
+    pstatus = "unknown"
+print("[omes]   %-26s %s (OMES-recorded intent, not live unit state)" % ("profile status", pstatus))
+for name, label in (("hardening", "hardening profile"), ("egress", "egress profile")):
+    item = profile.get(name)
+    if not isinstance(item, dict):
+        item = {}
+    state = item.get("state")
+    recorded = item.get("recorded")
+    if state in ("present", "not_present") and recorded in ("off", "conservative", "strict", "deny_by_default"):
+        text = "%s (%s)" % ("present" if state == "present" else "not present", recorded)
+    else:
+        reason = item.get("reason")
+        if not (isinstance(reason, str) and reason.replace("_", "").isalnum()):
+            reason = "not_reported"
+        text = "unknown (%s)" % reason
+    print("[omes]   %-26s %s" % (label, text))
 for f in d.get("findings", []):
     print("[omes]   %s %s: %s" % (f.get("severity", "").upper(), f.get("id"), f.get("message")))
 print("[omes]   note: %s" % d.get("scope_note"))
