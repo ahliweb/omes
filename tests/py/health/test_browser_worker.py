@@ -313,6 +313,13 @@ def _s_browser_unsafe(w, stack):
     w.deps.browser_version = mock.Mock(side_effect=AssertionError("an unsafe binary must never be executed"))
 
 
+def _s_browser_dir_unsafe(w, stack):
+    # Run as root: the binary is root-owned and safe, its directory is not.
+    w.deps.uid = lambda: 0
+    w.deps.stat = lambda path: fake_stat(0, 0o755) if os.path.isfile(path) else fake_stat(1000, 0o777)
+    w.deps.browser_version = mock.Mock(side_effect=AssertionError("a binary in an unsafe directory must never be executed"))
+
+
 def _s_browser_version_unknown(w, stack):
     w.deps.browser_version = lambda binary: None
 
@@ -404,6 +411,7 @@ SCENARIOS = {
     "BROWSER_PIN_UNDECLARED": (_drop_env("OMES_BROWSER_WORKER_BROWSER_PIN"), "unknown"),
     "BROWSER_BINARY_MISSING": (_s_browser_missing, "blocked"),
     "BROWSER_BINARY_UNSAFE": (_s_browser_unsafe, "blocked"),
+    "BROWSER_BINARY_DIR_UNSAFE": (_s_browser_dir_unsafe, "blocked"),
     "BROWSER_VERSION_UNKNOWN": (_s_browser_version_unknown, "unknown"),
     "BROWSER_PIN_MISMATCH": (_set_env(OMES_BROWSER_WORKER_BROWSER_PIN="chromium-1.0.0"), "blocked"),
     "CDP_LISTENER_NONLOOPBACK": (_s_listeners(SS_WILDCARD_CDP), "blocked"),
@@ -778,6 +786,91 @@ class TestBrowserBinaryRootSafety(unittest.TestCase):
         world = World(self)
         self.assertEqual(bw.Deps().uid(), os.geteuid())
         self.assertEqual(bw.Deps().stat(world.browser).st_ino, os.stat(world.browser).st_ino)
+
+
+class TestBrowserBinaryDirRootSafety(unittest.TestCase):
+    """As root, the directory holding the browser binary must also be
+    root-owned and not group/world-writable (#360 item 2). Stat is faked, so
+    these pass whatever uid the suite runs as."""
+
+    def _world(self, binary, directory):
+        world = World(self)
+        world.deps.uid = lambda: 0
+        seen = []
+
+        def fake(path):
+            seen.append(path)
+            return binary if os.path.isfile(path) else directory
+        world.deps.stat = fake
+        world.seen = seen
+        return world
+
+    def _refused(self, world, code="BROWSER_BINARY_DIR_UNSAFE"):
+        world.deps.browser_version = mock.Mock(side_effect=AssertionError("must never be executed"))
+        document, results = world.collect()
+        self.assertEqual(document["state"], "blocked")
+        self.assertIn(code, document["reason_codes"])
+        self.assertNotIn(bw.READY_CODE, document["reason_codes"])
+        self.assertEqual((document["browser_engine"], document["browser_version"]), ("unknown", "unknown"))
+        self.assertEqual(schema_errors(document), [])
+        world.deps.browser_version.assert_not_called()
+        return document, results
+
+    def test_root_refuses_a_directory_owned_by_another_account(self):
+        world = self._world(fake_stat(0, 0o755), fake_stat(1000, 0o755))
+        document, results = self._refused(world)
+        self.assertNotIn("BROWSER_BINARY_UNSAFE", document["reason_codes"])
+        browser = next(r for r in results if r["probe"] == "browser")
+        self.assertEqual(browser["detail"]["browser_source"], "explicit_dir_unsafe")
+        self.assertEqual(world.seen[-1], os.path.dirname(os.path.realpath(world.browser)))
+
+    def test_root_refuses_a_group_or_world_writable_directory(self):
+        for mode in (0o775, 0o757, 0o777):
+            with self.subTest(mode=oct(mode)):
+                self._refused(self._world(fake_stat(0, 0o755), fake_stat(0, mode)))
+
+    def test_root_refuses_when_the_directory_cannot_be_stat_ed(self):
+        world = World(self)
+        world.deps.uid = lambda: 0
+
+        def fake(path):
+            if os.path.isfile(path):
+                return fake_stat(0, 0o755)
+            raise PermissionError("denied")
+        world.deps.stat = fake
+        self._refused(world)
+
+    def test_an_unsafe_binary_is_reported_as_the_binary_not_the_directory(self):
+        world = self._world(fake_stat(1000, 0o755), fake_stat(1000, 0o777))
+        document, _ = self._refused(world, "BROWSER_BINARY_UNSAFE")
+        self.assertNotIn("BROWSER_BINARY_DIR_UNSAFE", document["reason_codes"])
+
+    def test_root_accepts_a_root_owned_directory_without_group_or_world_write(self):
+        for mode in (0o755, 0o700, 0o555):
+            with self.subTest(mode=oct(mode)):
+                world = self._world(fake_stat(0, 0o755), fake_stat(0, mode))
+                document, results = world.collect()
+                browser = next(r for r in results if r["probe"] == "browser")
+                self.assertEqual(browser["codes"], [])
+                self.assertNotIn("BROWSER_BINARY_DIR_UNSAFE", document["reason_codes"])
+                self.assertEqual(document["browser_engine"], "chromium")
+
+    def test_a_path_discovered_binary_in_an_unsafe_directory_is_refused(self):
+        world = self._world(fake_stat(0, 0o755), fake_stat(0, 0o777))
+        del world.env["OMES_BROWSER_WORKER_BROWSER_BIN"]
+        world.deps.which = lambda name: world.browser
+        _, results = self._refused(world)
+        browser = next(r for r in results if r["probe"] == "browser")
+        self.assertEqual(browser["detail"]["browser_source"], "path_dir_unsafe")
+
+    def test_non_root_never_stats_the_directory(self):
+        world = World(self)
+        world.deps.uid = lambda: 1000
+        world.deps.stat = mock.Mock(side_effect=AssertionError("a non-root run must not stat"))
+        _, results = world.collect()
+        self.assertEqual(next(r for r in results if r["probe"] == "browser")["codes"], [])
+        world.deps.stat.assert_not_called()
+
 
 
 class TestExposure(unittest.TestCase):

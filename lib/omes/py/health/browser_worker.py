@@ -165,6 +165,11 @@ REASONS: dict = {
         "run as root, the browser binary is not root-owned or is group/world-writable, so it was not executed",
         "make the binary root-owned and not group/world-writable (chown root:root, chmod go-w), or run the check as the worker account",
     ),
+    "BROWSER_BINARY_DIR_UNSAFE": (
+        SEV_BLOCKED,
+        "run as root, the directory holding the browser binary is not root-owned or is group/world-writable, so the binary was not executed",
+        "make the binary's parent directory root-owned and not group/world-writable (chown root:root, chmod go-w), or run the check as the worker account",
+    ),
     "BROWSER_VERSION_UNKNOWN": (
         SEV_UNKNOWN,
         "a browser was found but its version could not be determined",
@@ -727,8 +732,13 @@ def binary_unsafe_for_root(path: str, deps: Deps) -> bool:
     can write it, so the binary is reported as not ready and never executed.
     A stat failure is treated as unsafe (fail closed). Non-root runs are not
     affected: they execute nothing the invoking user could not already run.
-    Only the binary itself is checked, not its parent directories, and a
-    Playwright-cache browser is never executed so it is never checked."""
+    Only the binary itself is checked here (see `binary_dir_unsafe_for_root`
+    for its parent directory), and a Playwright-cache browser is never
+    executed so it is never checked."""
+    return _unsafe_for_root(path, deps)
+
+
+def _unsafe_for_root(path: str, deps: Deps) -> bool:
     if deps.uid() != 0:
         return False
     try:
@@ -736,6 +746,24 @@ def binary_unsafe_for_root(path: str, deps: Deps) -> bool:
     except OSError:
         return True
     return st.st_uid != 0 or bool(st.st_mode & 0o022)
+
+
+def binary_dir_unsafe_for_root(path: str, deps: Deps) -> bool:
+    """Like `binary_unsafe_for_root`, for the immediate parent directory of the
+    resolved binary: a non-root owner or a group/world-writable directory lets
+    that party replace the binary root is about to execute. Only the immediate
+    parent is checked (not every ancestor). A stat failure is unsafe."""
+    return _unsafe_for_root(os.path.dirname(path), deps)
+
+
+def _unsafe_source(path: str, prefix: str, deps: Deps) -> Optional[str]:
+    """The `browser_source` marker when `path` must not be executed as root,
+    else None. The binary is checked before its directory."""
+    if binary_unsafe_for_root(path, deps):
+        return prefix + "_unsafe"
+    if binary_dir_unsafe_for_root(path, deps):
+        return prefix + "_dir_unsafe"
+    return None
 
 
 def probe_browser(cfg: Config, deps: Deps) -> dict:
@@ -749,10 +777,8 @@ def probe_browser(cfg: Config, deps: Deps) -> dict:
         # runtime than the one the operator pinned).
         real = os.path.realpath(cfg.browser_bin)
         if os.path.isfile(real) and os.access(real, os.X_OK):
-            if binary_unsafe_for_root(real, deps):
-                source = "explicit_unsafe"
-            else:
-                source = "explicit"
+            source = _unsafe_source(real, "explicit", deps) or "explicit"
+            if source == "explicit":
                 engine, label = _browser_label(deps.browser_version(cfg.browser_bin))
         else:
             source = "explicit_missing"
@@ -764,10 +790,8 @@ def probe_browser(cfg: Config, deps: Deps) -> dict:
             for name in _BROWSER_NAMES:
                 found = deps.which(name)
                 if found:
-                    if binary_unsafe_for_root(os.path.realpath(found), deps):
-                        source = "path_unsafe"
-                    else:
-                        source = "path"
+                    source = _unsafe_source(os.path.realpath(found), "path", deps) or "path"
+                    if source == "path":
                         engine, label = _browser_label(deps.browser_version(found))
                     break
 
@@ -777,7 +801,7 @@ def probe_browser(cfg: Config, deps: Deps) -> dict:
         # Found but deliberately not executed: engine and version stay
         # `unknown` (the contract has no better value) and the pin is not
         # compared against anything.
-        codes.append("BROWSER_BINARY_UNSAFE")
+        codes.append("BROWSER_BINARY_DIR_UNSAFE" if source.endswith("_dir_unsafe") else "BROWSER_BINARY_UNSAFE")
         fields["browser_engine"] = "unknown"
         fields["browser_version"] = "unknown"
     elif engine == "not_installed":
