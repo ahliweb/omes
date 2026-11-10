@@ -420,7 +420,8 @@ generates a real Ed25519 key locally with the OpenSSL 3 command line (no Python
 crypto dependency), keeps the private key in its own mode `0600` file
 `$OMES_STATE_DIR/worker/worker_ed25519.key` (never in `credentials.json`, and not
 included in any OMES backup) and sends the raw public key plus a
-`challenge_signature` over the enrollment challenge. Every poll, result and
+`challenge_signature` over a versioned string that binds the enrollment challenge,
+tenant, server and public key. Every poll, result and
 heartbeat request is signed (`X-OMES-Worker-Id`, `X-OMES-Timestamp`,
 `X-OMES-Nonce`, `X-OMES-Signature`; the canonical string is specified in
 [contracts/README.md](../contracts/README.md)); a request that cannot be signed is

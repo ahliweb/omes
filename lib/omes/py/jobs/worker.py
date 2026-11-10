@@ -6,7 +6,10 @@ and telemetry heartbeats for distributed OMES hosts.
 Guarantees:
   - Zero inbound listening ports on OMES hosts.
   - Challenge-based enrollment (issue #362): a real Ed25519 key is generated locally with OpenSSL 3,
-    stays in its own 0600 file, and the worker proves possession by signing the enrollment challenge.
+    stays in its own 0600 file, and the worker proves possession by signing a versioned canonical string
+    (OMES-WORKER-ENROLL-V1: challenge, tenant, server, public key).
+  - The key file and credentials.json are replaced as one recoverable step: either both are new, or the
+    previous pair is restored, or the worker fails closed with a re-enroll message (never a silent mismatch).
   - Every poll, result and heartbeat request carries X-OMES-Worker-Id/Timestamp/Nonce/Signature
     headers (see worker_signing.py). AWCMS-side verification is Not implemented yet (tracked in #362).
   - No arbitrary shell, eval, or unvetted command execution (dispatches exclusively via jobs.runner).
@@ -63,6 +66,16 @@ class LegacyCredentialsError(WorkerError):
     """Credentials written before issue #362 hold a fabricated key; they are refused, never migrated."""
 
 
+class InconsistentCredentialsError(WorkerError):
+    """The key file and credentials.json do not belong together (interrupted update); fail closed."""
+
+
+INCONSISTENT_CREDENTIALS_MESSAGE = (
+    "the worker key file and credentials.json do not match (an enrollment update was interrupted); "
+    "they are refused, not used. Re-enroll with a fresh challenge: 'omes worker enroll --endpoint <url> "
+    "--tenant <id> --server <id> --challenge <token>'."
+)
+
 LEGACY_CREDENTIALS_MESSAGE = (
     "stored worker credentials predate request signing (issue #362) and contain a fabricated key; "
     "they are refused. Re-enroll with a fresh challenge: 'omes worker enroll --endpoint <url> "
@@ -118,7 +131,41 @@ def _credentials_path(state_dir: Path | None = None) -> Path:
     return _worker_dir(state_dir) / "credentials.json"
 
 
+def _prev_key_path(state_dir: Path | None = None) -> Path:
+    return _worker_dir(state_dir) / f"{signing.KEY_FILE_NAME}.prev"
+
+
+def _recover_interrupted_update(state_dir: Path | None = None) -> None:
+    """Settle a key/credentials update that was interrupted (crash, power loss) between its two renames.
+
+    The previous key is kept as `<key>.prev` until credentials.json has been replaced. If it is still
+    there, decide from the public keys which pair is on disk: the new pair (finish: drop `.prev`), the
+    old pair (roll back: restore the old key) or neither (fail closed, re-enroll). Never guesses.
+    """
+    prev = _prev_key_path(state_dir)
+    if not prev.exists():
+        return
+    key_final = _worker_dir(state_dir) / signing.KEY_FILE_NAME
+    cred_path = _credentials_path(state_dir)
+    try:
+        stored_pub = json.loads(cred_path.read_text(encoding="utf-8")).get("public_key")
+    except (OSError, ValueError, AttributeError):
+        stored_pub = None
+    try:
+        if stored_pub and key_final.exists() and signing.public_key_b64(key_final) == stored_pub:
+            prev.unlink(missing_ok=True)  # the update had completed
+            return
+        if stored_pub and signing.public_key_b64(prev) == stored_pub:
+            os.replace(prev, key_final)  # roll back to the previous, consistent pair
+            prev.unlink(missing_ok=True)
+            return
+    except (signing.SigningError, OSError):
+        pass
+    raise InconsistentCredentialsError(INCONSISTENT_CREDENTIALS_MESSAGE)
+
+
 def load_credentials(state_dir: Path | None = None) -> WorkerCredentials | None:
+    _recover_interrupted_update(state_dir)
     p = _credentials_path(state_dir)
     if not p.is_file():
         return None
@@ -131,18 +178,39 @@ def load_credentials(state_dir: Path | None = None) -> WorkerCredentials | None:
         return None
 
 
+def _fsync_dir(path: Path) -> None:
+    try:
+        fd = os.open(path, os.O_RDONLY)
+    except OSError:
+        return
+    try:
+        os.fsync(fd)
+    except OSError:
+        pass
+    finally:
+        os.close(fd)
+
+
 def save_credentials(creds: WorkerCredentials, state_dir: Path | None = None) -> Path:
+    """Write credentials.json atomically: temp file (0600 from creation) + fsync + rename + directory fsync."""
     wdir = _worker_dir(state_dir)
     wdir.mkdir(parents=True, exist_ok=True)
     os.chmod(wdir, 0o700)
     p = _credentials_path(state_dir)
 
     tmp = p.with_suffix(".tmp")
-    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)  # 0600 before any data is written
-    with os.fdopen(fd, "w", encoding="utf-8") as fh:
-        fh.write(json.dumps(creds.to_dict(), indent=2))
-    os.chmod(tmp, 0o600)
-    tmp.replace(p)
+    tmp.unlink(missing_ok=True)
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(creds.to_dict(), indent=2))
+            fh.flush()
+            os.fsync(fh.fileno())
+        os.replace(tmp, p)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    _fsync_dir(wdir)
     return p
 
 
@@ -254,9 +322,16 @@ def enroll_worker(
     # fallback key. A key left by an interrupted enrollment is ours and is replaced.
     key_pending.unlink(missing_ok=True)
     try:
+        _recover_interrupted_update(state_dir)
+    except InconsistentCredentialsError:
+        # Neither pair is usable; re-enrollment is the way out, so a stale rollback copy is dropped.
+        _prev_key_path(state_dir).unlink(missing_ok=True)
+    try:
         signing.generate_private_key(key_pending)
         pub_key = signing.public_key_b64(key_pending)
-        challenge_signature = signing.sign_challenge(key_pending, enrollment_challenge)
+        challenge_signature = signing.sign_challenge(
+            key_pending, enrollment_challenge, tenant_id, server_id, pub_key
+        )
     except signing.SigningError as exc:
         key_pending.unlink(missing_ok=True)
         raise EnrollmentError(f"cannot generate or use a local Ed25519 key: {exc}") from exc
@@ -317,7 +392,6 @@ def _finish_enrollment(
         raise EnrollmentError(f"enrollment failed with status '{status}'")
 
     # The control center accepted the key: only now does it replace any earlier key file.
-    os.replace(key_pending, key_final)
     creds = WorkerCredentials(
         tenant_id=tenant_id,
         server_id=server_id,
@@ -329,8 +403,66 @@ def _finish_enrollment(
         heartbeat_interval_seconds=resp_data.get("heartbeat_interval_seconds", DEFAULT_HEARTBEAT_INTERVAL),
         enrolled_at=resp_data.get("enrolled_at", _now_iso()),
     )
-    save_credentials(creds, state_dir)
+    _install_key_and_credentials(creds, key_pending, key_final, state_dir)
     return creds
+
+
+_REENROLL_HINT = (
+    "re-enroll with a fresh challenge: 'omes worker enroll --endpoint <url> --tenant <id> --server <id> "
+    "--challenge <token>'"
+)
+
+
+def _install_key_and_credentials(
+    creds: WorkerCredentials, key_pending: Path, key_final: Path, state_dir: Path | None,
+) -> None:
+    """Replace the key file and credentials.json as one recoverable step.
+
+    Order: (1) keep the previous key as `<key>.prev` (hard link, same 0600 inode); (2) atomically rename the
+    new key into place; (3) atomically write credentials.json; (4) drop `.prev`. Any failure after (1) is
+    rolled back to the previous pair; if even the rollback fails the worker is left with no usable key and
+    no credentials (fail closed) and the error says to re-enroll. A crash between (2) and (3) is settled by
+    `_recover_interrupted_update` the next time credentials are loaded.
+    """
+    prev = _prev_key_path(state_dir)
+    had_previous = key_final.exists() or key_final.is_symlink()
+    prev.unlink(missing_ok=True)
+    if had_previous:
+        try:
+            os.link(key_final, prev)
+        except OSError as exc:
+            raise EnrollmentError(
+                f"cannot keep a rollback copy of the previous worker key ({exc.strerror or type(exc).__name__}); "
+                "the previous key and credentials are unchanged"
+            ) from exc
+    try:
+        os.replace(key_pending, key_final)
+        save_credentials(creds, state_dir)
+    except Exception as exc:
+        try:
+            if had_previous:
+                os.replace(prev, key_final)  # previous key back; previous credentials were never touched
+                prev.unlink(missing_ok=True)  # rename of a hard link onto itself keeps the source
+            else:
+                key_final.unlink(missing_ok=True)  # nothing was enrolled before: leave nothing behind
+        except OSError:
+            # Rollback failed: remove everything so a mismatching pair can never be used.
+            for leftover in (key_final, prev, _credentials_path(state_dir)):
+                try:
+                    leftover.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            raise EnrollmentError(
+                "the Control Center accepted the new key but it could not be stored locally and the previous "
+                f"state could not be restored; the worker is not enrolled (fail closed): {_REENROLL_HINT}"
+            ) from exc
+        raise EnrollmentError(
+            "the Control Center accepted the new key but it could not be stored locally "
+            f"({type(exc).__name__}); the previous worker key and credentials were restored, so the Control "
+            f"Center and this host may disagree about the key: {_REENROLL_HINT}"
+        ) from exc
+    prev.unlink(missing_ok=True)
+    _fsync_dir(key_final.parent)
 
 
 def send_heartbeat(
@@ -676,7 +808,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         creds = load_credentials()
-    except LegacyCredentialsError as exc:
+    except (LegacyCredentialsError, InconsistentCredentialsError) as exc:
         print(f"[omes-worker] ERROR: {exc}", file=sys.stderr)
         return 1
     if not creds:

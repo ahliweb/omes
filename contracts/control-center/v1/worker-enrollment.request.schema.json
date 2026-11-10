@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "contracts/control-center/v1/worker-enrollment.request.schema.json",
   "title": "worker-enrollment.request",
-  "description": "Challenge-based enrollment request from an OMES host pull-worker to the Control Center (ADR-0027, issue #192). The worker generates an Ed25519 key locally (OpenSSL 3) and proves possession by signing the enrollment challenge; later requests are signed through the X-OMES-* headers documented in contracts/README.md (issue #362).",
+  "description": "Challenge-based enrollment request from an OMES host pull-worker to the Control Center (ADR-0027, issue #192). The worker generates an Ed25519 key locally (OpenSSL 3) and proves possession by signing the versioned OMES-WORKER-ENROLL-V1 string that binds the enrollment challenge, tenant_id, server_id and public_key; later requests are signed through the X-OMES-* headers documented in contracts/README.md (issue #362).",
   "type": "object",
   "required": [
     "tenant_id",
@@ -44,7 +44,7 @@
     "challenge_signature": {
       "type": "string",
       "pattern": "^[A-Za-z0-9+/]{86}==$",
-      "description": "Base64 of the raw 64-byte Ed25519 signature over the UTF-8 bytes of enrollment_challenge made with the private key matching public_key (proof of possession)."
+      "description": "Base64 of the raw 64-byte Ed25519 signature over the UTF-8 OMES-WORKER-ENROLL-V1 string (enrollment_challenge, tenant_id, server_id and public_key, newline separated; see contracts/README.md) made with the private key matching public_key (proof of possession)."
     },
     "hostname": {
       "type": "string",

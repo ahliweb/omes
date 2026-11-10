@@ -135,8 +135,20 @@ class TestEnrollment(_Base):
         self.assertEqual(raw, signing.public_key_raw(creds.private_key_path))
         sig = base64.b64decode(sent["challenge_signature"], validate=True)
         self.assertEqual(len(sig), 64)
-        self.assertTrue(signing.verify_signature(raw, sent["enrollment_challenge"].encode(), sig))
-        self.assertFalse(signing.verify_signature(raw, b"another-challenge-0123456789", sig))
+        msg = ("OMES-WORKER-ENROLL-V1\n" + sent["enrollment_challenge"] + "\ntenant-acme\nsrv-test-01\n"
+               + sent["public_key"]).encode()
+        self.assertEqual(msg, signing.enrollment_proof_message(
+            sent["enrollment_challenge"], "tenant-acme", "srv-test-01", sent["public_key"]))
+        self.assertTrue(signing.verify_signature(raw, msg, sig))
+        # The proof is bound to its context: the bare challenge, or another tenant/server/key, does not verify.
+        self.assertFalse(signing.verify_signature(raw, sent["enrollment_challenge"].encode(), sig))
+        for other in (
+            ("tenant-evil", "srv-test-01", sent["public_key"]),
+            ("tenant-acme", "srv-other", sent["public_key"]),
+            ("tenant-acme", "srv-test-01", base64.b64encode(bytes(32)).decode()),
+        ):
+            self.assertFalse(signing.verify_signature(
+                raw, signing.enrollment_proof_message(sent["enrollment_challenge"], *other), sig))
         self.assertEqual(schema_mod.validate(sent, schema_mod.load_json(CC / "worker-enrollment.request.schema.json")), [])
         # Enrollment itself is not header-signed: the key is not yet known to the Control Center.
         self.assertNotIn(signing.HEADER_SIGNATURE, client.sent[0]["headers"])
@@ -187,7 +199,7 @@ class TestEnrollment(_Base):
     def test_rejected_enrollment_leaves_no_key_behind(self) -> None:
         client = worker.HttpClient(mock_handlers={"/api/v1/worker/enroll": {
             "tenant_id": "tenant-acme", "server_id": "srv-test-01", "worker_id": "wrk-1", "status": "token_expired",
-            "control_center_public_key": "cc", "poll_interval_seconds": 10, "heartbeat_interval_seconds": 60,
+            "control_center_public_key": "cc-key-reference", "poll_interval_seconds": 10, "heartbeat_interval_seconds": 60,
             "enrolled_at": "2026-09-21T12:00:00Z"}})
         with self.assertRaises(worker.EnrollmentError):
             worker.enroll_worker("https://control-center.example.com", "tenant-acme", "srv-test-01",
@@ -203,6 +215,186 @@ class TestEnrollment(_Base):
             worker.enroll_worker("https://control-center.example.com", "tenant-acme", "srv-test-01",
                                  "challenge_token_valid12345678", state_dir=self.state, client=bad)
         self.assertEqual(Path(creds.private_key_path).read_bytes(), before)
+
+
+class TestEnrollmentProofMessage(unittest.TestCase):
+    def test_exact_canonical_string(self) -> None:
+        self.assertEqual(
+            signing.enrollment_proof_message("chal_123", "tenant-a", "srv-1", "PUBKEYB64="),
+            b"OMES-WORKER-ENROLL-V1\nchal_123\ntenant-a\nsrv-1\nPUBKEYB64=",
+        )
+
+    def test_line_breaks_in_any_component_are_rejected(self) -> None:
+        good = ["chal_123", "tenant-a", "srv-1", "PUBKEYB64="]
+        for i in range(4):
+            for bad in ("x\ny", "x\ry", "\n"):
+                args = list(good)
+                args[i] = bad
+                with self.assertRaises(signing.SigningError, msg=f"component {i} {bad!r}"):
+                    signing.enrollment_proof_message(*args)
+
+    def test_sign_challenge_rejects_line_breaks_before_touching_the_key(self) -> None:
+        with self.assertRaises(signing.SigningError):
+            signing.sign_challenge("/nonexistent/key", "a\nb", "t", "s", "p")
+
+
+class TestAtomicKeyAndCredentialsUpdate(_Base):
+    """The key file and credentials.json are replaced together: both new, both old, or fail closed."""
+
+    def snapshot(self) -> dict[str, bytes]:
+        return {p.name: p.read_bytes() for p in sorted((self.state / "worker").iterdir())}
+
+    def reenroll(self) -> None:
+        client = worker.HttpClient(mock_handlers={"/api/v1/worker/enroll": {
+            "tenant_id": "tenant-acme", "server_id": "srv-test-01", "worker_id": "wrk-srv-test-01-002",
+            "status": "enrolled", "control_center_public_key": "cc-key-reference", "poll_interval_seconds": 10,
+            "heartbeat_interval_seconds": 60, "enrolled_at": "2026-09-22T12:00:00Z"}})
+        worker.enroll_worker("https://control-center.example.com", "tenant-acme", "srv-test-01",
+                             "challenge_token_valid12345678", state_dir=self.state, client=client)
+
+    def test_successful_update_leaves_a_consistent_new_pair_and_no_leftovers(self) -> None:
+        old, _ = self.enroll()
+        self.reenroll()
+        loaded = worker.load_credentials(self.state)
+        assert loaded is not None
+        self.assertNotEqual(loaded.public_key, old.public_key)
+        self.assertEqual(signing.public_key_b64(loaded.private_key_path), loaded.public_key)
+        self.assertEqual(sorted(self.snapshot()), ["credentials.json", signing.KEY_FILE_NAME])
+        self.assertEqual(Path(loaded.private_key_path).stat().st_mode & 0o777, 0o600)
+
+    def test_credentials_save_failure_restores_the_previous_pair(self) -> None:
+        old, _ = self.enroll()
+        before = self.snapshot()
+        with mock.patch.object(worker, "save_credentials", side_effect=OSError("disk full")):
+            with self.assertRaises(worker.EnrollmentError) as ctx:
+                self.reenroll()
+        self.assertIn("re-enroll", str(ctx.exception))
+        self.assertIn("previous worker key and credentials were restored", str(ctx.exception))
+        self.assertEqual(self.snapshot(), before)
+        loaded = worker.load_credentials(self.state)
+        assert loaded is not None
+        self.assertEqual(loaded.public_key, old.public_key)
+        self.assertEqual(signing.public_key_b64(loaded.private_key_path), loaded.public_key)
+
+    def test_credentials_save_failure_on_first_enrollment_leaves_nothing(self) -> None:
+        with mock.patch.object(worker, "save_credentials", side_effect=OSError("disk full")):
+            with self.assertRaises(worker.EnrollmentError) as ctx:
+                self.reenroll()
+        self.assertIn("re-enroll", str(ctx.exception))
+        self.assertEqual(self.snapshot(), {})
+        self.assertIsNone(worker.load_credentials(self.state))
+
+    def test_key_rename_failure_keeps_the_previous_pair(self) -> None:
+        old, _ = self.enroll()
+        before = self.snapshot()
+        real_replace = os.replace
+
+        def flaky(src: Any, dst: Any) -> None:
+            if str(src).endswith(".pending"):
+                raise OSError("rename failed")
+            real_replace(src, dst)
+
+        with mock.patch.object(worker.os, "replace", flaky):
+            with self.assertRaises(worker.EnrollmentError) as ctx:
+                self.reenroll()
+        self.assertIn("re-enroll", str(ctx.exception))
+        self.assertEqual(self.snapshot(), before)
+        loaded = worker.load_credentials(self.state)
+        assert loaded is not None
+        self.assertEqual(loaded.public_key, old.public_key)
+
+    def test_failed_rollback_fails_closed_with_no_usable_mismatch(self) -> None:
+        self.enroll()
+        real_replace = os.replace
+
+        def flaky(src: Any, dst: Any) -> None:
+            if str(src).endswith(".prev"):
+                raise OSError("rollback failed")
+            real_replace(src, dst)
+
+        with mock.patch.object(worker, "save_credentials", side_effect=OSError("disk full")), \
+                mock.patch.object(worker.os, "replace", flaky):
+            with self.assertRaises(worker.EnrollmentError) as ctx:
+                self.reenroll()
+        self.assertIn("not enrolled (fail closed)", str(ctx.exception))
+        self.assertIn("re-enroll", str(ctx.exception))
+        self.assertEqual(self.snapshot(), {})
+        self.assertIsNone(worker.load_credentials(self.state))
+
+    def test_no_partial_credentials_file_is_ever_visible(self) -> None:
+        creds, _ = self.enroll()
+        before = (self.state / "worker" / "credentials.json").read_bytes()
+        with mock.patch.object(worker.json, "dumps", side_effect=ValueError("boom")):
+            with self.assertRaises(ValueError):
+                worker.save_credentials(creds, self.state)
+        self.assertEqual((self.state / "worker" / "credentials.json").read_bytes(), before)
+        self.assertFalse((self.state / "worker" / "credentials.tmp").exists())
+
+    def test_credentials_are_fsynced_before_the_rename(self) -> None:
+        creds, _ = self.enroll()
+        calls: list[str] = []
+        real_fsync, real_replace = os.fsync, os.replace
+
+        def fs(fd: int) -> None:
+            calls.append("fsync")
+            real_fsync(fd)
+
+        def rp(a: Any, b: Any) -> None:
+            calls.append("replace")
+            real_replace(a, b)
+
+        with mock.patch.object(worker.os, "fsync", fs), mock.patch.object(worker.os, "replace", rp):
+            worker.save_credentials(creds, self.state)
+        self.assertEqual(calls[:2], ["fsync", "replace"])
+        self.assertEqual((self.state / "worker" / "credentials.json").stat().st_mode & 0o777, 0o600)
+
+    def _simulate_crash_after_key_rename(self) -> worker.WorkerCredentials:
+        """New key in place, previous key kept as .prev, credentials.json still the old ones."""
+        old, _ = self.enroll()
+        wdir = self.state / "worker"
+        os.link(wdir / signing.KEY_FILE_NAME, wdir / (signing.KEY_FILE_NAME + ".prev"))
+        new_key = wdir / "new.key"
+        signing.generate_private_key(new_key)
+        os.replace(new_key, wdir / signing.KEY_FILE_NAME)
+        return old
+
+    def test_crash_between_the_renames_is_rolled_back_on_next_load(self) -> None:
+        old = self._simulate_crash_after_key_rename()
+        loaded = worker.load_credentials(self.state)
+        assert loaded is not None
+        self.assertEqual(loaded.public_key, old.public_key)
+        self.assertEqual(signing.public_key_b64(loaded.private_key_path), old.public_key)
+        self.assertFalse((self.state / "worker" / (signing.KEY_FILE_NAME + ".prev")).exists())
+
+    def test_crash_after_both_renames_just_drops_the_rollback_copy(self) -> None:
+        creds, _ = self.enroll()
+        wdir = self.state / "worker"
+        prev = wdir / (signing.KEY_FILE_NAME + ".prev")
+        prev.write_bytes((wdir / signing.KEY_FILE_NAME).read_bytes())
+        os.chmod(prev, 0o600)
+        loaded = worker.load_credentials(self.state)
+        assert loaded is not None
+        self.assertEqual(loaded.public_key, creds.public_key)
+        self.assertFalse(prev.exists())
+
+    def test_unrelated_key_is_refused_fail_closed_and_cli_says_reenroll(self) -> None:
+        self.enroll()
+        wdir = self.state / "worker"
+        for name in (signing.KEY_FILE_NAME, signing.KEY_FILE_NAME + ".prev"):
+            (wdir / name).unlink(missing_ok=True)
+            signing.generate_private_key(wdir / name)  # neither matches credentials.json
+        with self.assertRaises(worker.InconsistentCredentialsError) as ctx:
+            worker.load_credentials(self.state)
+        self.assertIn("Re-enroll", str(ctx.exception))
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            rc = worker.main(["poll", "--once"])
+        self.assertEqual(rc, 1)
+        self.assertIn("Re-enroll", err.getvalue())
+        # Re-enrollment is the way out.
+        self.reenroll()
+        self.assertIsNotNone(worker.load_credentials(self.state))
+        self.assertFalse((wdir / (signing.KEY_FILE_NAME + ".prev")).exists())
 
 
 class TestFailClosed(_Base):
@@ -323,6 +515,38 @@ class TestRequestSigning(_Base):
             "OMES-WORKER-SIG-V1\nPOST\n/api/v1/worker/poll\n" + hashlib.sha256(b"{}").hexdigest()
             + "\nnonce_abcdefabcdefabcd\n2026-01-01T00:00:00Z",
         )
+
+    def test_canonical_string_rejects_line_breaks_and_bad_timestamps(self) -> None:
+        ok = ("POST", "/api/v1/worker/poll", b"{}", "nonce_abcdefabcdefabcd", "2026-01-01T00:00:00Z")
+        signing.canonical_string(*ok)
+        for idx, bad in ((0, "POST\nGET"), (0, "POST\r"), (1, "/a\n/b"), (1, "/a\r"),
+                         (3, "nonce_abcdefabc\ndef"), (4, "2026-01-01T00:00:00Z\n")):
+            args = list(ok)
+            args[idx] = bad
+            with self.assertRaises(signing.SigningError, msg=repr(bad)):
+                signing.canonical_string(*args)
+        for ts in ("", "2026-01-01 00:00:00Z", "2026-01-01T00:00:00+00:00", "2026-01-01T00:00:00", "yesterday",
+                   "2026-01-01T00:00:00Zextra"):
+            args = list(ok)
+            args[4] = ts
+            with self.assertRaises(signing.SigningError, msg=ts):
+                signing.canonical_string(*args)
+
+    def test_sign_request_refuses_a_line_break_in_the_path(self) -> None:
+        with self.assertRaises(signing.SigningError):
+            signing.sign_request(self.creds.private_key_path, self.creds.worker_id, "POST", "/a\nb", b"{}")
+
+    def test_emitted_headers_validate_against_the_header_contract(self) -> None:
+        schema = schema_mod.load_json(CC / "worker-request-signature.headers.schema.json")
+        worker.send_heartbeat(self.creds, client=self.client)
+        worker.poll_and_dispatch_once(self.creds, state_dir=self.state, client=self.client)
+        worker._submit_result(self.creds, self.client, {"correlation_id": "corr-1", "idempotency_key": _IDEM_KEY,
+                                                         "operation": "status"}, "succeeded", 0, "ok")
+        self.assertEqual(len(self.client.sent), 3)
+        for s in self.client.sent:
+            self.assertEqual(schema_mod.validate(s["headers"], schema), [], s["path"])
+        broken = {**self.client.sent[0]["headers"], signing.HEADER_NONCE: "short"}
+        self.assertNotEqual(schema_mod.validate(broken, schema), [])
 
     def test_tampered_body_fails_verification(self) -> None:
         worker.send_heartbeat(self.creds, client=self.client)

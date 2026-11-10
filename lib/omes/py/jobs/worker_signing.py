@@ -19,6 +19,19 @@ Canonical string signed for every request (UTF-8, `\\n` separated, no trailing n
     <nonce>
     <timestamp>
 
+Enrollment proof of possession (signed once, over a versioned canonical string that binds the proof to
+its context so it cannot be replayed for another tenant, server or key; UTF-8, `\\n` separated, no
+trailing newline):
+
+    OMES-WORKER-ENROLL-V1
+    <enrollment_challenge>
+    <tenant_id>
+    <server_id>
+    <public_key base64 of the raw 32 bytes>
+
+The enroll request itself carries no X-OMES-* headers: the Control Center does not know the key yet, so
+there is nothing to verify a header signature against; its proof is `challenge_signature`.
+
 Verification and replay handling (nonce store, clock skew) belong to the Control Center and are
 Not implemented yet (tracked in #362). `verify_signature` below is a reference for tests only.
 """
@@ -37,6 +50,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 SIGNATURE_VERSION = "OMES-WORKER-SIG-V1"
+ENROLL_PROOF_VERSION = "OMES-WORKER-ENROLL-V1"
 ALGORITHM = "ed25519"
 KEY_FILE_NAME = "worker_ed25519.key"
 HEADER_WORKER_ID = "X-OMES-Worker-Id"
@@ -50,6 +64,7 @@ OPENSSL_TIMEOUT_SECONDS = 15
 # DER SubjectPublicKeyInfo prefix of an Ed25519 key: the raw 32-byte key follows it.
 _SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 _NONCE_RE = re.compile(r"^[A-Za-z0-9_.:-]{16,128}$")
+_TIMESTAMP_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 
 
 class SigningError(Exception):
@@ -149,12 +164,37 @@ def sign_bytes(key_path: Path | str, message: bytes) -> bytes:
     return sig
 
 
-def sign_challenge(key_path: Path | str, enrollment_challenge: str) -> str:
-    """Proof of possession: base64 raw signature over the UTF-8 enrollment challenge."""
-    return base64.b64encode(sign_bytes(key_path, enrollment_challenge.encode("utf-8"))).decode("ascii")
+def _reject_line_breaks(**fields: str) -> None:
+    """A newline in any canonical-string component would let one message be read as another."""
+    for name, value in fields.items():
+        if not isinstance(value, str):
+            raise SigningError(f"{name} must be a string")
+        if "\n" in value or "\r" in value:
+            raise SigningError(f"{name} must not contain a line break")
+
+
+def enrollment_proof_message(enrollment_challenge: str, tenant_id: str, server_id: str, public_key: str) -> bytes:
+    """Canonical message of the enrollment proof (`OMES-WORKER-ENROLL-V1`), bound to its context."""
+    _reject_line_breaks(
+        enrollment_challenge=enrollment_challenge, tenant_id=tenant_id, server_id=server_id, public_key=public_key,
+    )
+    return "\n".join(
+        [ENROLL_PROOF_VERSION, enrollment_challenge, tenant_id, server_id, public_key]
+    ).encode("utf-8")
+
+
+def sign_challenge(
+    key_path: Path | str, enrollment_challenge: str, tenant_id: str, server_id: str, public_key: str,
+) -> str:
+    """Proof of possession: base64 raw signature over the `OMES-WORKER-ENROLL-V1` canonical string."""
+    message = enrollment_proof_message(enrollment_challenge, tenant_id, server_id, public_key)
+    return base64.b64encode(sign_bytes(key_path, message)).decode("ascii")
 
 
 def canonical_string(method: str, path: str, body: bytes, nonce: str, timestamp: str) -> bytes:
+    _reject_line_breaks(method=method, path=path, nonce=nonce, timestamp=timestamp)
+    if not _TIMESTAMP_RE.match(timestamp):
+        raise SigningError("timestamp must be UTC YYYY-MM-DDTHH:MM:SSZ")
     digest = hashlib.sha256(body).hexdigest()
     return "\n".join([SIGNATURE_VERSION, method.upper(), path, digest, nonce, timestamp]).encode("utf-8")
 
