@@ -700,7 +700,7 @@ under `contracts/agent/v1/fixtures/agent-deployment/` and
 `invalid-compose-egress-allowlist-*.json` semantic cases (ports, IP literal,
 duplicate, `.internal`, missing proxy image, list without `allowlist` mode)
 under `contracts/agent/v1/fixtures-semantic/agent-deployment/`. The rendered
-sidecar golden is `tests/py/agent/golden/compose-egress-allowlist-sidecar.yaml`.
+sidecar golden is `tests/py/agent/golden/compose-egress-allowlist-sidecar.golden`.
 
 ### 9.7 Declared-versus-running isolation drift check (issue #276)
 

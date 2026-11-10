@@ -519,7 +519,7 @@ class TestEgressAllowlist(unittest.TestCase):
         plan = compose.build_plan(_allowlist_manifest(("api.example.com", "models.example.org")))
         rendered = compose.render_compose_yaml(plan)
         part = rendered[rendered.index(f"  {plan['egressProxyService']}:"):]
-        golden = (Path(__file__).parent / "golden" / "compose-egress-allowlist-sidecar.yaml").read_text(encoding="utf-8")
+        golden = (Path(__file__).parent / "golden" / "compose-egress-allowlist-sidecar.golden").read_text(encoding="utf-8")
         self.assertEqual(part, golden)
 
     def test_render_is_deterministic_and_order_insensitive(self):
