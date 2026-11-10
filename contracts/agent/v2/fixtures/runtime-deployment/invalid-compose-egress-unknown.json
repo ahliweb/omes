@@ -26,6 +26,6 @@
     "capDrop": [
       "ALL"
     ],
-    "egress": "allowlist"
+    "egress": "bogus"
   }
 }

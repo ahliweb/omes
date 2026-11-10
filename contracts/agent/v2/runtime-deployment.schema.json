@@ -181,8 +181,27 @@
         },
         "egress": {
           "type": "string",
-          "enum": ["open", "none"],
-          "description": "Network egress mode (issue #276). 'open' (default when omitted) is a plain bridge with outbound access. 'none' renders the compose network with 'internal: true' (no route to the outside world); all-or-nothing, no per-destination allowlist, and cannot be combined with 'ports'."
+          "enum": ["open", "none", "allowlist"],
+          "description": "Network egress mode (issue #276). 'open' (default when omitted) renders the compose network as a plain bridge with outbound access, exactly as before. 'none' renders it with 'internal: true' so Docker gives the network no route to the outside world (all-or-nothing, cannot be combined with 'ports'). 'allowlist' (opt-in) attaches the agent only to an 'internal: true' network and routes HTTP(S) through a digest-pinned, operator-supplied forward-proxy sidecar that permits only 'egressAllowlist' hostnames; it requires 'egressAllowlist' and 'egressProxyImage', a dedicated topology, and cannot be combined with 'ports'. Semantic rules live in lib/omes/py/agent/compose.py."
+        },
+        "egressAllowlist": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "description": "Hostnames the egress proxy permits; only valid with egress 'allowlist'. Lowercase RFC 1123 hostnames of at least two labels, exact match (no wildcards, IP literals, localhost, '.local' or '.internal'). Duplicates are rejected in lib/omes/py/agent/compose.py.",
+          "items": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 253,
+            "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$"
+          }
+        },
+        "egressProxyImage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._/-]*@sha256:[0-9a-f]{64}$",
+          "description": "Operator-supplied forward-proxy image for egress 'allowlist', pinned by digest (name@sha256:<64 hex>). OMES ships no default proxy image. The image must provide a tinyproxy binary (the renderer emits tinyproxy config)."
         },
         "volumes": {
           "type": "array",

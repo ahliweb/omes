@@ -207,6 +207,62 @@ class TestComposeRollback(ComposeCliTestCase):
         self.assertIn("restoredPreviousVersion", out)
 
 
+class TestComposeEgressAllowlistCli(ComposeCliTestCase):
+    """Opt-in egress allowlist through the CLI (issue #276); shim only."""
+
+    def _allowlist(self, hosts=("api.example.com", "models.example.org")) -> dict:
+        data = self._fixture("valid-compose-generic.json")
+        c = data["spec"]["compose"]
+        c.pop("ports", None)
+        c["egress"] = "allowlist"
+        c["egressAllowlist"] = list(hosts)
+        c["egressProxyImage"] = "registry.example.com/proxy/tinyproxy@sha256:" + "b" * 64
+        return data
+
+    def _compose_file(self) -> Path:
+        return self.state_home / "agents" / "compose-worker" / "compose" / "compose.yaml"
+
+    def test_dry_run_lists_allowlist_without_mutation(self):
+        self._write_manifest("compose-worker", self._allowlist())
+        proc = self._run("apply", "compose-worker", "--dry-run", "--json")
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        out = json.loads(proc.stdout)
+        self.assertEqual(out["egress"], "allowlist")
+        self.assertEqual(out["egressAllowlist"], ["api.example.com", "models.example.org"])
+        self.assertFalse(self._compose_file().exists())
+
+    def test_apply_renders_sidecar_and_is_idempotent(self):
+        self._write_manifest("compose-worker", self._allowlist())
+        first = self._run("apply", "compose-worker", "--yes", "--json")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        rendered = self._compose_file().read_text(encoding="utf-8")
+        self.assertIn("FilterDefaultDeny Yes", rendered)
+        self.assertIn("compose-worker-egress-proxy", rendered)
+        second = self._run("apply", "compose-worker", "--yes", "--json")
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(self._compose_file().read_text(encoding="utf-8"), rendered)
+
+    def test_apply_refuses_invalid_allowlist_before_mutation(self):
+        data = self._allowlist(("*.example.com",))
+        self._write_manifest("compose-worker", data)
+        proc = self._run("apply", "compose-worker", "--yes", "--json")
+        self.assertNotEqual(proc.returncode, 0)
+        self.assertFalse(self._compose_file().exists())
+
+    def test_rollback_restores_previous_render(self):
+        self._write_manifest("compose-worker", self._allowlist(("a.example.com",)))
+        self.assertEqual(self._run("apply", "compose-worker", "--yes", "--json").returncode, 0)
+        original = self._compose_file().read_text(encoding="utf-8")
+        self._write_manifest("compose-worker", self._allowlist(("b.example.com",)))
+        env = dict(self.env)
+        env["SHIM_DOCKER_COMPOSE_UP_EXIT"] = "1"
+        self.assertEqual(self._run("apply", "compose-worker", "--yes", "--json", env=env).returncode, 6)
+        rollback = self._run("rollback", "compose-worker", "--yes", "--json")
+        self.assertEqual(rollback.returncode, 0, rollback.stderr)
+        self.assertTrue(json.loads(rollback.stdout)["restoredPreviousVersion"])
+        self.assertEqual(self._compose_file().read_text(encoding="utf-8"), original)
+
+
 class TestComposeRemove(ComposeCliTestCase):
     def test_remove_tears_down_and_cleans_state(self):
         self._write_manifest("compose-worker", self._fixture("valid-compose-generic.json"))
