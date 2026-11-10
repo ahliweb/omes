@@ -259,6 +259,66 @@ assert d["session_exposure"] == "unknown"
   [[ "$output" == *"session exposure"*"unknown"* ]]
 }
 
+@test "omes health acp human output renders the recorded profile as unknown when the state file has no keys" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web"]'
+  run "$OMES_BIN" health acp
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"profile status"*"unknown"* ]]
+  [[ "$output" == *"hardening profile"*"unknown (state_file_missing)"* ]]
+  [[ "$output" == *"egress profile"*"unknown (state_file_missing)"* ]]
+  [[ "$output" == *"acp.allow_always_discouraged"* ]]
+  [[ "$output" == *"acp.hardening_profile_unknown"* ]]
+  run grep -E "(profile status|hardening profile|egress profile) +(ok|present|safe)" <<<"$output"
+  [ "$status" -ne 0 ]
+}
+
+@test "omes health acp human output renders an unrecognised recorded value as unknown and does not echo it" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web"]'
+  printf '%s\n' 'module.hermes-gateway.hardening_profile=superstrict-xyz' \
+    'module.hermes-restricted.network_policy=allow_all_xyz' >"${OMES_STATE_DIR}/state"
+  run "$OMES_BIN" health acp
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hardening profile"*"unknown (out_of_range)"* ]]
+  [[ "$output" == *"egress profile"*"unknown (out_of_range)"* ]]
+  [[ "$output" != *"superstrict-xyz"* ]]
+  [[ "$output" != *"allow_all_xyz"* ]]
+}
+
+@test "omes health acp human output renders recorded present and recorded-off profile" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web"]'
+  printf '%s\n' 'module.hermes-gateway.hardening_profile=strict' \
+    'module.hermes-restricted.network_policy=deny_by_default' >"${OMES_STATE_DIR}/state"
+  run "$OMES_BIN" health acp
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"profile status"*"ok"*"not live unit state"* ]]
+  [[ "$output" == *"hardening profile"*"present (strict)"* ]]
+  [[ "$output" == *"egress profile"*"present (deny_by_default)"* ]]
+  printf '%s\n' 'module.hermes-gateway.hardening_profile=off' \
+    'module.hermes-restricted.network_policy=deny_by_default' >"${OMES_STATE_DIR}/state"
+  run "$OMES_BIN" health acp
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"profile status"*"warn"* ]]
+  [[ "$output" == *"hardening profile"*"not present (off)"* ]]
+}
+
+@test "omes health acp --json keeps stdout machine-readable and unchanged by human rendering" {
+  export SHIM_HERMES_CONFIG_GET_SUPPORTED=1
+  export SHIM_HERMES_CONFIG_GET_PLATFORM_TOOLSETS_ACP='["web"]'
+  omes_run_stdout_only "$OMES_BIN" health acp --json
+  [ "$status" -eq 0 ]
+  OMES_TEST_JSON="$output" run python3 -c '
+import json
+import os
+d = json.loads(os.environ["OMES_TEST_JSON"])
+assert d["profile"]["status"] == "unknown", d["profile"]
+assert d["profile"]["hardening"]["state"] == "unknown"
+'
+  [ "$status" -eq 0 ]
+}
+
 # ---------------------------------------------------------------------------
 # omes health budget (issue #275): configured Hermes run-budget limits. Logic
 # is covered by tests/py/health/test_budget_posture.py; these assert the
