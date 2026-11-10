@@ -302,8 +302,9 @@ change) on each of the following triggers, whichever comes first:
 ## 9. Dependency and runtime compatibility status (issue #347)
 
 > Scope (issue #347): OMES is a Python/Bash/systemd host platform plus Hermes Agent
-> integration. It is not an AWCMS Bun app worker, the signed outbound HTTPS pull-worker
-> transport ([ADR-0027](adr/0027-control-center-pull-worker-transport.md)) is unchanged, and no
+> integration. It is not an AWCMS Bun app worker, the outbound HTTPS pull-worker
+> transport ([ADR-0027](adr/0027-control-center-pull-worker-transport.md); end-to-end request signing is Not
+> implemented yet, tracked in #362) is unchanged, and no
 > OMES Python is rewritten to Bun. This section records what the repository itself pins or
 > declares. A newer upstream release is a **candidate**, never automatically supported on every
 > distro in [section 2](#2-os-matrix). Last reviewed against repository state: 2026-11-10.
