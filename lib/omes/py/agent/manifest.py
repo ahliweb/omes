@@ -156,6 +156,11 @@ def _semantic_errors_v2(data: dict) -> List[str]:
             errors.append("compose: required when placement.backend is 'compose'")
         elif isinstance(name, str) and NAME_RE.match(name):
             errors.extend(compose_mod.validate_compose_spec(compose_spec, name))
+            if compose_spec.get("egress") == "allowlist" and compose_mod.v2_topology(data) == "shared":
+                errors.append(
+                    "compose.egress: 'allowlist' requires a dedicated topology (set compose.topology "
+                    "'dedicated'); a shared container would apply one allowlist to every profile in it"
+                )
     elif compose_spec is not None:
         errors.append("compose: must not be set unless placement.backend is 'compose'")
 

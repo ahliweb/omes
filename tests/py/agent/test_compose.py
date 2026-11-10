@@ -353,13 +353,13 @@ class TestEgressControl(unittest.TestCase):
 
     def test_invalid_egress_rejected_by_schema(self):
         data = copy.deepcopy(self.manifest)
-        data["spec"]["compose"]["egress"] = "allowlist"
+        data["spec"]["compose"]["egress"] = "bogus"
         errors = manifest.validate(data, OMES_ROOT)
         self.assertTrue(any("egress" in e for e in errors), errors)
 
     def test_invalid_egress_rejected_by_semantic_validation(self):
         errors = compose.validate_compose_spec(
-            {"image": f"registry.example.com/x@{VALID_DIGEST}", "user": "1000:1000", "egress": "allowlist"}, "worker"
+            {"image": f"registry.example.com/x@{VALID_DIGEST}", "user": "1000:1000", "egress": "bogus"}, "worker"
         )
         self.assertTrue(any("spec.compose.egress" in e for e in errors), errors)
 
@@ -402,6 +402,153 @@ class TestEgressControl(unittest.TestCase):
         ]
         errors = manifest.validate(data, OMES_ROOT)
         self.assertTrue(any("Docker socket" in e for e in errors), errors)
+
+
+PROXY_IMAGE = "registry.example.com/proxy/tinyproxy@sha256:" + "b" * 64
+
+
+def _allowlist_manifest(hosts=("models.example.org", "api.example.com")) -> dict:
+    data = _load_fixture("valid-compose-generic.json")
+    c = data["spec"]["compose"]
+    c.pop("ports", None)
+    c["egress"] = "allowlist"
+    c["egressAllowlist"] = list(hosts)
+    c["egressProxyImage"] = PROXY_IMAGE
+    return data
+
+
+class TestEgressAllowlist(unittest.TestCase):
+    """Opt-in `egress: "allowlist"` rendering and validation (issue #276)."""
+
+    def _errors(self, mutate):
+        data = _allowlist_manifest()
+        mutate(data["spec"]["compose"])
+        return manifest.validate(data, OMES_ROOT)
+
+    def test_valid_manifest(self):
+        self.assertEqual(manifest.validate(_allowlist_manifest(), OMES_ROOT), [])
+
+    def test_valid_fixtures_v1_and_v2(self):
+        v2 = OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment"
+        for path in (FIXTURES / "valid-compose-egress-allowlist.json", v2 / "valid-compose-egress-allowlist.json"):
+            data = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest.validate(data, OMES_ROOT), [], path.name)
+            rendered = compose.render_compose_yaml(compose.build_plan(data))
+            self.assertIn("FilterDefaultDeny Yes", rendered)
+
+    def test_negative_validation(self):
+        cases = {
+            "wildcard": (lambda c: c.__setitem__("egressAllowlist", ["*.example.com"]), "wildcards"),
+            "ipv4": (lambda c: c.__setitem__("egressAllowlist", ["203.0.113.10"]), "IP literals"),
+            "ipv6": (lambda c: c.__setitem__("egressAllowlist", ["[::1]"]), "IP literals"),
+            "localhost": (lambda c: c.__setitem__("egressAllowlist", ["localhost"]), "single-label"),
+            "single-label": (lambda c: c.__setitem__("egressAllowlist", ["intranet"]), "single-label"),
+            "dot-local": (lambda c: c.__setitem__("egressAllowlist", ["printer.local"]), ".local"),
+            "dot-internal": (lambda c: c.__setitem__("egressAllowlist", ["db.internal"]), ".internal"),
+            "uppercase": (lambda c: c.__setitem__("egressAllowlist", ["API.example.com"]), "lowercase"),
+            "trailing-dot": (lambda c: c.__setitem__("egressAllowlist", ["api.example.com."]), "RFC 1123"),
+            "url": (lambda c: c.__setitem__("egressAllowlist", ["https://api.example.com"]), "hostnames only"),
+            "too-long": (lambda c: c.__setitem__("egressAllowlist", [".".join(["a" * 60] * 5) + ".com"]), "253"),
+            "empty": (lambda c: c.__setitem__("egressAllowlist", []), "non-empty"),
+            "missing-list": (lambda c: c.pop("egressAllowlist"), "non-empty"),
+            "duplicate": (lambda c: c.__setitem__("egressAllowlist", ["a.example.com", "a.example.com"]), "duplicate"),
+            "ports": (lambda c: c.__setitem__("ports", ["127.0.0.1:8081:8080"]), "cannot be combined with spec.compose.ports"),
+            "shared": (lambda c: c.__setitem__("topology", "shared"), "dedicated topology"),
+            "missing-image": (lambda c: c.pop("egressProxyImage"), "egressProxyImage"),
+            "tag-only-image": (lambda c: c.__setitem__("egressProxyImage", "registry.example.com/p:latest"), "egressProxyImage"),
+            "list-without-mode": (lambda c: c.__setitem__("egress", "open"), "only valid when"),
+        }
+        for label, (mutate, needle) in cases.items():
+            with self.subTest(case=label):
+                errors = self._errors(mutate)
+                self.assertTrue(any(needle in e for e in errors), (label, errors))
+
+    def test_v2_implicit_shared_topology_rejected(self):
+        v2 = OMES_ROOT / "contracts" / "agent" / "v2" / "fixtures" / "runtime-deployment"
+        data = json.loads((v2 / "valid-compose-egress-allowlist.json").read_text(encoding="utf-8"))
+        data["security"] = {"isolationClass": "standard"}
+        errors = manifest.validate(data, OMES_ROOT)
+        self.assertTrue(any("dedicated topology" in e for e in errors), errors)
+
+    def test_render_proxy_config_pure_and_deterministic(self):
+        a = compose.render_proxy_config(["b.example.com", "a-1.example.com"])
+        b = compose.render_proxy_config(["a-1.example.com", "b.example.com"])
+        self.assertEqual(a, b)
+        self.assertIn("FilterDefaultDeny Yes\n", a["tinyproxy.conf"])
+        self.assertIn("ConnectPort 443\n", a["tinyproxy.conf"])
+        self.assertEqual(a["allowlist.filter"], "^a-1\\.example\\.com$\n^b\\.example\\.com$\n")
+
+    def test_render_proxy_config_fails_closed(self):
+        for bad in ([], ["*.example.com"], ["localhost"], ["1.2.3.4"], ["a.example.com\nb.com"]):
+            with self.subTest(bad=bad), self.assertRaises(ValueError):
+                compose.render_proxy_config(bad)
+
+    def test_rendered_topology(self):
+        plan = compose.build_plan(_allowlist_manifest())
+        rendered = compose.render_compose_yaml(plan)
+        net = plan["network"]
+        egress_net = net + "-egress"
+        proxy = plan["egressProxyService"]
+        self.assertEqual(plan["egressAllowlist"], ["api.example.com", "models.example.org"])
+        # agent service: only the internal network, proxy env, depends_on
+        agent_block = rendered.split(f"  {proxy}:")[0]
+        self.assertIn(f'    networks:\n      - "{net}"\n', agent_block)
+        self.assertNotIn(egress_net, agent_block)
+        self.assertIn(f'      HTTPS_PROXY: "http://{proxy}:8888"\n', agent_block)
+        self.assertIn(f'      HTTP_PROXY: "http://{proxy}:8888"\n', agent_block)
+        self.assertIn('      NO_PROXY: "localhost,127.0.0.1,::1"\n', agent_block)
+        self.assertIn(f'    depends_on:\n      - "{proxy}"\n', agent_block)
+        # sidecar: both networks, hardened, pinned image, no ports/volumes/env_file
+        sidecar = rendered.split(f"  {proxy}:")[1].split("\nnetworks:")[0]
+        self.assertIn(f'    image: "{PROXY_IMAGE}"', sidecar)
+        self.assertIn(f'      - "{net}"\n      - "{egress_net}"\n', sidecar)
+        self.assertIn("    read_only: true\n", sidecar)
+        self.assertIn('    cap_drop:\n      - "ALL"\n', sidecar)
+        self.assertIn('"no-new-privileges:true"', sidecar)
+        for forbidden in ("ports:", "volumes:", "env_file:", "privileged", "docker.sock"):
+            self.assertNotIn(forbidden, sidecar)
+        # networks: agent network internal, egress network not
+        nets = rendered.split("\nnetworks:\n")[1]
+        self.assertIn(f'  {net}:\n    driver: bridge\n    internal: true\n', nets)
+        self.assertIn(f'  {egress_net}:\n    driver: bridge\n    internal: false\n', nets)
+        # inline proxy config
+        self.assertIn("    content: |\n      ^api\\.example\\.com$\n      ^models\\.example\\.org$\n", rendered)
+        self.assertTrue(compose.network_is_internal(plan))
+
+    def test_sidecar_and_networks_golden(self):
+        plan = compose.build_plan(_allowlist_manifest(("api.example.com", "models.example.org")))
+        rendered = compose.render_compose_yaml(plan)
+        part = rendered[rendered.index(f"  {plan['egressProxyService']}:"):]
+        golden = (Path(__file__).parent / "golden" / "compose-egress-allowlist-sidecar.yaml").read_text(encoding="utf-8")
+        self.assertEqual(part, golden)
+
+    def test_render_is_deterministic_and_order_insensitive(self):
+        a = compose.render_compose_yaml(compose.build_plan(_allowlist_manifest(("a.example.com", "b.example.com"))))
+        b = compose.render_compose_yaml(compose.build_plan(_allowlist_manifest(("b.example.com", "a.example.com"))))
+        self.assertEqual(a, b)
+        self.assertEqual(a, compose.render_compose_yaml(compose.build_plan(_allowlist_manifest(("a.example.com", "b.example.com")))))
+
+    def test_no_secret_in_render(self):
+        data = _allowlist_manifest()
+        plan = compose.build_plan(data)
+        rendered = compose.render_compose_yaml(plan)
+        # secrets stay name-only, behind env_file on the agent; never in the proxy part
+        self.assertIn("env_file:", rendered)
+        proxy_part = rendered.split(f"  {plan['egressProxyService']}:")[1]
+        for needle in ("provider-primary", ".env", "KEY", "TOKEN", "PASSWORD", "SECRET"):
+            self.assertNotIn(needle, proxy_part)
+        summary = compose.plan_summary(plan)
+        self.assertEqual(summary["egress"], "allowlist")
+        self.assertEqual(summary["egressProxyImage"], PROXY_IMAGE)
+
+    def test_open_and_none_render_unchanged(self):
+        base = _load_fixture("valid-compose-generic.json")
+        plan = compose.build_plan(base)
+        rendered = compose.render_compose_yaml(plan)
+        for marker in ("-egress", "configs:", "depends_on", "environment:", "tinyproxy"):
+            self.assertNotIn(marker, rendered)
+        self.assertNotIn("egressAllowlist", compose.plan_summary(plan))
+        self.assertNotIn("egressProxyService", plan)
 
 
 if __name__ == "__main__":

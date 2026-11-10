@@ -42,10 +42,25 @@ DEFAULT_READ_ONLY_ROOTFS = True
 # behavior (a plain bridge with outbound access) and stays the default so
 # existing manifests render byte-identically. "none" renders the compose
 # network as `internal: true`: Docker then gives the network no route to
-# the outside world. This is all-or-nothing - there is no per-destination
-# allowlist (Not implemented yet, tracked in #276).
-EGRESS_MODES = ("open", "none")
+# the outside world. "allowlist" (opt-in, issue #276 PR 1) keeps the agent on
+# an internal network and routes its HTTP(S) traffic through an
+# operator-supplied, digest-pinned forward-proxy sidecar that only permits
+# the declared hostnames (see render_proxy_config).
+EGRESS_MODES = ("open", "none", "allowlist")
 DEFAULT_EGRESS = "open"
+
+# Egress-allowlist sidecar constants. OMES ships NO default proxy image and
+# invents no digest: the operator supplies `egressProxyImage`. The renderer
+# emits the tinyproxy config dialect (`FilterDefaultDeny Yes` + a filter
+# file), so the operator's image must provide a `tinyproxy` binary.
+PROXY_PORT = 8888
+PROXY_CONF_TARGET = "/etc/tinyproxy/tinyproxy.conf"
+PROXY_FILTER_TARGET = "/etc/tinyproxy/allowlist.filter"
+PROXY_USER = "65534:65534"
+PROXY_NO_PROXY = "localhost,127.0.0.1,::1"
+MAX_ALLOWLIST_ENTRIES = 64
+_HOST_LABEL_RE = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
+_FORBIDDEN_HOST_SUFFIXES = (".local", ".localhost", ".internal")
 
 # Never accepted as a host-side bind mount target, under any path -
 # defence in depth even though the schema does not expose a "privileged"/
@@ -108,6 +123,77 @@ def _validate_network(network: Any) -> List[str]:
         return errors
     if network in _FORBIDDEN_NETWORK_VALUES:
         errors.append(f"spec.compose.network: {network!r} is not allowed (no host/none network mode)")
+    return errors
+
+
+def hostname_error(host: Any) -> str:
+    """Returns why `host` is not an acceptable allowlist hostname, or ""
+    when it is. Hostnames only: lowercase RFC 1123 labels, at least two
+    labels, at most 253 characters; no wildcards, IP literals, localhost,
+    single-label, `.local`, `.localhost` or `.internal` names."""
+    if not isinstance(host, str) or not host:
+        return "must be a non-empty string"
+    if len(host) > 253:
+        return "exceeds 253 characters"
+    if "*" in host or "?" in host:
+        return "wildcards are not allowed"
+    if ":" in host or "[" in host:
+        return "IP literals, ports and URLs are not allowed (hostnames only)"
+    if host != host.lower():
+        return "must be lowercase"
+    labels = host.split(".")
+    if any(not _HOST_LABEL_RE.match(label) for label in labels):
+        return "must be RFC 1123 labels (a-z, 0-9, '-'; no empty label, trailing dot or path)"
+    if len(labels) < 2:
+        return "single-label names (including 'localhost') are not allowed"
+    if labels[-1].isdigit():
+        return "IP literals are not allowed (hostnames only)"
+    if host.endswith(_FORBIDDEN_HOST_SUFFIXES):
+        return "'.local', '.localhost' and '.internal' names are not allowed"
+    return ""
+
+
+def _validate_allowlist(compose_spec: Dict[str, Any]) -> List[str]:
+    """Validation of `egressAllowlist`/`egressProxyImage` (fail closed)."""
+    errors: List[str] = []
+    egress = compose_spec.get("egress")
+    allowlist = compose_spec.get("egressAllowlist")
+    proxy_image = compose_spec.get("egressProxyImage")
+    if egress != "allowlist":
+        if allowlist is not None:
+            errors.append("spec.compose.egressAllowlist: only valid when spec.compose.egress is 'allowlist'")
+        if proxy_image is not None:
+            errors.append("spec.compose.egressProxyImage: only valid when spec.compose.egress is 'allowlist'")
+        return errors
+    if compose_spec.get("ports"):
+        errors.append(
+            "spec.compose.egress: 'allowlist' cannot be combined with spec.compose.ports - the agent "
+            "is attached only to an internal network, where Docker does not publish host ports"
+        )
+    if compose_spec.get("topology") == "shared":
+        errors.append(
+            "spec.compose.egress: 'allowlist' requires a dedicated topology - a shared container "
+            "would apply one allowlist to every profile in it"
+        )
+    if not isinstance(proxy_image, str) or not IMAGE_DIGEST_RE.match(proxy_image):
+        errors.append(
+            "spec.compose.egressProxyImage: required with egress 'allowlist' and must be pinned by "
+            "digest ('name@sha256:<64 hex>'); OMES ships no default proxy image"
+        )
+    if not isinstance(allowlist, list) or not allowlist:
+        errors.append("spec.compose.egressAllowlist: required with egress 'allowlist' and must be a non-empty list")
+        return errors
+    if len(allowlist) > MAX_ALLOWLIST_ENTRIES:
+        errors.append(f"spec.compose.egressAllowlist: at most {MAX_ALLOWLIST_ENTRIES} entries")
+    seen = set()
+    for host in allowlist:
+        reason = hostname_error(host)
+        if reason:
+            errors.append(f"spec.compose.egressAllowlist[] {host!r}: {reason}")
+        elif host in seen:
+            errors.append(f"spec.compose.egressAllowlist[] {host!r}: duplicate entry")
+        else:
+            seen.add(host)
     return errors
 
 
@@ -243,6 +329,7 @@ def validate_compose_spec(compose_spec: Dict[str, Any], agent_name: str) -> List
     errors.extend(_validate_volumes(compose_spec.get("volumes"), agent_name))
     errors.extend(_validate_ports(compose_spec.get("ports")))
     errors.extend(_validate_egress(compose_spec.get("egress"), compose_spec.get("ports")))
+    errors.extend(_validate_allowlist(compose_spec))
     return errors
 
 
@@ -255,6 +342,16 @@ def _memory_to_compose(memory: str) -> str:
     ('1g'/'512m'/'1024k'). The schema already restricts the input to
     `^[0-9]+[KMG]$`."""
     return memory[:-1] + memory[-1].lower()
+
+
+def v2_topology(manifest: Dict[str, Any]) -> str:
+    """Effective topology of a v2 manifest: explicit `compose.topology`,
+    else 'shared' for isolationClass 'standard', else 'dedicated'."""
+    topology = (manifest.get("compose") or {}).get("topology")
+    if topology:
+        return topology
+    isolation_class = (manifest.get("security") or {}).get("isolationClass")
+    return "shared" if isolation_class == "standard" else "dedicated"
 
 
 _RESTART_MAP = {"always": "always", "on-failure": "on-failure", "no": "no"}
@@ -280,10 +377,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         env_file_ref = None
         role = None
         storage = {"memory": "delegated", "sessions": "delegated", "skills": "delegated"}
-        topology = compose_spec.get("topology")
-        if not topology:
-            isolation_class = manifest.get("security", {}).get("isolationClass")
-            topology = "shared" if isolation_class == "standard" else "dedicated"
+        topology = v2_topology(manifest)
     else:
         spec = manifest["spec"]
         compose_spec = spec["compose"]
@@ -328,6 +422,16 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
 
     compose_file = compose_dir / "compose.yaml"
 
+    allowlist_plan: Dict[str, Any] = {}
+    if egress == "allowlist":
+        allowlist_plan = {
+            "egressAllowlist": sorted(compose_spec.get("egressAllowlist", [])),
+            "egressProxyImage": compose_spec["egressProxyImage"],
+            "egressProxyService": f"{service_name}-egress-proxy",
+            "egressProxyContainerName": f"{container_name}-egress-proxy",
+            "egressNetwork": f"{network}-egress",
+        }
+
     return {
         "apiVersion": api_version,
         "agent": name,
@@ -360,6 +464,7 @@ def build_plan(manifest: Dict[str, Any]) -> Dict[str, Any]:
         "composeFile": str(compose_file),
         "serviceName": service_name,
         "containerName": container_name,
+        **allowlist_plan,
     }
 
 
@@ -379,10 +484,107 @@ def _yaml_str(value: str) -> str:
 
 
 def network_is_internal(plan: Dict[str, Any]) -> bool:
-    """True when the plan's egress mode blocks all external egress
-    (`egress: "none"` -> compose `internal: true`). Shared by the renderer
-    and the drift check so both read the declared value from one place."""
-    return plan.get("egress", DEFAULT_EGRESS) == "none"
+    """True when the agent's network has no route to the outside world
+    (`egress: "none"` or `"allowlist"` -> compose `internal: true`; with
+    `allowlist` only the proxy sidecar also sits on a non-internal network).
+    Shared by the renderer and the drift check so both read the declared
+    value from one place."""
+    return plan.get("egress", DEFAULT_EGRESS) in ("none", "allowlist")
+
+
+def render_proxy_config(hostnames: List[str]) -> Dict[str, str]:
+    """Pure: renders the tinyproxy config dialect for an egress allowlist.
+    Returns {"tinyproxy.conf": ..., "allowlist.filter": ...}. Default deny
+    (`FilterDefaultDeny Yes`); only the exact hostnames listed are
+    allowed (one anchored, dot-escaped pattern per hostname, sorted); CONNECT
+    is limited to port 443. No secrets, no operator free text: every
+    hostname is re-validated and a bad one raises ValueError (fail closed).
+    The operator's proxy image must provide `tinyproxy`."""
+    if not hostnames:
+        raise ValueError("egress allowlist must not be empty")
+    for host in hostnames:
+        reason = hostname_error(host)
+        if reason:
+            raise ValueError(f"invalid egress allowlist hostname {host!r}: {reason}")
+    unique = sorted(set(hostnames))
+    conf = "\n".join([
+        f"Port {PROXY_PORT}",
+        "Listen 0.0.0.0",
+        "Timeout 600",
+        "MaxClients 100",
+        "LogLevel Warning",
+        "DisableViaHeader Yes",
+        "ConnectPort 443",
+        "FilterURLs Off",
+        "FilterExtended Off",
+        "FilterCaseSensitive Off",
+        "FilterDefaultDeny Yes",
+        f'Filter "{PROXY_FILTER_TARGET}"',
+    ]) + "\n"
+    filt = "".join("^" + host.replace(".", "\\.") + "$\n" for host in unique)
+    return {"tinyproxy.conf": conf, "allowlist.filter": filt}
+
+
+def _proxy_url(plan: Dict[str, Any]) -> str:
+    return f"http://{plan['egressProxyService']}:{PROXY_PORT}"
+
+
+def _proxy_config_names(plan: Dict[str, Any]) -> Dict[str, str]:
+    base = plan["egressProxyService"]
+    return {"tinyproxy.conf": f"{base}-conf", "allowlist.filter": f"{base}-filter"}
+
+
+def _render_proxy_service(plan: Dict[str, Any]) -> List[str]:
+    """The egress-proxy sidecar service: on the agent's internal network
+    and on the dedicated egress network, hardened like the agent service
+    (read-only rootfs, cap_drop ALL, no-new-privileges, non-root, limits),
+    never publishing ports, never mounting host paths or reading secrets."""
+    names = _proxy_config_names(plan)
+    lines = [f"  {plan['egressProxyService']}:"]
+    lines.append(f"    image: {_yaml_str(plan['egressProxyImage'])}")
+    lines.append(f"    container_name: {_yaml_str(plan['egressProxyContainerName'])}")
+    lines.append(f"    user: {_yaml_str(PROXY_USER)}")
+    lines.append(
+        "    command: [\"tinyproxy\", \"-d\", \"-c\", " + _yaml_str(PROXY_CONF_TARGET) + "]"
+    )
+    lines.append("    read_only: true")
+    lines.append("    cap_drop:")
+    lines.append("      - \"ALL\"")
+    lines.append("    security_opt:")
+    lines.append("      - \"no-new-privileges:true\"")
+    lines.append("    networks:")
+    lines.append(f"      - {_yaml_str(plan['network'])}")
+    lines.append(f"      - {_yaml_str(plan['egressNetwork'])}")
+    lines.append("    configs:")
+    lines.append(f"      - source: {_yaml_str(names['tinyproxy.conf'])}")
+    lines.append(f"        target: {_yaml_str(PROXY_CONF_TARGET)}")
+    lines.append(f"      - source: {_yaml_str(names['allowlist.filter'])}")
+    lines.append(f"        target: {_yaml_str(PROXY_FILTER_TARGET)}")
+    lines.append("    tmpfs:")
+    lines.append("      - \"/run:rw,noexec,nosuid,size=64k\"")
+    lines.append("      - \"/tmp:rw,noexec,nosuid,size=64k\"")
+    lines.append("    mem_limit: \"128m\"")
+    lines.append("    mem_reservation: \"128m\"")
+    lines.append("    cpus: \"0.5\"")
+    lines.append("    pids_limit: 64")
+    lines.append(f"    restart: {_yaml_str(plan['composeRestart'])}")
+    return lines
+
+
+def _render_proxy_configs(plan: Dict[str, Any]) -> List[str]:
+    """Top-level `configs:` carrying the rendered proxy config inline
+    (Compose `content:`, Compose >= 2.23.1), so the single compose.yaml
+    stays the only managed file and apply/rollback/idempotency are
+    unchanged. The content holds hostnames only - never a secret."""
+    rendered = render_proxy_config(plan["egressAllowlist"])
+    names = _proxy_config_names(plan)
+    lines = ["configs:"]
+    for key in ("tinyproxy.conf", "allowlist.filter"):
+        lines.append(f"  {names[key]}:")
+        lines.append("    content: |")
+        for text_line in rendered[key].splitlines():
+            lines.append(f"      {text_line}")
+    return lines
 
 
 def render_compose_yaml(plan: Dict[str, Any]) -> str:
@@ -404,6 +606,17 @@ def render_compose_yaml(plan: Dict[str, Any]) -> str:
     lines.append("      - \"no-new-privileges:true\"")
     lines.append("    networks:")
     lines.append(f"      - {_yaml_str(plan['network'])}")
+
+    allowlist = plan.get("egress", DEFAULT_EGRESS) == "allowlist"
+    if allowlist:
+        proxy_url = _yaml_str(_proxy_url(plan))
+        lines.append("    depends_on:")
+        lines.append(f"      - {_yaml_str(plan['egressProxyService'])}")
+        lines.append("    environment:")
+        for key in ("HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"):
+            lines.append(f"      {key}: {proxy_url}")
+        for key in ("NO_PROXY", "no_proxy"):
+            lines.append(f"      {key}: {_yaml_str(PROXY_NO_PROXY)}")
 
     if plan.get("environmentFileReference"):
         lines.append("    env_file:")
@@ -433,10 +646,18 @@ def render_compose_yaml(plan: Dict[str, Any]) -> str:
     lines.append(f"    pids_limit: {resources['pids']}")
     lines.append(f"    restart: {_yaml_str(plan['composeRestart'])}")
 
+    if allowlist:
+        lines.extend(_render_proxy_service(plan))
+
     lines.append("networks:")
     lines.append(f"  {plan['network']}:")
     lines.append("    driver: bridge")
     lines.append(f"    internal: {'true' if network_is_internal(plan) else 'false'}")
+    if allowlist:
+        lines.append(f"  {plan['egressNetwork']}:")
+        lines.append("    driver: bridge")
+        lines.append("    internal: false")
+        lines.extend(_render_proxy_configs(plan))
 
     return "\n".join(lines) + "\n"
 
@@ -445,6 +666,15 @@ def plan_summary(plan: Dict[str, Any]) -> Dict[str, Any]:
     """The subset of `plan` that `omes agent plan`/`--dry-run` prints -
     image digest, project, network, volumes, limits, and env references
     by NAME only (never a secret value)."""
+    summary = _plan_summary_base(plan)
+    if plan.get("egress") == "allowlist":
+        summary["egressAllowlist"] = plan["egressAllowlist"]
+        summary["egressProxyImage"] = plan["egressProxyImage"]
+        summary["egressNetwork"] = plan["egressNetwork"]
+    return summary
+
+
+def _plan_summary_base(plan: Dict[str, Any]) -> Dict[str, Any]:
     return {
         "backend": "compose",
         "topology": plan.get("topology", "dedicated"),

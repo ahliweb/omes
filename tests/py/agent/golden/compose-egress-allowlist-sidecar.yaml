@@ -1,0 +1,52 @@
+  compose-worker-egress-proxy:
+    image: "registry.example.com/proxy/tinyproxy@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    container_name: "omes-agent-compose-worker-compose-worker-egress-proxy"
+    user: "65534:65534"
+    command: ["tinyproxy", "-d", "-c", "/etc/tinyproxy/tinyproxy.conf"]
+    read_only: true
+    cap_drop:
+      - "ALL"
+    security_opt:
+      - "no-new-privileges:true"
+    networks:
+      - "omes-agent-compose-worker-net"
+      - "omes-agent-compose-worker-net-egress"
+    configs:
+      - source: "compose-worker-egress-proxy-conf"
+        target: "/etc/tinyproxy/tinyproxy.conf"
+      - source: "compose-worker-egress-proxy-filter"
+        target: "/etc/tinyproxy/allowlist.filter"
+    tmpfs:
+      - "/run:rw,noexec,nosuid,size=64k"
+      - "/tmp:rw,noexec,nosuid,size=64k"
+    mem_limit: "128m"
+    mem_reservation: "128m"
+    cpus: "0.5"
+    pids_limit: 64
+    restart: "on-failure"
+networks:
+  omes-agent-compose-worker-net:
+    driver: bridge
+    internal: true
+  omes-agent-compose-worker-net-egress:
+    driver: bridge
+    internal: false
+configs:
+  compose-worker-egress-proxy-conf:
+    content: |
+      Port 8888
+      Listen 0.0.0.0
+      Timeout 600
+      MaxClients 100
+      LogLevel Warning
+      DisableViaHeader Yes
+      ConnectPort 443
+      FilterURLs Off
+      FilterExtended Off
+      FilterCaseSensitive Off
+      FilterDefaultDeny Yes
+      Filter "/etc/tinyproxy/allowlist.filter"
+  compose-worker-egress-proxy-filter:
+    content: |
+      ^api\.example\.com$
+      ^models\.example\.org$
