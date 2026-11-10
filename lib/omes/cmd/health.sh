@@ -82,10 +82,15 @@ Targets:
             or absent evidence. It never configures Hermes' provider.
             Options: --json  --endpoint <url>  --model <id>
             --scope <loopback|private>  --ca-file <path>  --active-probe
+            [--probe-tool-call] [--probe-stream]
             --active-probe (issue #354; off by default; flag only, no env
             var) sends ONE fixed, non-sensitive chat request (max_tokens 8,
             no credentials) through the same vetted path; a pass proves
             only that fixture, not general model capability.
+            --probe-tool-call / --probe-stream (issue #354; only valid with
+            --active-probe) add one fixed harmless tool-call request and one
+            fixed stream:true request, as extra layers
+            active_probe_tool_call / active_probe_stream.
             (see docs/cli.md and docs/ai-inference-serving-architecture.md)
   acp       Read-only report of the CONFIGURED tool surface of Hermes'
             inbound ACP server (`hermes acp`): platform_toolsets.acp and
@@ -950,10 +955,10 @@ print("[omes]   note: a pass proves the model id is advertised by a policy-compl
 '
 }
 
-# _health_run_inference_endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <s>] [--ca-file <path>] [--active-probe]
+# _health_run_inference_endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <s>] [--ca-file <path>] [--active-probe [--probe-tool-call] [--probe-stream]]
 _health_run_inference_endpoint() {
   local -a py_args=()
-  local want_json=0
+  local want_json=0 have_active=0 have_extra=0
   [[ "${OMES_JSON:-0}" == "1" ]] && want_json=1
 
   while [[ $# -gt 0 ]]; do
@@ -963,6 +968,12 @@ _health_run_inference_endpoint() {
         shift
         ;;
       --active-probe)
+        have_active=1
+        py_args+=("$1")
+        shift
+        ;;
+      --probe-tool-call | --probe-stream)
+        have_extra=1
         py_args+=("$1")
         shift
         ;;
@@ -980,6 +991,10 @@ _health_run_inference_endpoint() {
         ;;
     esac
   done
+
+  if [[ "$have_extra" == "1" && "$have_active" != "1" ]]; then
+    omes_die "$OMES_EX_USAGE" "health inference-endpoint: --probe-tool-call and --probe-stream require --active-probe"
+  fi
 
   if ! command -v python3 >/dev/null 2>&1; then
     log_error "health inference-endpoint: python3 not found (required for lib/omes/py/health/inference_endpoint.py)"

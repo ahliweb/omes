@@ -364,7 +364,7 @@ built-in commands.
 **Synopsis:** `omes health [agent|gateway] [--json] [--mode <user|system>]` /
 `omes health ollama [--json] [--profile <name>] [--model <id>]` /
 `omes health agent-runtime [--json] [--profile-home <path>]` /
-`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe]` /
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe [--probe-tool-call] [--probe-stream]]` /
 `omes health acp [--json] [--profile-home <path>]` /
 `omes health budget [--json] [--profile-home <path>]` /
 `omes health browser-worker [--json] [--worker-id <id>] [--capability-profile <deterministic|ai_assisted>] [--model <id>]`
@@ -427,7 +427,7 @@ omes health ollama --profile structured --model llama3.1
 OMES_OLLAMA_MODEL=llama3.1 omes health ollama
 ```
 
-`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe]`
+`omes health inference-endpoint [--json] [--endpoint <url>] [--model <id>] [--scope <loopback|private>] [--ca-file <path>] [--active-probe [--probe-tool-call] [--probe-stream]]`
 (issue [#292](https://github.com/ahliweb/omes/issues/292), via
 [`lib/omes/py/health/inference_endpoint.py`](../lib/omes/py/health/inference_endpoint.py),
 [`endpoint_guard.py`](../lib/omes/py/health/endpoint_guard.py) and
@@ -463,6 +463,10 @@ What it does, in order (each is a layer in the JSON):
 - **active_probe**: `not_applicable` (`active_probe_not_run`) unless the explicit `--active-probe` flag is passed
   (issue [#354](https://github.com/ahliweb/omes/issues/354)); no environment variable can enable it and no prompt is
   sent without it. See "Opt-in active synthetic probe" below.
+- **active_probe_tool_call** / **active_probe_stream**: present **only** when `--active-probe` is combined with
+  `--probe-tool-call` / `--probe-stream` (issue [#354](https://github.com/ahliweb/omes/issues/354)). Without those
+  flags the layers do not exist, so the default and plain `--active-probe` output shapes are unchanged. See
+  "Opt-in tool-call and streaming capability probes" below.
 
 **Opt-in active synthetic probe (`--active-probe`, off by default).** Only after config, policy, network, api,
 model (and, when the server sends a `Date`, freshness) have all passed, the command sends exactly one
@@ -488,8 +492,50 @@ character count and an allowlisted `finish_reason` (`stop|length|tool_calls|cont
   `false`. With the flag, `limits.allowed_probes` also lists `POST /v1/chat/completions` and `limits.active_probe`
   records the bounds.
 
-Not implemented yet (tracked in #354): credentialed (`secret_reference`) endpoints, tool-call and streaming probes,
-and an operator-supplied or per-model fixture. Output without the flag differs from the pre-#354 shape only in the
+**Opt-in tool-call and streaming capability probes (`--probe-tool-call`, `--probe-stream`, off by default).** Each is
+a separate opt-in flag, valid **only together with `--active-probe`** (without it the command exits 2 with a usage
+error; no environment variable can enable either). They are separate flags, rather than part of `--active-probe`,
+because each sends a different fixed request and many endpoints legitimately do not support tools or streaming, so
+`--active-probe` alone keeps its existing meaning and result. They add the layers `active_probe_tool_call` and
+`active_probe_stream` (same `pass|fail|not_applicable|unknown` model, `proves`, `source`, `authority`,
+`checked_at`), appended after `active_probe` and present only when requested. Each requested layer must `pass` for
+`ready`. They run in order (plain probe, tool call, stream) and only after the plain `--active-probe` layer passed:
+if config, policy, network, api, model, freshness or the plain probe did not pass, the requested capability layers are
+`not_applicable` (`skipped_prior_failure`) and no further request is sent. A failing tool-call layer does not stop the
+stream probe once the plain probe passed. Both reuse every safety property of the plain probe: the same vetted
+loopback/private address, pinned connection, no redirects, verified TLS, the `OMES_HEALTH_TIMEOUT` deadline per
+request, the 64 KiB response cap, no credential header, fixed redacted reasons, and no prompt, tool argument or
+streamed text in any output or log. Each request is a constant fixture with no user data or user-supplied URL.
+
+- **Tool call** (`--probe-tool-call`): one `POST <prefix>/v1/chat/completions` with the validated model id, one
+  constant message, **one fixed harmless tool** (`omes_probe_echo`, one string argument restricted to the constant
+  `ok`; nothing is ever executed), `tool_choice` `auto`, `max_tokens` 64, no stream. `pass` only on HTTP 200 whose
+  `choices[0].message.tool_calls` is a bounded non-empty list in which every call has `type` `function`, a non-empty
+  `id`, exactly the name `omes_probe_echo` and `arguments` that is a bounded JSON string equal to an object with only
+  the key `value` set to `ok`. The layer records only the call count and an allowlisted `finish_reason`. Reasons:
+  `tool_call_missing` (no tool call, for example text only), `tool_call_wrong_name`, `tool_call_invalid` (bad shape,
+  id, type or arguments), plus the shared `malformed_json`, `active_probe_invalid_response`, `response_too_large`,
+  `auth_required`, `unsupported_api`, `redirect_not_followed`, `server_error`, `timeout`.
+- **Streaming** (`--probe-stream`): one POST with the validated model id, one constant message, `max_tokens` 8,
+  `stream` true, no tools, `Accept: text/event-stream`. The whole stream is read under the same 64 KiB and deadline
+  caps, so an endless or slow-drip stream ends as `response_too_large` or `timeout`, and at most 256 events are
+  accepted. `pass` only on HTTP 200 with a `text/event-stream` content type, only `data:` events (comment keep-alives
+  are ignored), each non-terminator event a JSON OpenAI-style chunk with an object `choices[0].delta` and text-only
+  `content`, at least one chunk with non-empty text in total, and a final `data: [DONE]` event with nothing after it.
+  The layer records only the chunk count, a bounded character count and an allowlisted `finish_reason`. Reasons:
+  `stream_not_sse` (any other content type, for example a plain JSON completion), `stream_malformed`,
+  `stream_empty` (no data chunks), `stream_truncated` (no `[DONE]` or an unterminated last event), `stream_too_long`,
+  `empty_completion` (chunks but no text), plus the shared status and transport reasons above.
+- **Interpretation is model-dependent.** A passing tool-call layer proves only that this one fixed schema produced a
+  well-formed call of that tool at that moment; a passing stream layer proves only that this one fixed request streamed
+  well-formed chunks ending in `[DONE]`. Neither proves other tools or prompts, argument quality, parallel or
+  multi-turn tool use, long or sustained streams, quality or correctness, and HTTP 200 alone proves nothing. A model
+  that does not emit a tool call on the first turn fails `tool_call_missing`; that is a fact about this fixture, not a
+  verdict on the model. With the flags, `limits.active_probe.tool_call` / `limits.active_probe.stream` record the
+  bounds and `limits.prompt_sent` is `true` once any request was sent.
+
+Not implemented yet (tracked in #354): credentialed (`secret_reference`) endpoints and an operator-supplied or
+per-model fixture. Output without the flag differs from the pre-#354 shape only in the
 `active_probe` layer reason (`active_probe_not_run` replaces `active_probe_not_implemented`).
 
 **A passing result proves** a loopback/private endpoint answered a well-formed model list that contains the
@@ -542,6 +588,7 @@ OMES_INFERENCE_ENDPOINT=http://127.0.0.1:8000 OMES_INFERENCE_MODEL=my-model omes
 omes health inference-endpoint --json --endpoint https://llm.internal:8443 --ca-file /etc/ssl/internal-ca.pem --model my-model | jq -e '.ready'
 omes health --json inference-endpoint   # no endpoint configured: status "not_applicable", ready false, exit 7
 omes health inference-endpoint --active-probe --endpoint http://127.0.0.1:8000 --model my-model   # opt-in: one fixed synthetic chat request
+omes health inference-endpoint --active-probe --probe-tool-call --probe-stream --endpoint http://127.0.0.1:8000 --model my-model   # opt-in: plus fixed tool-call and streaming probes
 ```
 
 `omes health ai-privacy [--json]` (issue

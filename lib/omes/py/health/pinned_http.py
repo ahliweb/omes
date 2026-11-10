@@ -58,15 +58,16 @@ class ProbeError(Exception):
 
 
 class Response:
-    __slots__ = ("status", "date_header", "body", "tls_version", "peer", "content_encoding")
+    __slots__ = ("status", "date_header", "body", "tls_version", "peer", "content_encoding", "content_type")
 
-    def __init__(self, status, date_header, body, tls_version, peer, content_encoding):
+    def __init__(self, status, date_header, body, tls_version, peer, content_encoding, content_type=None):
         self.status = status
         self.date_header = date_header
         self.body = body
         self.tls_version = tls_version
         self.peer = peer
         self.content_encoding = content_encoding
+        self.content_type = content_type
 
 
 class _PinnedConnection(http.client.HTTPConnection):
@@ -122,6 +123,7 @@ def request(
     timeout: float,
     max_bytes: int,
     ssl_context: Optional[ssl.SSLContext] = None,
+    accept: str = "application/json",
 ) -> Response:
     """Performs one bounded request: the allowlisted GET, or (issue #354,
     opt-in active probe only) one POST of a fixed JSON `body`. `addresses`
@@ -130,6 +132,8 @@ def request(
     but never any credential header; every other guarantee is shared."""
     if method not in ("GET", "POST"):
         raise ValueError("method not allowed")
+    if accept not in ("application/json", "text/event-stream"):
+        raise ValueError("accept not allowed")
     start = time.monotonic()
     state: dict = {"sock": None, "expired": False}
 
@@ -227,7 +231,7 @@ def request(
         conn = _PinnedConnection(sock, host, port, timeout)
         headers = {
             "Host": host_header,
-            "Accept": "application/json",
+            "Accept": accept,
             "Accept-Encoding": "identity",
             "User-Agent": USER_AGENT,
             "Connection": "close",
@@ -240,6 +244,7 @@ def request(
         status = resp.status
         date_header = resp.getheader("Date")
         content_encoding = resp.getheader("Content-Encoding")
+        content_type = resp.getheader("Content-Type")
 
         payload = b""
         if status == 200:
@@ -262,7 +267,7 @@ def request(
                     raise ProbeError(LAYER_API, "fail", "response_too_large")
                 chunks.append(chunk)
             payload = b"".join(chunks)
-        return Response(status, date_header, payload, tls_version, str(expected), content_encoding)
+        return Response(status, date_header, payload, tls_version, str(expected), content_encoding, content_type)
 
     except ProbeError:
         raise
