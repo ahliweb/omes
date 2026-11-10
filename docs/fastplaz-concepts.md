@@ -30,7 +30,7 @@ beyond them.
 | FastPlaz license file | <https://github.com/fastplaz/fastplaz/blob/master/LICENSE.txt> | License statement |
 
 **License as stated in that repository (read 2026-11-10).** The README only says to see
-`LICENSE.txt`. `LICENSE.txt` is a three-line file containing a copyright notice
+`LICENSE.txt`. `LICENSE.txt` is a short file containing only a copyright notice (in Indonesian and English)
 ("Copyright reserved Allah SWT", in Indonesian and English). It names **no recognized
 open-source license, no version and no copyright holder**. OMES therefore treats the
 license as **unknown / not a recognized grant**, and section 10 blocks any source reuse.
