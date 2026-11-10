@@ -181,7 +181,18 @@ case "${1:-}" in
       exit 0
     fi
     for p in "${props[@]}"; do
-      printf '%s=%s\n' "$p" "${SHIM_SYSTEMCTL_SHOW_VALUE:-infinity}"
+      # Additive (issue #359): SHIM_SYSTEMCTL_SHOW_<PROPERTY> (upper-cased)
+      # overrides one property; LoadState defaults to not-found so a host
+      # without the unit is not mistaken for a loaded one. Other properties
+      # keep the original SHIM_SYSTEMCTL_SHOW_VALUE behavior.
+      override="SHIM_SYSTEMCTL_SHOW_${p^^}"
+      if [[ -n "${!override:-}" ]]; then
+        printf '%s=%s\n' "$p" "${!override}"
+      elif [[ "$p" == "LoadState" ]]; then
+        printf '%s=not-found\n' "$p"
+      else
+        printf '%s=%s\n' "$p" "${SHIM_SYSTEMCTL_SHOW_VALUE:-infinity}"
+      fi
     done
     exit 0
     ;;
