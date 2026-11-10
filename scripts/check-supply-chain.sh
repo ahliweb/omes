@@ -139,7 +139,7 @@ list_external_downloads() {
   mapfile -t files < <(collect_shell_files | { grep -E '^(bin|lib|modules|install)/' || true; })
 
   if [[ ${#files[@]} -eq 0 ]]; then
-    echo "check-supply-chain: no bin/, lib/, modules/, or install/ shell files yet (core installer tracked in #6)"
+    echo "check-supply-chain: no bin/, lib/, modules/, or install/ shell files found"
     return 0
   fi
 

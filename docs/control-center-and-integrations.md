@@ -471,7 +471,7 @@ All of the following, previously deferred, have shipped and are removed from thi
 Genuinely still deferred:
 
 - Enforcing stale-target, decommissioned-target, and unverified-backup conditions in the canonical operation, job, and backup-restore endpoints — a possible follow-up **proposal**, not tracked by a numbered issue. Mission Control shows these conditions as non-blocking advisories because the canonical endpoints do not enforce them today ([release close-out §6.2.1](control-center-release-closeout.md#621-source-action-matrix)).
-- Live Cloudflare, SRS-X, and GitHub provider clients — not implemented yet (tracked in #99, #100, #101); only contracts, capability profiles as data, and fake-provider tests exist here.
+- Live Cloudflare, SRS-X, and GitHub provider clients — Not implemented yet (tracked in #396; #99–#101 are closed); only contracts, capability profiles as data, and fake-provider tests exist here.
 - The `github_webhook` source, per-tenant distinct credentials, and GitHub App installation tokens for the repository-progress projection — deferred per ADR-0030, not tracked by a numbered issue.
 
 ## 12. Related documents

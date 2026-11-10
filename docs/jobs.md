@@ -301,7 +301,7 @@ exit 1; a record with a missing `tenant_id` never matches.
 skip/refuse rule to `target.server_id`.
 
 Confirmed cancellation of a `running` job (intent versus verified stop) is
-Not implemented yet (tracked in [#271](https://github.com/ahliweb/omes/issues/271));
+Not implemented yet (tracked in [#395](https://github.com/ahliweb/omes/issues/395));
 `omes job cancel` still rejects `running`. `reconcile` is operator-invoked:
 nothing runs it automatically (no timer, boot hook or daemon ships with it),
 and no issue currently owns adding one.
