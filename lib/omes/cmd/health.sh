@@ -1050,7 +1050,7 @@ for key, entry in d.get("keys", {}).items():
 print("[omes]   %-26s %s" % ("hermes acp installability", (d.get("installability") or {}).get("state")))
 print("[omes]   %-26s %s" % ("session exposure", d.get("session_exposure")))
 # Recorded gateway hardening / egress profile (issue #357). Anything absent,
-# malformed or unrecognised renders as `unknown`; it is never shown as ok or
+# malformed or unrecognised renders as "unknown"; it is never shown as ok or
 # safe, and a raw value is only echoed for the two recorded states below.
 profile = d.get("profile")
 if not isinstance(profile, dict):
